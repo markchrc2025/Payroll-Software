@@ -1,0 +1,339 @@
+// =============================================================================
+// Philippine HRIS & Payroll SaaS — Prisma Schema
+// Phase 1: Multi-Tenancy + Core HRIS
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  SUPER_ADMIN  // Platform-level (you, the SaaS owner)
+  ADMIN        // Company HR/Payroll Admin
+  MANAGER      // Department Manager (limited access)
+  EMPLOYEE     // ESS access only
+}
+
+enum SubscriptionTier {
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+}
+
+enum EmploymentStatus {
+  PROBATIONARY
+  REGULAR
+  CONTRACTUAL
+  PROJECT_BASED
+  RESIGNED
+  TERMINATED
+  RETIRED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CASUAL
+}
+
+enum PayFrequency {
+  WEEKLY
+  SEMI_MONTHLY
+  MONTHLY
+}
+
+enum SalaryType {
+  MONTHLY
+  DAILY
+  HOURLY
+}
+
+enum CivilStatus {
+  SINGLE
+  MARRIED
+  WIDOWED
+  LEGALLY_SEPARATED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+// =============================================================================
+// MULTI-TENANCY — Company (Tenant)
+// =============================================================================
+
+model Company {
+  id                 String             @id @default(cuid())
+  name               String
+  tradeName          String?
+  industry           String?
+  tinNumber          String?            @unique
+  sssNumber          String?
+  philhealthNumber   String?
+  pagibigNumber      String?
+  address            String?
+  city               String?
+  province           String?
+  zipCode            String?
+  country            String             @default("Philippines")
+  contactEmail       String?
+  contactPhone       String?
+  logoUrl            String?
+
+  // Subscription
+  subscriptionTier   SubscriptionTier   @default(STARTER)
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+  trialEndsAt        DateTime?
+  billingEmail       String?
+
+  // Standard timestamps & soft delete
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  // Relations
+  users              User[]
+  departments        Department[]
+  branches           Branch[]
+  employees          Employee[]
+  employeeSalaries   EmployeeSalary[]
+
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// USERS & RBAC
+// =============================================================================
+
+model User {
+  id             String    @id @default(cuid())
+  companyId      String
+  email          String
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole  @default(EMPLOYEE)
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+
+  // 2FA (for future use)
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
+
+  // Standard timestamps & soft delete
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  // Relations
+  company        Company   @relation(fields: [companyId], references: [id])
+  employee       Employee? // A user may be linked to an employee profile
+
+  // A user's email must be unique within a company (not globally)
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// ORGANIZATIONAL STRUCTURE
+// =============================================================================
+
+model Department {
+  id          String     @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  managerId   String?    // FK to Employee (set after employee table exists)
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  employees   Employee[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+model Branch {
+  id          String     @id @default(cuid())
+  companyId   String
+  name        String
+  address     String?
+  city        String?
+  province    String?
+  zipCode     String?
+  isHeadOffice Boolean   @default(false)
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  employees   Employee[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// CORE HRIS — Employee
+// =============================================================================
+
+model Employee {
+  id                  String           @id @default(cuid())
+  companyId           String
+  userId              String?          @unique  // Link to User account (for ESS)
+
+  // Personal Information
+  employeeNumber      String           // e.g. "EMP-0001" — unique per company
+  firstName           String
+  middleName          String?
+  lastName            String
+  suffix              String?          // Jr., Sr., III, etc.
+  preferredName       String?
+  birthDate           DateTime?
+  gender              Gender?
+  civilStatus         CivilStatus?
+  nationality         String?          @default("Filipino")
+
+  // Contact
+  personalEmail       String?
+  workEmail           String?
+  mobileNumber        String?
+  phoneNumber         String?
+
+  // Address
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  province            String?
+  zipCode             String?
+  region              String?
+
+  // Employment Details
+  departmentId        String?
+  branchId            String?
+  jobTitle            String?
+  jobLevel            String?          // e.g. "Junior", "Senior", "Manager"
+  employmentStatus    EmploymentStatus @default(PROBATIONARY)
+  employmentType      EmploymentType   @default(FULL_TIME)
+  hireDate            DateTime
+  regularizationDate  DateTime?
+  resignationDate     DateTime?
+  lastWorkingDate     DateTime?
+  endOfContractDate   DateTime?
+
+  // Payroll Settings
+  payFrequency        PayFrequency     @default(SEMI_MONTHLY)
+  salaryType          SalaryType       @default(MONTHLY)
+  standardWorkHours   Decimal          @default(8)   @db.Decimal(4, 2)
+  standardWorkDays    Decimal          @default(22)  @db.Decimal(4, 2)
+
+  // Bank Details (encrypted at application layer before storing)
+  bankName            String?
+  bankAccountNumber   String?          // Store encrypted
+  bankAccountName     String?
+
+  // Standard timestamps & soft delete
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
+
+  // Relations
+  company             Company          @relation(fields: [companyId], references: [id])
+  user                User?            @relation(fields: [userId], references: [id])
+  department          Department?      @relation(fields: [departmentId], references: [id])
+  branch              Branch?          @relation(fields: [branchId], references: [id])
+  statutoryIds        StatutoryIds?
+  salaryHistory       EmployeeSalary[]
+
+  @@unique([companyId, employeeNumber])
+  @@index([companyId])
+  @@index([companyId, employmentStatus])
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// STATUTORY IDs (one-to-one with Employee)
+// =============================================================================
+
+model StatutoryIds {
+  id              String    @id @default(cuid())
+  employeeId      String    @unique
+  companyId       String    // Denormalized for easy tenant scoping
+
+  // Government IDs (store encrypted at application layer)
+  tinNumber       String?
+  sssNumber       String?
+  philhealthNumber String?
+  pagibigNumber   String?
+  gsisMembershipId String?  // For government employees
+
+  // Tax exemption status
+  taxExempt       Boolean   @default(false)
+  taxExemptReason String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+}
+
+// =============================================================================
+// SALARY HISTORY (Effective Dating — never delete, append only)
+// Auditability: historical payroll runs must never be affected by salary changes.
+// =============================================================================
+
+model EmployeeSalary {
+  id              String      @id @default(cuid())
+  employeeId      String
+  companyId       String      // Denormalized for easy tenant scoping
+
+  // The actual rate — all monetary values use Decimal to prevent FP errors
+  basicSalary     Decimal     @db.Decimal(12, 4)  // e.g. 25000.0000
+  salaryType      SalaryType
+
+  // Effective dating: this record is valid from effectiveDate to the next record's effectiveDate
+  effectiveDate   DateTime
+  endDate         DateTime?   // NULL = currently active rate
+  reason          String?     // e.g. "Initial hire", "Annual increment", "Promotion"
+
+  // Audit trail
+  createdByUserId String?
+  createdAt       DateTime    @default(now())
+
+  employee        Employee    @relation(fields: [employeeId], references: [id])
+  company         Company     @relation(fields: [companyId], references: [id])
+
+  @@index([employeeId, effectiveDate])
+  @@index([companyId])
+}
+
