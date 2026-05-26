@@ -1,8 +1,8 @@
-# **End-to-End Philippine Payroll Software: Feature Blueprint & Architecture**
+# **Sentire Payroll: End-to-End Philippine Payroll Software Blueprint & Architecture**
 
 **Target Market:** Philippine SMEs (Micro-businesses to Mid-Market enterprises with 500 \- 5,000+ employees).
 
-**Objective:** A scalable, compliant, and automated HRIS & Payroll system.
+**Objective:** A scalable, compliant, and automated HRIS & Payroll system with a premium user experience.
 
 ## **1\. Core Computation Engine (Philippine Labor Code Compliant)**
 
@@ -61,7 +61,8 @@
 
 * **Comprehensive Profile:** Name, contact, address, civil status, birthdate, gender.  
 * **Statutory IDs:** TIN, SSS, PhilHealth, Pag-IBIG numbers.  
-* **Employment Details:** Hire date, regularisation date, job title, department, branch/location (Crucial for multi-branch SMEs).  
+* **Multi-Location & Branch Management:** Explicitly tag and group employees by physical locations, branches, or stores. This enables location-specific reporting, filtered payroll runs, and assigning specific geofences to specific branches.  
+* **Employment Details:** Hire date, regularisation date, job title, department.  
 * **Employee Lifecycle & Movement:** Generate and track digital Movement Forms for department transfers, branch reassignments, promotions, and salary adjustments.  
 * **Incident Management:** Create, attach, and track Incident Reports (IR), Notice to Explain (NTE), disciplinary actions, and memos directly within the employee's 201 file.  
 * **Salary Details:** Basic pay, pay frequency (Semi-monthly, Monthly, Weekly), Bank Account details for payroll crediting.  
@@ -71,9 +72,10 @@
 ### **Module 2: Time & Attendance (T\&A)**
 
 * **Digital Time Clock (Employee Login/Out):**  
-  * **Web/Mobile Access:** Employees log in to their ESS portal via mobile browser or dedicated app.  
-  * **Selfie Requirement:** Upon clicking "Time In" or "Time Out", the application requires camera access to capture a live selfie. This prevents buddy-punching.  
-  * **GPS & Geofencing:** The system captures the device's exact GPS coordinates. Admins can set "Geofences" (e.g., 50-meter radius around the office/branch). If the employee is outside the radius, the log is flagged or rejected.  
+  * **Web/Mobile Access (Personal Device):** Employees log in to their ESS portal via their personal mobile browser or dedicated app.  
+  * **Shared Device Kiosk Mode (Cross-Platform):** A specialized web-based interface that turns ANY device (tablet, desktop PC, or spare smartphone browser) into a centralized punch clock for a specific branch or location. Employees without personal smartphones can simply approach the kiosk, enter their unique Employee PIN (or scan a printed QR badge), and time in/out.  
+  * **Selfie Requirement:** Upon clicking "Time In" or "Time Out" (whether on personal ESS or the Kiosk), the application requires camera access to capture a live selfie. This prevents buddy-punching.  
+  * **GPS & Geofencing:** The system captures the device's exact GPS coordinates. Admins can set distinct "Geofences" per branch (e.g., 50-meter radius around the Makati office vs. the Cebu warehouse). If a personal device log is outside the radius, it is flagged or rejected.  
 * **Alternative Timekeeping Inputs:**  
   * Manual entry (Admin/HR only).  
   * Bulk upload of raw timesheet data (CSV from biometrics).  
@@ -104,8 +106,11 @@
 * **One-Click Payroll Run:** Generate gross-to-net computations for thousands of employees in seconds based on approved DTRs.  
 * **Payroll Register Review:** Detailed breakdown table (Basic, OT, Allowances, Gross, Statutory, Tax, Net) prior to finalization.
 
-### **Module 4: Compliance & Reporting**
+### **Module 4: Compliance & Reporting Analytics**
 
+* **Advanced Payroll & Timesheet Reporting:**  
+  * **Payroll Reports:** Downloadable, comprehensive Gross-to-Net registers, YTD (Year-to-Date) earnings reports, active loan balance summaries, and payroll variance reports (comparing current vs. previous cutoff).  
+  * **Timesheet & Attendance Reports (Data Slicing):** Advanced timesheet analytics allowing HR/Admins to slice, dice, and pivot attendance data by *Department, Location, Branch, Cost Center, or specific Date Ranges*. Essential for tracking Overtime spend, identifying absenteeism trends, and allocating manpower costs accurately across different business units.  
 * **Bank Advice/Files:** Generate standard bank text/CSV files for direct deposit (BDO, BPI, Metrobank, Security Bank, UnionBank).  
 * **Statutory Reports:**  
   * SSS R-1A, R-3 forms / electronic files.  
@@ -148,7 +153,7 @@
 * **Computations:** Automated basic pay, SSS, PhilHealth, Pag-IBIG, and Withholding Tax.  
 * **Allowances:** Standard De Minimis setup.  
 * **Outputs:** Standard PDF Payslips (Admin downloads and distributes manually), Basic Payroll Register report.  
-* *Limitation:* Single admin user, no bank file generation, no ESS portal (no selfie time clock), standard non-editable roles.
+* *Limitation:* Single admin user, no bank file generation, no ESS portal (no selfie time clock), standard non-editable roles, single location only.
 
 ### **Tier 2: Growth (₱799 Base \+ ₱39/employee)**
 
@@ -156,7 +161,8 @@
 
 * **Everything in Starter, plus:**  
 * **Employee Self-Service (ESS):** Digital payslip viewing, Leave filing, OT filing.  
-* **Time & Attendance:** Digital Time Clock with Selfie & Geofencing, Shift scheduling, multi-level leave approval workflows.  
+* **Time & Attendance:** Digital Time Clock with Selfie & Geofencing via personal device.  
+* **Kiosk Mode:** Access to the cross-platform Shared Device Kiosk (Tablet/Browser) for remote/branch employees without smartphones.  
 * **Payout:** Bank File Generation (BPI, BDO, UnionBank, etc.).  
 * **Compliance:** Generation of 1601-C data, SSS/PHIC/HDMF transmittal files.  
 * **HRIS Extras:** Basic Incident Reports and Leave Entitlement Engine.  
@@ -168,14 +174,15 @@
 
 * **Everything in Growth, plus:**  
 * **Mass Scale Operations:** High-performance bulk processing, bulk shift assignments, mass salary adjustments.  
-* **Organizational Complexity:** Multi-branch/Multi-location tagging, Cost Center allocation, Departmental rollups, Movement Forms.  
-* **Advanced T\&A:** Cross-Midnight shift logic, Custom DTR routing workflows (Employee \-\> Supervisor \-\> Manager \-\> HR).  
+* **Organizational Complexity:** Advanced Multi-Location & Branch Management (unlimited branches, specific geo-fencing per location), Cost Center allocation, Departmental rollups, Movement Forms.  
+* **Advanced T\&A & Analytics:** Cross-Midnight shift logic, Custom DTR routing workflows, and Full Timesheet/Payroll Data Slicing (by department/branch).  
 * **Advanced Taxation:** Year-end Annualization, BIR Form 2316 auto-generation, Alphalist dat-file generation.  
 * **Security & Audit:** Dynamic Roles and Permissions (Custom RBAC), Comprehensive Audit Logs (who edited what salary/time log and when), SSO (Single Sign-On).  
 * **Integrations:** Developer API access (for pushing biometric data or integrating with external ERPs/Accounting software).
 
 ## **4\. Technical Non-Functional Requirements (for the AI)**
 
+* **UI/UX & Branding (Sentire Payroll):** The platform must embody the **Sentire Payroll** brand identity with a premium, professional "blue-themed" design language. Prioritize high-quality UX and UI—clean layouts, intuitive navigation, ample whitespace, and fast, responsive data tables capable of handling thousands of rows smoothly. *(Directives for AI: Utilize Tailwind CSS deep blue and slate color palettes, and leverage premium component libraries like shadcn/ui to achieve a modern, trustworthy, and enterprise-grade feel).*  
 * **Database Scalability:** Use relational databases (PostgreSQL/MySQL) with proper indexing on company\_id, employee\_id, and payroll\_period to ensure calculations for 5,000 employees complete in under 10 seconds. Implement strict Multi-Tenant isolation at the database query level.  
 * **Precision:** Use Decimal data types for all monetary values to prevent floating-point rounding errors (crucial for tax and statutory calculations).  
 * **Security:** PII (Personally Identifiable Information) and bank details must be encrypted at rest. Selfie images should be stored in secure cloud buckets (e.g., AWS S3) with signed URLs.  

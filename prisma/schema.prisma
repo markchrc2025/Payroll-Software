@@ -1,6 +1,6 @@
 // =============================================================================
 // Philippine HRIS & Payroll SaaS — Prisma Schema
-// Phase 1: Multi-Tenancy + Core HRIS
+// Phase 1 (v2): Multi-Tenancy + Core HRIS + Dynamic RBAC + Leave + Movements
 // =============================================================================
 
 generator client {
@@ -15,11 +15,37 @@ datasource db {
 // ENUMS
 // =============================================================================
 
-enum UserRole {
-  SUPER_ADMIN  // Platform-level (you, the SaaS owner)
-  ADMIN        // Company HR/Payroll Admin
-  MANAGER      // Department Manager (limited access)
-  EMPLOYEE     // ESS access only
+/// Platform-level role. Separates the SaaS owner from all company users.
+/// All company-specific access control is handled by the dynamic Role model.
+enum SystemRole {
+  SUPER_ADMIN  // SaaS platform owner — no companyId, sees all tenants
+  COMPANY_USER // Belongs to a company; access governed by assigned Role
+}
+
+// Dynamic RBAC — which module the permission applies to
+enum PermissionModule {
+  EMPLOYEES
+  DEPARTMENTS
+  BRANCHES
+  PAYROLL
+  TIMESHEETS
+  LEAVES
+  REPORTS
+  COMPLIANCE
+  SETTINGS
+  ROLES
+  INCIDENTS
+  MOVEMENTS
+}
+
+// Dynamic RBAC — granular actions per module
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
 }
 
 enum SubscriptionTier {
@@ -77,8 +103,70 @@ enum Gender {
   PREFER_NOT_TO_SAY
 }
 
-// =============================================================================
-// MULTI-TENANCY — Company (Tenant)
+// Shared approval status used across Leave, Movements, OT requests, etc.
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  FOR_REVIEW  // Flagged for further checking (e.g. GPS out-of-range)
+}
+
+// Employee lifecycle event types
+enum MovementType {
+  DEPARTMENT_TRANSFER
+  BRANCH_TRANSFER
+  PROMOTION
+  DEMOTION
+  SALARY_ADJUSTMENT
+  TITLE_CHANGE
+  STATUS_CHANGE       // e.g. Probationary → Regular
+  REGULARIZATION
+}
+
+// HR incident & disciplinary record types
+enum IncidentType {
+  INCIDENT_REPORT
+  NOTICE_TO_EXPLAIN
+  NOTICE_OF_DECISION
+  DISCIPLINARY_ACTION
+  COMMENDATION
+  MEMO
+  OTHER
+}
+
+enum IncidentStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+// Leave management
+enum LeaveUnit {
+  DAYS
+  HOURS
+}
+
+enum AccrualFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+  UPON_REGULARIZATION
+  LUMP_SUM             // Full balance granted at start of year/hire
+}
+
+enum LeaveTransactionType {
+  ACCRUAL              // System-generated periodic credit
+  USAGE                // Deducted when a leave request is approved
+  ADJUSTMENT           // Manual HR credit/debit
+  CARRYOVER            // Year-end balance rolled forward
+  FORFEITURE           // Year-end balance that exceeds carry-over limit
+  CONVERSION           // Leave credits converted to cash payout
+}
+
+
 // =============================================================================
 
 model Company {
@@ -112,10 +200,18 @@ model Company {
 
   // Relations
   users              User[]
+  roles              Role[]
   departments        Department[]
   branches           Branch[]
   employees          Employee[]
   employeeSalaries   EmployeeSalary[]
+  employeeMovements  EmployeeMovement[]
+  incidentReports    IncidentReport[]
+  geofences          Geofence[]
+  kiosks             Kiosk[]
+  leaveTypes         LeaveType[]
+  leaveTransactions  LeaveTransaction[]
+  dtrApprovalConfig  DTRApprovalConfig?
 
   @@index([deletedAt])
 }
@@ -125,14 +221,23 @@ model Company {
 // =============================================================================
 
 model User {
-  id             String    @id @default(cuid())
-  companyId      String
+  id             String     @id @default(cuid())
+  companyId      String?    // NULL for SUPER_ADMIN users
   email          String
   passwordHash   String
   firstName      String
   lastName       String
-  role           UserRole  @default(EMPLOYEE)
-  isActive       Boolean   @default(true)
+
+  // Platform-level role — distinguishes SaaS owner from company users
+  systemRole     SystemRole @default(COMPANY_USER)
+
+  // Dynamic company-level role (NULL for SUPER_ADMIN)
+  roleId         String?
+
+  // ESS secondary PIN — stored hashed; used to unlock payslip detail view
+  essPinHash     String?
+
+  isActive       Boolean    @default(true)
   lastLoginAt    DateTime?
 
   // 2FA (for future use)
@@ -140,17 +245,19 @@ model User {
   twoFactorSecret  String?
 
   // Standard timestamps & soft delete
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   deletedAt      DateTime?
 
   // Relations
-  company        Company   @relation(fields: [companyId], references: [id])
-  employee       Employee? // A user may be linked to an employee profile
+  company        Company?   @relation(fields: [companyId], references: [id])
+  assignedRole   Role?      @relation(fields: [roleId], references: [id])
+  employee       Employee?  // A user may be linked to an employee profile
 
-  // A user's email must be unique within a company (not globally)
+  // Email must be unique within a company (not globally)
   @@unique([companyId, email])
   @@index([companyId])
+  @@index([roleId])
   @@index([deletedAt])
 }
 
@@ -193,6 +300,8 @@ model Branch {
 
   company     Company    @relation(fields: [companyId], references: [id])
   employees   Employee[]
+  geofences   Geofence[]
+  kiosks      Kiosk[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -253,6 +362,12 @@ model Employee {
   standardWorkHours   Decimal          @default(8)   @db.Decimal(4, 2)
   standardWorkDays    Decimal          @default(22)  @db.Decimal(4, 2)
 
+  // Kiosk Time Clock (Growth+)
+  // PIN hashed at application layer — used for shared-device punch-in
+  kioskPinHash        String?
+  // Unique QR badge code for contactless kiosk scan — unique per company
+  qrBadgeCode         String?
+
   // Bank Details (encrypted at application layer before storing)
   bankName            String?
   bankAccountNumber   String?          // Store encrypted
@@ -270,8 +385,13 @@ model Employee {
   branch              Branch?          @relation(fields: [branchId], references: [id])
   statutoryIds        StatutoryIds?
   salaryHistory       EmployeeSalary[]
+  movements           EmployeeMovement[]
+  incidentReports     IncidentReport[]
+  leaveBalances       LeaveBalance[]
+  leaveTransactions   LeaveTransaction[]
 
   @@unique([companyId, employeeNumber])
+  @@unique([companyId, qrBadgeCode])
   @@index([companyId])
   @@index([companyId, employmentStatus])
   @@index([departmentId])
@@ -335,5 +455,340 @@ model EmployeeSalary {
 
   @@index([employeeId, effectiveDate])
   @@index([companyId])
+}
+
+// =============================================================================
+// DYNAMIC RBAC — Role, Permission, RolePermission
+// Module 6: Each company defines its own named roles with granular permissions.
+// SUPER_ADMIN users bypass this system entirely.
+// =============================================================================
+
+model Role {
+  id          String           @id @default(cuid())
+  companyId   String
+  name        String           // e.g. "Payroll Master", "Line Supervisor", "Read-Only Auditor"
+  description String?
+  isSystem    Boolean          @default(false) // TRUE = built-in default, cannot be deleted
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+
+  company     Company          @relation(fields: [companyId], references: [id])
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+/// Static permission definitions — seeded once, never changed by users.
+/// Represents every possible action on every module in the system.
+model Permission {
+  id      String           @id @default(cuid())
+  module  PermissionModule
+  action  PermissionAction
+  label   String           // Human-readable, e.g. "Approve Timesheets"
+
+  roles   RolePermission[]
+
+  @@unique([module, action])
+}
+
+/// Join table: which permissions are granted to which role.
+/// Optional departmentScoped flag allows fine-grained access
+/// (e.g. a Supervisor can approve DTRs only for their own department).
+model RolePermission {
+  roleId           String
+  permissionId     String
+  departmentScoped Boolean    @default(false)
+
+  role             Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission       Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// =============================================================================
+// EMPLOYEE LIFECYCLE — Movement Forms
+// Module 1: Auditable trail of every structural change to an employee record.
+// Historical payroll runs must not be affected — movements use effective dating.
+// =============================================================================
+
+model EmployeeMovement {
+  id               String           @id @default(cuid())
+  companyId        String
+  employeeId       String
+  movementType     MovementType
+
+  // Before/after snapshots — store what changed
+  fromDepartmentId String?
+  toDepartmentId   String?
+  fromBranchId     String?
+  toBranchId       String?
+  fromJobTitle     String?
+  toJobTitle       String?
+  fromJobLevel     String?
+  toJobLevel       String?
+  fromBasicSalary  Decimal?         @db.Decimal(12, 4)
+  toBasicSalary    Decimal?         @db.Decimal(12, 4)
+  fromStatus       EmploymentStatus?
+  toStatus         EmploymentStatus?
+
+  effectiveDate    DateTime         // When the change takes effect
+  reason           String?
+  notes            String?
+  documentUrl      String?          // Supporting document (e.g. signed movement form)
+
+  // Approval workflow
+  approvalStatus   ApprovalStatus   @default(PENDING)
+  approvedByUserId String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+
+  createdByUserId  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  company          Company          @relation(fields: [companyId], references: [id])
+  employee         Employee         @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId, effectiveDate])
+}
+
+// =============================================================================
+// INCIDENT MANAGEMENT — IR / NTE / Disciplinary Records
+// Module 1: Attached to the employee's 201 file. Never hard-deleted.
+// =============================================================================
+
+model IncidentReport {
+  id                String         @id @default(cuid())
+  companyId         String
+  employeeId        String
+  type              IncidentType
+  status            IncidentStatus @default(OPEN)
+
+  subject           String
+  description       String
+  incidentDate      DateTime
+
+  // For NTE: deadline for employee's written response
+  responseDeadline  DateTime?
+  employeeResponse  String?
+
+  // File attachments — array of signed storage URLs (e.g. S3)
+  attachmentUrls    Json           @default("[]")
+
+  resolution        String?
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+
+  createdByUserId   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  company           Company        @relation(fields: [companyId], references: [id])
+  employee          Employee       @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// GPS GEOFENCING
+// Module 2 (Growth+): Per-branch geofence radius for the digital time clock.
+// Attendance logs outside the radius are flagged or rejected.
+// =============================================================================
+
+model Geofence {
+  id            String    @id @default(cuid())
+  companyId     String
+  branchId      String?   // NULL = applies to the whole company (fallback)
+  name          String    // e.g. "Main Office", "Warehouse B"
+
+  latitude      Decimal   @db.Decimal(10, 7)
+  longitude     Decimal   @db.Decimal(10, 7)
+  radiusMeters  Int       @default(50)
+  isActive      Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  company       Company   @relation(fields: [companyId], references: [id])
+  branch        Branch?   @relation(fields: [branchId], references: [id])
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// LEAVE ENTITLEMENT ENGINE
+// Module 2: Leave types, per-employee balances, and full transaction ledger.
+// Supports custom accrual policies per leave type per company.
+// =============================================================================
+
+model LeaveType {
+  id                      String           @id @default(cuid())
+  companyId               String
+  name                    String           // e.g. "Vacation Leave", "Sick Leave"
+  code                    String           // e.g. "VL", "SL", "SIL"
+  description             String?
+  isPaid                  Boolean          @default(true)
+  isConvertibleToCash     Boolean          @default(false)
+  unit                    LeaveUnit        @default(DAYS)
+
+  // Accrual policy
+  accrualFrequency        AccrualFrequency @default(MONTHLY)
+  accrualAmount           Decimal          @db.Decimal(6, 4) // e.g. 1.25 days/month
+  maxAccruableBalance     Decimal?         @db.Decimal(6, 4) // cap on max held balance
+  carryOverLimit          Decimal?         @db.Decimal(6, 4) // how much rolls to next year
+
+  // Eligibility
+  requiresRegularization  Boolean          @default(false)   // only regular employees can use
+
+  isActive                Boolean          @default(true)
+
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  deletedAt               DateTime?
+
+  company                 Company          @relation(fields: [companyId], references: [id])
+  balances                LeaveBalance[]
+  transactions            LeaveTransaction[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+/// Running balance per employee per leave type per calendar year.
+/// Never deleted — adjusted via LeaveTransaction entries.
+model LeaveBalance {
+  id               String    @id @default(cuid())
+  companyId        String
+  employeeId       String
+  leaveTypeId      String
+  year             Int       // Calendar year this balance covers (e.g. 2025)
+
+  openingBalance   Decimal   @db.Decimal(8, 4) @default(0)
+  earned           Decimal   @db.Decimal(8, 4) @default(0)
+  used             Decimal   @db.Decimal(8, 4) @default(0)
+  forfeited        Decimal   @db.Decimal(8, 4) @default(0)
+  convertedToCash  Decimal   @db.Decimal(8, 4) @default(0)
+  // Computed in application: balance = openingBalance + earned - used - forfeited - convertedToCash
+
+  updatedAt        DateTime  @updatedAt
+
+  employee         Employee  @relation(fields: [employeeId], references: [id])
+  leaveType        LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@index([companyId])
+  @@index([employeeId])
+}
+
+/// Full ledger of every credit and debit against a leave balance.
+/// This is the source of truth — balances are derived from this log.
+model LeaveTransaction {
+  id               String               @id @default(cuid())
+  companyId        String
+  employeeId       String
+  leaveTypeId      String
+  leaveBalanceId   String
+
+  type             LeaveTransactionType
+  // Positive = credit (accrual, adjustment, carryover)
+  // Negative = debit (usage, forfeiture, conversion)
+  amount           Decimal              @db.Decimal(8, 4)
+
+  // For USAGE transactions
+  startDate        DateTime?
+  endDate          DateTime?
+  reason           String?
+  attachmentUrls   Json                 @default("[]")
+
+  // Approval
+  approvalStatus   ApprovalStatus       @default(PENDING)
+  approvedByUserId String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+
+  createdByUserId  String?
+  createdAt        DateTime             @default(now())
+
+  company          Company              @relation(fields: [companyId], references: [id])
+  employee         Employee             @relation(fields: [employeeId], references: [id])
+  leaveType        LeaveType            @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId, leaveTypeId])
+  @@index([approvalStatus])
+}
+
+// =============================================================================
+// DTR APPROVAL WORKFLOW CONFIGURATION
+// Module 2 (Pro): Customizable multi-step approval chain per company.
+// Companies can enable/disable steps to match their org structure.
+// =============================================================================
+
+model DTRApprovalConfig {
+  id                              String   @id @default(cuid())
+  companyId                       String   @unique
+
+  // Toggle approval steps on/off
+  requiresEmployeeSubmission      Boolean  @default(true)
+  requiresSupervisorVerification  Boolean  @default(true)
+  requiresManagerApproval         Boolean  @default(true)
+  // HR processing is always the final step — cannot be disabled
+
+  // Hours allowed after cutoff end before each step auto-escalates
+  employeeSubmitDeadlineHours     Int      @default(48)
+  supervisorDeadlineHours         Int      @default(24)
+  managerDeadlineHours            Int      @default(24)
+
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  company                         Company  @relation(fields: [companyId], references: [id])
+}
+
+// =============================================================================
+// KIOSK — Shared Device Time Clock
+// Module 2 (Growth+): Any browser-capable device registered as a branch punch
+// clock. Employees authenticate with their kioskPinHash or QR badge scan.
+// GPS check is skipped — kiosk is physically located at the branch.
+// =============================================================================
+
+model Kiosk {
+  id               String    @id @default(cuid())
+  companyId        String
+  branchId         String?   // Which branch/location this kiosk serves
+  name             String    // e.g. "Main Entrance", "Warehouse B Gate"
+
+  // Unique token embedded in the kiosk URL to identify the device session
+  deviceToken      String    @unique @default(cuid())
+
+  requiresSelfie   Boolean   @default(true)
+  isActive         Boolean   @default(true)
+
+  lastSeenAt       DateTime? // Last time a punch was recorded through this kiosk
+
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  company          Company   @relation(fields: [companyId], references: [id])
+  branch           Branch?   @relation(fields: [branchId], references: [id])
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([deletedAt])
 }
 
