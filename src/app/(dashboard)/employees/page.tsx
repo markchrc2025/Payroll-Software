@@ -57,7 +57,7 @@ const EMPLOYMENT_STATUSES = [
   { value: "PROJECT_BASED", label: "Project-Based" },
   { value: "RESIGNED", label: "Resigned" },
   { value: "TERMINATED", label: "Terminated" },
-  { value: "SEPARATED", label: "Separated" },
+  { value: "RETIRED", label: "Retired" },
 ];
 
 const LIMITS = [25, 50, 100];
@@ -186,11 +186,9 @@ export default function EmployeesPage() {
             <Download className="mr-2 h-4 w-4" />
             {isExporting ? "Exporting…" : "Export CSV"}
           </Button>
-          <Button size="sm" asChild>
-            <Link href="/employees/new">
+          <Button size="sm" render={<Link href="/employees/new" />}>
               <Plus className="mr-2 h-4 w-4" />
               Add Employee
-            </Link>
           </Button>
         </div>
       </div>
@@ -203,11 +201,11 @@ export default function EmployeesPage() {
             className="pl-8 h-9"
             placeholder="Search by name, number, email…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
           />
         </div>
 
-        <Select value={departmentId} onValueChange={setDepartmentId}>
+        <Select value={departmentId} onValueChange={(v: string | null) => setDepartmentId(v ?? "all")}>
           <SelectTrigger className="w-44 h-9">
             <SelectValue placeholder="All Departments" />
           </SelectTrigger>
@@ -221,7 +219,7 @@ export default function EmployeesPage() {
           </SelectContent>
         </Select>
 
-        <Select value={branchId} onValueChange={setBranchId}>
+        <Select value={branchId} onValueChange={(v: string | null) => setBranchId(v ?? "all")}>
           <SelectTrigger className="w-40 h-9">
             <SelectValue placeholder="All Branches" />
           </SelectTrigger>
@@ -235,7 +233,7 @@ export default function EmployeesPage() {
           </SelectContent>
         </Select>
 
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(v: string | null) => setStatus(v ?? "all")}>
           <SelectTrigger className="w-40 h-9">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
@@ -251,7 +249,7 @@ export default function EmployeesPage() {
 
         <Select
           value={String(limit)}
-          onValueChange={(v) => setLimit(Number(v))}
+          onValueChange={(v: string | null) => setLimit(Number(v ?? 25))}
         >
           <SelectTrigger className="w-24 h-9">
             <SelectValue />

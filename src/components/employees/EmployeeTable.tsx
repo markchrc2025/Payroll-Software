@@ -196,7 +196,7 @@ export function EmployeeTable({
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}
       >
         <DialogContent>
           <DialogHeader>

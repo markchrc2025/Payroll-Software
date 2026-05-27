@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
     const parsed = csvEmployeeRowSchema.safeParse(rows[i]);
 
     if (!parsed.success) {
-      const messages = parsed.error.errors
-        .map((e) => `${e.path.join(".")}: ${e.message}`)
+      const messages = parsed.error.issues
+        .map((e) => `${(e.path as (string | number | symbol)[]).filter(p => typeof p !== 'symbol').join(".")}: ${e.message}`)
         .join("; ");
       errors.push({ row: rowNum, message: messages });
       continue;

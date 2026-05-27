@@ -60,11 +60,7 @@ const CIVIL_STATUS_OPTIONS = [
 const EMPLOYMENT_TYPE_OPTIONS = [
   { value: "FULL_TIME", label: "Full-Time" },
   { value: "PART_TIME", label: "Part-Time" },
-  { value: "CONTRACTUAL", label: "Contractual" },
-  { value: "PROJECT_BASED", label: "Project-Based" },
   { value: "CASUAL", label: "Casual" },
-  { value: "SEASONAL", label: "Seasonal" },
-  { value: "APPRENTICE", label: "Apprentice/OJT" },
 ];
 
 const EMPLOYMENT_STATUS_OPTIONS = [
@@ -74,7 +70,7 @@ const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "PROJECT_BASED", label: "Project-Based" },
   { value: "RESIGNED", label: "Resigned" },
   { value: "TERMINATED", label: "Terminated" },
-  { value: "SEPARATED", label: "Separated" },
+  { value: "RETIRED", label: "Retired" },
 ];
 
 const PAY_FREQUENCY_OPTIONS = [
@@ -120,7 +116,8 @@ export function EmployeeForm({
   const schema = mode === "create" ? createEmployeeSchema : updateEmployeeSchema;
 
   const form = useForm<CreateEmployeeInput>({
-    resolver: zodResolver(schema as typeof createEmployeeSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(schema as any),
     defaultValues: {
       employmentStatus: "PROBATIONARY",
       employmentType: "FULL_TIME",
@@ -134,7 +131,7 @@ export function EmployeeForm({
 
   const isSubmitting = form.formState.isSubmitting;
 
-  async function onSubmit(values: CreateEmployeeInput) {
+  async function onSubmit(values: CreateEmployeeInput): Promise<void> {
     const url =
       mode === "create" ? "/api/employees" : `/api/employees/${employeeId}`;
     const method = mode === "create" ? "POST" : "PUT";
@@ -182,10 +179,11 @@ export function EmployeeForm({
     type?: string;
   }) {
     return (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       <FormField
         control={form.control}
-        name={name}
-        render={({ field }) => (
+        name={name as any}
+        render={({ field }: { field: any }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <FormControl>
@@ -193,7 +191,7 @@ export function EmployeeForm({
                 type={type}
                 placeholder={placeholder}
                 {...field}
-                value={field.value as string ?? ""}
+                value={(field.value as string) ?? ""}
               />
             </FormControl>
             <FormMessage />
@@ -218,14 +216,15 @@ export function EmployeeForm({
     placeholder?: string;
   }) {
     return (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       <FormField
         control={form.control}
-        name={name}
-        render={({ field }) => (
+        name={name as any}
+        render={({ field }: { field: any }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <Select
-              value={field.value as string ?? ""}
+              value={(field.value as string) ?? ""}
               onValueChange={field.onChange}
             >
               <FormControl>
@@ -348,12 +347,12 @@ export function EmployeeForm({
             <FormField
               control={form.control}
               name="departmentId"
-              render={({ field }) => (
+              render={({ field }: { field: any }) => (
                 <FormItem>
                   <FormLabel>Department</FormLabel>
                   <Select
                     value={field.value ?? "none"}
-                    onValueChange={(v) =>
+                    onValueChange={(v: string) =>
                       field.onChange(v === "none" ? null : v)
                     }
                   >
@@ -378,12 +377,12 @@ export function EmployeeForm({
             <FormField
               control={form.control}
               name="branchId"
-              render={({ field }) => (
+              render={({ field }: { field: any }) => (
                 <FormItem>
                   <FormLabel>Branch</FormLabel>
                   <Select
                     value={field.value ?? "none"}
-                    onValueChange={(v) =>
+                    onValueChange={(v: string) =>
                       field.onChange(v === "none" ? null : v)
                     }
                   >

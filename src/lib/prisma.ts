@@ -1,29 +1,32 @@
 /**
  * Prisma Client Singleton
  *
- * Prevents multiple PrismaClient instances in Next.js hot-reload (development).
- * In Prisma 7, the database URL is passed directly to the constructor.
- * Reference: https://pris.ly/d/prisma7-client-config
+ * Prisma 7 uses the "client" engine which requires a driver adapter.
+ * We use @prisma/adapter-pg (pg Pool) for PostgreSQL.
+ * A single Pool is shared to prevent exhausting connections during Next.js hot-reload.
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prismaClientSingleton = () => {
+function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL!;
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
+    adapter,
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
         : ["error"],
   });
-};
+}
 
 declare global {
   // eslint-disable-next-line no-var
-  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var prismaGlobal: undefined | ReturnType<typeof createPrismaClient>;
 }
 
-const prisma: ReturnType<typeof prismaClientSingleton> =
-  globalThis.prismaGlobal ?? prismaClientSingleton();
+const prisma: ReturnType<typeof createPrismaClient> =
+  globalThis.prismaGlobal ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
