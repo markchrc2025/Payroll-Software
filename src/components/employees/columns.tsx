@@ -153,18 +153,16 @@ export function buildColumns(
         const name = `${emp.firstName} ${emp.lastName}`;
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
-              </Button>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon" className="h-8 w-8" />}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Open menu</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href={`/employees/${emp.id}/edit`}>
+              <DropdownMenuItem render={<Link href={`/employees/${emp.id}/edit`} />}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
-                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

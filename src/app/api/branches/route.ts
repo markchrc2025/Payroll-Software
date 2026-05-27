@@ -11,12 +11,10 @@ import { z } from "zod";
 
 const createBranchSchema = z.object({
   name: z.string().min(1, "Name is required").max(150),
-  code: z.string().max(20).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
   province: z.string().max(100).optional().nullable(),
-  region: z.string().max(100).optional().nullable(),
-  contactNumber: z.string().max(20).optional().nullable(),
+  zipCode: z.string().max(10).optional().nullable(),
   isHeadOffice: z.boolean().default(false),
 });
 
@@ -30,10 +28,8 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       name: true,
-      code: true,
       city: true,
       province: true,
-      region: true,
       isHeadOffice: true,
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },

@@ -62,7 +62,7 @@ export const createEmployeeSchema = z.object({
   jobLevel: z.string().max(100).optional().nullable(),
   employmentStatus: z.nativeEnum(EmploymentStatus).default("PROBATIONARY"),
   employmentType: z.nativeEnum(EmploymentType).default("FULL_TIME"),
-  hireDate: z.coerce.date({ required_error: "Hire date is required" }),
+  hireDate: z.coerce.date({ error: "Hire date is required" }),
   regularizationDate: z.coerce.date().optional().nullable(),
   resignationDate: z.coerce.date().optional().nullable(),
   lastWorkingDate: z.coerce.date().optional().nullable(),
@@ -76,7 +76,7 @@ export const createEmployeeSchema = z.object({
 
   // Initial salary (required on create)
   basicSalary: z.coerce
-    .number({ required_error: "Basic salary is required" })
+    .number({ error: "Basic salary is required" })
     .positive("Salary must be positive")
     .multipleOf(0.0001),
 
@@ -117,13 +117,17 @@ export const csvEmployeeRowSchema = z.object({
   birth_date: z.string().optional(),
   gender: z
     .string()
-    .transform((v) => v.toUpperCase())
-    .pipe(z.nativeEnum(Gender).optional().catch(undefined))
+    .transform((v) => {
+      const upper = v.toUpperCase();
+      return (upper in Gender) ? upper as keyof typeof Gender : undefined;
+    })
     .optional(),
   civil_status: z
     .string()
-    .transform((v) => v.toUpperCase().replace(" ", "_"))
-    .pipe(z.nativeEnum(CivilStatus).optional().catch(undefined))
+    .transform((v) => {
+      const upper = v.toUpperCase().replace(" ", "_");
+      return (upper in CivilStatus) ? upper as keyof typeof CivilStatus : undefined;
+    })
     .optional(),
   mobile_number: z.string().optional(),
   work_email: z.string().email().optional().or(z.literal("")),

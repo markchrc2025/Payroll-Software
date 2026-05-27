@@ -11,9 +11,7 @@ import { z } from "zod";
 
 const createDeptSchema = z.object({
   name: z.string().min(1, "Name is required").max(150),
-  code: z.string().max(20).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
-  parentId: z.string().cuid().optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -26,9 +24,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       name: true,
-      code: true,
       description: true,
-      parentId: true,
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },
   });
