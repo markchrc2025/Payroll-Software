@@ -60,15 +60,15 @@ export default async function EditEmployeePage({
     regularizationDate: employee.regularizationDate
       ? new Date(employee.regularizationDate).toISOString().slice(0, 10)
       : undefined,
-    statutoryIds: employee.statutoryIds
+    statutoryIds: Array.isArray(employee.statutoryIds)
       ? {
-          tinNumber: employee.statutoryIds.tinNumber ?? "",
-          sssNumber: employee.statutoryIds.sssNumber ?? "",
-          philhealthNumber: employee.statutoryIds.philhealthNumber ?? "",
-          pagibigNumber: employee.statutoryIds.pagibigNumber ?? "",
-          gsisMembershipId: employee.statutoryIds.gsisMembershipId ?? "",
-          taxExempt: employee.statutoryIds.taxExempt ?? false,
-          taxExemptReason: employee.statutoryIds.taxExemptReason ?? "",
+          tinNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "TIN")?.number ?? "",
+          sssNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "SSS")?.number ?? "",
+          philhealthNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "PHILHEALTH")?.number ?? "",
+          pagibigNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "PAGIBIG")?.number ?? "",
+          gsisMembershipId: employee.statutoryIds.find((s: { type: string }) => s.type === "GSIS")?.number ?? "",
+          taxExempt: false,
+          taxExemptReason: "",
         }
       : undefined,
   };

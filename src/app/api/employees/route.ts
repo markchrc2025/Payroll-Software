@@ -4,15 +4,15 @@
  */
 
 import type { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, StatutoryIdType } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
+import { toCentavos, centavosToJson } from "@/lib/money";
 import {
   ok,
   paginated,
   err,
   unauthorized,
-  serverError,
 } from "@/lib/api-response";
 import {
   createEmployeeSchema,
@@ -35,9 +35,9 @@ export async function GET(req: NextRequest) {
   const { page, limit, search, departmentId, branchId, status, employmentType } =
     params.data;
 
-  // Build the WHERE clause — always scoped to the company (multi-tenancy)
+  // Build the WHERE clause — always scoped to the tenant (multi-tenancy)
   const where: Prisma.EmployeeWhereInput = {
-    companyId: auth.companyId,
+    tenantId: auth.tenantId,
     deletedAt: null,
     ...(departmentId && { departmentId }),
     ...(branchId && { branchId }),
@@ -79,18 +79,28 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         department: { select: { id: true, name: true } },
         branch: { select: { id: true, name: true } },
+        position: { select: { id: true, title: true, level: true } },
         salaryHistory: {
           where: { endDate: null },
           orderBy: { effectiveDate: "desc" },
           take: 1,
-          select: { basicSalary: true, effectiveDate: true },
+          select: { basicSalaryCents: true, effectiveDate: true },
         },
       },
     }),
     prisma.employee.count({ where }),
   ]);
 
-  return paginated(employees, total, page, limit);
+  // Serialise BigInt centavos to string for JSON safety.
+  const serialised = employees.map((e) => ({
+    ...e,
+    salaryHistory: e.salaryHistory.map((s) => ({
+      ...s,
+      basicSalaryCents: centavosToJson(s.basicSalaryCents),
+    })),
+  }));
+
+  return paginated(serialised, total, page, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +119,12 @@ export async function POST(req: NextRequest) {
 
   const {
     basicSalary,
+    nontaxableBasicAmount,
     departmentId,
     branchId,
+    positionId,
+    immediateSupervisorId,
+    managerId,
     hireDate,
     standardWorkHours,
     standardWorkDays,
@@ -118,23 +132,29 @@ export async function POST(req: NextRequest) {
     ...rest
   } = parsed.data;
 
-  // Validate department & branch belong to this company
+  // Validate department, branch, position belong to this tenant
   if (departmentId) {
     const dept = await prisma.department.findFirst({
-      where: { id: departmentId, companyId: auth.companyId, deletedAt: null },
+      where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
     });
-    if (!dept) return err("Department not found in your company", 404);
+    if (!dept) return err("Department not found in your tenant", 404);
   }
   if (branchId) {
     const branch = await prisma.branch.findFirst({
-      where: { id: branchId, companyId: auth.companyId, deletedAt: null },
+      where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
     });
-    if (!branch) return err("Branch not found in your company", 404);
+    if (!branch) return err("Branch not found in your tenant", 404);
+  }
+  if (positionId) {
+    const pos = await prisma.position.findFirst({
+      where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
+    });
+    if (!pos) return err("Position not found in your tenant", 404);
   }
 
-  // Generate employee number: EMP-XXXX (padded, sequential per company)
+  // Generate employee number: EMP-XXXX (padded, sequential per tenant)
   const lastEmployee = await prisma.employee.findFirst({
-    where: { companyId: auth.companyId },
+    where: { tenantId: auth.tenantId },
     orderBy: { createdAt: "desc" },
     select: { employeeNumber: true },
   });
@@ -143,27 +163,31 @@ export async function POST(req: NextRequest) {
     : 1;
   const employeeNumber = `EMP-${String(nextNum).padStart(4, "0")}`;
 
-  // Create employee + initial salary in a transaction
+  // Create employee + initial salary + statutory IDs in a transaction
   const employee = await prisma.$transaction(async (tx) => {
     const emp = await tx.employee.create({
       data: {
         ...rest,
-        companyId: auth.companyId,
+        tenantId: auth.tenantId,
         employeeNumber,
         departmentId: departmentId ?? null,
         branchId: branchId ?? null,
+        positionId: positionId ?? null,
+        immediateSupervisorId: immediateSupervisorId ?? null,
+        managerId: managerId ?? null,
+        nontaxableBasicAmountCents: toCentavos(nontaxableBasicAmount ?? 0),
         hireDate,
         standardWorkHours: standardWorkHours.toString(),
         standardWorkDays: standardWorkDays.toString(),
       },
     });
 
-    // Create the opening salary record (effective from hire date)
+    // Opening salary record (effective from hire date)
     await tx.employeeSalary.create({
       data: {
         employeeId: emp.id,
-        companyId: auth.companyId,
-        basicSalary: basicSalary.toString(),
+        tenantId: auth.tenantId,
+        basicSalaryCents: toCentavos(basicSalary),
         salaryType: emp.salaryType,
         effectiveDate: hireDate,
         reason: "Initial hire",
@@ -171,21 +195,25 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create statutory IDs row if any were supplied (always create empty row
-    // so detail page can edit them later without a separate create step)
-    await tx.statutoryIds.create({
-      data: {
-        employeeId: emp.id,
-        companyId: auth.companyId,
-        tinNumber: emptyToNull(statutoryIds?.tinNumber),
-        sssNumber: emptyToNull(statutoryIds?.sssNumber),
-        philhealthNumber: emptyToNull(statutoryIds?.philhealthNumber),
-        pagibigNumber: emptyToNull(statutoryIds?.pagibigNumber),
-        gsisMembershipId: emptyToNull(statutoryIds?.gsisMembershipId),
-        taxExempt: statutoryIds?.taxExempt ?? false,
-        taxExemptReason: emptyToNull(statutoryIds?.taxExemptReason),
-      },
-    });
+    // Normalised StatutoryId rows — one row per (employee, type)
+    const rows: { type: StatutoryIdType; value: string | null }[] = [
+      { type: StatutoryIdType.TIN, value: emptyToNull(statutoryIds?.tinNumber) },
+      { type: StatutoryIdType.SSS, value: emptyToNull(statutoryIds?.sssNumber) },
+      { type: StatutoryIdType.PHILHEALTH, value: emptyToNull(statutoryIds?.philhealthNumber) },
+      { type: StatutoryIdType.PAGIBIG, value: emptyToNull(statutoryIds?.pagibigNumber) },
+      { type: StatutoryIdType.GSIS, value: emptyToNull(statutoryIds?.gsisMembershipId) },
+    ];
+    for (const r of rows) {
+      if (r.value == null) continue;
+      await tx.statutoryId.create({
+        data: {
+          employeeId: emp.id,
+          tenantId: auth.tenantId,
+          type: r.type,
+          number: r.value,
+        },
+      });
+    }
 
     return emp;
   });

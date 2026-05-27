@@ -46,13 +46,13 @@ export async function POST(
 
   // Verify employee is in this tenant
   const employee = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
     select: { id: true },
   });
   if (!employee) return notFound("Employee");
 
   const storageKey = buildEmployeeDocumentKey({
-    companyId: auth.companyId,
+    tenantId: auth.tenantId,
     employeeId: id,
     fileName: parsed.data.fileName,
   });

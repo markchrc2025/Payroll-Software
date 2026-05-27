@@ -22,12 +22,12 @@ export default async function EmployeeDocumentsPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
-  if (!session?.user?.companyId) redirect("/login");
+  if (!session?.user?.tenantId) redirect("/login");
 
   const { id } = await params;
 
   const employee = await prisma.employee.findFirst({
-    where: { id, companyId: session.user.companyId, deletedAt: null },
+    where: { id, tenantId: session.user.tenantId, deletedAt: null },
     select: {
       id: true,
       firstName: true,
@@ -40,7 +40,7 @@ export default async function EmployeeDocumentsPage({
   const documents = await prisma.employeeDocument.findMany({
     where: {
       employeeId: id,
-      companyId: session.user.companyId,
+      tenantId: session.user.tenantId,
       deletedAt: null,
     },
     orderBy: [{ category: "asc" }, { createdAt: "desc" }],

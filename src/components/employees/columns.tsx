@@ -38,7 +38,7 @@ export type EmployeeRow = {
   hireDate: string;
   department: { id: string; name: string } | null;
   branch: { id: string; name: string } | null;
-  salaryHistory: { basicSalary: string; effectiveDate: string }[];
+  salaryHistory: { basicSalaryCents: string | null; effectiveDate: string }[];
 };
 
 // ---------------------------------------------------------------------------
@@ -66,9 +66,9 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatPeso(value: string | undefined): string {
-  if (!value) return "—";
-  const n = parseFloat(value);
+function formatPeso(cents: string | null | undefined): string {
+  if (!cents) return "—";
+  const n = Number(cents) / 100;
   if (isNaN(n)) return "—";
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
@@ -143,7 +143,7 @@ export function buildColumns(
       id: "basicSalary",
       header: "Basic Salary",
       cell: ({ row }) =>
-        formatPeso(row.original.salaryHistory?.[0]?.basicSalary),
+        formatPeso(row.original.salaryHistory?.[0]?.basicSalaryCents),
     },
     {
       id: "actions",

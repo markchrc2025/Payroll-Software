@@ -1,12 +1,12 @@
 /**
- * GET  /api/branches  — List all branches for the company
+ * GET  /api/branches  — List all branches for the tenant
  * POST /api/branches  — Create a new branch
  */
 
 import type { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
 
 const createBranchSchema = z.object({
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (!auth) return unauthorized();
 
   const branches = await prisma.branch.findMany({
-    where: { companyId: auth.companyId, deletedAt: null },
+    where: { tenantId: auth.tenantId, deletedAt: null },
     orderBy: [{ isHeadOffice: "desc" }, { name: "asc" }],
     select: {
       id: true,
@@ -48,10 +48,10 @@ export async function POST(req: NextRequest) {
   const parsed = createBranchSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  // Check for duplicate name within company
+  // Check for duplicate name within tenant
   const existing = await prisma.branch.findFirst({
     where: {
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
       name: { equals: parsed.data.name, mode: "insensitive" },
       deletedAt: null,
     },
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const branch = await prisma.branch.create({
     data: {
       ...parsed.data,
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
     },
   });
 

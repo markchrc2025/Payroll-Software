@@ -5,14 +5,15 @@
  */
 
 import type { NextRequest } from "next/server";
+import { StatutoryIdType } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
+import { centavosToJson, toCentavos } from "@/lib/money";
 import {
   ok,
   err,
   unauthorized,
   notFound,
-  serverError,
 } from "@/lib/api-response";
 import { updateEmployeeSchema } from "@/lib/validations/employee";
 
@@ -30,10 +31,11 @@ export async function GET(
   const { id } = await params; // Next.js 16: params is a Promise
 
   const employee = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
     include: {
       department: { select: { id: true, name: true } },
       branch: { select: { id: true, name: true } },
+      position: { select: { id: true, title: true, level: true } },
       statutoryIds: true,
       salaryHistory: {
         where: { endDate: null },
@@ -45,7 +47,17 @@ export async function GET(
 
   if (!employee) return notFound("Employee");
 
-  return ok(employee);
+  // Serialise BigInt centavos for JSON safety
+  const serialised = {
+    ...employee,
+    nontaxableBasicAmountCents: centavosToJson(employee.nontaxableBasicAmountCents),
+    salaryHistory: employee.salaryHistory.map((s) => ({
+      ...s,
+      basicSalaryCents: centavosToJson(s.basicSalaryCents),
+    })),
+  };
+
+  return ok(serialised);
 }
 
 // ---------------------------------------------------------------------------
@@ -68,27 +80,42 @@ export async function PUT(
   if (!parsed.success)
     return err("Validation failed", 422, parsed.error.flatten());
 
-  // Ensure employee belongs to this company
+  // Ensure employee belongs to this tenant
   const existing = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
   });
   if (!existing) return notFound("Employee");
 
-  // Validate dept / branch if being changed
-  const { departmentId, branchId, standardWorkHours, standardWorkDays, statutoryIds, ...rest } =
-    parsed.data;
+  const {
+    departmentId,
+    branchId,
+    positionId,
+    immediateSupervisorId,
+    managerId,
+    nontaxableBasicAmount,
+    standardWorkHours,
+    standardWorkDays,
+    statutoryIds,
+    ...rest
+  } = parsed.data;
 
   if (departmentId !== undefined && departmentId !== null) {
     const dept = await prisma.department.findFirst({
-      where: { id: departmentId, companyId: auth.companyId, deletedAt: null },
+      where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
     });
-    if (!dept) return err("Department not found in your company", 404);
+    if (!dept) return err("Department not found in your tenant", 404);
   }
   if (branchId !== undefined && branchId !== null) {
     const branch = await prisma.branch.findFirst({
-      where: { id: branchId, companyId: auth.companyId, deletedAt: null },
+      where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
     });
-    if (!branch) return err("Branch not found in your company", 404);
+    if (!branch) return err("Branch not found in your tenant", 404);
+  }
+  if (positionId !== undefined && positionId !== null) {
+    const pos = await prisma.position.findFirst({
+      where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
+    });
+    if (!pos) return err("Position not found in your tenant", 404);
   }
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -98,6 +125,12 @@ export async function PUT(
         ...rest,
         ...(departmentId !== undefined && { departmentId }),
         ...(branchId !== undefined && { branchId }),
+        ...(positionId !== undefined && { positionId }),
+        ...(immediateSupervisorId !== undefined && { immediateSupervisorId }),
+        ...(managerId !== undefined && { managerId }),
+        ...(nontaxableBasicAmount !== undefined && {
+          nontaxableBasicAmountCents: toCentavos(nontaxableBasicAmount),
+        }),
         ...(standardWorkHours !== undefined && {
           standardWorkHours: standardWorkHours.toString(),
         }),
@@ -109,20 +142,31 @@ export async function PUT(
 
     // Upsert statutory IDs only if the caller actually sent the object
     if (statutoryIds !== undefined) {
-      const data = {
-        tinNumber: emptyToNull(statutoryIds.tinNumber),
-        sssNumber: emptyToNull(statutoryIds.sssNumber),
-        philhealthNumber: emptyToNull(statutoryIds.philhealthNumber),
-        pagibigNumber: emptyToNull(statutoryIds.pagibigNumber),
-        gsisMembershipId: emptyToNull(statutoryIds.gsisMembershipId),
-        taxExempt: statutoryIds.taxExempt ?? false,
-        taxExemptReason: emptyToNull(statutoryIds.taxExemptReason),
-      };
-      await tx.statutoryIds.upsert({
-        where: { employeeId: id },
-        create: { employeeId: id, companyId: auth.companyId, ...data },
-        update: data,
-      });
+      const rows: { type: StatutoryIdType; value: string | null }[] = [
+        { type: StatutoryIdType.TIN, value: emptyToNull(statutoryIds.tinNumber) },
+        { type: StatutoryIdType.SSS, value: emptyToNull(statutoryIds.sssNumber) },
+        { type: StatutoryIdType.PHILHEALTH, value: emptyToNull(statutoryIds.philhealthNumber) },
+        { type: StatutoryIdType.PAGIBIG, value: emptyToNull(statutoryIds.pagibigNumber) },
+        { type: StatutoryIdType.GSIS, value: emptyToNull(statutoryIds.gsisMembershipId) },
+      ];
+      for (const r of rows) {
+        if (r.value == null) {
+          await tx.statutoryId.deleteMany({
+            where: { employeeId: id, type: r.type },
+          });
+          continue;
+        }
+        await tx.statutoryId.upsert({
+          where: { employeeId_type: { employeeId: id, type: r.type } },
+          create: {
+            employeeId: id,
+            tenantId: auth.tenantId,
+            type: r.type,
+            number: r.value,
+          },
+          update: { number: r.value },
+        });
+      }
     }
 
     return emp;
@@ -152,7 +196,7 @@ export async function DELETE(
   const { id } = await params;
 
   const existing = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
   });
   if (!existing) return notFound("Employee");
 

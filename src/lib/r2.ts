@@ -11,7 +11,7 @@
  *                           confidential HR files)
  *
  * Storage key convention:
- *   companies/{companyId}/employees/{employeeId}/documents/{uuid}.{ext}
+ *   tenants/{tenantId}/employees/{employeeId}/documents/{uuid}.{ext}
  *
  * Always use presigned URLs for both upload and download — never expose
  * the access keys to the browser.
@@ -55,7 +55,7 @@ export function r2(): S3Client {
 
 /** Build a stable storage key for an employee document. */
 export function buildEmployeeDocumentKey(opts: {
-  companyId: string;
+  tenantId: string;
   employeeId: string;
   fileName: string;
 }): string {
@@ -63,5 +63,5 @@ export function buildEmployeeDocumentKey(opts: {
     ? opts.fileName.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")
     : "bin";
   const uuid = crypto.randomUUID();
-  return `companies/${opts.companyId}/employees/${opts.employeeId}/documents/${uuid}.${ext}`;
+  return `tenants/${opts.tenantId}/employees/${opts.employeeId}/documents/${uuid}.${ext}`;
 }

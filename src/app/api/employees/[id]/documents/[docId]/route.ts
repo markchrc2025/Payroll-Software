@@ -34,7 +34,7 @@ export async function GET(
     where: {
       id: docId,
       employeeId: id,
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
       deletedAt: null,
     },
   });
@@ -75,7 +75,7 @@ export async function DELETE(
     where: {
       id: docId,
       employeeId: id,
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
       deletedAt: null,
     },
   });

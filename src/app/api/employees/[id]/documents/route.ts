@@ -32,7 +32,7 @@ export async function GET(
 
   // Confirm the employee belongs to this tenant
   const employee = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
     select: { id: true },
   });
   if (!employee) return notFound("Employee");
@@ -40,7 +40,7 @@ export async function GET(
   const documents = await prisma.employeeDocument.findMany({
     where: {
       employeeId: id,
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
       deletedAt: null,
     },
     orderBy: [{ category: "asc" }, { createdAt: "desc" }],
@@ -82,14 +82,14 @@ export async function POST(
 
   // Verify employee is in this tenant
   const employee = await prisma.employee.findFirst({
-    where: { id, companyId: auth.companyId, deletedAt: null },
+    where: { id, tenantId: auth.tenantId, deletedAt: null },
     select: { id: true },
   });
   if (!employee) return notFound("Employee");
 
   // Sanity-check the storage key actually belongs to this employee in this
-  // company — prevents a caller from registering somebody else's upload.
-  const expectedPrefix = `companies/${auth.companyId}/employees/${id}/documents/`;
+  // tenant — prevents a caller from registering somebody else's upload.
+  const expectedPrefix = `tenants/${auth.tenantId}/employees/${id}/documents/`;
   if (!parsed.data.storageKey.startsWith(expectedPrefix)) {
     return err("storageKey does not belong to this employee", 400);
   }
@@ -98,7 +98,7 @@ export async function POST(
     const doc = await prisma.employeeDocument.create({
       data: {
         employeeId: id,
-        companyId: auth.companyId,
+        tenantId: auth.tenantId,
         category: parsed.data.category,
         title: parsed.data.title,
         description: parsed.data.description ?? null,

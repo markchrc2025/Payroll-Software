@@ -10,7 +10,8 @@ import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
-import { unauthorized, serverError } from "@/lib/api-response";
+import { fromCentavos } from "@/lib/money";
+import { unauthorized } from "@/lib/api-response";
 import { toCsvString, csvDownloadResponse } from "@/lib/utils/csv";
 import { listEmployeesSchema } from "@/lib/validations/employee";
 
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     listEmployeesSchema.parse({ ...qp, page: 1, limit: 200 });
 
   const where: Prisma.EmployeeWhereInput = {
-    companyId: auth.companyId,
+    tenantId: auth.tenantId,
     deletedAt: null,
     ...(departmentId && { departmentId }),
     ...(branchId && { branchId }),
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
         where: { endDate: null },
         orderBy: { effectiveDate: "desc" },
         take: 1,
-        select: { basicSalary: true },
+        select: { basicSalaryCents: true },
       },
     },
   });
@@ -75,7 +76,9 @@ export async function GET(req: NextRequest) {
       : "",
     pay_frequency: e.payFrequency,
     salary_type: e.salaryType,
-    basic_salary: e.salaryHistory[0]?.basicSalary?.toString() ?? "",
+    basic_salary: e.salaryHistory[0]?.basicSalaryCents != null
+      ? fromCentavos(e.salaryHistory[0].basicSalaryCents).toFixed(2)
+      : "",
     bank_name: e.bankName ?? "",
     bank_account_number: e.bankAccountNumber ?? "",
     bank_account_name: e.bankAccountName ?? "",

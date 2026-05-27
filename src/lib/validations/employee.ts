@@ -11,6 +11,7 @@ import {
   Gender,
   PayFrequency,
   SalaryType,
+  TaxClassification,
 } from "@prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -108,6 +109,9 @@ export const createEmployeeSchema = z.object({
   // Employment
   departmentId: z.string().cuid().optional().nullable(),
   branchId: z.string().cuid().optional().nullable(),
+  positionId: z.string().cuid().optional().nullable(),
+  immediateSupervisorId: z.string().cuid().optional().nullable(),
+  managerId: z.string().cuid().optional().nullable(),
   jobTitle: z.string().max(150).optional().nullable(),
   jobLevel: z.string().max(100).optional().nullable(),
   employmentStatus: z.nativeEnum(EmploymentStatus).default("PROBATIONARY"),
@@ -124,11 +128,19 @@ export const createEmployeeSchema = z.object({
   standardWorkHours: z.coerce.number().min(1).max(24).default(8),
   standardWorkDays: z.coerce.number().min(1).max(31).default(22),
 
-  // Initial salary (required on create)
+  // Initial salary (required on create) — PHP pesos. API converts to BigInt centavos.
   basicSalary: z.coerce
     .number({ error: "Basic salary is required" })
     .positive("Salary must be positive")
-    .multipleOf(0.0001),
+    .multipleOf(0.01),
+
+  // BIR tax classification (REGULAR | MWE). Defaults to REGULAR.
+  taxClassification: z
+    .nativeEnum(TaxClassification)
+    .optional()
+    .default("REGULAR"),
+  // Non-taxable portion of basic pay (e.g. MWE allowable) — PHP pesos.
+  nontaxableBasicAmount: z.coerce.number().min(0).optional().default(0),
 
   // Bank details (stored encrypted)
   bankName: z.string().max(100).optional().nullable(),
