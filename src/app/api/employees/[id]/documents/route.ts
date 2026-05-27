@@ -12,7 +12,7 @@
  */
 
 import type { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { finalizeDocumentSchema } from "@/lib/validations/document";
@@ -30,35 +30,37 @@ export async function GET(
 
   const { id } = await params;
 
-  // Confirm the employee belongs to this tenant
-  const employee = await prisma.employee.findFirst({
-    where: { id, tenantId: auth.tenantId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!employee) return notFound("Employee");
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    const employee = await tx.employee.findFirst({
+      where: { id, tenantId: auth.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!employee) return null;
 
-  const documents = await prisma.employeeDocument.findMany({
-    where: {
-      employeeId: id,
-      tenantId: auth.tenantId,
-      deletedAt: null,
-    },
-    orderBy: [{ category: "asc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      category: true,
-      title: true,
-      description: true,
-      fileName: true,
-      mimeType: true,
-      fileSize: true,
-      isConfidential: true,
-      createdAt: true,
-      uploadedByUserId: true,
-    },
+    return tx.employeeDocument.findMany({
+      where: {
+        employeeId: id,
+        tenantId: auth.tenantId,
+        deletedAt: null,
+      },
+      orderBy: [{ category: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        description: true,
+        fileName: true,
+        mimeType: true,
+        fileSize: true,
+        isConfidential: true,
+        createdAt: true,
+        uploadedByUserId: true,
+      },
+    });
   });
 
-  return ok(documents);
+  if (result === null) return notFound("Employee");
+  return ok(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -80,13 +82,6 @@ export async function POST(
     return err("Validation failed", 400, parsed.error.flatten());
   }
 
-  // Verify employee is in this tenant
-  const employee = await prisma.employee.findFirst({
-    where: { id, tenantId: auth.tenantId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!employee) return notFound("Employee");
-
   // Sanity-check the storage key actually belongs to this employee in this
   // tenant — prevents a caller from registering somebody else's upload.
   const expectedPrefix = `tenants/${auth.tenantId}/employees/${id}/documents/`;
@@ -95,32 +90,42 @@ export async function POST(
   }
 
   try {
-    const doc = await prisma.employeeDocument.create({
-      data: {
-        employeeId: id,
-        tenantId: auth.tenantId,
-        category: parsed.data.category,
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-        isConfidential: parsed.data.isConfidential,
-        fileName: parsed.data.fileName,
-        mimeType: parsed.data.mimeType,
-        fileSize: parsed.data.fileSize,
-        storageKey: parsed.data.storageKey,
-        uploadedByUserId: auth.userId,
-      },
-      select: {
-        id: true,
-        category: true,
-        title: true,
-        fileName: true,
-        mimeType: true,
-        fileSize: true,
-        isConfidential: true,
-        createdAt: true,
-      },
+    const result = await withTenant(auth.tenantId, async (tx) => {
+      const employee = await tx.employee.findFirst({
+        where: { id, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!employee) return { notFound: true as const };
+
+      const doc = await tx.employeeDocument.create({
+        data: {
+          employeeId: id,
+          tenantId: auth.tenantId,
+          category: parsed.data.category,
+          title: parsed.data.title,
+          description: parsed.data.description ?? null,
+          isConfidential: parsed.data.isConfidential,
+          fileName: parsed.data.fileName,
+          mimeType: parsed.data.mimeType,
+          fileSize: parsed.data.fileSize,
+          storageKey: parsed.data.storageKey,
+          uploadedByUserId: auth.userId,
+        },
+        select: {
+          id: true,
+          category: true,
+          title: true,
+          fileName: true,
+          mimeType: true,
+          fileSize: true,
+          isConfidential: true,
+          createdAt: true,
+        },
+      });
+      return { doc };
     });
-    return ok(doc, "Document uploaded", 201);
+    if ("notFound" in result) return notFound("Employee");
+    return ok(result.doc, "Document uploaded", 201);
   } catch (e) {
     return serverError(e);
   }

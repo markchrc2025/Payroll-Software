@@ -8,7 +8,7 @@ import type { NextRequest } from "next/server";
 import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { r2, R2_BUCKET, isR2Configured } from "@/lib/r2";
@@ -30,14 +30,14 @@ export async function GET(
 
   const { id, docId } = await params;
 
-  const doc = await prisma.employeeDocument.findFirst({
+  const doc = await withTenant(auth.tenantId, (tx) => tx.employeeDocument.findFirst({
     where: {
       id: docId,
       employeeId: id,
       tenantId: auth.tenantId,
       deletedAt: null,
     },
-  });
+  }));
   if (!doc) return notFound("Document");
 
   const command = new GetObjectCommand({
@@ -71,14 +71,14 @@ export async function DELETE(
 
   const { id, docId } = await params;
 
-  const doc = await prisma.employeeDocument.findFirst({
+  const doc = await withTenant(auth.tenantId, (tx) => tx.employeeDocument.findFirst({
     where: {
       id: docId,
       employeeId: id,
       tenantId: auth.tenantId,
       deletedAt: null,
     },
-  });
+  }));
   if (!doc) return notFound("Document");
 
   try {
@@ -93,10 +93,10 @@ export async function DELETE(
       }
     }
 
-    await prisma.employeeDocument.update({
+    await withTenant(auth.tenantId, (tx) => tx.employeeDocument.update({
       where: { id: docId },
       data: { deletedAt: new Date() },
-    });
+    }));
 
     return ok({ id: docId }, "Document deleted");
   } catch (e) {

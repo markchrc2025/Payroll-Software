@@ -15,7 +15,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import prisma from "@/lib/prisma";
+import prismaAdmin from "@/lib/prisma-admin";
 import type { SystemRole } from "@prisma/client";
 
 const credentialsSchema = z.object({
@@ -61,7 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const { email, password } = parsed.data;
 
-        const user = await prisma.user.findFirst({
+        const user = await prismaAdmin.user.findFirst({
           where: {
             email: email.toLowerCase(),
             isActive: true,
@@ -85,7 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!ok) return null;
 
         // Update lastLoginAt (fire-and-forget acceptable; await for correctness)
-        await prisma.user.update({
+        await prismaAdmin.user.update({
           where: { id: user.id },
           data: { lastLoginAt: new Date() },
         });

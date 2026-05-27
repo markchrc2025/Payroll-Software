@@ -15,7 +15,7 @@
  */
 
 import type { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { toCentavos } from "@/lib/money";
 import { ok, err, unauthorized } from "@/lib/api-response";
@@ -44,30 +44,32 @@ export async function POST(req: NextRequest) {
     return err("CSV file is empty or has no data rows.");
   }
 
-  // --- Pre-load dept & branch lookup maps for this tenant ---
-  const [departments, branches] = await Promise.all([
-    prisma.department.findMany({
-      where: { tenantId: auth.tenantId, deletedAt: null },
-      select: { id: true, name: true },
-    }),
-    prisma.branch.findMany({
-      where: { tenantId: auth.tenantId, deletedAt: null },
-      select: { id: true, name: true },
-    }),
-  ]);
+  // --- Pre-load dept & branch lookup maps + next number + insert in one tx ---
+  const { departments, branches, startNum } = await withTenant(auth.tenantId, async (tx) => {
+    const [departments, branches, lastEmployee] = await Promise.all([
+      tx.department.findMany({
+        where: { tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true, name: true },
+      }),
+      tx.branch.findMany({
+        where: { tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true, name: true },
+      }),
+      tx.employee.findFirst({
+        where: { tenantId: auth.tenantId },
+        orderBy: { createdAt: "desc" },
+        select: { employeeNumber: true },
+      }),
+    ]);
+    const startNum = lastEmployee
+      ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
+      : 1;
+    return { departments, branches, startNum };
+  });
 
   const deptMap = new Map(departments.map((d) => [d.name.toLowerCase(), d.id]));
   const branchMap = new Map(branches.map((b) => [b.name.toLowerCase(), b.id]));
-
-  // --- Determine next employee number offset ---
-  const lastEmployee = await prisma.employee.findFirst({
-    where: { tenantId: auth.tenantId },
-    orderBy: { createdAt: "desc" },
-    select: { employeeNumber: true },
-  });
-  let nextNum = lastEmployee
-    ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
-    : 1;
+  let nextNum = startNum;
 
   // --- Validate each row ---
   const validRows: Array<{
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
   }
 
   // --- Insert valid rows in a single transaction ---
-  await prisma.$transaction(async (tx) => {
+  await withTenant(auth.tenantId, async (tx) => {
     for (const row of validRows) {
       const d = row.data;
       const hireDate = new Date(d.hire_date);

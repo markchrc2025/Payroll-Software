@@ -4,7 +4,7 @@
  */
 
 import type { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
 
-  const branches = await prisma.branch.findMany({
+  const branches = await withTenant(auth.tenantId, (tx) => tx.branch.findMany({
     where: { tenantId: auth.tenantId, deletedAt: null },
     orderBy: [{ isHeadOffice: "desc" }, { name: "asc" }],
     select: {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       isHeadOffice: true,
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },
-  });
+  }));
 
   return ok(branches);
 }
@@ -48,22 +48,28 @@ export async function POST(req: NextRequest) {
   const parsed = createBranchSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  // Check for duplicate name within tenant
-  const existing = await prisma.branch.findFirst({
-    where: {
-      tenantId: auth.tenantId,
-      name: { equals: parsed.data.name, mode: "insensitive" },
-      deletedAt: null,
-    },
-  });
-  if (existing) return err(`Branch "${parsed.data.name}" already exists`, 409);
+  const branch = await withTenant(auth.tenantId, async (tx) => {
+    // Check for duplicate name within tenant
+    const existing = await tx.branch.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        name: { equals: parsed.data.name, mode: "insensitive" },
+        deletedAt: null,
+      },
+    });
+    if (existing) return { duplicate: true as const };
 
-  const branch = await prisma.branch.create({
-    data: {
-      ...parsed.data,
-      tenantId: auth.tenantId,
-    },
+    return {
+      duplicate: false as const,
+      row: await tx.branch.create({
+        data: {
+          ...parsed.data,
+          tenantId: auth.tenantId,
+        },
+      }),
+    };
   });
+  if (branch.duplicate) return err(`Branch "${parsed.data.name}" already exists`, 409);
 
-  return ok(branch, "Branch created", 201);
+  return ok(branch.row, "Branch created", 201);
 }

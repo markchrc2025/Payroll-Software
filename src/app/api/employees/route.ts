@@ -5,7 +5,7 @@
 
 import type { NextRequest } from "next/server";
 import { Prisma, StatutoryIdType } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { toCentavos, centavosToJson } from "@/lib/money";
 import {
@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
     }),
   };
 
-  const [employees, total] = await prisma.$transaction([
-    prisma.employee.findMany({
+  const [employees, total] = await withTenant(auth.tenantId, (tx) => Promise.all([
+    tx.employee.findMany({
       where,
       skip: (page - 1) * limit,
       take: limit,
@@ -88,8 +88,8 @@ export async function GET(req: NextRequest) {
         },
       },
     }),
-    prisma.employee.count({ where }),
-  ]);
+    tx.employee.count({ where }),
+  ]));
 
   // Serialise BigInt centavos to string for JSON safety.
   const serialised = employees.map((e) => ({
@@ -132,39 +132,39 @@ export async function POST(req: NextRequest) {
     ...rest
   } = parsed.data;
 
-  // Validate department, branch, position belong to this tenant
-  if (departmentId) {
-    const dept = await prisma.department.findFirst({
-      where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
-    });
-    if (!dept) return err("Department not found in your tenant", 404);
-  }
-  if (branchId) {
-    const branch = await prisma.branch.findFirst({
-      where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
-    });
-    if (!branch) return err("Branch not found in your tenant", 404);
-  }
-  if (positionId) {
-    const pos = await prisma.position.findFirst({
-      where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
-    });
-    if (!pos) return err("Position not found in your tenant", 404);
-  }
+  // Create employee + initial salary + statutory IDs, plus all tenant-scoped
+  // pre-checks, in a single tenant-scoped transaction.
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    if (departmentId) {
+      const dept = await tx.department.findFirst({
+        where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!dept) return { error: "Department not found in your tenant" as const };
+    }
+    if (branchId) {
+      const branch = await tx.branch.findFirst({
+        where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!branch) return { error: "Branch not found in your tenant" as const };
+    }
+    if (positionId) {
+      const pos = await tx.position.findFirst({
+        where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!pos) return { error: "Position not found in your tenant" as const };
+    }
 
-  // Generate employee number: EMP-XXXX (padded, sequential per tenant)
-  const lastEmployee = await prisma.employee.findFirst({
-    where: { tenantId: auth.tenantId },
-    orderBy: { createdAt: "desc" },
-    select: { employeeNumber: true },
-  });
-  const nextNum = lastEmployee
-    ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
-    : 1;
-  const employeeNumber = `EMP-${String(nextNum).padStart(4, "0")}`;
+    // Generate employee number: EMP-XXXX (padded, sequential per tenant)
+    const lastEmployee = await tx.employee.findFirst({
+      where: { tenantId: auth.tenantId },
+      orderBy: { createdAt: "desc" },
+      select: { employeeNumber: true },
+    });
+    const nextNum = lastEmployee
+      ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
+      : 1;
+    const employeeNumber = `EMP-${String(nextNum).padStart(4, "0")}`;
 
-  // Create employee + initial salary + statutory IDs in a transaction
-  const employee = await prisma.$transaction(async (tx) => {
     const emp = await tx.employee.create({
       data: {
         ...rest,
@@ -215,10 +215,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return emp;
+    return { employee: emp };
   });
 
-  return ok(employee, "Employee created successfully", 201);
+  if ("error" in result && result.error) return err(result.error, 404);
+
+  return ok(result.employee, "Employee created successfully", 201);
 }
 
 /** Convert empty / undefined strings to null for DB storage. */

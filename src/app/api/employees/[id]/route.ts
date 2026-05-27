@@ -6,7 +6,7 @@
 
 import type { NextRequest } from "next/server";
 import { StatutoryIdType } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { centavosToJson, toCentavos } from "@/lib/money";
 import {
@@ -30,7 +30,7 @@ export async function GET(
 
   const { id } = await params; // Next.js 16: params is a Promise
 
-  const employee = await prisma.employee.findFirst({
+  const employee = await withTenant(auth.tenantId, (tx) => tx.employee.findFirst({
     where: { id, tenantId: auth.tenantId, deletedAt: null },
     include: {
       department: { select: { id: true, name: true } },
@@ -43,7 +43,7 @@ export async function GET(
         take: 1,
       },
     },
-  });
+  }));
 
   if (!employee) return notFound("Employee");
 
@@ -80,12 +80,6 @@ export async function PUT(
   if (!parsed.success)
     return err("Validation failed", 422, parsed.error.flatten());
 
-  // Ensure employee belongs to this tenant
-  const existing = await prisma.employee.findFirst({
-    where: { id, tenantId: auth.tenantId, deletedAt: null },
-  });
-  if (!existing) return notFound("Employee");
-
   const {
     departmentId,
     branchId,
@@ -99,26 +93,32 @@ export async function PUT(
     ...rest
   } = parsed.data;
 
-  if (departmentId !== undefined && departmentId !== null) {
-    const dept = await prisma.department.findFirst({
-      where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
+  // Ensure employee belongs to this tenant + run all writes in one tx
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    const existing = await tx.employee.findFirst({
+      where: { id, tenantId: auth.tenantId, deletedAt: null },
     });
-    if (!dept) return err("Department not found in your tenant", 404);
-  }
-  if (branchId !== undefined && branchId !== null) {
-    const branch = await prisma.branch.findFirst({
-      where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
-    });
-    if (!branch) return err("Branch not found in your tenant", 404);
-  }
-  if (positionId !== undefined && positionId !== null) {
-    const pos = await prisma.position.findFirst({
-      where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
-    });
-    if (!pos) return err("Position not found in your tenant", 404);
-  }
+    if (!existing) return { notFound: true as const };
 
-  const updated = await prisma.$transaction(async (tx) => {
+    if (departmentId !== undefined && departmentId !== null) {
+      const dept = await tx.department.findFirst({
+        where: { id: departmentId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!dept) return { error: "Department not found in your tenant" as const };
+    }
+    if (branchId !== undefined && branchId !== null) {
+      const branch = await tx.branch.findFirst({
+        where: { id: branchId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!branch) return { error: "Branch not found in your tenant" as const };
+    }
+    if (positionId !== undefined && positionId !== null) {
+      const pos = await tx.position.findFirst({
+        where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!pos) return { error: "Position not found in your tenant" as const };
+    }
+
     const emp = await tx.employee.update({
       where: { id },
       data: {
@@ -169,10 +169,13 @@ export async function PUT(
       }
     }
 
-    return emp;
+    return { employee: emp };
   });
 
-  return ok(updated, "Employee updated");
+  if ("notFound" in result) return notFound("Employee");
+  if ("error" in result && result.error) return err(result.error, 404);
+
+  return ok(result.employee, "Employee updated");
 }
 
 /** Convert empty / undefined strings to null for DB storage. */
@@ -195,15 +198,19 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const existing = await prisma.employee.findFirst({
-    where: { id, tenantId: auth.tenantId, deletedAt: null },
+  const wasFound = await withTenant(auth.tenantId, async (tx) => {
+    const existing = await tx.employee.findFirst({
+      where: { id, tenantId: auth.tenantId, deletedAt: null },
+    });
+    if (!existing) return false;
+    await tx.employee.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return true;
   });
-  if (!existing) return notFound("Employee");
 
-  await prisma.employee.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
+  if (!wasFound) return notFound("Employee");
 
   return ok({ id }, "Employee deleted");
 }
