@@ -143,6 +143,21 @@ enum IncidentStatus {
   ESCALATED
 }
 
+// 201 File document categories — used by EmployeeDocument
+enum DocumentCategory {
+  CONTRACT            // Employment contract, NDA, addenda
+  VALID_ID            // Passport, driver's license, postal ID, etc.
+  GOVERNMENT_FORM     // BIR 2316, SSS E-1, PhilHealth MDR, Pag-IBIG MDF
+  MEDICAL             // Pre-employment medical, fit-to-work, vaccination
+  RESUME              // CV / resume / portfolio
+  EDUCATION           // Diploma, TOR, certifications
+  TRAINING_CERT       // Training certificates, seminars
+  PERFORMANCE         // Performance reviews, evaluations
+  CLEARANCE           // Police, NBI, barangay clearance
+  TAX                 // BIR forms, tax declarations
+  OTHER
+}
+
 // Leave management
 enum LeaveUnit {
   DAYS
@@ -387,6 +402,7 @@ model Employee {
   salaryHistory       EmployeeSalary[]
   movements           EmployeeMovement[]
   incidentReports     IncidentReport[]
+  documents           EmployeeDocument[]
   leaveBalances       LeaveBalance[]
   leaveTransactions   LeaveTransaction[]
 
@@ -425,6 +441,41 @@ model StatutoryIds {
   employee        Employee  @relation(fields: [employeeId], references: [id])
 
   @@index([companyId])
+}
+
+// =============================================================================
+// EMPLOYEE DOCUMENTS — 201 File attachments stored in object storage (R2 / S3)
+// Files themselves live in Cloudflare R2; this table stores metadata + key.
+// =============================================================================
+
+model EmployeeDocument {
+  id               String           @id @default(cuid())
+  employeeId       String
+  companyId        String           // Denormalized for tenant scoping
+
+  category         DocumentCategory
+  title            String           // Human-readable name (e.g. "Employment Contract 2025")
+  description      String?
+
+  // Object storage — bucket key (never the public URL — always presign on read)
+  storageKey       String           // e.g. companies/{cid}/employees/{eid}/documents/{uuid}.pdf
+  fileName         String           // Original filename uploaded by user
+  mimeType         String
+  fileSize         Int              // Bytes
+
+  isConfidential   Boolean          @default(false)  // HR-only when true
+
+  uploadedByUserId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  employee         Employee         @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([category])
+  @@index([deletedAt])
 }
 
 // =============================================================================

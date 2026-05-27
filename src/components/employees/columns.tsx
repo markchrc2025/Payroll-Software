@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FileText, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -163,6 +163,10 @@ export function buildColumns(
               <DropdownMenuItem render={<Link href={`/employees/${emp.id}/edit`} />}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/employees/${emp.id}/documents`} />}>
+                <FileText className="mr-2 h-4 w-4" />
+                201 File
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

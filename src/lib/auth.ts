@@ -1,32 +1,43 @@
 /**
- * Auth Context
- * -----------
- * Phase 2 placeholder — reads DEV_COMPANY_ID / DEV_USER_ID from .env.local.
- * TODO: Replace with real NextAuth session in the Auth phase.
+ * Auth Context — server-side helper used by every API route and Server Component.
  *
- * Every API route calls getAuthContext() first. If it returns null, respond 401.
- * The returned companyId MUST scope every Prisma query (multi-tenancy guarantee).
+ * Reads the NextAuth v5 JWT session and returns the caller's tenant scope
+ * (companyId) plus identity (userId, systemRole). Returns null if not signed in.
+ *
+ * Multi-tenancy contract: every Prisma query MUST be filtered by `companyId`.
  */
-
-import type { NextRequest } from "next/server";
-import { SystemRole } from "@prisma/client";
+import { auth } from "@/auth";
+import type { SystemRole } from "@prisma/client";
 
 export type AuthContext = {
   companyId: string;
   userId: string;
   systemRole: SystemRole;
+  roleId: string | null;
 };
 
+/**
+ * Returns the current auth context, or null if the request is unauthenticated.
+ * SUPER_ADMIN users (no companyId) are intentionally rejected from tenant-scoped
+ * routes — they should use dedicated admin endpoints in a later phase.
+ *
+ * The optional `_req` parameter is accepted for backward compatibility with
+ * existing callers that pass `NextRequest`; it is unused (session is read from
+ * cookies via NextAuth's `auth()` helper).
+ */
 export async function getAuthContext(
-  _req: NextRequest
+  _req?: unknown
 ): Promise<AuthContext | null> {
-  // TODO: Replace with real session/JWT validation
-  const companyId = process.env.DEV_COMPANY_ID;
-  const userId = process.env.DEV_USER_ID;
+  const session = await auth();
+  if (!session?.user) return null;
 
-  if (process.env.NODE_ENV === "development" && companyId && userId) {
-    return { companyId, userId, systemRole: SystemRole.COMPANY_USER };
-  }
+  const { id, companyId, systemRole, roleId } = session.user;
+  if (!companyId) return null; // SUPER_ADMIN tenant guard
 
-  return null;
+  return {
+    userId: id,
+    companyId,
+    systemRole,
+    roleId,
+  };
 }

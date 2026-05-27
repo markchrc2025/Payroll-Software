@@ -60,6 +60,17 @@ export default async function EditEmployeePage({
     regularizationDate: employee.regularizationDate
       ? new Date(employee.regularizationDate).toISOString().slice(0, 10)
       : undefined,
+    statutoryIds: employee.statutoryIds
+      ? {
+          tinNumber: employee.statutoryIds.tinNumber ?? "",
+          sssNumber: employee.statutoryIds.sssNumber ?? "",
+          philhealthNumber: employee.statutoryIds.philhealthNumber ?? "",
+          pagibigNumber: employee.statutoryIds.pagibigNumber ?? "",
+          gsisMembershipId: employee.statutoryIds.gsisMembershipId ?? "",
+          taxExempt: employee.statutoryIds.taxExempt ?? false,
+          taxExemptReason: employee.statutoryIds.taxExemptReason ?? "",
+        }
+      : undefined,
   };
 
   const fullName = `${employee.firstName} ${employee.lastName}`;

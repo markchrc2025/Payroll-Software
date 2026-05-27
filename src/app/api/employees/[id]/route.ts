@@ -75,7 +75,7 @@ export async function PUT(
   if (!existing) return notFound("Employee");
 
   // Validate dept / branch if being changed
-  const { departmentId, branchId, standardWorkHours, standardWorkDays, ...rest } =
+  const { departmentId, branchId, standardWorkHours, standardWorkDays, statutoryIds, ...rest } =
     parsed.data;
 
   if (departmentId !== undefined && departmentId !== null) {
@@ -91,22 +91,51 @@ export async function PUT(
     if (!branch) return err("Branch not found in your company", 404);
   }
 
-  const updated = await prisma.employee.update({
-    where: { id },
-    data: {
-      ...rest,
-      ...(departmentId !== undefined && { departmentId }),
-      ...(branchId !== undefined && { branchId }),
-      ...(standardWorkHours !== undefined && {
-        standardWorkHours: standardWorkHours.toString(),
-      }),
-      ...(standardWorkDays !== undefined && {
-        standardWorkDays: standardWorkDays.toString(),
-      }),
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const emp = await tx.employee.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(departmentId !== undefined && { departmentId }),
+        ...(branchId !== undefined && { branchId }),
+        ...(standardWorkHours !== undefined && {
+          standardWorkHours: standardWorkHours.toString(),
+        }),
+        ...(standardWorkDays !== undefined && {
+          standardWorkDays: standardWorkDays.toString(),
+        }),
+      },
+    });
+
+    // Upsert statutory IDs only if the caller actually sent the object
+    if (statutoryIds !== undefined) {
+      const data = {
+        tinNumber: emptyToNull(statutoryIds.tinNumber),
+        sssNumber: emptyToNull(statutoryIds.sssNumber),
+        philhealthNumber: emptyToNull(statutoryIds.philhealthNumber),
+        pagibigNumber: emptyToNull(statutoryIds.pagibigNumber),
+        gsisMembershipId: emptyToNull(statutoryIds.gsisMembershipId),
+        taxExempt: statutoryIds.taxExempt ?? false,
+        taxExemptReason: emptyToNull(statutoryIds.taxExemptReason),
+      };
+      await tx.statutoryIds.upsert({
+        where: { employeeId: id },
+        create: { employeeId: id, companyId: auth.companyId, ...data },
+        update: data,
+      });
+    }
+
+    return emp;
   });
 
   return ok(updated, "Employee updated");
+}
+
+/** Convert empty / undefined strings to null for DB storage. */
+function emptyToNull(v: string | null | undefined): string | null {
+  if (v === undefined || v === null) return null;
+  const trimmed = v.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 // ---------------------------------------------------------------------------

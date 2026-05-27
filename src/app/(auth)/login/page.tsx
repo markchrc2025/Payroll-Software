@@ -1,0 +1,118 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (!res || res.error) {
+        toast.error("Invalid email or password.");
+        return;
+      }
+
+      toast.success("Signed in. Redirecting…");
+      router.replace(callbackUrl);
+      router.refresh();
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/60 shadow-lg">
+      <CardHeader className="space-y-2 text-center">
+        <CardTitle className="text-2xl font-semibold tracking-tight">
+          Welcome back
+        </CardTitle>
+        <CardDescription>
+          Sign in to your Sentire Payroll account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </Button>
+
+          <p className="text-center text-xs text-muted-foreground pt-2">
+            Demo:{" "}
+            <span className="font-mono text-foreground/70">
+              admin@democorp.ph
+            </span>{" "}
+            / <span className="font-mono text-foreground/70">Admin1234!</span>
+          </p>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

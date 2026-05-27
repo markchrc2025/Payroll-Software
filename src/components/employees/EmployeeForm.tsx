@@ -5,9 +5,11 @@
  *
  * Sections:
  *   1. Personal Information
- *   2. Employment Details
- *   3. Salary & Payroll Settings
- *   4. Bank Details
+ *   2. Contact & Address
+ *   3. Employment Details
+ *   4. Salary & Payroll Settings
+ *   5. Bank Details
+ *   6. Statutory & Tax Information
  *
  * Used by:
  *   • /employees/new      → mode="create", no initialData
@@ -28,6 +30,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -125,6 +129,15 @@ export function EmployeeForm({
       salaryType: "MONTHLY",
       standardWorkHours: 8,
       standardWorkDays: 22,
+      statutoryIds: {
+        tinNumber: "",
+        sssNumber: "",
+        philhealthNumber: "",
+        pagibigNumber: "",
+        gsisMembershipId: "",
+        taxExempt: false,
+        taxExemptReason: "",
+      },
       ...initialData,
     },
   });
@@ -173,7 +186,7 @@ export function EmployeeForm({
     placeholder,
     type = "text",
   }: {
-    name: keyof CreateEmployeeInput;
+    name: string;
     label: string;
     placeholder?: string;
     type?: string;
@@ -210,7 +223,7 @@ export function EmployeeForm({
     options,
     placeholder,
   }: {
-    name: keyof CreateEmployeeInput;
+    name: string;
     label: string;
     options: { value: string; label: string }[];
     placeholder?: string;
@@ -497,6 +510,84 @@ export function EmployeeForm({
               placeholder="JUAN S DELA CRUZ"
             />
           </div>
+        </section>
+
+        {/* ─── Section 6: Statutory & Tax Information ──────────────────────── */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold">Statutory & Tax Information</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Philippine government IDs used for SSS, PhilHealth, Pag-IBIG, and BIR contributions.
+            </p>
+            <Separator className="mt-2" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <TextField
+              name="statutoryIds.tinNumber"
+              label="TIN (Tax Identification Number)"
+              placeholder="123-456-789-000"
+            />
+            <TextField
+              name="statutoryIds.sssNumber"
+              label="SSS Number"
+              placeholder="01-2345678-9"
+            />
+            <TextField
+              name="statutoryIds.philhealthNumber"
+              label="PhilHealth Number"
+              placeholder="12-345678901-2"
+            />
+            <TextField
+              name="statutoryIds.pagibigNumber"
+              label="Pag-IBIG MID Number"
+              placeholder="1234-5678-9012"
+            />
+            <TextField
+              name="statutoryIds.gsisMembershipId"
+              label="GSIS Membership ID (gov't employees)"
+              placeholder="Optional"
+            />
+          </div>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <FormField
+            control={form.control}
+            name={"statutoryIds.taxExempt" as any}
+            render={({ field }: { field: any }) => (
+              <FormItem className="flex flex-row items-start gap-3 rounded-md border p-3">
+                <FormControl>
+                  <Checkbox
+                    checked={!!field.value}
+                    onCheckedChange={(checked: boolean) => field.onChange(checked)}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>Tax-exempt employee</FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Minimum wage earners and certain BIR-exempt cases. Withholding tax will be skipped.
+                  </p>
+                </div>
+              </FormItem>
+            )}
+          />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <FormField
+            control={form.control}
+            name={"statutoryIds.taxExemptReason" as any}
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>Tax Exemption Reason</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. Minimum wage earner under RA 9504"
+                    {...field}
+                    value={(field.value as string) ?? ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </section>
 
         {/* ─── Actions ─────────────────────────────────────────────────────── */}
