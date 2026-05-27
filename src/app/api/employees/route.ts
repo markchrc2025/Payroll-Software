@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
     hireDate,
     standardWorkHours,
     standardWorkDays,
+    statutoryIds,
     ...rest
   } = parsed.data;
 
@@ -170,8 +171,31 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Create statutory IDs row if any were supplied (always create empty row
+    // so detail page can edit them later without a separate create step)
+    await tx.statutoryIds.create({
+      data: {
+        employeeId: emp.id,
+        companyId: auth.companyId,
+        tinNumber: emptyToNull(statutoryIds?.tinNumber),
+        sssNumber: emptyToNull(statutoryIds?.sssNumber),
+        philhealthNumber: emptyToNull(statutoryIds?.philhealthNumber),
+        pagibigNumber: emptyToNull(statutoryIds?.pagibigNumber),
+        gsisMembershipId: emptyToNull(statutoryIds?.gsisMembershipId),
+        taxExempt: statutoryIds?.taxExempt ?? false,
+        taxExemptReason: emptyToNull(statutoryIds?.taxExemptReason),
+      },
+    });
+
     return emp;
   });
 
   return ok(employee, "Employee created successfully", 201);
+}
+
+/** Convert empty / undefined strings to null for DB storage. */
+function emptyToNull(v: string | null | undefined): string | null {
+  if (v === undefined || v === null) return null;
+  const trimmed = v.trim();
+  return trimmed === "" ? null : trimmed;
 }

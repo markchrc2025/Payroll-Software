@@ -20,6 +20,56 @@ import {
 const phoneRegex = /^(\+63|0)[0-9]{9,10}$/;
 const bankAccountRegex = /^[0-9\-\s]{6,20}$/;
 
+// Philippine government ID formats
+// TIN:        XXX-XXX-XXX (9–12 digits, optional dashes)
+// SSS:        XX-XXXXXXX-X (10 digits, optional dashes)
+// PhilHealth: XX-XXXXXXXXX-X (12 digits, optional dashes)
+// Pag-IBIG:   XXXX-XXXX-XXXX (12 digits, optional dashes)
+const tinRegex = /^[0-9-]{9,15}$/;
+const sssRegex = /^[0-9-]{10,13}$/;
+const philhealthRegex = /^[0-9-]{12,15}$/;
+const pagibigRegex = /^[0-9-]{12,15}$/;
+
+// Optional + nullable + accepts "" as null helper
+const optionalString = (max = 100) =>
+  z.string().max(max).optional().nullable().or(z.literal(""));
+
+// ---------------------------------------------------------------------------
+// Statutory IDs sub-schema (one-to-one with Employee)
+// ---------------------------------------------------------------------------
+
+export const statutoryIdsSchema = z.object({
+  tinNumber: z
+    .string()
+    .regex(tinRegex, "Invalid TIN format (e.g. 123-456-789)")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  sssNumber: z
+    .string()
+    .regex(sssRegex, "Invalid SSS format (e.g. 12-3456789-0)")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  philhealthNumber: z
+    .string()
+    .regex(philhealthRegex, "Invalid PhilHealth format (e.g. 12-345678901-2)")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  pagibigNumber: z
+    .string()
+    .regex(pagibigRegex, "Invalid Pag-IBIG format (e.g. 1234-5678-9012)")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  gsisMembershipId: optionalString(50),
+  taxExempt: z.coerce.boolean().optional().default(false),
+  taxExemptReason: optionalString(255),
+});
+
+export type StatutoryIdsInput = z.infer<typeof statutoryIdsSchema>;
+
 // ---------------------------------------------------------------------------
 // Create / Update Employee
 // ---------------------------------------------------------------------------
@@ -89,6 +139,9 @@ export const createEmployeeSchema = z.object({
     .nullable()
     .or(z.literal("")),
   bankAccountName: z.string().max(200).optional().nullable(),
+
+  // Statutory government IDs (nested — upserted in same transaction)
+  statutoryIds: statutoryIdsSchema.optional(),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema
