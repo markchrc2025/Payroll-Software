@@ -1,12 +1,12 @@
 /**
- * GET  /api/departments  — List all departments for the company
+ * GET  /api/departments  — List all departments for the tenant
  * POST /api/departments  — Create a new department
  */
 
 import type { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
 
 const createDeptSchema = z.object({
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!auth) return unauthorized();
 
   const departments = await prisma.department.findMany({
-    where: { companyId: auth.companyId, deletedAt: null },
+    where: { tenantId: auth.tenantId, deletedAt: null },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
   const parsed = createDeptSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  // Check for duplicate name within company
+  // Check for duplicate name within tenant
   const existing = await prisma.department.findFirst({
     where: {
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
       name: { equals: parsed.data.name, mode: "insensitive" },
       deletedAt: null,
     },
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const dept = await prisma.department.create({
     data: {
       ...parsed.data,
-      companyId: auth.companyId,
+      tenantId: auth.tenantId,
     },
   });
 

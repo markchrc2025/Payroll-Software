@@ -1,104 +1,120 @@
-# Sentire Payroll — Master Blueprint (Build Specification)
+# Sentire Payroll — Master Blueprint (Complete Build Specification)
 
-**This document is the single source of truth for implementation. Build exactly what is specified here. Every statement is a requirement. This document describes the system as it must exist at first launch (Phase 1). Features not described here are out of scope for this build.**
+**This document is the single, complete source of truth for implementation. It describes the entire target system. Every feature, table, and workflow described here is in scope. A feature being assigned a later build priority (Section 10) does not mean it is excluded — it means it is sequenced. Build to this specification.**
+
+**Product:** A multi-tenant HRIS, Time & Attendance, and Payroll SaaS for Philippine SMEs (micro-businesses through mid-market, 500–5,000+ employees), Philippine Labor Code and BIR compliant, with a premium UX.
 
 ---
 
 ## 1. System Architecture
 
 ### 1.1 Multi-Tenancy
-The system is a single application with a single codebase and a single deployment. It serves all client companies ("tenants") from that one instance.
-
-- The root entity is **Tenant** (a client company).
-- Every tenant-owned table carries a `tenant_id`. All data access is scoped by `tenant_id` at the data-access layer. No query returns rows across tenants.
-- Each tenant has its own subdomain, branding (logo, colors), and configuration. A tenant's users only ever see that tenant's data.
+- The system is a single application, single codebase, single deployment, serving all client companies ("tenants").
+- The root entity is **Tenant**. Every tenant-owned table carries `tenant_id`. All data access is scoped by `tenant_id` at the data-access layer, enforced by PostgreSQL row-level security. No query returns rows across tenants.
+- Each tenant has its own subdomain, branding (logo, colors), configuration, and feature set. A tenant's users only ever see that tenant's data.
+- A tenant can later be migrated to a dedicated isolated deployment without schema changes (the data layer is designed so tenant data is cleanly separable).
 
 ### 1.2 Technology
-- **Database:** PostgreSQL. Tenant isolation is enforced by `tenant_id` on all tenant-owned tables plus row-level security policies.
+- **Database:** PostgreSQL with row-level security for tenant isolation.
+- **Object storage:** Cloudflare R2 for documents and media (employee 201 files, receipts, selfies). Files are referenced by key from the database; access is via signed, time-limited URLs.
 - **Backend:** A single backend application exposing a REST API.
-- **Front end:** React + TypeScript + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA).
+- **Front end:** React + TypeScript + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA). The Kiosk is a cross-platform web interface.
 - **Currency:** All monetary values are Philippine Peso (PHP), stored as integer centavos.
 
 ### 1.3 Subscriptions & Feature Flags
 - Each tenant has a `plan_tier` (`Standard`, `Plus`) and a set of `feature_flags`.
-- The **Central Portal** (Section 5.6) sets a tenant's `plan_tier` and toggles individual `feature_flags`.
-- The application reads `feature_flags` to enable or disable functionality per tenant. All Phase 1 functionality is available on `Standard`.
+- The **Central/Master Portal** (Section 5.7) sets a tenant's `plan_tier` and toggles individual `feature_flags`, including the AI Assistant add-on.
+- The application reads `feature_flags` to enable or disable functionality per tenant.
 
 ### 1.4 Security & Data Privacy (RA 10173)
-- Data is encrypted in transit (TLS) and at rest.
-- The following fields are encrypted at the field level: TIN, SSS number, PhilHealth number, Pag-IBIG number, and bank account number.
-- Every create, update, delete, and sensitive read of employee, payroll, and statutory data is written to the **AuditLog** (Section 2) with actor, action, entity, before/after values, and timestamp.
-- An employee's consent for storing personal and financial data is captured at onboarding and recorded in **ConsentRecord** with a timestamp.
-- Each data category has a configured retention period. Records past retention are purged by a scheduled job.
+- Data is encrypted in transit (TLS) and at rest. Field-level encryption applies to TIN, statutory ID numbers, and bank account numbers.
+- Every create, update, delete, and sensitive read of employee, payroll, statutory, and document data is written to **AuditLog** with actor, action, entity, before/after values, and timestamp.
+- Employee consent for storing personal data, financial data, biometric data (selfies), and location data (GPS) is captured and recorded in **ConsentRecord** with type and timestamp. Biometric and location data are Sensitive Personal Information and require explicit consent before capture.
+- Each data category has a configured retention period. Raw selfies and GPS coordinates are purged after the DTR they support is finalized, per retention policy; computed results are retained. A scheduled job enforces retention.
+- The system supports a breach-notification record and data-subject access/erasure requests.
 
 ---
 
 ## 2. Data Model
 
-All tables below carry `id`, `tenant_id`, `created_at`, and `updated_at` unless noted. `Tenant` itself has no `tenant_id`.
+All tables carry `id`, `tenant_id`, `created_at`, `updated_at` unless noted. `Tenant` has no `tenant_id`.
 
-**Tenant** — `name`, `subdomain`, `branding` (JSON: logo, primary color), `plan_tier`, `feature_flags` (JSON), `payroll_cycle` (`semi_monthly`), `working_days_denominator` (`261`), `statutory_cutoff_rule` (`second_cutoff`), `thirteenth_month_basis` (`strict_dole`), `default_dtr_approver_id` (references User; reviews DTRs/requests for employees at the top of the reporting chain).
+### 2.1 Tenant, Users & Access Control (Dynamic RBAC)
+- **Tenant** — `name`, `subdomain`, `branding` (JSON), `plan_tier`, `feature_flags` (JSON), `payroll_cycle`, `working_days_denominator`, `statutory_cutoff_rule`, `thirteenth_month_basis`, `default_dtr_approver_id`.
+- **User** — `email`, `password_hash`, `employee_id` (nullable), `is_active`.
+- **Role** — `name` (e.g., `Admin`, `Payroll`, `Branch Supervisor`, `Payroll Read-Only`), `is_system_default` (bool). Tenants may create custom roles.
+- **Permission** — `key` (e.g., `payroll.run`, `employee.edit`, `dtr.approve`), `description`.
+- **RolePermission** — `role_id`, `permission_id`.
+- **UserRole** — `user_id`, `role_id`.
 
-**User** — `email`, `password_hash`, `role` (`Admin` | `Payroll` | `Employee`), `employee_id` (nullable).
+### 2.2 Organization
+- **WorkLocation** — `name`, `region` (used for minimum-wage lookup), `address`.
+- **Branch** — `name`, `work_location_id`, `geofence_id` (nullable).
+- **Department** — `name`.
+- **Position** — `name`, `level` (`Entry` | `Mid` | `Senior` | `Manager` | `Director`).
 
-**WorkLocation**, **Branch**, **Department**, **Position** — each: `name`, plus parent references where applicable (`Branch.work_location_id`). `WorkLocation` also carries `region` (used to look up the applicable minimum wage for MWE classification).
+### 2.3 Employee & 201 File
+- **Employee** — `employee_no`, `first_name`, `last_name`, `birthdate`, `hire_date`, `regularization_date` (nullable), `employment_status` (`Probationary` | `Regular` | `Inactive`), `salary_type` (`Monthly` | `Daily`), `base_rate`, `derived_daily_rate`, `derived_hourly_rate`, `work_location_id`, `branch_id`, `department_id`, `position_id`, `immediate_supervisor_id` (nullable → Employee), `manager_id` (nullable → Employee), `tax_classification` (`Regular` | `MWE`), `nontaxable_basic_amount` (default 0), `bank_account` (encrypted), `ess_pin`.
+- **StatutoryId** — `employee_id`, `type` (`SSS` | `PhilHealth` | `PagIBIG` | `TIN`), `number` (encrypted). (Statutory IDs are stored in this normalized table, one row per ID type.)
+- **EmployeeDocument** — `employee_id`, `category` (e.g., `Contract`, `GovID`, `Certificate`, `Memo`), `file_key` (R2 object key), `file_name`, `uploaded_by_id`, `retention_until`.
+- **Asset** — `name`, `serial_number`, `category`, `condition`, `monetary_value`.
+- **AssetAssignment** — `asset_id`, `employee_id`, `assigned_on`, `returned_on` (nullable), `return_condition`.
+- **Movement** — `employee_id`, `type` (`Promotion` | `Transfer` | `Reclassification`), `effective_date`, `from_values` (JSON), `to_values` (JSON), `status`, `approver_id`.
+- **Incident** — `employee_id`, `type` (`Memo` | `NTE`), `subject`, `body`, `file_key` (nullable), `issued_by_id`, `issued_on`, `employee_response` (nullable).
 
-**Employee** — `employee_no`, `first_name`, `last_name`, `birthdate`, `hire_date`, `employment_status` (`Active` | `Inactive`), `salary_type` (`Monthly` | `Daily`), `base_rate`, `derived_daily_rate`, `derived_hourly_rate`, `level` (`Entry` | `Mid` | `Senior` | `Manager` | `Director`), `work_location_id`, `branch_id`, `department_id`, `position_id`, `immediate_supervisor_id` (nullable, references Employee), `manager_id` (nullable, references Employee), `tax_classification` (`Regular` | `MWE`), `nontaxable_basic_amount` (default 0; employer-designated non-taxable portion of basic pay), `sss_no`, `philhealth_no`, `pagibig_no`, `tin`, `bank_account` (encrypted), `ess_pin`.
+### 2.4 Time & Attendance
+- **ShiftSchedule** — `name`, `type` (`Fixed` | `Flexible`), `time_in`, `time_out`, `break_minutes`, `crosses_midnight` (bool), `work_days` (JSON).
+- **EmployeeShiftAssignment** — `employee_id`, `shift_schedule_id`, `effective_from`, `effective_to`.
+- **Geofence** — `branch_id`, `center_lat`, `center_lng`, `radius_meters`.
+- **AttendanceLog** — `employee_id`, `date`, `time_in`, `time_out`, `source` (`Import` | `Manual` | `Kiosk` | `ESS`), `selfie_key` (R2, nullable), `gps_lat` (nullable), `gps_lng` (nullable), `geofence_status` (`Inside` | `Outside` | `Unknown`), `flagged` (bool).
+- **DailyTimeRecord (DTR)** — `employee_id`, `date`, `status` (`Present` | `Absent` | `PaidLeave` | `Holiday`), `worked_hours`, `late_minutes`, `undertime_minutes`, `approved_ot_hours`, `nsd_hours`, `holiday_type` (nullable), `approval_status` (`Pending` | `Approved` | `Rejected`), `approved_by_id` (nullable), `is_locked` (bool).
+- **HolidayCalendar** — `date`, `holiday_type` (`Regular` | `SpecialNonWorking`), `scope` (`Global` | `Branch`), `branch_id` (nullable).
 
-**ShiftSchedule** — `name`, `type` (`Fixed` | `Flexible`), `time_in`, `time_out`, `break_minutes`, `crosses_midnight` (bool), `work_days` (JSON).
+### 2.5 Leave & Requests
+- **LeaveType** — `name`, `is_paid` (bool), `requires_medical_cert` (bool).
+- **LeavePolicy** — `leave_type_id`, `accrual_method` (`Accrual` | `LumpSum`), `accrual_rate`, `max_balance`, `carryover_rule`.
+- **LeaveBalance** — `employee_id`, `leave_type_id`, `balance_days`.
+- **LeaveLedger** — `employee_id`, `leave_type_id`, `change`, `reason`, `effective_date` (historical accrual/usage ledger).
+- **LeaveApplication** — `employee_id`, `leave_type_id`, `start_date`, `end_date`, `status`, `approver_id`, `medical_cert_key` (nullable).
+- **OTApplication** — `employee_id`, `date`, `hours`, `justification`, `status`, `approver_id`.
+- **ProfileUpdateRequest** — `employee_id`, `field`, `old_value`, `new_value`, `status`, `approver_id` (used for sensitive changes such as bank account).
+- **EForm** — `name`, `schema` (JSON form definition). **EFormSubmission** — `eform_id`, `employee_id`, `data` (JSON), `status`, `approver_id`.
 
-**EmployeeShiftAssignment** — `employee_id`, `shift_schedule_id`, `effective_from`, `effective_to`.
+### 2.6 Payroll & Pay Components
+- **PayComponent** — `name`, `kind` (`Allowance` | `Bonus` | `Deduction`), `is_taxable` (bool), `is_recurring` (bool), `is_de_minimis` (bool).
+- **EmployeePayComponent** — `employee_id`, `pay_component_id`, `amount`, `effective_from`, `effective_to`.
+- **ExpenseClaim** — `employee_id`, `amount`, `receipt_key` (R2), `category`, `tax_treatment` (`NonTaxableReimbursement` | `DeMinimis` | `Taxable`), `status`, `approver_id`, `target_payroll_book_id`.
+- **Loan** — `employee_id`, `type` (`SSS` | `PagIBIG` | `CashAdvance` | `Company`), `principal`, `installment_amount`, `balance`, `status`.
+- **PayrollBook** — `period_start`, `period_end`, `cycle`, `status` (`Draft` | `Finalized`), `run_type` (`Regular` | `OffCycle` | `FinalPay` | `YearEnd`).
+- **PayrollSheet** — `payroll_book_id`, `employee_id`, `tax_classification` (snapshot), and frozen fields: `base_pay`, `late_undertime_deduction`, `ot_pay`, `nsd_pay`, `holiday_pay`, `hazard_pay`, `taxable_allowances`, `mwe_exempt_compensation`, `nontaxable_basic`, `gross_compensation`, `nontaxable_compensation`, `nontaxable_13month_and_benefits`, `gross_taxable_income`, `sss_ee`, `sss_er`, `philhealth_ee`, `philhealth_er`, `pagibig_ee`, `pagibig_er`, `withholding_tax`, `nontaxable_additions`, `loan_deductions`, `net_pay`. Immutable once the parent `PayrollBook` is `Finalized`.
+- **PayrollAdjustment** — `employee_id`, `target_payroll_book_id`, `kind` (`Addition` | `Deduction`), `amount`, `is_taxable` (bool), `reason`.
 
-**HolidayCalendar** — `date`, `holiday_type` (`Regular` | `SpecialNonWorking`), `scope` (`Global` | `Branch`), `branch_id` (nullable).
+### 2.7 Statutory Configuration (effective-dated)
+- **SSS_Schedule**, **PhilHealth_Schedule**, **PagIBIG_Schedule**, **BIR_WithholdingTable**, **DeMinimis_Ceilings**, **MinimumWageRate** — each carries `effective_from`, `effective_to`, `legal_basis`, `version` (Section 3).
 
-**LeaveType** — `name`, `is_paid` (bool).
+### 2.8 Recruitment (ATS)
+- **Applicant** — `name`, `email`, `phone`, `position_id`, `resume_key` (R2), `stage` (`Applied` | `Shortlisted` | `Interviewed` | `Offered` | `Hired`).
+- **ApplicantNote** — `applicant_id`, `author_id`, `body`.
 
-**LeaveBalance** — `employee_id`, `leave_type_id`, `balance_days`.
-
-**LeaveApplication** — `employee_id`, `leave_type_id`, `start_date`, `end_date`, `status` (`Pending` | `Approved` | `Rejected`), `approver_id`, `medical_cert_file` (nullable).
-
-**OTApplication** — `employee_id`, `date`, `hours`, `justification`, `status` (`Pending` | `Approved` | `Rejected`), `approver_id`.
-
-**AttendanceLog** — `employee_id`, `date`, `time_in`, `time_out`, `source` (`Import` | `Manual`).
-
-**DailyTimeRecord (DTR)** — `employee_id`, `date`, `status` (`Present` | `Absent` | `PaidLeave` | `Holiday`), `worked_hours`, `late_minutes`, `undertime_minutes`, `approved_ot_hours`, `nsd_hours`, `holiday_type` (nullable), `approval_status` (`Pending` | `Approved` | `Rejected`), `approved_by_id` (nullable, references User), `is_locked` (bool).
-
-**PayComponent** — `name`, `kind` (`Allowance` | `Bonus` | `Deduction`), `is_taxable` (bool), `is_recurring` (bool).
-
-**EmployeePayComponent** — `employee_id`, `pay_component_id`, `amount`, `effective_from`, `effective_to`.
-
-**PayrollBook** — `period_start`, `period_end`, `cycle`, `status` (`Draft` | `Finalized`).
-
-**PayrollSheet** — `payroll_book_id`, `employee_id`, `tax_classification` (snapshot of `Regular` | `MWE` at run time), and frozen computed fields: `base_pay`, `late_undertime_deduction`, `ot_pay`, `nsd_pay`, `holiday_pay`, `hazard_pay`, `taxable_allowances`, `mwe_exempt_compensation` (basic minimum wage + holiday/OT/NSD/hazard pay exempt for MWEs), `nontaxable_basic`, `gross_compensation`, `nontaxable_compensation` (sum of all exempt items), `gross_taxable_income`, `sss_ee`, `sss_er`, `philhealth_ee`, `philhealth_er`, `pagibig_ee`, `pagibig_er`, `withholding_tax`, `nontaxable_additions`, `nontaxable_13month_and_benefits` (the portion within the ₱90,000 cap), `loan_deductions`, `net_pay`. Once the parent `PayrollBook` is `Finalized`, these rows are immutable.
-
-**PayrollAdjustment** — `employee_id`, `target_payroll_book_id`, `kind` (`Addition` | `Deduction`), `amount`, `is_taxable` (bool), `reason`.
-
-**StatutoryTable configs** (Section 3): **SSS_Schedule**, **PhilHealth_Schedule**, **PagIBIG_Schedule**, **BIR_WithholdingTable**, **DeMinimis_Ceilings**, **MinimumWageRate** — each effective-dated.
-
-**AuditLog** — `user_id`, `action`, `entity`, `entity_id`, `before` (JSON), `after` (JSON), `timestamp`.
-
-**ConsentRecord** — `employee_id`, `consent_type`, `granted_at`.
+### 2.9 Audit, Consent & AI Metering
+- **AuditLog** — `user_id`, `action`, `entity`, `entity_id`, `before` (JSON), `after` (JSON), `timestamp`.
+- **ConsentRecord** — `employee_id`, `consent_type` (`PersonalData` | `Biometric` | `Location` | `Financial`), `granted_at`.
+- **AiUsage** — `tenant_id`, `feature`, `model`, `input_tokens`, `output_tokens`, `cost_estimate`, `timestamp` (used for metering and fair-use caps; Section 8).
 
 ---
 
 ## 3. Statutory Configuration Engine
 
 ### 3.1 Rule
-No statutory rate, bracket, ceiling, or threshold is written in application code. Each lives in an effective-dated config table. Every config row carries `effective_from`, `effective_to`, `legal_basis`, and `version`. The payroll engine selects the row valid for the **pay period's date range**, not the current date. Re-running a past period uses that period's rates.
+No statutory rate, bracket, ceiling, or threshold is written in application code. Each lives in an effective-dated config table with `effective_from`, `effective_to`, `legal_basis`, `version`. The engine selects the row valid for the **pay period's date range**, not the current date. Re-running a past period uses that period's rules.
 
 ### 3.2 Seed Data (effective 2026-01-01)
-
-**SSS_Schedule** — Total rate 15% of Monthly Salary Credit (MSC). Employer share 10%, employee share 5%. MSC floor ₱5,000, ceiling ₱35,000. For MSC above ₱20,000 the contribution includes a Mandatory Provident Fund (MPF) component. Employer also pays Employees' Compensation (EC): ₱10 when MSC is below ₱15,000, otherwise ₱30. The full bracketed MSC table (₱500 steps) is loaded from the official SSS 2026 schedule. `legal_basis`: RA 11199.
-
-**PhilHealth_Schedule** — Rate 5% of monthly basic salary, split equally (2.5% employee / 2.5% employer). Income floor ₱10,000, ceiling ₱100,000. Minimum monthly premium ₱500, maximum ₱5,000. `legal_basis`: RA 11223 (UHC), PhilHealth Circular 2025-001.
-
-**PagIBIG_Schedule** — Employee 2% and employer 2% of monthly compensation; employee rate is 1% when monthly compensation is ₱1,500 or below. Maximum Fund Salary cap ₱10,000, so the maximum is ₱200 per share (₱400 total). `legal_basis`: RA 9679, HDMF Circular 460.
-
-**BIR_WithholdingTable** — Stored per payroll frequency (`daily`, `weekly`, `semi_monthly`, `monthly`). Seeded from the current BIR withholding tax tables under the TRAIN law (2023-onward tranche; ₱250,000 annual exemption threshold). The engine selects the table matching the tenant's `payroll_cycle`.
-
-**DeMinimis_Ceilings** — Per-category non-taxable ceilings, seeded from BIR Revenue Regulation 29-2025. Amounts paid above a category's ceiling are treated as taxable. The combined annual exclusion cap for 13th-month pay and other benefits is ₱90,000 (`legal_basis`: RA 10963, TRAIN).
-
-**MinimumWageRate** — Daily statutory minimum wage by `region` (and sector where applicable), used to classify Minimum Wage Earners. Seeded from the current Regional Tripartite Wages and Productivity Board (RTWPB) wage orders per region. `legal_basis`: applicable regional Wage Order.
+- **SSS_Schedule** — Total 15% of Monthly Salary Credit (MSC). Employer 10%, employee 5%. MSC floor ₱5,000, ceiling ₱35,000. MSC above ₱20,000 includes a Mandatory Provident Fund (MPF) component. Employer pays Employees' Compensation (EC): ₱10 (MSC < ₱15,000) or ₱30 (MSC ≥ ₱15,000). Full bracketed MSC table (₱500 steps) loaded from the official SSS 2026 schedule. `legal_basis`: RA 11199.
+- **PhilHealth_Schedule** — 5% of monthly basic salary, split 2.5% employee / 2.5% employer. Floor ₱10,000, ceiling ₱100,000. Minimum premium ₱500, maximum ₱5,000. `legal_basis`: RA 11223, PhilHealth Circular 2025-001.
+- **PagIBIG_Schedule** — Employee 2% and employer 2%; employee 1% when monthly compensation ≤ ₱1,500. Maximum Fund Salary cap ₱10,000 → max ₱200 per share. `legal_basis`: RA 9679, HDMF Circular 460.
+- **BIR_WithholdingTable** — Stored per payroll frequency (`daily`, `weekly`, `semi_monthly`, `monthly`). Seeded from current BIR withholding tax tables (TRAIN, 2023-onward tranche; ₱250,000 annual exemption threshold). The engine selects the table matching the tenant's `payroll_cycle`.
+- **DeMinimis_Ceilings** — Per-category non-taxable ceilings, seeded from BIR Revenue Regulation 29-2025; excess over a ceiling is taxable. Combined annual exclusion cap for 13th-month pay and other benefits is ₱90,000. `legal_basis`: RA 10963 (TRAIN), RR 29-2025.
+- **MinimumWageRate** — Daily statutory minimum wage by `region` (and sector where applicable), used to classify Minimum Wage Earners. Seeded from current RTWPB wage orders per region. `legal_basis`: applicable regional Wage Order.
 
 ---
 
@@ -109,145 +125,196 @@ No statutory rate, bracket, ceiling, or threshold is written in application code
 - **Daily Paid:** pay = `derived_daily_rate × days_worked`.
 - **Hourly rate:** `derived_hourly_rate = derived_daily_rate / 8`.
 - **Late/Undertime deduction:** `(derived_hourly_rate / 60) × total_late_undertime_minutes`.
-- **Regular Pay:** fixed base rate with no absence/late deductions.
-- **Basic Pay:** Regular Pay minus tardiness and absence deductions.
+- **Regular Pay:** fixed base rate, no absence/late deductions. **Basic Pay:** Regular Pay minus tardiness and absences.
 
 ### 4.2 Gross-to-Net Waterfall
-The engine computes each employee's pay in this exact order and writes the result to a `PayrollSheet`:
-
+The engine computes each employee's pay in this exact order and writes a `PayrollSheet`:
 1. Compute **Base Pay**.
 2. Deduct **tardiness and absences** (late/undertime).
-3. Add **premium pay** (OT, NSD, rest day, holiday, hazard) using the stacking matrix (4.3).
+3. Add **premium pay** (OT, NSD, rest day, holiday, hazard) via the stacking matrix (4.3).
 4. Add **allowances and bonuses** (each tagged taxable or non-taxable on its `PayComponent`).
 5. **Gross Compensation** = sum of steps 1–4.
-6. Determine **non-taxable compensation** (Section 4.8): MWE-exempt pay, mandatory contributions, non-taxable components, de-minimis-within-ceiling, 13th-month-and-other-benefits within the ₱90,000 cap, and substantiated reimbursements.
+6. Determine **non-taxable compensation** (4.5): MWE-exempt pay, mandatory contributions, non-taxable components, de-minimis-within-ceiling, 13th-month-and-other-benefits within the ₱90,000 cap, substantiated reimbursements.
 7. **Gross Taxable Income** = Gross Compensation − non-taxable compensation.
-8. Deduct **statutory contributions** (SSS, PhilHealth, Pag-IBIG) per the tenant's `statutory_cutoff_rule`.
-9. Compute **withholding tax** on Gross Taxable Income from the period-specific BIR table. For employees with `tax_classification = MWE`, withholding tax on the exempt components is zero.
-10. Add back **non-taxable additions** (reimbursements and other non-taxable items that are paid out but were excluded from the tax base).
+8. Deduct **statutory contributions** (SSS, PhilHealth, Pag-IBIG) per `statutory_cutoff_rule`.
+9. Compute **withholding tax** on Gross Taxable Income via the period-specific BIR table. For MWEs, withholding on exempt components is zero.
+10. Add back **non-taxable additions** (reimbursements/items paid out but excluded from the tax base).
 11. Deduct **loans and other deductions**.
 12. **Net Take-Home Pay** = result.
 
 ### 4.3 Premium Stacking Matrix
-Premium pay is computed hour by hour against the employee's shift and the night-shift window (10:00 PM–6:00 AM). Multipliers compose; they are not applied as a single day-level value. The base factors:
+Premium pay is computed hour by hour against the employee's shift and the night-shift window (10:00 PM–6:00 AM). Multipliers compose; they are not applied as a single day-level value.
 
 | Condition | Factor |
 |---|---|
 | Regular work overtime | 1.25 |
-| Night Shift Differential (within 10PM–6AM) | ×1.10 applied to the otherwise-applicable rate |
+| Night Shift Differential (within 10PM–6AM) | ×1.10 on the otherwise-applicable rate |
 | Rest day or Special Non-Working Holiday worked | 1.30 |
 | Rest day OT / Special Non-Working Holiday OT | 1.69 |
 | Regular Holiday worked | 2.00 |
 | Regular Holiday OT | 2.60 |
-| Regular Holiday falling on a rest day, worked | 2.60 |
+| Regular Holiday on a rest day, worked | 2.60 |
 | Double Holiday worked | 3.00 |
 
-Stacking order: apply the day-type factor first, then the overtime factor, then multiply by 1.10 for any of those hours that fall inside the night-shift window. Example: overtime worked between 10PM and 6AM on a regular holiday = base hourly rate × 2.60 × 1.10.
+Stacking order: day-type factor, then overtime factor, then ×1.10 for hours inside the night-shift window. Example: OT between 10PM–6AM on a regular holiday = hourly rate × 2.60 × 1.10.
 
 ### 4.4 13th-Month Pay
-`thirteenth_month = total_basic_salary_earned_in_calendar_year / 12`. The default basis is **Strict DOLE**: Basic Pay (which already reflects unpaid lates and absences) and excludes overtime, premium pay, allowances, and COLA. The tenant setting `thirteenth_month_basis` controls the basis.
+`thirteenth_month = total_basic_salary_earned_in_calendar_year / 12`. Default basis **Strict DOLE** (Basic Pay, reflecting unpaid lates/absences; excludes OT, premium pay, allowances, COLA). Tenant setting `thirteenth_month_basis` controls the basis.
 
-### 4.5 Statutory Computation Specifics
-- Each contribution is computed from the employee's applicable salary against the effective-dated schedule (Section 3).
-- SSS uses the MSC bracket lookup (including MPF and EC components). PhilHealth applies 5% within the floor/ceiling. Pag-IBIG applies the 2%/2% (or 1% employee) rule capped at the Maximum Fund Salary.
-- Contributions are monthly obligations. In semi-monthly payroll, they are deducted on the second (month-end) cutoff (`statutory_cutoff_rule = second_cutoff`).
+### 4.5 Minimum Wage Earners & Non-Taxable Compensation
+- **MWE classification:** an employee is an MWE when `tax_classification = MWE`. The engine validates against `MinimumWageRate` for the employee's `WorkLocation.region` each period; if the basic rate exceeds the applicable regional minimum for that period, the employee is treated as `Regular` for that period.
+- **MWE exemption:** basic minimum wage (including COLA forming part of minimum wage), holiday pay, overtime pay, night shift differential, and hazard pay are exempt from income tax and withholding; recorded in `mwe_exempt_compensation`. Other taxable income an MWE receives (commissions, taxable allowances, bonuses beyond the ₱90,000 cap) remains taxable.
+- **Employer-designated non-taxable basic:** `Employee.nontaxable_basic_amount` excludes a designated portion of basic pay from `gross_taxable_income`, recorded in `nontaxable_basic`.
+- **Non-taxable compensation set:** MWE-exempt compensation; mandatory SSS/PhilHealth/Pag-IBIG employee contributions; components flagged `is_taxable = false`; de minimis within RR 29-2025 ceilings; 13th-month and other benefits up to ₱90,000; substantiated reimbursements.
 
-### 4.6 Withholding Tax
-The engine selects the BIR withholding table matching the tenant's `payroll_cycle` and applies it to the period's taxable income.
+### 4.6 Statutory Computation Specifics
+- Each contribution is computed against the effective-dated schedule. SSS uses the MSC bracket lookup (incl. MPF and EC). PhilHealth applies 5% within floor/ceiling. Pag-IBIG applies 2%/2% (or 1% employee) capped at the Maximum Fund Salary.
+- Contributions are monthly obligations; in semi-monthly payroll they are deducted on the second (month-end) cutoff (`statutory_cutoff_rule = second_cutoff`).
 
-### 4.7 Corrections & Off-Cycle Runs
-- A `PayrollBook` in `Draft` status can be re-opened and recomputed.
-- A `Finalized` `PayrollBook` is immutable. Corrections to a finalized book are made through an **off-cycle adjustment run** (a new `PayrollBook`) or through **PayrollAdjustment** records that are applied to the next `PayrollBook`.
+### 4.7 Withholding Tax
+The engine selects the BIR withholding table matching the tenant's `payroll_cycle` and applies it to taxable income for the period.
 
-### 4.8 Minimum Wage Earners & Non-Taxable Compensation
-**MWE classification.** An employee is a Minimum Wage Earner when `tax_classification = MWE`. The system supports this in two ways: the employer sets the classification on the employee, and the engine validates it against `MinimumWageRate` for the employee's `WorkLocation.region` for the period — if the employee's basic rate exceeds the applicable regional minimum wage for that period, the engine flags the classification as invalid for that period and treats the employee as `Regular`.
+### 4.8 Corrections & Off-Cycle Runs
+- A `Draft` `PayrollBook` can be re-opened and recomputed.
+- A `Finalized` `PayrollBook` is immutable. Corrections are made via an **off-cycle adjustment run** (a new `PayrollBook` with `run_type = OffCycle`) or via **PayrollAdjustment** records applied to the next book.
 
-**MWE tax treatment.** For an MWE, the following are exempt from income tax and from withholding: basic minimum wage (including COLA that forms part of the minimum wage), holiday pay, overtime pay, night shift differential, and hazard pay. These amounts are recorded in `mwe_exempt_compensation` and excluded from `gross_taxable_income`. Any *other* taxable compensation an MWE receives (e.g., commissions, taxable allowances, bonuses beyond the ₱90,000 cap) remains taxable under the normal rules.
+### 4.9 Year-End Annualization
+In the final period of the calendar year, the engine runs annualization for all active employees: sum YTD taxable income and YTD withholding; compute true annual liability against the annual TRAIN table; post the over/under-withholding true-up (refund or shortfall); produce per-employee BIR 2316; and produce the Alphalist (with MWEs on the separate MWE schedule) and supporting DAT file.
 
-**Employer-designated non-taxable basic.** `Employee.nontaxable_basic_amount` lets the employer designate a non-taxable portion of basic pay (for example, the exempt minimum-wage portion). The engine excludes this amount from `gross_taxable_income` and records it in `nontaxable_basic`.
-
-**Non-taxable compensation set** (excluded from the withholding-tax base): MWE-exempt compensation; mandatory SSS/PhilHealth/Pag-IBIG employee contributions; pay components flagged `is_taxable = false`; de minimis benefits within their RR 29-2025 ceilings (excess is taxable); 13th-month pay and other benefits up to the ₱90,000 combined annual cap (excess is taxable); and substantiated reimbursements.
+### 4.10 Final Pay / Offboarding Computation
+On offboarding, the engine: schedules ESS lockout for the end date; queries `AssetAssignment` and flags unreturned assets (HR may post a monetary deduction equal to asset value); converts unused convertible leave to cash via `LeaveBalance`; prorates 13th-month (YTD Basic / 12); annualizes tax (YTD income vs. YTD withheld → refund or payable); sums unpaid salary + 13th-month + leave cash-out + tax refund − asset and other deductions. Output: a Final `PayrollSheet`, an auto-populated **Quitclaim**, and the final **BIR 2316**.
 
 ---
 
-## 5. Modules
+## 5. Feature Modules
 
 ### 5.1 HRIS
-- Employee master with the fields in Section 2, organizational tags (Work Location, Branch, Department, Position, Level), and statutory IDs.
-- Company dashboard showing headcount, the next upcoming payroll period, and upcoming holidays.
+- **Employee master & 201 files:** all Section 2.3 fields, organizational tags, statutory IDs (StatutoryId table), and an **EmployeeDocument** vault backed by R2 (contracts, government IDs, certificates, memos) with category, retention, and audit.
+- **Company dashboard:** noticeboard, headcount, upcoming payroll, holidays, employees on leave, birthdays.
+- **Asset tracking:** assign equipment (serial, condition) and track returns for final-pay clearance.
+- **Incident management:** memos and Notices to Explain (NTE) with employee responses.
+- **Movements:** digital promotion/transfer/reclassification forms with approval and effective dating.
 
-### 5.2 Time & Attendance
-- **DTR sources:** import attendance via CSV/biometric-export file, and manual entry/correction by Admin or Payroll users.
-- **Shift logic:** fixed and flexible shifts; recognition of cross-midnight overtime; computation of tardiness and undertime against the assigned shift.
-- **DTR review & approval:** DTRs route through the reporting chain for approval (Section 6.3).
-- **Leave:** leave types, per-employee leave balances (manual ledger), and the leave/undertime application workflow (Section 6.4).
-- **Overtime:** the overtime application workflow (Section 6.5).
+### 5.2 Applicant Tracking System (ATS)
+- Kanban pipeline (Applied → Shortlisted → Interviewed → Offered → Hired), applicant notes, resume storage in R2.
+- 1-click conversion of a Hired applicant into an Active `Employee` (carrying over name, position, documents).
 
-### 5.3 Payroll, Records & Claims
-- **Payroll Book:** the historical ledger of all payroll runs for the tenant.
-- **Payroll Sheet:** the frozen per-employee line-item breakdown for a run.
-- **Pay components:** Admin-defined custom allowances, bonuses, and deductions, each flagged taxable or non-taxable.
-- **Corrections:** off-cycle runs and adjustments per Section 4.7.
+### 5.3 Time & Attendance
+- **Capture:** (a) import attendance via CSV/biometric-export file; (b) manual entry by Admin/Payroll; (c) **Digital time clock** in ESS and **Kiosk** mode with **selfie capture** and **GPS geofencing**.
+- **Shift logic:** fixed and flexible shifts; cross-midnight overtime; tardiness/undertime against the assigned shift.
+- **Geofence:** punches outside a branch radius are **flagged and allowed** (never hard-rejected) for HR review; consent for biometric/location capture is required (Section 1.4).
+- **DTR:** computed records with review/approval routed up the reporting chain (Section 6.4).
+- **Leave:** leave types, accrual/lump-sum policies, balances, historical ledger, and the leave/undertime application workflow.
+- **Overtime:** the overtime application workflow with attendance cross-check.
 
-### 5.4 Compliance Outputs
-- **Payslip** generation per employee per run.
-- **BPI bank file** generation in BPI's payroll batch upload format, plus a **generic CSV** export.
-- **BIR 1601-C data** export (monthly remittance of withholding tax on compensation).
-- **BIR Form 2316** generation per employee — the Certificate of Compensation Payment / Tax Withheld for the calendar year (and for the final period on separation).
-  - **Data sources:** the employee's master record (name, TIN, address, employer details, `tax_classification`) plus the aggregation of all that employee's frozen `PayrollSheet` rows for the target year. The form's lines are populated from the snapshotted breakdown: `gross_compensation`, `mwe_exempt_compensation`, `nontaxable_compensation` (broken out into mandatory contributions, 13th-month-and-other-benefits within ₱90,000, de minimis, and MWE-exempt components), `gross_taxable_income`, and total `withholding_tax`.
-  - **How it is generated:** an Admin or Payroll user opens the 2316 generator, selects the calendar year (or a separated employee), and generates either a single employee's certificate or a batch for all employees. The system aggregates the year's `PayrollSheet` data per employee and renders the BIR 2316 layout.
-  - **Output:** a per-employee BIR Form 2316 document (PDF) following the official layout, plus a batch download. The employee's `tax_classification` determines whether the MWE-exempt lines are populated.
-- All compliance files are generated for the client to file themselves (export-only).
+### 5.4 Payroll, Records & Claims
+- **Payroll Book:** master historical ledger of all runs. **Payroll Sheet:** frozen per-employee line-item breakdown.
+- **Custom pay components:** Admin-built allowances/bonuses/deductions, each taxable or non-taxable, with de-minimis flags.
+- **Expense claims:** employees file reimbursements with receipt upload; Finance approves and assigns tax treatment; approved claims attach to a target payroll book.
+- **Loans:** SSS/Pag-IBIG/company loans and cash advances with installment schedules and running balances.
+- **Corrections:** off-cycle and adjustment runs (Section 4.8).
 
-### 5.5 Employee Self-Service (ESS)
-- Secure payslip viewing, protected by the employee's `ess_pin` (or birthdate).
-- View of own profile and leave balances.
+### 5.5 Compliance & Analytics
+- **Payslips** per employee per run, published to ESS.
+- **Bank files:** BDO, BPI, UnionBank, Metrobank batch formats, plus a generic CSV.
+- **Statutory reports:** SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C, BIR 2316, Alphalist (with the separate MWE schedule) and DAT file.
+- **Filing posture:** export-only — all files are generated for the client to file through their own channels.
+- **Analytics:** pivot/slice timesheets and payroll by Department, Branch, Work Location, or Level.
 
-### 5.6 RBAC, Reporting Lines & Central Portal
-- **System roles:** `Admin`, `Payroll`, `Employee`, each with a fixed permission set. Roles control what a user can *do* in the system.
-- **Reporting lines:** each employee has an `immediate_supervisor_id` and a `manager_id` (Section 2). These define the approval chain for DTRs, leave, and overtime, and are independent of system roles.
-- **Approval-chain fallback:** an employee's requests route to their immediate supervisor; a supervisor's own requests route to their manager; an employee at the top of the chain (no supervisor or manager set) routes to the tenant's designated reviewer, `Tenant.default_dtr_approver_id` (an `Admin` or `Payroll` user).
-- **Central Portal:** the operator-facing portal that creates and manages tenants, sets each tenant's `plan_tier`, and toggles each tenant's `feature_flags`.
+### 5.6 Employee Self-Service (ESS)
+- Secure payslip viewing protected by `ess_pin` (or birthdate).
+- Profile view; sensitive changes (e.g., bank account) submitted as `ProfileUpdateRequest` for HR approval.
+- E-forms (IT tickets, shift-change requests, etc.) via the e-form builder.
+- File leave, undertime, overtime, and expense claims.
+
+### 5.7 RBAC & Central/Master Portal
+- **Dynamic RBAC:** custom roles built from permissions (Section 2.1). Default roles `Admin`, `Payroll`, `Employee` ship as presets; tenants may add roles such as `Branch Supervisor` or `Payroll Read-Only`.
+- **Reporting lines:** `immediate_supervisor_id` / `manager_id` define approval chains, independent of roles.
+- **Central/Master Portal:** operator-facing portal for the SaaS owner to create and manage tenants, set `plan_tier`, toggle `feature_flags` (including the AI add-on), and manage subscriptions.
+
+### 5.8 AI Assistant Add-On
+A billable add-on bundled into the `Plus` tier, OFF by default, controlled per-tenant from the Central Portal. Full behavior, models, caching, and gating are defined in Section 8.
 
 ---
 
 ## 6. Workflows
 
 ### 6.1 Tenant Setup Wizard
-Operator creates a Tenant in the Central Portal → tenant Admin completes a guided wizard: company profile and branding → organizational structure (locations with region, branches, departments, positions) → employees, statutory IDs, reporting lines (immediate supervisor and manager), and tax classification (Regular/MWE) → pay rules (cycle, denominator, 13th-month basis, default DTR approver) → shift schedules and holiday calendar. On completion the tenant can run payroll.
+Operator creates a Tenant in the Central Portal → tenant Admin completes a wizard: company profile & branding → org structure (locations with region, branches with geofences, departments, positions) → roles & permissions → employees, statutory IDs, documents, reporting lines, tax classification → pay rules (cycle, denominator, 13th-month basis, default DTR approver) → shift schedules, leave policies, holiday calendar. On completion the tenant can run payroll.
 
-### 6.2 DTR Generation (from import)
-Admin/Payroll imports an attendance file or enters punches manually → the system writes `AttendanceLog` rows → the system computes each `DailyTimeRecord` against the employee's assigned `ShiftSchedule`, deriving worked hours, late minutes, undertime minutes, and night-shift hours → each DTR is created with `approval_status = Pending`.
+### 6.2 Clock-In (Kiosk / ESS)
+Employee enters PIN → camera captures selfie → system captures GPS → queries the employee's assigned Branch and Shift → computes distance from the branch `Geofence`; if outside the radius the punch is flagged and allowed → saves `AttendanceLog` (selfie key, GPS, geofence status) → computes tardiness/undertime against the shift. Requires prior biometric/location consent.
 
-### 6.3 DTR Review & Approval
-DTRs are routed for approval along the reporting chain (Section 5.6): an employee's DTRs route to their `immediate_supervisor`; a supervisor's own DTRs route to their `manager`; an employee at the top of the chain (no supervisor or manager) routes to the tenant's `default_dtr_approver`. The approver reviews the period's DTRs, can edit before approving, and sets each to `Approved` or `Rejected`, recorded in `approved_by_id`. An `Admin` may override and approve any DTR (escalation/fallback). A payroll run cannot finalize on `Pending` or `Rejected` DTRs without an explicit `Admin` override.
+### 6.3 DTR Generation
+From imported/manual punches or from clock-in logs, the system computes each `DailyTimeRecord` against the assigned `ShiftSchedule` (worked hours, late, undertime, night-shift hours), created with `approval_status = Pending`.
 
-### 6.4 Leave / Undertime Application
-Employee files a leave or undertime request in ESS, attaching a medical certificate where required → status `Pending`; the system checks the `LeaveBalance` → request routes to the employee's `immediate_supervisor` (escalating to `manager`, then `default_dtr_approver` per the chain) → on approval, the system decrements the balance and overwrites the `DailyTimeRecord` for the date as `PaidLeave`, bypassing the absence deduction.
+### 6.4 DTR Review & Approval
+DTRs route up the reporting chain: an employee's DTRs → `immediate_supervisor`; a supervisor's own DTRs → `manager`; top-of-chain (no supervisor/manager) → tenant `default_dtr_approver`. The approver may edit before approving, then sets `Approved`/`Rejected` (`approved_by_id` recorded). An `Admin` may override. A payroll run cannot finalize on `Pending`/`Rejected` DTRs without an `Admin` override.
 
-### 6.5 Overtime Application
-Employee files an overtime request in ESS with hours and justification → the system cross-references `AttendanceLog` and rejects the request if there is no clock-out supporting the claimed hours → request routes to the employee's `immediate_supervisor` (escalating per the chain) → on approval the system sets `approved_ot_hours` on the `DailyTimeRecord`. Only approved overtime is paid.
+### 6.5 Leave / Undertime Application
+Employee files in ESS, attaching a medical certificate where required → status `Pending`; balance checked → routes up the reporting chain → on approval, balance decremented (ledger updated) and the DTR overwritten as `PaidLeave`, bypassing the absence deduction.
 
-### 6.6 Holiday Application
-Admin adds a holiday to the `HolidayCalendar` with date, type, and scope → during a payroll run the engine intercepts each `DailyTimeRecord` on that date: if there is no log on a Regular Holiday it injects 100% holiday pay; if the employee is present it applies the holiday factor from the stacking matrix.
+### 6.6 Overtime Application
+Employee files hours + justification in ESS → system cross-references `AttendanceLog` and rejects if no supporting clock-out → routes up the reporting chain → on approval sets `approved_ot_hours`. Only approved overtime is paid.
 
-### 6.7 Payroll Run & Corrections
-Payroll user opens the Payroll Book and starts a run for a period → the system verifies that all `DailyTimeRecord` rows for the period are `Approved` (blocking on any `Pending`/`Rejected` DTR unless an `Admin` overrides) → locks all DTRs for the period → creates a new `PayrollBook` (`Draft`) → loops every active employee and executes the gross-to-net waterfall (Section 4.2), pulling effective-dated statutory tables, MWE classification, approved overtime, leave, holiday factors, and pay components → writes one frozen `PayrollSheet` per employee → Payroll user reviews the run → on **Finalize**, the `PayrollBook` becomes immutable, the system generates the BPI bank file and CSV, and publishes payslips to ESS. Corrections after finalization follow Section 4.7.
+### 6.7 Expense Claims
+Employee uploads receipt + amount in ESS → routes to HR/Finance → Finance verifies and sets `tax_treatment` (non-taxable reimbursement, de-minimis-within-ceiling, or taxable) → approved claim attaches to the target payroll book and is added in the next run with the correct tax handling.
 
-### 6.8 BIR 2316 Generation
-Admin/Payroll opens the 2316 generator → selects a calendar year (or a separated employee) and either a single employee or a batch → the system aggregates that employee's frozen `PayrollSheet` rows for the year together with the employee master record → it renders the BIR Form 2316 layout, populating the gross, taxable, and non-taxable lines (including MWE-exempt lines when `tax_classification = MWE`) → output is a per-employee PDF certificate plus a batch download, for the client to issue and file.
+### 6.8 Profile Update (Bank Change Safeguard)
+Employee edits a sensitive field (e.g., bank account) in ESS → not committed immediately; a `ProfileUpdateRequest` routes to HR → HR verifies identity and approves → change is committed and logged in `AuditLog`. The next bank file uses the new account.
+
+### 6.9 Holiday Application
+Admin adds a holiday (date, type, scope) to `HolidayCalendar` → during a run the engine intercepts DTRs on that date: no log on a Regular Holiday → inject 100% holiday pay; present → apply the holiday factor from the stacking matrix.
+
+### 6.10 Payroll Run & Corrections
+Payroll user starts a run for a period → system verifies all DTRs are `Approved` (blocks otherwise unless `Admin` override) → locks DTRs → creates a `Draft` `PayrollBook` → loops every active employee and executes the gross-to-net waterfall (4.2), pulling effective-dated tables, MWE classification, approved OT, leave, holiday factors, components, loans → writes one frozen `PayrollSheet` per employee → user reviews → on **Finalize**, the book becomes immutable, bank files and CSV are generated, and payslips are published to ESS. Corrections follow Section 4.8.
+
+### 6.11 Year-End Annualization
+In the final period of the year, the system runs the annualization described in Section 4.9 across all active employees, producing the true-up, 2316s, and Alphalist/DAT.
+
+### 6.12 BIR 2316 Generation
+Admin/Payroll opens the 2316 generator → selects a calendar year (or a separated employee), single or batch → system aggregates the employee's frozen `PayrollSheet` rows for the year plus master data → renders the BIR 2316 layout, populating gross/taxable/non-taxable lines (incl. MWE-exempt lines when `tax_classification = MWE`) → output is a per-employee PDF plus batch download, for the client to issue and file.
+
+### 6.13 Offboarding & Final Pay
+HR initiates offboarding with an end date → engine runs the final-pay computation (Section 4.10): asset clearance, leave cash-out, 13th-month proration, tax annualization, net final pay → output is a Final `PayrollSheet`, auto-populated Quitclaim, and final BIR 2316; ESS access is revoked on the end date.
+
+### 6.14 Applicant Onboarding (ATS)
+Recruiter moves an applicant through the pipeline → on Hire, 1-click conversion creates an Active `Employee`, carrying over details and documents, and launches the relevant setup steps.
 
 ---
 
 ## 7. UI/UX
 
-- **Branding:** "Sentire Payroll," deep-blue and slate palette, built with Tailwind and shadcn/ui; per-tenant logo and primary color.
-- **Admin desktop:** collapsible left sidebar, top global search, dashboard metric widgets (headcount, upcoming payroll, holidays).
-- **ESS mobile (PWA):** bottom navigation bar; data tables collapse to vertical card views with no horizontal scrolling.
+- **Branding:** "Sentire Payroll," premium deep-blue and slate palette; Tailwind + shadcn/ui; per-tenant logo and primary color.
+- **Admin desktop:** collapsible left sidebar, top global search, dashboard metric widgets (headcount, payroll trend, upcoming payroll, holidays, on-leave, birthdays). Data grids for employees, DTRs, payroll sheets.
+- **ESS mobile (PWA):** bottom navigation bar; a large central "Clock In" button; data tables collapse to vertical card views with no horizontal scrolling; selfie capture flow; payslip viewer.
+- **Kiosk tablet:** distraction-free, large clock, numeric PIN keypad and/or QR scan for rapid queueing, selfie capture, branch-bound.
 
 ---
 
-## 8. Configuration Defaults
+## 8. AI Assistant — Integration & Gating Map
+
+The AI Assistant is an add-on bundled into the `Plus` tier, OFF by default, toggled per-tenant (and per-feature) from the Central Portal.
+
+### 8.1 Control & Metering
+- The Central Portal's `plan_tier` and `feature_flags` gate AI. Setting a tenant to `Plus` enables AI feature flags; each AI feature is independently toggleable.
+- **All AI calls route through one internal metering gateway** that tags each call with `tenant_id` + feature, logs token usage to `AiUsage`, enforces per-tenant fair-use caps, and degrades gracefully (queues or disables a feature) when a cap is hit.
+- **Cost controls:** Claude **Haiku 4.5** by default; **Sonnet** only for flagged complex reasoning; aggressive prompt-caching of system prompts, tool definitions, document templates, and per-tenant knowledge base; strict per-call max-token limits.
+
+### 8.2 Touchpoint Map
+
+| # | Feature | Default Model | Caching | Notes |
+|---|---|---|---|---|
+| 1 | Document extraction — receipts, government IDs, DTR/biometric exports | Haiku 4.5 (vision) | Extraction prompt + per-doc-type template | Highest token volume; metered hardest |
+| 2 | Always-on HR assistant (admin + ESS chat) | Haiku 4.5; escalate to Sonnet for complex policy/computation questions | System prompt + tenant knowledge base + chat history | Cap messages/day per seat |
+| 3 | Payslip / "why is my tax this?" Q&A | Haiku 4.5 | Explainer prompt + the employee's own sheet | Rides on #2 |
+| 4 | Compliance helper — explain a BIR form, summarize a circular | Sonnet | Form/circular references | Admin-only, low volume |
+| 5 | Résumé parsing (ATS) | Haiku 4.5 | Parse template | Tied to ATS |
+| 6 | Payroll-run anomaly flagging | Rules-first; AI (Sonnet) optional second pass | — | Deterministic rules preferred; AI only for fuzzy cases |
+
+---
+
+## 9. Configuration Defaults
 
 | Setting | Default |
 |---|---|
@@ -256,9 +323,28 @@ Admin/Payroll opens the 2316 generator → selects a calendar year (or a separat
 | Statutory deduction timing | Second (month-end) cutoff |
 | Monthly-paid denominator | 261 working days |
 | 13th-month basis | Strict DOLE (Basic Pay) |
-| Compliance filing posture | Export-only (the client files) |
-| Bank file format | BPI |
-| Plan tiers | `Standard`, `Plus` |
-| Employee tax classification | `Regular` by default; `MWE` set per employee, validated against the regional minimum wage |
 | 13th-month & other benefits exclusion cap | ₱90,000 combined, annual |
+| Employee tax classification | `Regular` by default; `MWE` per employee, validated vs. regional minimum wage |
+| Compliance filing posture | Export-only (the client files) |
+| First bank file format | BPI (others available) |
 | DTR approval before payroll | Required (Admin override available) |
+| Geofence handling | Flag-and-allow (never hard-reject) |
+| Plan tiers | `Standard`, `Plus` (AI add-on bundled into `Plus`) |
+| Default roles | `Admin`, `Payroll`, `Employee` (custom roles supported) |
+
+---
+
+## 10. Recommended Build Sequence
+
+This section is sequencing guidance only. All features in Sections 1–9 are in scope; this is the order that delivers a sellable system fastest and keeps compliance risk contained. Nothing here is excluded.
+
+1. **Foundation:** multi-tenancy, dynamic RBAC, security/DPA, R2 storage, tenant setup wizard.
+2. **Core payroll wedge:** statutory configuration engine + 2026 seed; employee master + StatutoryId + documents; DTR via import/manual + shift logic; DTR approval; leave & OT; gross-to-net engine with stacking matrix, MWE/non-taxable, 13th-month; payroll book/sheet with corrections; payslips; BPI bank file + CSV; 1601-C data + 2316.
+3. **Compliance depth:** year-end annualization + Alphalist; remaining statutory reports (R-3, RF1, MCRF); additional bank files; expense claims; loans; leave accrual automation; offboarding & final pay.
+4. **Attendance & engagement:** ESS time clock with selfie + GPS geofence; Kiosk mode; e-forms; profile-update requests; analytics/pivots.
+5. **Growth modules:** ATS; asset tracking; incident/NTE; movements.
+6. **AI Assistant add-on:** metering gateway, then the touchpoint features (Section 8), gated to `Plus`.
+
+---
+
+*Complete build specification. Compliance parameters (BIR withholding tables, de minimis ceilings, regional minimum wage) are loaded as effective-dated configuration data and verified against current BIR and RTWPB issuances before seeding.*

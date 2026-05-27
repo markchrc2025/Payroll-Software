@@ -2,7 +2,7 @@
  * NextAuth v5 configuration — Sentire Payroll
  * --------------------------------------------
  * Strategy: JWT (httpOnly cookie) + Credentials provider (email + password via bcrypt).
- * The JWT carries: userId, companyId, systemRole, roleId so server routes can authorize
+ * The JWT carries: userId, tenantId, systemRole, roleId so server routes can authorize
  * without an extra DB lookup on every request.
  *
  * Used by:
@@ -27,7 +27,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      companyId: string | null;
+      tenantId: string | null;
       systemRole: SystemRole;
       roleId: string | null;
     } & DefaultSession["user"];
@@ -37,7 +37,7 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     userId: string;
-    companyId: string | null;
+    tenantId: string | null;
     systemRole: SystemRole;
     roleId: string | null;
   }
@@ -73,7 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             passwordHash: true,
             firstName: true,
             lastName: true,
-            companyId: true,
+            tenantId: true,
             systemRole: true,
             roleId: true,
           },
@@ -94,7 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: `${user.firstName} ${user.lastName}`.trim(),
-          companyId: user.companyId,
+          tenantId: user.tenantId,
           systemRole: user.systemRole,
           roleId: user.roleId,
         };
@@ -106,7 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         // user is the object returned from authorize() — only on initial sign-in
         token.userId = user.id as string;
-        token.companyId = (user as { companyId: string | null }).companyId;
+        token.tenantId = (user as { tenantId: string | null }).tenantId;
         token.systemRole = (user as { systemRole: SystemRole }).systemRole;
         token.roleId = (user as { roleId: string | null }).roleId;
       }
@@ -114,7 +114,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       session.user.id = token.userId;
-      session.user.companyId = token.companyId;
+      session.user.tenantId = token.tenantId;
       session.user.systemRole = token.systemRole;
       session.user.roleId = token.roleId;
       return session;

@@ -17,7 +17,8 @@
 import type { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { toCentavos } from "@/lib/money";
+import { ok, err, unauthorized } from "@/lib/api-response";
 import { csvEmployeeRowSchema } from "@/lib/validations/employee";
 import { parseCsvString } from "@/lib/utils/csv";
 
@@ -43,14 +44,14 @@ export async function POST(req: NextRequest) {
     return err("CSV file is empty or has no data rows.");
   }
 
-  // --- Pre-load dept & branch lookup maps for this company ---
+  // --- Pre-load dept & branch lookup maps for this tenant ---
   const [departments, branches] = await Promise.all([
     prisma.department.findMany({
-      where: { companyId: auth.companyId, deletedAt: null },
+      where: { tenantId: auth.tenantId, deletedAt: null },
       select: { id: true, name: true },
     }),
     prisma.branch.findMany({
-      where: { companyId: auth.companyId, deletedAt: null },
+      where: { tenantId: auth.tenantId, deletedAt: null },
       select: { id: true, name: true },
     }),
   ]);
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   // --- Determine next employee number offset ---
   const lastEmployee = await prisma.employee.findFirst({
-    where: { companyId: auth.companyId },
+    where: { tenantId: auth.tenantId },
     orderBy: { createdAt: "desc" },
     select: { employeeNumber: true },
   });
@@ -102,14 +103,14 @@ export async function POST(req: NextRequest) {
     if (d.department_name && !departmentId) {
       errors.push({
         row: rowNum,
-        message: `Department "${d.department_name}" not found in company`,
+        message: `Department "${d.department_name}" not found in tenant`,
       });
       continue;
     }
     if (d.branch_name && !branchId) {
       errors.push({
         row: rowNum,
-        message: `Branch "${d.branch_name}" not found in company`,
+        message: `Branch "${d.branch_name}" not found in tenant`,
       });
       continue;
     }
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
 
       const emp = await tx.employee.create({
         data: {
-          companyId: auth.companyId,
+          tenantId: auth.tenantId,
           employeeNumber: row.employeeNumber,
           firstName: d.first_name,
           middleName: d.middle_name ?? null,
@@ -163,8 +164,8 @@ export async function POST(req: NextRequest) {
       await tx.employeeSalary.create({
         data: {
           employeeId: emp.id,
-          companyId: auth.companyId,
-          basicSalary: d.basic_salary.toString(),
+          tenantId: auth.tenantId,
+          basicSalaryCents: toCentavos(d.basic_salary),
           salaryType: d.salary_type,
           effectiveDate: hireDate,
           reason: "CSV bulk import",
