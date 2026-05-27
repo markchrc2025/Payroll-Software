@@ -1,0 +1,639 @@
+/**
+ * Phase D3 — Pure gross-to-net engine.
+ *
+ * Implements the 12-step waterfall from §4.2 of the master blueprint. This
+ * module has NO database access and NO non-determinism (no `Date.now()`).
+ * It is exclusively driven by the `ComputeInput` it is handed.
+ *
+ * Order of operations (mirrors blueprint §4.2):
+ *   1.  Base pay (basicSalary × daysWorked / workingDays).
+ *   2.  Subtract tardiness / undertime (hourly / 60 × minutes).
+ *   3.  Add premium pay (OT, NSD, rest day, holiday, hazard) per §4.3.
+ *   4.  Add allowances / bonuses (per `PayComponent` rules).
+ *   5.  Gross Compensation = Σ steps 1–4.
+ *   6.  Determine non-taxable comp (MWE §4.5, de minimis ceilings,
+ *       statutory contribs, employee.nontaxableBasicAmountCents).
+ *   7.  Gross Taxable Income = Gross Comp − non-taxable buckets.
+ *   8.  Deduct statutory contributions iff `isStatutoryDeducted` (driven by
+ *       tenant's `statutoryCutoffRule` + period's position in the month).
+ *   9.  Withholding tax via period-specific BIR table (0 for MWE).
+ *  10.  Add back non-taxable additions (reimbursements).
+ *  11.  Deduct loans.
+ *  12.  Net Take-Home Pay.
+ *
+ * SIMPLIFYING ASSUMPTIONS DOCUMENTED FOR D3 (will be revisited in later phases):
+ *   • Premium hours are treated as EXTRA hours beyond `daysWorked × dailyHours`.
+ *     I.e. caller's `daysWorked` should not double-count rest-day / holiday
+ *     work. The engine applies the multiplier to the full hour.
+ *   • NSD is computed as a flat ×0.10 premium on `nightDiffHours` (not stacked
+ *     with day-type). True hour-by-hour stacking is deferred.
+ *   • 13th-month-and-benefits residual is 0 in D3 (annualization lives in a
+ *     later phase).
+ *   • DEDUCTION-kind PayComponents are IGNORED in D3 (loan-only deductions).
+ *   • Compensation basis for statutory MSC/MFS = `basicSalaryCents` (treated
+ *     as monthly when `salaryType = MONTHLY`). Daily/weekly approximated by
+ *     monthlyEquivalent = daily × workingDaysDenominator / 12 or weekly × 52/12.
+ */
+import type { PayFrequency } from "@prisma/client";
+import {
+  computePagibig,
+  computePhilHealth,
+  computeSSS,
+  getMinimumWage,
+  lookupBIR,
+} from "@/lib/statutory/compute";
+import type {
+  AppliedLoanPayment,
+  AppliedPayComponent,
+  ComputeInput,
+  ComputePayComponent,
+  ComputeResult,
+  StatutoryBreakdown,
+} from "./types";
+
+// ---------------------------------------------------------------------------
+// Math helpers — duplicated from statutory/compute.ts to keep engine standalone.
+// ---------------------------------------------------------------------------
+function multiplyHalfUp(amountCentavos: bigint, rate: number): bigint {
+  const n = Number(amountCentavos) * rate;
+  return BigInt(Math.round(n));
+}
+
+/** Multiply BigInt centavos by a `number` hours/days value (HALF-UP). */
+function timesUnits(centavos: bigint, units: number): bigint {
+  if (units === 0) return 0n;
+  return BigInt(Math.round(Number(centavos) * units));
+}
+
+function clampNonNegative(v: bigint): bigint {
+  return v < 0n ? 0n : v;
+}
+
+// ---------------------------------------------------------------------------
+// Cutoff helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if statutory contributions should be deducted for this period.
+ * MONTHLY-cycle runs always deduct. SEMI_MONTHLY runs deduct on the cutoff
+ * designated by tenant's `statutoryCutoffRule`. WEEKLY/DAILY treated as
+ * MONTHLY (deduct every run) — proper monthly aggregation is deferred.
+ */
+export function isStatutoryDeducted(
+  cycle: PayFrequency,
+  rule: "FIRST_CUTOFF" | "SECOND_CUTOFF",
+  periodEnd: Date,
+): boolean {
+  if (cycle === "MONTHLY") return true;
+  if (cycle === "SEMI_MONTHLY") {
+    const day = periodEnd.getUTCDate();
+    if (rule === "FIRST_CUTOFF") return day <= 15;
+    // SECOND_CUTOFF: any period ending on/after the 16th counts.
+    return day >= 16;
+  }
+  // WEEKLY / DAILY — out of strict D3 scope; default to deducted so totals
+  // don't silently zero out. Document for later.
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Rate derivation
+// ---------------------------------------------------------------------------
+
+interface DerivedRates {
+  dailyRateCents: bigint;
+  hourlyRateCents: bigint;
+  /// The monthly equivalent of the employee's basic — used as the MSC/MFS
+  /// basis for SSS/PhilHealth/Pag-IBIG.
+  monthlyEquivalentCents: bigint;
+}
+
+function deriveRates(input: ComputeInput): DerivedRates {
+  const { salary, employee, tenant } = input;
+  const wdDenom = tenant.workingDaysDenominator;
+  const hoursPerDay = employee.standardWorkHours || 8;
+
+  let dailyRateCents: bigint;
+  let monthlyEquivalentCents: bigint;
+
+  switch (salary.salaryType) {
+    case "MONTHLY": {
+      // dailyRate = (monthly × 12) / workingDaysDenominator
+      const annual = salary.basicSalaryCents * 12n;
+      dailyRateCents = annual / BigInt(wdDenom);
+      monthlyEquivalentCents = salary.basicSalaryCents;
+      break;
+    }
+    case "DAILY": {
+      dailyRateCents = salary.basicSalaryCents;
+      // monthly equivalent = daily × workingDaysDenominator / 12
+      monthlyEquivalentCents =
+        (salary.basicSalaryCents * BigInt(wdDenom)) / 12n;
+      break;
+    }
+    case "WEEKLY": {
+      // assume 5 working days / week
+      dailyRateCents = salary.basicSalaryCents / 5n;
+      monthlyEquivalentCents = (salary.basicSalaryCents * 52n) / 12n;
+      break;
+    }
+    default: {
+      const _exhaustive: never = salary.salaryType;
+      throw new Error(`Unsupported salaryType: ${String(_exhaustive)}`);
+    }
+  }
+
+  const hourlyRateCents = BigInt(
+    Math.round(Number(dailyRateCents) / hoursPerDay),
+  );
+  return { dailyRateCents, hourlyRateCents, monthlyEquivalentCents };
+}
+
+// ---------------------------------------------------------------------------
+// MWE check
+// ---------------------------------------------------------------------------
+
+function checkMwe(input: ComputeInput, dailyRateCents: bigint): boolean {
+  if (input.employee.taxClassification !== "MWE") return false;
+  if (!input.employee.region) return false;
+  if (!input.rules.minWage) return false;
+  const minWage = getMinimumWage(input.rules.minWage, input.employee.region);
+  // MWE qualifies when basic daily rate is at or below the region's minimum
+  // wage (i.e. earning at-or-below the published minimum).
+  return dailyRateCents <= minWage;
+}
+
+// ---------------------------------------------------------------------------
+// Pay-component classification
+// ---------------------------------------------------------------------------
+
+interface ComponentBuckets {
+  /// Earnings included in gross comp.
+  taxableAllowancesCents: bigint;
+  nontaxableCompensationCents: bigint;
+  /// Reimbursements — added BACK after taxable computation (Step 10).
+  nontaxableAdditionsCents: bigint;
+  applied: AppliedPayComponent[];
+}
+
+function classifyComponents(
+  components: ComputePayComponent[],
+  deMinimisCeilingByCode: Map<string, bigint>,
+): ComponentBuckets {
+  let taxableAllowancesCents = 0n;
+  let nontaxableCompensationCents = 0n;
+  let nontaxableAdditionsCents = 0n;
+  const applied: AppliedPayComponent[] = [];
+
+  for (const c of components) {
+    let nonTaxablePortion = 0n;
+    let taxablePortion = 0n;
+
+    // Reimbursements: out of gross comp; added back as non-taxable additions.
+    if (c.kind === "REIMBURSEMENT") {
+      nontaxableAdditionsCents += c.amountCents;
+      nonTaxablePortion = c.amountCents;
+    } else if (c.kind === "DEDUCTION") {
+      // D3 SCOPE: deductions other than statutory + loans are deferred.
+      // Skip silently but record on payslip so caller can audit.
+    } else {
+      // ALLOWANCE / BONUS / COMMISSION / OTHER_EARNING.
+      switch (c.taxability) {
+        case "TAXABLE":
+          taxableAllowancesCents += c.amountCents;
+          taxablePortion = c.amountCents;
+          break;
+        case "NON_TAXABLE":
+          nontaxableCompensationCents += c.amountCents;
+          nonTaxablePortion = c.amountCents;
+          break;
+        case "DE_MINIMIS": {
+          const ceiling = c.deMinimisCode
+            ? deMinimisCeilingByCode.get(c.deMinimisCode) ?? null
+            : null;
+          if (ceiling === null) {
+            // No ceiling found → treat entire amount as TAXABLE to be safe.
+            taxableAllowancesCents += c.amountCents;
+            taxablePortion = c.amountCents;
+          } else {
+            const nonTaxable =
+              c.amountCents > ceiling ? ceiling : c.amountCents;
+            const excess = c.amountCents - nonTaxable;
+            nontaxableCompensationCents += nonTaxable;
+            taxableAllowancesCents += excess;
+            nonTaxablePortion = nonTaxable;
+            taxablePortion = excess;
+          }
+          break;
+        }
+        case "STATUTORY_EXEMPT":
+          nontaxableCompensationCents += c.amountCents;
+          nonTaxablePortion = c.amountCents;
+          break;
+      }
+    }
+
+    applied.push({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      kind: c.kind,
+      taxability: c.taxability,
+      amountCents: c.amountCents.toString(),
+      nonTaxablePortionCents: nonTaxablePortion.toString(),
+      taxablePortionCents: taxablePortion.toString(),
+    });
+  }
+
+  return {
+    taxableAllowancesCents,
+    nontaxableCompensationCents,
+    nontaxableAdditionsCents,
+    applied,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Annual 13th-month / year-end cap per TRAIN (RA 10963 + RR 29-2025 §3):
+ * 13th-month pay and other benefits are non-taxable up to ₱90,000 combined.
+ */
+const ANNUAL_13TH_MONTH_CAP = 9_000_000n; // ₱90,000 in centavos
+
+/**
+ * YEAR_END computation path — invoked when `input.thirteenthMonthCents` is
+ * set by the persist layer.
+ *
+ * Rules (§4.4 + TRAIN §3):
+ *   • grossCompensation = thirteenthMonthCents.
+ *   • Non-taxable: min(thirteenthMonth, ₱90,000).
+ *   • Taxable excess → WHT via MONTHLY BIR table.
+ *   • No SSS/PhilHealth/Pag-IBIG deductions (contributions are a monthly
+ *     obligation already deducted in REGULAR runs).
+ *   • Loan installments deducted normally.
+ *   • Net = thirteenthMonth − WHT − loanDeductions.
+ */
+function computeYearEnd(input: ComputeInput): ComputeResult {
+  const { employee, salary, tenant, period, periodInput, loans, rules } = input;
+  const thirteenthMonth = input.thirteenthMonthCents ?? 0n;
+
+  const nonTaxable13Month =
+    thirteenthMonth < ANNUAL_13TH_MONTH_CAP
+      ? thirteenthMonth
+      : ANNUAL_13TH_MONTH_CAP;
+  const taxableExcess = thirteenthMonth - nonTaxable13Month; // always ≥ 0n
+
+  // WHT only on taxable excess; use MONTHLY BIR table for one-time payment.
+  let withholdingTaxCents = 0n;
+  let birBracket: StatutoryBreakdown["bir"] = null;
+  if (taxableExcess > 0n) {
+    const bir = lookupBIR(rules.bir, "MONTHLY", taxableExcess);
+    withholdingTaxCents = bir.tax;
+    birBracket = {
+      bracketFloorCents: bir.bracket.floor.toString(),
+      bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
+      bracketPlusRate: bir.bracket.plusRate,
+    };
+  }
+
+  // Loans.
+  const loanPaymentsApplied: AppliedLoanPayment[] = [];
+  let loanDeductionsCents = 0n;
+  for (const loan of loans) {
+    const amount =
+      loan.installmentCents > loan.balanceCents
+        ? loan.balanceCents
+        : loan.installmentCents;
+    if (amount <= 0n) continue;
+    loanPaymentsApplied.push({
+      loanId: loan.id,
+      loanType: loan.loanType,
+      amountCents: amount.toString(),
+      balanceBeforeCents: loan.balanceCents.toString(),
+      balanceAfterCents: (loan.balanceCents - amount).toString(),
+    });
+    loanDeductionsCents += amount;
+  }
+
+  const netPayCents = thirteenthMonth - withholdingTaxCents - loanDeductionsCents;
+
+  const statutoryBreakdown: StatutoryBreakdown = {
+    deducted: false,
+    bases: { sssMscCents: "0", philHealthMscCents: "0", pagibigMfsCents: "0" },
+    sss: { eeRegularCents: "0", erRegularCents: "0", eeMpfCents: "0", erMpfCents: "0", ecCents: "0" },
+    bir: birBracket,
+  };
+
+  return {
+    taxClassificationSnapshot: employee.taxClassification,
+    regionSnapshot: employee.region,
+    payFrequencySnapshot: employee.payFrequency,
+    salaryTypeSnapshot: salary.salaryType,
+    basicSalaryCentsSnapshot: salary.basicSalaryCents,
+    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    statutoryDeductedSnapshot: false,
+
+    basePayCents: 0n,
+    lateUndertimeDeductionCents: 0n,
+    otPayCents: 0n,
+    nsdPayCents: 0n,
+    holidayPayCents: 0n,
+    restDayPayCents: 0n,
+    hazardPayCents: 0n,
+    taxableAllowancesCents: taxableExcess,
+
+    grossCompensationCents: thirteenthMonth,
+    mweExemptCompensationCents: 0n,
+    nontaxableBasicCents: 0n,
+    nontaxableCompensationCents: 0n,
+    nontaxable13MonthAndBenefitsCents: nonTaxable13Month,
+
+    grossTaxableIncomeCents: taxableExcess,
+
+    sssEeCents: 0n,
+    sssErCents: 0n,
+    sssEcCents: 0n,
+    philhealthEeCents: 0n,
+    philhealthErCents: 0n,
+    pagibigEeCents: 0n,
+    pagibigErCents: 0n,
+
+    withholdingTaxCents,
+
+    nontaxableAdditionsCents: 0n,
+    loanDeductionsCents,
+
+    netPayCents,
+
+    payComponentsApplied: [],
+    loanPaymentsApplied,
+    statutoryBreakdown,
+    periodInputSnapshot: periodInput,
+  };
+}
+
+export function computeSheet(input: ComputeInput): ComputeResult {
+  // Year-end (13th month) path — triggered when the persist layer supplies
+  // the pre-computed thirteenthMonthCents.
+  if (input.thirteenthMonthCents !== undefined) {
+    return computeYearEnd(input);
+  }
+
+  const { employee, salary, tenant, period, periodInput, loans, rules } =
+    input;
+
+  const rates = deriveRates(input);
+  const { dailyRateCents, hourlyRateCents } = rates;
+
+  // -- Step 1: base pay ------------------------------------------------------
+  // For MONTHLY salaryType on SEMI_MONTHLY/MONTHLY cycles, base = dailyRate × daysWorked.
+  // This deliberately follows the blueprint §4.1 derivation.
+  const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
+
+  // -- Step 2: late / undertime ---------------------------------------------
+  // (hourlyRate / 60) × minutes
+  const perMinuteCents = BigInt(
+    Math.round(Number(hourlyRateCents) / 60),
+  );
+  const lateUndertimeDeductionCents =
+    perMinuteCents * BigInt(periodInput.lateUndertimeMinutes);
+
+  // -- Step 3: premium pay (§4.3 simplified — see header comment) -----------
+  const otPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.regularOtHours * 1.25,
+  );
+  const nsdPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.nightDiffHours * 0.1,
+  );
+  const restDayPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.restDayHours * 1.3,
+  );
+  const specialHolidayPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.specialHolidayHours * 1.3,
+  );
+  const regularHolidayPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.regularHolidayHours * 2.0,
+  );
+  const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
+  const hazardPayCents = timesUnits(
+    hourlyRateCents,
+    periodInput.hazardHours * 1.25,
+  );
+
+  // -- Step 4: pay components ------------------------------------------------
+  const deMinimisCeilingByCode = new Map<string, bigint>();
+  if (rules.deMinimis) {
+    for (const item of rules.deMinimis.items) {
+      // Use monthly ceiling if present; else annual / 12 (rough); else skip.
+      if (item.monthlyCeiling != null) {
+        deMinimisCeilingByCode.set(item.code, BigInt(item.monthlyCeiling));
+      } else if (item.annualCeiling != null) {
+        deMinimisCeilingByCode.set(
+          item.code,
+          BigInt(Math.floor(Number(item.annualCeiling) / 12)),
+        );
+      }
+    }
+  }
+  const buckets = classifyComponents(
+    input.payComponents,
+    deMinimisCeilingByCode,
+  );
+
+  // Subtotal of base + premiums + late deduction.
+  const earningsSubtotal =
+    basePayCents -
+    lateUndertimeDeductionCents +
+    otPayCents +
+    nsdPayCents +
+    holidayPayCents +
+    restDayPayCents +
+    hazardPayCents;
+
+  // -- Step 5: gross compensation --------------------------------------------
+  const grossCompensationCents =
+    earningsSubtotal +
+    buckets.taxableAllowancesCents +
+    buckets.nontaxableCompensationCents;
+
+  // -- Step 6: non-taxable buckets ------------------------------------------
+  const isMwe = checkMwe(input, dailyRateCents);
+  const mweExemptCompensationCents = isMwe
+    ? basePayCents +
+      holidayPayCents +
+      otPayCents +
+      nsdPayCents +
+      hazardPayCents
+    : 0n;
+  const nontaxableBasicCents = employee.nontaxableBasicAmountCents;
+
+  // -- Step 8: statutory contributions (computed early — needed for non-tax) -
+  const deducted =
+    input.overrideStatutoryDeducted !== undefined
+      ? input.overrideStatutoryDeducted
+      : isStatutoryDeducted(
+          period.cycle,
+          tenant.statutoryCutoffRule,
+          period.end,
+        );
+
+  const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
+  const phic = computePhilHealth(
+    rules.philHealth,
+    rates.monthlyEquivalentCents,
+  );
+  const hdmf = computePagibig(rules.pagibig, rates.monthlyEquivalentCents);
+
+  const sssEeCents = deducted ? sss.employee : 0n;
+  const sssErCents = deducted ? sss.employer : 0n;
+  const sssEcCents = deducted ? sss.ec : 0n;
+  const philhealthEeCents = deducted ? phic.employee : 0n;
+  const philhealthErCents = deducted ? phic.employer : 0n;
+  const pagibigEeCents = deducted ? hdmf.employee : 0n;
+  const pagibigErCents = deducted ? hdmf.employer : 0n;
+
+  const mandatoryEeContribs =
+    sssEeCents + philhealthEeCents + pagibigEeCents;
+
+  // Total non-taxable comp = MWE-exempt + non-taxable components +
+  //                         mandatory contribs (per blueprint §4.5).
+  // `nontaxableCompensationCents` reported on the sheet is the bucket
+  // EXCLUDING the MWE-exempt and 13th-month columns (those have their own
+  // columns per §2.6).
+  const nontaxableCompensationCents =
+    buckets.nontaxableCompensationCents + mandatoryEeContribs;
+
+  // 13th-month / benefits residual — deferred to year-end phase.
+  const nontaxable13MonthAndBenefitsCents = 0n;
+
+  // -- Step 7: gross taxable income -----------------------------------------
+  const grossTaxableIncomeCents = clampNonNegative(
+    grossCompensationCents -
+      mweExemptCompensationCents -
+      nontaxableBasicCents -
+      nontaxableCompensationCents -
+      nontaxable13MonthAndBenefitsCents,
+  );
+
+  // -- Step 9: withholding tax -----------------------------------------------
+  let withholdingTaxCents = 0n;
+  let birBracket: StatutoryBreakdown["bir"] = null;
+  if (!isMwe) {
+    const bir = lookupBIR(
+      rules.bir,
+      period.cycle,
+      grossTaxableIncomeCents,
+    );
+    withholdingTaxCents = bir.tax;
+    birBracket = {
+      bracketFloorCents: bir.bracket.floor.toString(),
+      bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
+      bracketPlusRate: bir.bracket.plusRate,
+    };
+  }
+
+  // -- Step 10: non-taxable additions ---------------------------------------
+  const nontaxableAdditionsCents = buckets.nontaxableAdditionsCents;
+
+  // -- Step 11: loans --------------------------------------------------------
+  const loanPaymentsApplied: AppliedLoanPayment[] = [];
+  let loanDeductionsCents = 0n;
+  for (const loan of loans) {
+    // Don't deduct more than the outstanding balance.
+    const amount =
+      loan.installmentCents > loan.balanceCents
+        ? loan.balanceCents
+        : loan.installmentCents;
+    if (amount <= 0n) continue;
+    loanPaymentsApplied.push({
+      loanId: loan.id,
+      loanType: loan.loanType,
+      amountCents: amount.toString(),
+      balanceBeforeCents: loan.balanceCents.toString(),
+      balanceAfterCents: (loan.balanceCents - amount).toString(),
+    });
+    loanDeductionsCents += amount;
+  }
+
+  // -- Step 12: net pay ------------------------------------------------------
+  const netPayCents =
+    grossCompensationCents -
+    mandatoryEeContribs -
+    withholdingTaxCents +
+    nontaxableAdditionsCents -
+    loanDeductionsCents;
+
+  const statutoryBreakdown: StatutoryBreakdown = {
+    deducted,
+    bases: {
+      sssMscCents: sss.msc.toString(),
+      philHealthMscCents: phic.msc.toString(),
+      pagibigMfsCents: hdmf.mfs.toString(),
+    },
+    sss: {
+      eeRegularCents: (deducted ? sss.breakdown.eeRegular : 0n).toString(),
+      erRegularCents: (deducted ? sss.breakdown.erRegular : 0n).toString(),
+      eeMpfCents: (deducted ? sss.breakdown.eeMpf : 0n).toString(),
+      erMpfCents: (deducted ? sss.breakdown.erMpf : 0n).toString(),
+      ecCents: sssEcCents.toString(),
+    },
+    bir: birBracket,
+  };
+
+  return {
+    taxClassificationSnapshot: employee.taxClassification,
+    regionSnapshot: employee.region,
+    payFrequencySnapshot: employee.payFrequency,
+    salaryTypeSnapshot: salary.salaryType,
+    basicSalaryCentsSnapshot: salary.basicSalaryCents,
+    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    statutoryDeductedSnapshot: deducted,
+
+    basePayCents,
+    lateUndertimeDeductionCents,
+
+    otPayCents,
+    nsdPayCents,
+    holidayPayCents,
+    restDayPayCents,
+    hazardPayCents,
+
+    taxableAllowancesCents: buckets.taxableAllowancesCents,
+
+    grossCompensationCents,
+    mweExemptCompensationCents,
+    nontaxableBasicCents,
+    nontaxableCompensationCents,
+    nontaxable13MonthAndBenefitsCents,
+
+    grossTaxableIncomeCents,
+
+    sssEeCents,
+    sssErCents,
+    sssEcCents,
+    philhealthEeCents,
+    philhealthErCents,
+    pagibigEeCents,
+    pagibigErCents,
+
+    withholdingTaxCents,
+
+    nontaxableAdditionsCents,
+    loanDeductionsCents,
+
+    netPayCents,
+
+    payComponentsApplied: buckets.applied,
+    loanPaymentsApplied,
+    statutoryBreakdown,
+    periodInputSnapshot: periodInput,
+  };
+}

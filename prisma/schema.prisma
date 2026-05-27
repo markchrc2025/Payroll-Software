@@ -304,6 +304,22 @@ enum LoanStatus {
   ON_HOLD
 }
 
+/// Payroll run lifecycle. DRAFT → FINALIZED is a one-way transition (writes
+/// AuditLog + decrements loan balances). CANCELLED is reserved for runs that
+/// were created in error before finalize.
+enum PayrollBookStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+}
+
+enum PayrollRunType {
+  REGULAR
+  OFF_CYCLE
+  FINAL_PAY
+  YEAR_END
+}
+
 // =============================================================================
 // TENANT (SaaS customer)
 // =============================================================================
@@ -376,6 +392,8 @@ model Tenant {
   employeePayComponents EmployeePayComponent[]
   periodInputs          PeriodInput[]
   loans                 Loan[]
+  payrollBooks          PayrollBook[]
+  payrollSheets         PayrollSheet[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
@@ -655,6 +673,7 @@ model Employee {
   payComponentAssignments EmployeePayComponent[]
   periodInputs            PeriodInput[]
   loans                   Loan[]
+  payrollSheets           PayrollSheet[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
 
@@ -1304,4 +1323,136 @@ model Loan {
   @@index([tenantId])
   @@index([tenantId, employeeId, status])
   @@index([tenantId, status])
+}
+
+// =============================================================================
+// PAYROLL RUN — PayrollBook + PayrollSheet (Phase D3)
+//
+// A `PayrollBook` represents one payroll run for a tenant × period × runType.
+// While `status = DRAFT`, sheets can be recomputed (delete-and-regenerate).
+// On `FINALIZED`, the book is immutable: loan balances are decremented and an
+// `AuditLog` entry is written in the same tx. Corrections after finalize use
+// off-cycle runs (`runType = OFF_CYCLE`), never in-place edits.
+// =============================================================================
+
+model PayrollBook {
+  id       String @id @default(cuid())
+  tenantId String
+
+  periodStart DateTime
+  periodEnd   DateTime
+  cycle       PayFrequency
+  runType     PayrollRunType    @default(REGULAR)
+  status      PayrollBookStatus @default(DRAFT)
+
+  notes String?
+
+  /// When true the engine skips SSS/PhilHealth/Pag-IBIG deductions for every
+  /// sheet in this run (WHT is still computed).  Primarily for OFF_CYCLE
+  /// bonus runs where statutory was already collected in the regular cycle.
+  skipStatutory Boolean @default(false)
+
+  createdByUserId   String?
+  finalizedAt       DateTime?
+  finalizedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id])
+  sheets PayrollSheet[]
+
+  @@unique([tenantId, periodStart, periodEnd, runType])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, periodEnd])
+}
+
+/// One frozen pay-stub computation per employee per run. All monetary fields
+/// are BigInt centavos. Snapshot fields capture the inputs used so the row
+/// remains explainable even if the underlying master data changes later.
+model PayrollSheet {
+  id            String @id @default(cuid())
+  tenantId      String
+  payrollBookId String
+  employeeId    String
+
+  // -- Snapshots (master data captured at compute time) ---------------------
+  taxClassificationSnapshot      TaxClassification
+  /// Region code from the employee's branch.workLocation at compute time.
+  regionSnapshot                 String?
+  payFrequencySnapshot           PayFrequency
+  salaryTypeSnapshot             SalaryType
+  basicSalaryCentsSnapshot       BigInt
+  workingDaysDenominatorSnapshot Int
+  /// Whether statutory contributions were deducted in this run (driven by
+  /// tenant's `statutoryCutoffRule` and the period's position in the month).
+  statutoryDeductedSnapshot      Boolean
+
+  // -- Step 1: Base pay (after late/undertime) ------------------------------
+  basePayCents                BigInt @default(0)
+  lateUndertimeDeductionCents BigInt @default(0)
+
+  // -- Step 3: Premium pay (broken out for payslip readability) -------------
+  otPayCents      BigInt @default(0)
+  nsdPayCents     BigInt @default(0)
+  holidayPayCents BigInt @default(0)
+  hazardPayCents  BigInt @default(0)
+  restDayPayCents BigInt @default(0)
+
+  // -- Step 4: Pay components -----------------------------------------------
+  taxableAllowancesCents BigInt @default(0)
+
+  // -- Step 5/6: Gross + non-taxable buckets --------------------------------
+  grossCompensationCents            BigInt @default(0)
+  mweExemptCompensationCents        BigInt @default(0)
+  nontaxableBasicCents              BigInt @default(0)
+  nontaxableCompensationCents       BigInt @default(0)
+  nontaxable13MonthAndBenefitsCents BigInt @default(0)
+
+  // -- Step 7: Taxable -------------------------------------------------------
+  grossTaxableIncomeCents BigInt @default(0)
+
+  // -- Step 8: Statutory contributions --------------------------------------
+  sssEeCents        BigInt @default(0)
+  sssErCents        BigInt @default(0)
+  sssEcCents        BigInt @default(0)
+  philhealthEeCents BigInt @default(0)
+  philhealthErCents BigInt @default(0)
+  pagibigEeCents    BigInt @default(0)
+  pagibigErCents    BigInt @default(0)
+
+  // -- Step 9: Withholding tax ----------------------------------------------
+  withholdingTaxCents BigInt @default(0)
+
+  // -- Step 10/11: Add-backs and deductions ---------------------------------
+  nontaxableAdditionsCents BigInt @default(0)
+  loanDeductionsCents      BigInt @default(0)
+
+  // -- Step 12: Final --------------------------------------------------------
+  netPayCents BigInt @default(0)
+
+  // -- Polymorphic breakdowns for payslip / audit ---------------------------
+  /// Array of { id, code, name, kind, taxability, amountCents }.
+  payComponentsApplied Json @default("[]")
+  /// Array of { loanId, type, amountCents, balanceBeforeCents, balanceAfterCents }.
+  /// Populated at compute; `balanceAfterCents` only authoritative once the run
+  /// is FINALIZED (engine debits the loan during finalize tx).
+  loanPaymentsApplied  Json @default("[]")
+  /// Snapshot of the PeriodInput row used (days/hours/minutes).
+  periodInputSnapshot  Json @default("{}")
+  /// Per-fund SSS/PhilHealth/Pag-IBIG raw breakdown (msc, regular, mpf, ec).
+  statutoryBreakdown   Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  payrollBook PayrollBook @relation(fields: [payrollBookId], references: [id], onDelete: Cascade)
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+
+  @@unique([payrollBookId, employeeId])
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([payrollBookId])
 }

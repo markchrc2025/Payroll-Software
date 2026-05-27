@@ -7,6 +7,8 @@ import type {
   EmployeePayComponent,
   Loan,
   PayComponent,
+  PayrollBook,
+  PayrollSheet,
   PeriodInput,
 } from "@prisma/client";
 import { centavosToJson } from "@/lib/money";
@@ -44,5 +46,51 @@ export function serializeLoan<T extends Loan>(l: T) {
     principalCents: centavosToJson(l.principalCents)!,
     installmentCents: centavosToJson(l.installmentCents)!,
     balanceCents: centavosToJson(l.balanceCents)!,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase D3 — PayrollBook + PayrollSheet
+// ---------------------------------------------------------------------------
+
+export function serializePayrollBook<T extends PayrollBook & { sheets?: PayrollSheet[] }>(
+  b: T,
+) {
+  const { sheets, ...rest } = b;
+  return {
+    ...rest,
+    ...(sheets ? { sheets: sheets.map(serializePayrollSheet) } : {}),
+  };
+}
+
+export function serializePayrollSheet<T extends PayrollSheet>(s: T) {
+  return {
+    ...s,
+    basicSalaryCentsSnapshot: centavosToJson(s.basicSalaryCentsSnapshot)!,
+    basePayCents: centavosToJson(s.basePayCents)!,
+    lateUndertimeDeductionCents: centavosToJson(s.lateUndertimeDeductionCents)!,
+    otPayCents: centavosToJson(s.otPayCents)!,
+    nsdPayCents: centavosToJson(s.nsdPayCents)!,
+    holidayPayCents: centavosToJson(s.holidayPayCents)!,
+    restDayPayCents: centavosToJson(s.restDayPayCents)!,
+    hazardPayCents: centavosToJson(s.hazardPayCents)!,
+    taxableAllowancesCents: centavosToJson(s.taxableAllowancesCents)!,
+    grossCompensationCents: centavosToJson(s.grossCompensationCents)!,
+    mweExemptCompensationCents: centavosToJson(s.mweExemptCompensationCents)!,
+    nontaxableBasicCents: centavosToJson(s.nontaxableBasicCents)!,
+    nontaxableCompensationCents: centavosToJson(s.nontaxableCompensationCents)!,
+    nontaxable13MonthAndBenefitsCents: centavosToJson(s.nontaxable13MonthAndBenefitsCents)!,
+    grossTaxableIncomeCents: centavosToJson(s.grossTaxableIncomeCents)!,
+    sssEeCents: centavosToJson(s.sssEeCents)!,
+    sssErCents: centavosToJson(s.sssErCents)!,
+    sssEcCents: centavosToJson(s.sssEcCents)!,
+    philhealthEeCents: centavosToJson(s.philhealthEeCents)!,
+    philhealthErCents: centavosToJson(s.philhealthErCents)!,
+    pagibigEeCents: centavosToJson(s.pagibigEeCents)!,
+    pagibigErCents: centavosToJson(s.pagibigErCents)!,
+    withholdingTaxCents: centavosToJson(s.withholdingTaxCents)!,
+    nontaxableAdditionsCents: centavosToJson(s.nontaxableAdditionsCents)!,
+    loanDeductionsCents: centavosToJson(s.loanDeductionsCents)!,
+    netPayCents: centavosToJson(s.netPayCents)!,
   };
 }
