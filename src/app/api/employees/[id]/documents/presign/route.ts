@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
 import { presignUploadSchema } from "@/lib/validations/document";
@@ -45,10 +45,10 @@ export async function POST(
   }
 
   // Verify employee is in this tenant
-  const employee = await prisma.employee.findFirst({
+  const employee = await withTenant(auth.tenantId, (tx) => tx.employee.findFirst({
     where: { id, tenantId: auth.tenantId, deletedAt: null },
     select: { id: true },
-  });
+  }));
   if (!employee) return notFound("Employee");
 
   const storageKey = buildEmployeeDocumentKey({

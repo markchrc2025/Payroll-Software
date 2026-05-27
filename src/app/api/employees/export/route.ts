@@ -8,7 +8,7 @@
 
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { fromCentavos } from "@/lib/money";
 import { unauthorized } from "@/lib/api-response";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     ...(employmentType && { employmentType }),
   };
 
-  const employees = await prisma.employee.findMany({
+  const employees = await withTenant(auth.tenantId, (tx) => tx.employee.findMany({
     where,
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         select: { basicSalaryCents: true },
       },
     },
-  });
+  }));
 
   const rows = employees.map((e) => ({
     employee_number: e.employeeNumber,

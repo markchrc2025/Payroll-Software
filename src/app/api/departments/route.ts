@@ -4,7 +4,7 @@
  */
 
 import type { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
 
-  const departments = await prisma.department.findMany({
+  const departments = await withTenant(auth.tenantId, (tx) => tx.department.findMany({
     where: { tenantId: auth.tenantId, deletedAt: null },
     orderBy: { name: "asc" },
     select: {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       description: true,
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },
-  });
+  }));
 
   return ok(departments);
 }
@@ -42,22 +42,23 @@ export async function POST(req: NextRequest) {
   const parsed = createDeptSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  // Check for duplicate name within tenant
-  const existing = await prisma.department.findFirst({
-    where: {
-      tenantId: auth.tenantId,
-      name: { equals: parsed.data.name, mode: "insensitive" },
-      deletedAt: null,
-    },
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    const existing = await tx.department.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        name: { equals: parsed.data.name, mode: "insensitive" },
+        deletedAt: null,
+      },
+    });
+    if (existing) return { duplicate: true as const };
+    return {
+      duplicate: false as const,
+      row: await tx.department.create({
+        data: { ...parsed.data, tenantId: auth.tenantId },
+      }),
+    };
   });
-  if (existing) return err(`Department "${parsed.data.name}" already exists`, 409);
+  if (result.duplicate) return err(`Department "${parsed.data.name}" already exists`, 409);
 
-  const dept = await prisma.department.create({
-    data: {
-      ...parsed.data,
-      tenantId: auth.tenantId,
-    },
-  });
-
-  return ok(dept, "Department created", 201);
+  return ok(result.row, "Department created", 201);
 }
