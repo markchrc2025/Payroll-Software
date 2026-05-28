@@ -186,7 +186,7 @@ export default function EmployeesPage() {
             <Download className="mr-2 h-4 w-4" />
             {isExporting ? "Exporting…" : "Export CSV"}
           </Button>
-          <Button size="sm" render={<Link href="/employees/new" />}>
+          <Button size="sm" nativeButton={false} render={<Link href="/employees/new" />}>
               <Plus className="mr-2 h-4 w-4" />
               Add Employee
           </Button>
