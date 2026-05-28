@@ -4,15 +4,16 @@
  */
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
-import { getAuthContext } from "@/lib/auth";
-import { err, notFound, ok, unauthorized } from "@/lib/api-response";
+import { requirePermission } from "@/lib/require-permission";
+import { err, notFound, ok } from "@/lib/api-response";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "TIMESHEETS", "APPROVE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
   const { id } = await params;
 
   const updated = await withTenant(auth.tenantId, async (tx) => {

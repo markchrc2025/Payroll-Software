@@ -449,6 +449,7 @@ model Tenant {
   shiftAssignments      EmployeeShiftAssignment[]
   dtrRecords            DTRRecord[]
   expenseClaims         ExpenseClaim[]
+  essSessions           EssSession[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
@@ -734,6 +735,7 @@ model Employee {
   shiftAssignments        EmployeeShiftAssignment[]
   dtrRecords              DTRRecord[]
   expenseClaims           ExpenseClaim[]
+  essSessions             EssSession[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
 
@@ -1513,6 +1515,9 @@ model PayrollSheet {
   /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
   /// annualization inputs/outputs.  Null for REGULAR / OFF_CYCLE / YEAR_END.
   finalPayBreakdown    Json?
+  /// YEAR_END-only: year-end annualization true-up result.  Written by the
+  /// POST /api/payroll/runs/[id]/annualize endpoint after finalization.
+  annualizationData    Json?
   /// Array of { id, kind, amountCents, isTaxable, reason } applied in this run.
   adjustmentsApplied   Json?
   /// Array of { id, category, amountCents, taxTreatment, taxablePortionCents, nontaxablePortionCents }.
@@ -1734,4 +1739,33 @@ model ExpenseClaim {
   @@index([tenantId, employeeId])
   @@index([tenantId, status])
   @@index([payrollBookId])
+}
+
+// =============================================================================
+// ESS SESSIONS (Phase M)
+//
+// Short-lived tokens for Employee Self-Service portal.  The raw 32-byte
+// random token is returned to the client; only the SHA-256 hex digest is
+// persisted.  Sessions last 8 hours and can be revoked explicitly (logout).
+// =============================================================================
+
+/// Employee Self-Service session.  One row per active login.
+model EssSession {
+  id         String    @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// SHA-256 hex digest of the raw 32-byte token (never stored in clear text).
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([expiresAt])
 }

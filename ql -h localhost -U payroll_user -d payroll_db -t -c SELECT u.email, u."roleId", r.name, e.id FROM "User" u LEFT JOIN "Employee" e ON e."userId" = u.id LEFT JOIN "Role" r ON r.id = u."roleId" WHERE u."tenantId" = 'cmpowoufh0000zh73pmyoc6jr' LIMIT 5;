@@ -1,0 +1,5 @@
+       email       |          roleId           | roleName | employeeId | firstName | lastName 
+-------------------+---------------------------+----------+------------+-----------+----------
+ admin@democorp.ph | cmpowpaga000h7f73v1iaagfm | HR Admin |            |           | 
+(1 row)
+

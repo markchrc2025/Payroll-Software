@@ -13,6 +13,8 @@
 - The root entity is **Tenant**. Every tenant-owned table carries `tenant_id`. All data access is scoped by `tenant_id` at the data-access layer, enforced by PostgreSQL row-level security. No query returns rows across tenants.
 - Each tenant has its own subdomain, branding (logo, colors), configuration, and feature set. A tenant's users only ever see that tenant's data.
 - A tenant can later be migrated to a dedicated isolated deployment without schema changes (the data layer is designed so tenant data is cleanly separable).
+- **Global (non-tenant) data:** the statutory configuration tables (Section 2.7) are shared national data with no `tenant_id`; they are operator-managed and read by every tenant.
+- **Operator control plane:** the Central/Master Portal runs as role-gated routes within this same application (not a separate app), under a `SUPER_ADMIN` identity that operates above tenant row-level security. `SUPER_ADMIN` is defined in Section 1.4 and Section 5.7.
 
 ### 1.2 Technology
 - **Database:** PostgreSQL with row-level security for tenant isolation.
@@ -20,14 +22,17 @@
 - **Backend:** A single backend application exposing a REST API.
 - **Front end:** React + TypeScript + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA). The Kiosk is a cross-platform web interface.
 - **Currency:** All monetary values are Philippine Peso (PHP), stored as integer centavos.
+- **Payroll engine layout:** the engine is organized as pure per-step modules under `src/lib/payroll/engine/*`, one per step of the gross-to-net waterfall (Section 4.2). All arithmetic (multiply, divide, round, share-split) is delegated to a single centralized centavo module at `src/lib/money/`; engine step modules never perform inline arithmetic. The money module owns one rounding policy applied everywhere (Section 4.1).
 
 ### 1.3 Subscriptions & Feature Flags
-- Each tenant has a `plan_tier` (`Standard`, `Plus`) and a set of `feature_flags`.
+- Each tenant has a `plan_tier` (`STARTER`, `GROWTH`, `PRO`) and a set of `feature_flags`. Each tier maps to a set of feature flags; the tier-to-flag mapping is configured in the Central Portal rather than hardcoded. The AI Assistant add-on is included in the `PRO` tier.
 - The **Central/Master Portal** (Section 5.7) sets a tenant's `plan_tier` and toggles individual `feature_flags`, including the AI Assistant add-on.
 - The application reads `feature_flags` to enable or disable functionality per tenant.
 
 ### 1.4 Security & Data Privacy (RA 10173)
-- Data is encrypted in transit (TLS) and at rest. Field-level encryption applies to TIN, statutory ID numbers, and bank account numbers.
+- Data is encrypted in transit (TLS) and at rest. Field-level encryption applies to TIN, statutory ID numbers, and bank account numbers, using AES-256-GCM under an **envelope-encryption** scheme: a random Data Encryption Key (DEK) encrypts the field values, and the DEK is wrapped by a Key Encryption Key (KEK). The KEK is sourced from an environment secret initially and can later be moved to a KMS/vault by re-wrapping the DEK only — without re-encrypting stored data. The KEK is a 256-bit random value, never committed to the repository, backed up separately from the database, with a documented rotation procedure.
+- For any encrypted field that must be searched or made unique (e.g., TIN de-duplication), a keyed HMAC of the plaintext is stored in a companion indexed column; lookups and uniqueness constraints use the HMAC, since GCM ciphertext is not searchable.
+- **`SUPER_ADMIN` (operator) identity:** the SaaS operator's identity is separate from tenant RBAC. It is not a tenant `Role`, cannot be granted through tenant role management, has its own login with MFA, and every `SUPER_ADMIN` action is written to `AuditLog`. It operates above tenant row-level security to manage tenants and global statutory data.
 - Every create, update, delete, and sensitive read of employee, payroll, statutory, and document data is written to **AuditLog** with actor, action, entity, before/after values, and timestamp.
 - Employee consent for storing personal data, financial data, biometric data (selfies), and location data (GPS) is captured and recorded in **ConsentRecord** with type and timestamp. Biometric and location data are Sensitive Personal Information and require explicit consent before capture.
 - Each data category has a configured retention period. Raw selfies and GPS coordinates are purged after the DTR they support is finalized, per retention policy; computed results are retained. A scheduled job enforces retention.
@@ -55,7 +60,7 @@ All tables carry `id`, `tenant_id`, `created_at`, `updated_at` unless noted. `Te
 
 ### 2.3 Employee & 201 File
 - **Employee** — `employee_no`, `first_name`, `last_name`, `birthdate`, `hire_date`, `regularization_date` (nullable), `employment_status` (`Probationary` | `Regular` | `Inactive`), `salary_type` (`Monthly` | `Daily`), `base_rate`, `derived_daily_rate`, `derived_hourly_rate`, `work_location_id`, `branch_id`, `department_id`, `position_id`, `immediate_supervisor_id` (nullable → Employee), `manager_id` (nullable → Employee), `tax_classification` (`Regular` | `MWE`), `nontaxable_basic_amount` (default 0), `bank_account` (encrypted), `ess_pin`.
-- **StatutoryId** — `employee_id`, `type` (`SSS` | `PhilHealth` | `PagIBIG` | `TIN`), `number` (encrypted). (Statutory IDs are stored in this normalized table, one row per ID type.)
+- **StatutoryId** — `employee_id`, `type` (`SSS` | `PhilHealth` | `PagIBIG` | `TIN`), `number` (encrypted), `number_hmac` (keyed HMAC for uniqueness/lookup, per Section 1.4). (Statutory IDs are stored in this normalized table, one row per ID type.)
 - **EmployeeDocument** — `employee_id`, `category` (e.g., `Contract`, `GovID`, `Certificate`, `Memo`), `file_key` (R2 object key), `file_name`, `uploaded_by_id`, `retention_until`.
 - **Asset** — `name`, `serial_number`, `category`, `condition`, `monetary_value`.
 - **AssetAssignment** — `asset_id`, `employee_id`, `assigned_on`, `returned_on` (nullable), `return_condition`.
@@ -89,8 +94,9 @@ All tables carry `id`, `tenant_id`, `created_at`, `updated_at` unless noted. `Te
 - **PayrollSheet** — `payroll_book_id`, `employee_id`, `tax_classification` (snapshot), and frozen fields: `base_pay`, `late_undertime_deduction`, `ot_pay`, `nsd_pay`, `holiday_pay`, `hazard_pay`, `taxable_allowances`, `mwe_exempt_compensation`, `nontaxable_basic`, `gross_compensation`, `nontaxable_compensation`, `nontaxable_13month_and_benefits`, `gross_taxable_income`, `sss_ee`, `sss_er`, `philhealth_ee`, `philhealth_er`, `pagibig_ee`, `pagibig_er`, `withholding_tax`, `nontaxable_additions`, `loan_deductions`, `net_pay`. Immutable once the parent `PayrollBook` is `Finalized`.
 - **PayrollAdjustment** — `employee_id`, `target_payroll_book_id`, `kind` (`Addition` | `Deduction`), `amount`, `is_taxable` (bool), `reason`.
 
-### 2.7 Statutory Configuration (effective-dated)
+### 2.7 Statutory Configuration (effective-dated, GLOBAL)
 - **SSS_Schedule**, **PhilHealth_Schedule**, **PagIBIG_Schedule**, **BIR_WithholdingTable**, **DeMinimis_Ceilings**, **MinimumWageRate** — each carries `effective_from`, `effective_to`, `legal_basis`, `version` (Section 3).
+- These tables are **global**: they carry **no `tenant_id`**, are shared by all tenants, and are writable only by `SUPER_ADMIN` (Section 5.7). Tenants cannot create or override statutory rows.
 
 ### 2.8 Recruitment (ATS)
 - **Applicant** — `name`, `email`, `phone`, `position_id`, `resume_key` (R2), `stage` (`Applied` | `Shortlisted` | `Interviewed` | `Offered` | `Hired`).
@@ -115,6 +121,10 @@ No statutory rate, bracket, ceiling, or threshold is written in application code
 - **BIR_WithholdingTable** — Stored per payroll frequency (`daily`, `weekly`, `semi_monthly`, `monthly`). Seeded from current BIR withholding tax tables (TRAIN, 2023-onward tranche; ₱250,000 annual exemption threshold). The engine selects the table matching the tenant's `payroll_cycle`.
 - **DeMinimis_Ceilings** — Per-category non-taxable ceilings, seeded from BIR Revenue Regulation 29-2025; excess over a ceiling is taxable. Combined annual exclusion cap for 13th-month pay and other benefits is ₱90,000. `legal_basis`: RA 10963 (TRAIN), RR 29-2025.
 - **MinimumWageRate** — Daily statutory minimum wage by `region` (and sector where applicable), used to classify Minimum Wage Earners. Seeded from current RTWPB wage orders per region. `legal_basis`: applicable regional Wage Order.
+
+### 3.3 Importer & Resolver
+- **Importer:** a single reusable module performs all writes to the global statutory tables, following **parse → validate → dry-run (preview the diff) → commit**. It is the only path that mutates statutory data. It is invoked by a CLI seed command and, once built, by the `SUPER_ADMIN` admin API (Section 5.7) — both call the same importer; the logic is never duplicated.
+- **Resolver:** the engine reads statutory values only through a resolver that returns the row valid for a given **pay-period date** and table version. The resolver is a hard dependency of the payroll engine and is covered by the engine test suite.
 
 ---
 
@@ -184,6 +194,9 @@ In the final period of the calendar year, the engine runs annualization for all 
 ### 4.10 Final Pay / Offboarding Computation
 On offboarding, the engine: schedules ESS lockout for the end date; queries `AssetAssignment` and flags unreturned assets (HR may post a monetary deduction equal to asset value); converts unused convertible leave to cash via `LeaveBalance`; prorates 13th-month (YTD Basic / 12); annualizes tax (YTD income vs. YTD withheld → refund or payable); sums unpaid salary + 13th-month + leave cash-out + tax refund − asset and other deductions. Output: a Final `PayrollSheet`, an auto-populated **Quitclaim**, and the final **BIR 2316**.
 
+### 4.11 Engine Testing & Quality Gate
+The payroll engine must pass an automated golden-case regression suite, specified in the companion `Engine_Test_Spec.md`, before it produces any real payroll output. Tests are written alongside each engine module (never a phase behind it). Expected values are derived independently of the engine — from the formulas in the test spec, or hand-computed from the official statutory tables — and are never captured from the engine's own output. CI blocks merge on any failing or missing engine test.
+
 ---
 
 ## 5. Feature Modules
@@ -230,10 +243,12 @@ On offboarding, the engine: schedules ESS lockout for the end date; queries `Ass
 ### 5.7 RBAC & Central/Master Portal
 - **Dynamic RBAC:** custom roles built from permissions (Section 2.1). Default roles `Admin`, `Payroll`, `Employee` ship as presets; tenants may add roles such as `Branch Supervisor` or `Payroll Read-Only`.
 - **Reporting lines:** `immediate_supervisor_id` / `manager_id` define approval chains, independent of roles.
-- **Central/Master Portal:** operator-facing portal for the SaaS owner to create and manage tenants, set `plan_tier`, toggle `feature_flags` (including the AI add-on), and manage subscriptions.
+- **Central/Master Portal:** operator-facing portal for the SaaS owner to create and manage tenants, set `plan_tier`, toggle `feature_flags` (including the AI add-on), manage subscriptions, and manage the global statutory tables.
+- **Architecture:** the portal runs as role-gated routes inside the single application (not a separate app), under the `SUPER_ADMIN` identity (Section 1.4). It is not built from tenant RBAC.
+- **Statutory admin endpoints:** the global statutory tables are managed through a dedicated `/api/admin/statutory/*` namespace gated to `SUPER_ADMIN` only. There is no shared tenant/operator statutory endpoint, and tenants have no write or override access to statutory data. These endpoints call the shared importer (Section 3.3).
 
 ### 5.8 AI Assistant Add-On
-A billable add-on bundled into the `Plus` tier, OFF by default, controlled per-tenant from the Central Portal. Full behavior, models, caching, and gating are defined in Section 8.
+A billable add-on bundled into the `PRO` tier, OFF by default, controlled per-tenant from the Central Portal. Full behavior, models, caching, and gating are defined in Section 8.
 
 ---
 
@@ -294,10 +309,10 @@ Recruiter moves an applicant through the pipeline → on Hire, 1-click conversio
 
 ## 8. AI Assistant — Integration & Gating Map
 
-The AI Assistant is an add-on bundled into the `Plus` tier, OFF by default, toggled per-tenant (and per-feature) from the Central Portal.
+The AI Assistant is an add-on bundled into the `PRO` tier, OFF by default, toggled per-tenant (and per-feature) from the Central Portal.
 
 ### 8.1 Control & Metering
-- The Central Portal's `plan_tier` and `feature_flags` gate AI. Setting a tenant to `Plus` enables AI feature flags; each AI feature is independently toggleable.
+- The Central Portal's `plan_tier` and `feature_flags` gate AI. Setting a tenant to `PRO` enables AI feature flags; each AI feature is independently toggleable.
 - **All AI calls route through one internal metering gateway** that tags each call with `tenant_id` + feature, logs token usage to `AiUsage`, enforces per-tenant fair-use caps, and degrades gracefully (queues or disables a feature) when a cap is hit.
 - **Cost controls:** Claude **Haiku 4.5** by default; **Sonnet** only for flagged complex reasoning; aggressive prompt-caching of system prompts, tool definitions, document templates, and per-tenant knowledge base; strict per-call max-token limits.
 
@@ -329,8 +344,14 @@ The AI Assistant is an add-on bundled into the `Plus` tier, OFF by default, togg
 | First bank file format | BPI (others available) |
 | DTR approval before payroll | Required (Admin override available) |
 | Geofence handling | Flag-and-allow (never hard-reject) |
-| Plan tiers | `Standard`, `Plus` (AI add-on bundled into `Plus`) |
+| Plan tiers | `STARTER`, `GROWTH`, `PRO` (AI add-on bundled into `PRO`) |
 | Default roles | `Admin`, `Payroll`, `Employee` (custom roles supported) |
+| Operator identity | `SUPER_ADMIN`, separate from tenant RBAC, MFA, fully audited |
+| Statutory tables | Global (no `tenant_id`), `SUPER_ADMIN`-managed via the shared importer |
+| Statutory admin endpoints | `/api/admin/statutory/*`, `SUPER_ADMIN` only; no tenant override |
+| Field encryption | AES-256-GCM, envelope (DEK wrapped by KEK); env-var KEK now, KMS later; HMAC for searchable fields |
+| Money arithmetic | Centralized `src/lib/money/` centavo module; round half up to the centavo |
+| Engine tests | Golden-case suite (`Engine_Test_Spec.md`) required before any real payroll output |
 
 ---
 
@@ -338,12 +359,13 @@ The AI Assistant is an add-on bundled into the `Plus` tier, OFF by default, togg
 
 This section is sequencing guidance only. All features in Sections 1–9 are in scope; this is the order that delivers a sellable system fastest and keeps compliance risk contained. Nothing here is excluded.
 
-1. **Foundation:** multi-tenancy, dynamic RBAC, security/DPA, R2 storage, tenant setup wizard.
-2. **Core payroll wedge:** statutory configuration engine + 2026 seed; employee master + StatutoryId + documents; DTR via import/manual + shift logic; DTR approval; leave & OT; gross-to-net engine with stacking matrix, MWE/non-taxable, 13th-month; payroll book/sheet with corrections; payslips; BPI bank file + CSV; 1601-C data + 2316.
-3. **Compliance depth:** year-end annualization + Alphalist; remaining statutory reports (R-3, RF1, MCRF); additional bank files; expense claims; loans; leave accrual automation; offboarding & final pay.
-4. **Attendance & engagement:** ESS time clock with selfie + GPS geofence; Kiosk mode; e-forms; profile-update requests; analytics/pivots.
-5. **Growth modules:** ATS; asset tracking; incident/NTE; movements.
-6. **AI Assistant add-on:** metering gateway, then the touchpoint features (Section 8), gated to `Plus`.
+1. **Foundation:** multi-tenancy + `tenant_id` row-level security, dynamic RBAC, security/DPA (envelope encryption, audit log, consent), R2 storage, the `src/lib/money/` centavo module, and the tenant setup wizard.
+2. **Statutory core (D1 scope):** the effective-dated statutory tables seeded via the shared importer run as a **CLI seed** (no admin UI yet), plus the **resolver** the engine reads through. The `SUPER_ADMIN` statutory admin endpoints (`/api/admin/statutory/*`) are deferred to a later phase and reuse the same importer when built.
+3. **Core payroll wedge:** employee master + StatutoryId + documents; **manual day-level DTR entry** + shift logic; DTR approval routing; leave & OT; the gross-to-net engine (stacking matrix, MWE/non-taxable, 13th-month) — built behind the `Engine_Test_Spec.md` quality gate; payroll book/sheet with corrections; payslips; BPI bank file + CSV; 1601-C data + 2316.
+4. **Compliance depth:** year-end annualization + Alphalist; remaining statutory reports (R-3, RF1, MCRF); additional bank files; expense claims; loans; leave accrual automation; offboarding & final pay.
+5. **Attendance & engagement:** CSV/biometric DTR import; ESS time clock with selfie + GPS geofence; Kiosk mode; e-forms; profile-update requests; analytics/pivots; statutory admin UI/endpoints.
+6. **Growth modules:** ATS; asset tracking; incident/NTE; movements.
+7. **AI Assistant add-on:** metering gateway, then the touchpoint features (Section 8), gated to `PRO`.
 
 ---
 

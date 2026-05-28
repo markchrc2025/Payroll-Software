@@ -5,13 +5,12 @@
  *          409 on CANCELLED.
  */
 import type { NextRequest } from "next/server";
-import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import {
   err,
   notFound,
   ok,
   serverError,
-  unauthorized,
 } from "@/lib/api-response";
 import {
   finalizeRun,
@@ -24,8 +23,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "PAYROLL", "APPROVE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
   const { id } = await params;
 
   try {

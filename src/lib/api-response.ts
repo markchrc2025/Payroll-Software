@@ -50,6 +50,10 @@ export function unauthorized(): Response {
   return err("Unauthorized", 401);
 }
 
+export function forbidden(message = "Forbidden"): Response {
+  return err(message, 403);
+}
+
 export function notFound(resource = "Resource"): Response {
   return err(`${resource} not found`, 404);
 }
