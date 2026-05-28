@@ -13,7 +13,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const adapter = new PrismaPg({ connectionString: process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 const pesos = (php: number): bigint => BigInt(Math.round(php * 100));
@@ -128,16 +128,104 @@ async function main() {
     positions[p.title] = row.id;
   }
 
-  // ── 6. Role + Admin User ───────────────────────────────────────────────────
-  let adminRole = await prisma.role.findFirst({
-    where: { tenantId: tenant.id, name: "HR Admin", deletedAt: null },
-  });
-  if (!adminRole) {
-    adminRole = await prisma.role.create({
-      data: { tenantId: tenant.id, name: "HR Admin", description: "Full HR & Payroll access" },
+  // ── 6a. Permission catalog (global — no tenantId) ─────────────────────────
+  // Seed all meaningful (module, action) pairs used by requirePermission().
+  type PermSeed = { module: string; action: string; label: string };
+  const permSeeds: PermSeed[] = [
+    // EMPLOYEES
+    { module: "EMPLOYEES", action: "CREATE",  label: "Add employees" },
+    { module: "EMPLOYEES", action: "READ",    label: "View employees" },
+    { module: "EMPLOYEES", action: "UPDATE",  label: "Edit employees" },
+    { module: "EMPLOYEES", action: "DELETE",  label: "Deactivate employees" },
+    // PAYROLL
+    { module: "PAYROLL",   action: "CREATE",  label: "Create payroll runs" },
+    { module: "PAYROLL",   action: "READ",    label: "View payroll data" },
+    { module: "PAYROLL",   action: "APPROVE", label: "Finalize payroll runs" },
+    { module: "PAYROLL",   action: "EXPORT",  label: "Download bank files" },
+    // TIMESHEETS
+    { module: "TIMESHEETS", action: "CREATE",  label: "Enter DTR records" },
+    { module: "TIMESHEETS", action: "READ",    label: "View DTR records" },
+    { module: "TIMESHEETS", action: "UPDATE",  label: "Edit DTR records" },
+    { module: "TIMESHEETS", action: "APPROVE", label: "Approve DTR records" },
+    // LEAVES
+    { module: "LEAVES",    action: "READ",    label: "View leave requests" },
+    { module: "LEAVES",    action: "APPROVE", label: "Approve leave requests" },
+    // REPORTS
+    { module: "REPORTS",   action: "READ",    label: "View statutory reports" },
+    { module: "REPORTS",   action: "EXPORT",  label: "Export statutory reports" },
+    // COMPLIANCE
+    { module: "COMPLIANCE", action: "READ",   label: "View compliance data" },
+    { module: "COMPLIANCE", action: "EXPORT", label: "Export compliance data" },
+    // SETTINGS
+    { module: "SETTINGS",  action: "READ",    label: "View tenant settings" },
+    { module: "SETTINGS",  action: "UPDATE",  label: "Edit tenant settings" },
+    // ROLES
+    { module: "ROLES",     action: "CREATE",  label: "Create roles" },
+    { module: "ROLES",     action: "READ",    label: "View roles" },
+    { module: "ROLES",     action: "UPDATE",  label: "Edit roles" },
+    { module: "ROLES",     action: "DELETE",  label: "Delete roles" },
+  ];
+
+  const permMap: Record<string, string> = {}; // "MODULE:ACTION" → id
+  for (const p of permSeeds) {
+    const existing = await prisma.permission.findUnique({
+      where: { module_action: { module: p.module as never, action: p.action as never } },
+    });
+    const row = existing ?? await prisma.permission.create({
+      data: { module: p.module as never, action: p.action as never, label: p.label },
+    });
+    permMap[`${p.module}:${p.action}`] = row.id;
+  }
+  console.log(`✅  Permissions: ${permSeeds.length} permissions seeded`);
+
+  // ── 6b. Roles: HR Admin, Payroll Officer, Employee ────────────────────────
+  async function upsertRole(name: string, description: string, isSystem = true) {
+    const existing = await prisma.role.findFirst({
+      where: { tenantId: tenant!.id, name, deletedAt: null },
+    });
+    if (existing) {
+      // Ensure isSystem flag is up-to-date in case the role was created before this field existed
+      if (existing.isSystem !== isSystem) {
+        return prisma.role.update({ where: { id: existing.id }, data: { isSystem } });
+      }
+      return existing;
+    }
+    return prisma.role.create({
+      data: { tenantId: tenant!.id, name, description, isSystem },
     });
   }
 
+  const adminRole = await upsertRole("HR Admin", "Full HR & Payroll access");
+  const payrollRole = await upsertRole("Payroll Officer", "Create and finalize payroll runs");
+  const employeeRole = await upsertRole("Employee", "ESS-only access — no admin permissions");
+
+  // Assign all permissions to HR Admin
+  const adminPerms = Object.values(permMap);
+  for (const permissionId of adminPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: adminRole.id, permissionId } },
+      update: {},
+      create: { roleId: adminRole.id, permissionId },
+    });
+  }
+
+  // Assign payroll + report permissions to Payroll Officer
+  const payrollPerms = ["PAYROLL:CREATE","PAYROLL:READ","PAYROLL:APPROVE","PAYROLL:EXPORT","REPORTS:READ","REPORTS:EXPORT","TIMESHEETS:READ"];
+  for (const key of payrollPerms) {
+    const permissionId = permMap[key];
+    if (!permissionId) continue;
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: payrollRole.id, permissionId } },
+      update: {},
+      create: { roleId: payrollRole.id, permissionId },
+    });
+  }
+
+  // Employee role has no admin permissions (ESS only)
+  void employeeRole; // intentionally empty
+  console.log(`✅  Roles:       HR Admin (${adminPerms.length} perms), Payroll Officer (${payrollPerms.length} perms), Employee (0 perms)`);
+
+  // ── 6c. Admin User ────────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash("Admin1234!", 10);
   let adminUser = await prisma.user.findFirst({
     where: { tenantId: tenant.id, email: "admin@democorp.ph", deletedAt: null },

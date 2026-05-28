@@ -4,13 +4,12 @@
  *   POST — create a DRAFT payroll run (auto-fans-out compute across employees)
  */
 import type { NextRequest } from "next/server";
-import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import {
   err,
   ok,
   paginated,
   serverError,
-  unauthorized,
 } from "@/lib/api-response";
 import {
   createDraftRun,
@@ -24,8 +23,9 @@ import {
 } from "@/lib/validations/payroll-run";
 
 export async function GET(req: NextRequest) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "PAYROLL", "READ");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listPayrollRunsSchema.safeParse(qp);
@@ -43,8 +43,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "PAYROLL", "CREATE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const body = await req.json().catch(() => null);
   const parsed = createPayrollRunSchema.safeParse(body);

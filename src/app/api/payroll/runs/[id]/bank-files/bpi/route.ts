@@ -8,8 +8,8 @@
  * Filename: "bpi-payroll-YYYYMMDD.txt"
  */
 import type { NextRequest } from "next/server";
-import { getAuthContext } from "@/lib/auth";
-import { notFound, serverError, unauthorized } from "@/lib/api-response";
+import { requirePermission } from "@/lib/require-permission";
+import { notFound, serverError } from "@/lib/api-response";
 import { getRun, PayrollRunNotFoundError } from "@/lib/payroll/persist";
 import { withTenant } from "@/lib/with-tenant";
 import { formatBpiFile } from "@/lib/payroll/bank-files/bpi";
@@ -18,8 +18,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "PAYROLL", "EXPORT");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
   const { id } = await params;
 
   try {

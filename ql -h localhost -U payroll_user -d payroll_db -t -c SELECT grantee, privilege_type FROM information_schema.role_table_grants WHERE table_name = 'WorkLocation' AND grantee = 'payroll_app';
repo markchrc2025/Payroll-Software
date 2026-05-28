@@ -1,0 +1,8 @@
+                                                                         Access privileges
+ Schema |     Name     | Type  |         Access privileges         | Column privileges |                                  Policies                                  
+--------+--------------+-------+-----------------------------------+-------------------+----------------------------------------------------------------------------
+ public | WorkLocation | table | payroll_user=arwdDxt/payroll_user+|                   | tenant_isolation:                                                         +
+        |              |       | payroll_app=arwd/payroll_user     |                   |   (u): ("tenantId" = current_setting('app.current_tenant_id'::text, true))+
+        |              |       |                                   |                   |   (c): ("tenantId" = current_setting('app.current_tenant_id'::text, true))
+(1 row)
+

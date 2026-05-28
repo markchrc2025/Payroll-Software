@@ -6,13 +6,12 @@
 import type { NextRequest } from "next/server";
 import { Prisma, StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
-import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import { toCentavos, centavosToJson } from "@/lib/money";
 import {
   ok,
   paginated,
   err,
-  unauthorized,
 } from "@/lib/api-response";
 import {
   createEmployeeSchema,
@@ -24,8 +23,9 @@ import {
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "EMPLOYEES", "READ");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const params = listEmployeesSchema.safeParse(
     Object.fromEntries(req.nextUrl.searchParams)
@@ -108,8 +108,9 @@ export async function GET(req: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "EMPLOYEES", "CREATE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const body = await req.json().catch(() => null);
   if (!body) return err("Invalid JSON body");

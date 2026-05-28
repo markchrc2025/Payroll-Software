@@ -7,12 +7,11 @@
 import type { NextRequest } from "next/server";
 import { StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
-import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import { centavosToJson, toCentavos } from "@/lib/money";
 import {
   ok,
   err,
-  unauthorized,
   notFound,
 } from "@/lib/api-response";
 import { updateEmployeeSchema } from "@/lib/validations/employee";
@@ -25,8 +24,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "EMPLOYEES", "READ");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const { id } = await params; // Next.js 16: params is a Promise
 
@@ -68,8 +68,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "EMPLOYEES", "UPDATE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const { id } = await params;
 
@@ -193,8 +194,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "EMPLOYEES", "DELETE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
 
   const { id } = await params;
 

@@ -122,6 +122,27 @@ export async function GET(req: NextRequest) {
         },
       });
 
+      // 4. Fetch year-end annualization data for each employee (if run).
+      const yearEndAnnSheets = await tx.payrollSheet.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          ...(employeeId ? { employeeId } : {}),
+          NOT: { annualizationData: { equals: "JsonNull" } },
+          payrollBook: {
+            status: "FINALIZED",
+            runType: "YEAR_END",
+            periodEnd: { gte: yearStart, lte: yearEnd },
+          },
+        },
+        select: {
+          employeeId: true,
+          annualizationData: true,
+        },
+      });
+      const annByEmployee = new Map<string, unknown>(
+        yearEndAnnSheets.map((s) => [s.employeeId, s.annualizationData]),
+      );
+
       const employeeInputs: Bir2316EmployeeInput[] = employees.map((e) => ({
         employeeId: e.id,
         employeeNumber: e.employeeNumber,
@@ -133,12 +154,20 @@ export async function GET(req: NextRequest) {
         sheets: byEmployee.get(e.id) ?? [],
       }));
 
-      return buildBir2316Report({
+      const report = buildBir2316Report({
         year,
         tenantId: auth.tenantId,
         tenantName: tenant.name,
         employees: employeeInputs,
       });
+
+      // Attach annualizationData to each certificate where available.
+      const certificates = report.certificates.map((cert) => ({
+        ...cert,
+        annualizationData: annByEmployee.get(cert.employeeId) ?? null,
+      }));
+
+      return { ...report, certificates };
     });
 
     // Single-employee response: return the certificate directly (or 404).
