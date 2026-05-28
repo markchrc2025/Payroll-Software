@@ -7,6 +7,7 @@
  * and statutory rules BEFORE calling the engine.
  */
 import type {
+  AdjustmentKind,
   LoanType,
   PayComponentKind,
   PayComponentTaxability,
@@ -81,6 +82,16 @@ export interface ComputeLoan {
   balanceCents: bigint;
 }
 
+export interface ComputeAdjustment {
+  id: string;
+  kind: AdjustmentKind;
+  /** Always positive; kind determines sign direction. */
+  amountCents: bigint;
+  /** True → in gross (taxable); false → non-taxable add-back after WHT. */
+  isTaxable: boolean;
+  reason: string;
+}
+
 export interface ComputeStatutoryRules {
   sss: SssSchedulePayload;
   philHealth: PhilHealthSchedulePayload;
@@ -103,6 +114,9 @@ export interface ComputeInput {
   periodInput: ComputePeriodInputSnapshot;
   payComponents: ComputePayComponent[];
   loans: ComputeLoan[];
+  adjustments: ComputeAdjustment[];
+  /// Expense claims attached to this payroll book for this employee.
+  expenseClaims: ComputeExpenseClaim[];
   rules: ComputeStatutoryRules;
   /**
    * When present, the engine switches to YEAR_END (13th month) computation
@@ -123,6 +137,46 @@ export interface ComputeInput {
    * When absent, the standard `isStatutoryDeducted()` cutoff logic applies.
    */
   overrideStatutoryDeducted?: boolean;
+  /**
+   * When present, the engine switches to FINAL_PAY computation mode.
+   * The persist layer pre-computes all separation-related amounts and CY
+   * totals; the engine uses them for the annualized WHT true-up.
+   */
+  finalPayInputs?: FinalPayInputs;
+}
+
+/**
+ * Pre-computed separation inputs supplied by the persist layer for FINAL_PAY
+ * runs.  All centavo fields are BigInt; the engine does not touch the DB.
+ */
+export interface FinalPayInputs {
+  /** Prorated 13th month = sum(basePayCents from CY REGULAR runs) / 12. */
+  proratedThirteenthMonthCents: bigint;
+  /**
+   * Monetised unused leave days (isConvertibleToCash types only).
+   * Treated as taxable compensation (included in gross).
+   */
+  leaveCashOutCents: bigint;
+  /**
+   * DOLE statutory separation pay.
+   * Non-taxable when DOLE-mandated (NIRC §32(B)(6)(b)); taxable otherwise.
+   */
+  separationPayCents: bigint;
+  /**
+   * True when `separationPayCents` is taxable compensation (voluntary
+   * separation); false for DOLE-mandated causes (exempt from WHT).
+   */
+  isSeparationPayTaxable: boolean;
+  /**
+   * Sum of `grossTaxableIncomeCents` from all FINALIZED REGULAR + OFF_CYCLE
+   * runs for this employee in the same calendar year, BEFORE this run.
+   */
+  cyPriorTaxableIncomeCents: bigint;
+  /**
+   * Sum of `withholdingTaxCents` from the same prior runs.
+   * Used for the annualized WHT true-up: `annualWHT − cyPriorWHT`.
+   */
+  cyPriorWithholdingTaxCents: bigint;
 }
 
 /**
@@ -150,6 +204,32 @@ export interface AppliedLoanPayment {
   /// Projected balance AFTER deduction (engine output). Persist layer asserts
   /// this matches the real decrement at finalize.
   balanceAfterCents: string;
+}
+
+export interface AppliedAdjustment {
+  id: string;
+  kind: AdjustmentKind;
+  amountCents: string;
+  isTaxable: boolean;
+  reason: string;
+}
+
+export interface ComputeExpenseClaim {
+  id: string;
+  category: string;
+  amountCents: bigint;
+  taxTreatment: "NONTAXABLE_REIMBURSEMENT" | "DE_MINIMIS" | "TAXABLE";
+}
+
+export interface AppliedExpenseClaim {
+  id: string;
+  category: string;
+  amountCents: string;
+  taxTreatment: "NONTAXABLE_REIMBURSEMENT" | "DE_MINIMIS" | "TAXABLE";
+  /// Amount flowing into gross taxable income.
+  taxablePortionCents: string;
+  /// Amount added back after WHT or included as non-taxable compensation.
+  nontaxablePortionCents: string;
 }
 
 export interface StatutoryBreakdown {
@@ -227,6 +307,7 @@ export interface ComputeResult {
   // Step 10/11
   nontaxableAdditionsCents: bigint;
   loanDeductionsCents: bigint;
+  adjustmentDeductionsCents: bigint;
 
   // Step 12
   netPayCents: bigint;
@@ -234,6 +315,22 @@ export interface ComputeResult {
   // Breakdowns (JSON)
   payComponentsApplied: AppliedPayComponent[];
   loanPaymentsApplied: AppliedLoanPayment[];
+  adjustmentsApplied: AppliedAdjustment[];
+  expenseClaimsApplied: AppliedExpenseClaim[];
   statutoryBreakdown: StatutoryBreakdown;
   periodInputSnapshot: ComputePeriodInputSnapshot;
+  /** Present only for FINAL_PAY runs. */
+  finalPayBreakdown?: FinalPayBreakdown;
+}
+
+/** JSON breakdown stored on PayrollSheet.finalPayBreakdown for FINAL_PAY runs. */
+export interface FinalPayBreakdown {
+  backPayCents: string;
+  proratedThirteenthMonthCents: string;
+  leaveCashOutCents: string;
+  separationPayCents: string;
+  isSeparationPayTaxable: boolean;
+  cyPriorTaxableIncomeCents: string;
+  cyPriorWithholdingTaxCents: string;
+  annualizedWhtCents: string;
 }

@@ -320,6 +320,56 @@ enum PayrollRunType {
   YEAR_END
 }
 
+enum AdjustmentKind {
+  ADDITION
+  DEDUCTION
+}
+
+/// Reason an employee's employment was terminated.  Drives DOLE separation-pay
+/// formula and BIR taxability rules for the FINAL_PAY run.
+enum SeparationReason {
+  /// Voluntary resignation — no statutory separation pay; any gratuity is taxable.
+  RESIGNATION
+  /// Mutually agreed separation — no statutory separation pay.
+  MUTUAL_AGREEMENT
+  /// End of project / fixed-term contract — no statutory separation pay.
+  END_OF_CONTRACT
+  /// Art. 298 RA 10361 — 1 month per year (or fraction ≥ 6 mo) of service.
+  REDUNDANCY
+  /// Art. 298 — 0.5 month per year (min 1 month); exempt from WHT.
+  RETRENCHMENT
+  /// Art. 298 — 1 month per year when not due to serious losses; exempt from WHT.
+  CLOSURE_OF_BUSINESS
+  /// Art. 299 — disease not curable within 6 months; 1 month per year; exempt.
+  DISEASE
+  /// Art. 297 — dismissal for just cause; no separation pay by law.
+  JUST_CAUSE
+}
+
+// =============================================================================
+// DTR / TIMESHEET ENUMS (Phase J)
+// =============================================================================
+
+enum ShiftType {
+  FIXED
+  FLEXIBLE
+}
+
+enum DTRStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DTRDayStatus {
+  PRESENT
+  ABSENT
+  PAID_LEAVE
+  UNPAID_LEAVE
+  HOLIDAY
+  REST_DAY
+}
+
 // =============================================================================
 // TENANT (SaaS customer)
 // =============================================================================
@@ -394,6 +444,11 @@ model Tenant {
   loans                 Loan[]
   payrollBooks          PayrollBook[]
   payrollSheets         PayrollSheet[]
+  payrollAdjustments    PayrollAdjustment[]
+  shiftSchedules        ShiftSchedule[]
+  shiftAssignments      EmployeeShiftAssignment[]
+  dtrRecords            DTRRecord[]
+  expenseClaims         ExpenseClaim[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
@@ -430,6 +485,7 @@ model User {
   tenant       Tenant?   @relation(fields: [tenantId], references: [id])
   assignedRole Role?     @relation(fields: [roleId], references: [id])
   employee     Employee?
+  approvedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimApprover")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -674,6 +730,10 @@ model Employee {
   periodInputs            PeriodInput[]
   loans                   Loan[]
   payrollSheets           PayrollSheet[]
+  payrollAdjustments      PayrollAdjustment[]
+  shiftAssignments        EmployeeShiftAssignment[]
+  dtrRecords              DTRRecord[]
+  expenseClaims           ExpenseClaim[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
 
@@ -1352,6 +1412,10 @@ model PayrollBook {
   /// bonus runs where statutory was already collected in the regular cycle.
   skipStatutory Boolean @default(false)
 
+  /// Only set for FINAL_PAY runs.  Drives DOLE separation-pay formula and
+  /// BIR taxability; preserved on the book so recomputeRun is idempotent.
+  separationReason SeparationReason?
+
   createdByUserId   String?
   finalizedAt       DateTime?
   finalizedByUserId String?
@@ -1359,8 +1423,11 @@ model PayrollBook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant         @relation(fields: [tenantId], references: [id])
-  sheets PayrollSheet[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  sheets      PayrollSheet[]
+  adjustments PayrollAdjustment[]
+  expenseClaims     ExpenseClaim[]     @relation("BookExpenseClaims")
+  paidExpenseClaims ExpenseClaim[]     @relation("BookPaidExpenseClaims")
 
   @@unique([tenantId, periodStart, periodEnd, runType])
   @@index([tenantId])
@@ -1442,7 +1509,14 @@ model PayrollSheet {
   /// Snapshot of the PeriodInput row used (days/hours/minutes).
   periodInputSnapshot  Json @default("{}")
   /// Per-fund SSS/PhilHealth/Pag-IBIG raw breakdown (msc, regular, mpf, ec).
-  statutoryBreakdown   Json @default("{}")
+  statutoryBreakdown   Json  @default("{}")
+  /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
+  /// annualization inputs/outputs.  Null for REGULAR / OFF_CYCLE / YEAR_END.
+  finalPayBreakdown    Json?
+  /// Array of { id, kind, amountCents, isTaxable, reason } applied in this run.
+  adjustmentsApplied   Json?
+  /// Array of { id, category, amountCents, taxTreatment, taxablePortionCents, nontaxablePortionCents }.
+  expenseClaimsApplied Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1454,5 +1528,210 @@ model PayrollSheet {
   @@unique([payrollBookId, employeeId])
   @@index([tenantId])
   @@index([tenantId, employeeId])
+  @@index([payrollBookId])
+}
+
+/// One-off monetary addition or deduction applied to a specific DRAFT payroll
+/// run.  Created by payroll operators before finalizing the book; consumed by
+/// the engine in the gross-to-net waterfall.
+model PayrollAdjustment {
+  id            String         @id @default(cuid())
+  tenantId      String
+  employeeId    String
+  payrollBookId String
+
+  /// Whether this is a positive addition or a negative deduction.
+  kind        AdjustmentKind
+  /// Always stored as a positive value; `kind` determines the sign direction.
+  amountCents BigInt
+  /// True → included in gross compensation (taxable); False → added back
+  /// after WHT as a non-taxable reimbursement/allowance.
+  isTaxable   Boolean @default(true)
+  /// Required audit trail (e.g. "Bonus adjustment", "Salary overpayment").
+  reason      String  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  payrollBook PayrollBook @relation(fields: [payrollBookId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([payrollBookId])
+  @@index([employeeId])
+}
+
+// =============================================================================
+// EXPENSE CLAIMS (Phase K)
+// =============================================================================
+
+enum ExpenseClaimStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ATTACHED
+  PAID
+}
+
+enum ExpenseTaxTreatment {
+  /// Reimbursement — not in gross compensation; added back after WHT.
+  NONTAXABLE_REIMBURSEMENT
+  /// Non-taxable benefit (within BIR de minimis ceiling).
+  DE_MINIMIS
+  /// Fully taxable — included in gross taxable income.
+  TAXABLE
+}
+
+// =============================================================================
+// SHIFT SCHEDULES & DTR (Phase J)
+// =============================================================================
+
+/// Named shift template — defines expected start/end and work days.
+model ShiftSchedule {
+  id       String @id @default(cuid())
+  tenantId String
+
+  name         String
+  type         ShiftType @default(FIXED)
+  /// Expected time-in in 24-hour "HH:MM" format (e.g. "08:00").
+  timeIn       String
+  /// Expected time-out in 24-hour "HH:MM" format (e.g. "17:00").
+  timeOut      String
+  breakMinutes Int       @default(60)
+  /// True when the shift spans midnight (e.g. night shift 22:00–06:00).
+  crossesMidnight Boolean @default(false)
+  /// JSON array of ISO weekday names: ["MON","TUE","WED","THU","FRI"].
+  workDays     Json
+
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant                    @relation(fields: [tenantId], references: [id])
+  assignments EmployeeShiftAssignment[]
+  dtrRecords  DTRRecord[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Effective-dated assignment of a ShiftSchedule to an Employee.
+model EmployeeShiftAssignment {
+  id              String    @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  shiftScheduleId String
+
+  effectiveFrom DateTime
+  /// Null = open-ended (current assignment).
+  effectiveTo   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  shiftSchedule ShiftSchedule @relation(fields: [shiftScheduleId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId, effectiveFrom])
+}
+
+/// One computed daily attendance record per employee per calendar date.
+/// Created from AttendanceLog (kiosk/manual) or imported; computed against
+/// the assigned ShiftSchedule.
+model DTRRecord {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Calendar date this record covers (stored as UTC midnight).
+  date            DateTime
+  shiftScheduleId String?
+
+  dayStatus        DTRDayStatus @default(PRESENT)
+  workedMinutes    Int          @default(0)
+  lateMinutes      Int          @default(0)
+  undertimeMinutes Int          @default(0)
+  /// Pre-approved overtime minutes for this day.
+  otMinutes        Int          @default(0)
+  /// Night-shift differential minutes (10 PM – 6 AM window).
+  nsdMinutes       Int          @default(0)
+  hazardMinutes    Int          @default(0)
+  /// SPECIAL_HOLIDAY | REGULAR_HOLIDAY | null
+  holidayType      String?
+
+  approvalStatus DTRStatus @default(PENDING)
+  approvedById   String?
+  approvedAt     DateTime?
+  /// Locked records cannot be edited — set by payroll finalize.
+  isLocked       Boolean   @default(false)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  employee      Employee       @relation(fields: [employeeId], references: [id])
+  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+
+  @@unique([tenantId, employeeId, date])
+  @@index([tenantId])
+  @@index([tenantId, employeeId, date])
+  @@index([tenantId, approvalStatus])
+}
+
+// =============================================================================
+// EXPENSE CLAIMS (Phase K)
+// =============================================================================
+
+/// Employee expense reimbursement / claim record.
+/// Flow: DRAFT → SUBMITTED → APPROVED (taxTreatment set) → ATTACHED (to a
+/// PayrollBook) → PAID (after finalize).
+model ExpenseClaim {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Free-text category (TRANSPORTATION, MEALS, ACCOMMODATION, MEDICAL, etc.).
+  category        String
+  description     String  @db.Text
+  /// Claim amount in centavos.
+  amountCents     BigInt
+  /// Object store key for the attached receipt (e.g. R2 key). Nullable.
+  receiptKey      String?
+  /// The date the expense was incurred (UTC midnight).
+  claimDate       DateTime
+
+  status       ExpenseClaimStatus  @default(DRAFT)
+  /// Set by Finance/HR during APPROVAL. Drives engine treatment.
+  taxTreatment ExpenseTaxTreatment?
+
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String? @db.Text
+
+  /// Set to the target PayrollBook when status = ATTACHED.
+  payrollBookId String?
+  /// Set to the PayrollBook that finalized (paid) this claim.
+  paidInBookId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  employee    Employee     @relation(fields: [employeeId], references: [id])
+  approvedBy  User?        @relation("ExpenseClaimApprover", fields: [approvedById], references: [id])
+  payrollBook PayrollBook? @relation("BookExpenseClaims", fields: [payrollBookId], references: [id])
+  paidInBook  PayrollBook? @relation("BookPaidExpenseClaims", fields: [paidInBookId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
   @@index([payrollBookId])
 }
