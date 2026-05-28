@@ -5,8 +5,12 @@
  */
 import type {
   EmployeePayComponent,
+  LeaveBalance,
+  LeaveTransaction,
+  LeaveType,
   Loan,
   PayComponent,
+  PayrollAdjustment,
   PayrollBook,
   PayrollSheet,
   PeriodInput,
@@ -92,5 +96,72 @@ export function serializePayrollSheet<T extends PayrollSheet>(s: T) {
     nontaxableAdditionsCents: centavosToJson(s.nontaxableAdditionsCents)!,
     loanDeductionsCents: centavosToJson(s.loanDeductionsCents)!,
     netPayCents: centavosToJson(s.netPayCents)!,
+  };
+}
+
+export function serializePayrollAdjustment<T extends PayrollAdjustment>(a: T) {
+  return {
+    ...a,
+    amountCents: centavosToJson(a.amountCents)!,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase G — Leave Management
+// ---------------------------------------------------------------------------
+
+export function serializeLeaveType<T extends LeaveType>(lt: T) {
+  return {
+    ...lt,
+    accrualAmount: lt.accrualAmount.toString(),
+    maxAccruableBalance: lt.maxAccruableBalance?.toString() ?? null,
+    carryOverLimit: lt.carryOverLimit?.toString() ?? null,
+  };
+}
+
+export function serializeLeaveBalance<T extends LeaveBalance>(lb: T) {
+  return {
+    ...lb,
+    openingBalance: lb.openingBalance.toString(),
+    earned: lb.earned.toString(),
+    used: lb.used.toString(),
+    forfeited: lb.forfeited.toString(),
+    convertedToCash: lb.convertedToCash.toString(),
+  };
+}
+
+export function serializeLeaveTransaction<T extends LeaveTransaction>(lt: T) {
+  return {
+    ...lt,
+    amount: lt.amount.toString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase J — DTR / Timesheet
+// ---------------------------------------------------------------------------
+
+export function serializeShiftSchedule<T extends { workDays: unknown }>(s: T) {
+  return s; // workDays is JSON — no BigInt fields to convert
+}
+
+export function serializeShiftAssignment<T>(a: T) {
+  return a;
+}
+
+export function serializeDtrRecord<T>(r: T) {
+  return r; // No BigInt fields in DTRRecord
+}
+
+// ---------------------------------------------------------------------------
+// Phase K — Expense Claims
+// ---------------------------------------------------------------------------
+
+export function serializeExpenseClaim<
+  T extends { amountCents: bigint },
+>(c: T) {
+  return {
+    ...c,
+    amountCents: c.amountCents.toString(),
   };
 }

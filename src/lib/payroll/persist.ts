@@ -19,6 +19,7 @@ import type {
   PayComponent,
   Prisma,
   StatutoryCategory,
+  SeparationReason,
 } from "@prisma/client";
 import { computeSheet } from "./engine";
 import type {
@@ -28,6 +29,7 @@ import type {
   ComputePeriodInputSnapshot,
   ComputeResult,
   ComputeStatutoryRules,
+  FinalPayInputs,
 } from "./types";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
@@ -75,6 +77,11 @@ export interface CreateDraftRunInput {
    * `recomputeRun` preserves the behaviour.
    */
   skipStatutory?: boolean;
+  /**
+   * Reason for separation — required for FINAL_PAY runs to compute DOLE
+   * separation pay and its taxability.
+   */
+  separationReason?: SeparationReason;
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +290,8 @@ async function buildComputeInputForEmployee(
     periodInput: periodInputSnapshot(periodInputRow),
     payComponents: payCompAssignments.map(toComputeComponent),
     loans: activeLoans.map(toComputeLoan),
+    adjustments: [], // Injected by caller after bookId is known
+    expenseClaims: [], // Injected by caller after bookId is known
     rules,
     // tenantId not in ComputeInput — used by caller only
   } as ComputeInput;
@@ -334,10 +343,18 @@ function resultToSheetCreate(
       r.payComponentsApplied as unknown as Prisma.InputJsonValue,
     loanPaymentsApplied:
       r.loanPaymentsApplied as unknown as Prisma.InputJsonValue,
+    adjustmentsApplied:
+      r.adjustmentsApplied as unknown as Prisma.InputJsonValue,
+    expenseClaimsApplied: r.expenseClaimsApplied.length > 0
+      ? (r.expenseClaimsApplied as unknown as Prisma.InputJsonValue)
+      : undefined,
     periodInputSnapshot:
       r.periodInputSnapshot as unknown as Prisma.InputJsonValue,
     statutoryBreakdown:
       r.statutoryBreakdown as unknown as Prisma.InputJsonValue,
+    finalPayBreakdown: r.finalPayBreakdown
+      ? (r.finalPayBreakdown as unknown as Prisma.InputJsonValue)
+      : undefined,
   };
 }
 
@@ -380,6 +397,150 @@ async function computeThirteenthMonthCents(
     0n,
   );
   return totalBasic / 12n;
+}
+
+// ---------------------------------------------------------------------------
+// Private: separation pay helpers (FINAL_PAY runs)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal daily-rate derivation for the persist layer.
+ * Mirrors engine.ts `deriveRates` (MONTHLY branch only — the common case).
+ */
+function deriveRateForPersist(
+  basicSalaryCents: bigint,
+  salaryType: string,
+  workingDaysDenominator: number,
+): bigint {
+  switch (salaryType) {
+    case "MONTHLY":
+      return (basicSalaryCents * 12n) / BigInt(workingDaysDenominator);
+    case "DAILY":
+      return basicSalaryCents;
+    case "WEEKLY":
+      return basicSalaryCents / 5n;
+    default:
+      return (basicSalaryCents * 12n) / BigInt(workingDaysDenominator);
+  }
+}
+
+/** DOLE-mandated separation pay rates by reason (0 = none). */
+function separationPayRate(reason: SeparationReason): number {
+  switch (reason) {
+    case "REDUNDANCY":
+    case "CLOSURE_OF_BUSINESS":
+    case "DISEASE":
+      return 1.0; // 1 month per year of service
+    case "RETRENCHMENT":
+      return 0.5; // ½ month per year of service
+    default:
+      return 0;
+  }
+}
+
+/** Years of service; fraction ≥ 0.5 rounds up (RA 7641). Minimum 1 year. */
+function computeYearsOfService(hireDate: Date, lastDay: Date): number {
+  const ms = lastDay.getTime() - hireDate.getTime();
+  const years = ms / (365.25 * 24 * 60 * 60 * 1000);
+  const floored = Math.floor(years);
+  const fraction = years - floored;
+  const rounded = fraction >= 0.5 ? floored + 1 : floored;
+  return Math.max(1, rounded);
+}
+
+/**
+ * Computes all FINAL_PAY input values for one employee.
+ * dailyRateCents is passed in so we re-use the already-derived rate.
+ */
+async function computeFinalPayInputsForEmployee(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employee: Awaited<ReturnType<typeof loadActiveEmployees>>[number],
+  periodEnd: Date,
+  separationReason: SeparationReason | undefined,
+  dailyRateCents: bigint,
+  monthlySalaryCents: bigint,
+): Promise<FinalPayInputs> {
+  const year = periodEnd.getUTCFullYear();
+
+  // 1. Prorated 13th month (same helper as YEAR_END).
+  const proratedThirteenthMonthCents = await computeThirteenthMonthCents(
+    tx,
+    tenantId,
+    employee.id,
+    periodEnd,
+  );
+
+  // 2. Leave cash-out: sum available balances for convertible leave types.
+  const leaveBalances = await tx.leaveBalance.findMany({
+    where: {
+      employeeId: employee.id,
+      year,
+      leaveType: { isConvertibleToCash: true },
+    },
+    include: { leaveType: true },
+  });
+  let leaveCashOutCents = 0n;
+  for (const lb of leaveBalances) {
+    const available =
+      Number(lb.openingBalance) +
+      Number(lb.earned) -
+      Number(lb.used) -
+      Number(lb.forfeited) -
+      Number(lb.convertedToCash);
+    if (available > 0) {
+      leaveCashOutCents += BigInt(Math.round(available * Number(dailyRateCents)));
+    }
+  }
+
+  // 3. Separation pay (DOLE mandated).
+  let separationPayCents = 0n;
+  let isSeparationPayTaxable = true; // taxable by default (voluntary)
+  if (separationReason) {
+    const rate = separationPayRate(separationReason);
+    if (rate > 0) {
+      const lastDay = employee.lastWorkingDate ?? periodEnd;
+      const yearsOfService = computeYearsOfService(employee.hireDate, lastDay);
+      const rawPay = BigInt(Math.round(yearsOfService * rate * Number(monthlySalaryCents)));
+      // DOLE minimum: not less than 1 month salary.
+      separationPayCents =
+        rawPay < monthlySalaryCents ? monthlySalaryCents : rawPay;
+      isSeparationPayTaxable = false; // DOLE-mandated = tax-exempt
+    }
+  }
+
+  // 4. CY prior taxable income + withholding tax from FINALIZED REGULAR/OFF_CYCLE runs.
+  const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
+  const yearEnd = new Date(`${year}-12-31T23:59:59.999Z`);
+  const priorSheets = await tx.payrollSheet.findMany({
+    where: {
+      employeeId: employee.id,
+      tenantId,
+      payrollBook: {
+        status: "FINALIZED",
+        runType: { in: ["REGULAR", "OFF_CYCLE"] },
+        periodEnd: { gte: yearStart, lte: yearEnd },
+      },
+    },
+    select: { grossTaxableIncomeCents: true, withholdingTaxCents: true },
+  });
+  const cyPriorTaxableIncomeCents = priorSheets.reduce(
+    (acc, s) => acc + s.grossTaxableIncomeCents,
+    0n,
+  );
+  const cyPriorWithholdingTaxCents = priorSheets.reduce(
+    (acc, s) => acc + s.withholdingTaxCents,
+    0n,
+  );
+
+  return {
+    proratedThirteenthMonthCents,
+    leaveCashOutCents,
+    separationPayCents,
+    isSeparationPayTaxable,
+    cyPriorTaxableIncomeCents,
+    cyPriorWithholdingTaxCents,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +588,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         notes: input.notes ?? null,
         createdByUserId: input.createdByUserId ?? null,
         skipStatutory: input.skipStatutory ?? false,
+        separationReason: input.separationReason ?? null,
       },
     });
 
@@ -465,10 +627,49 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         );
       }
 
+      // FINAL_PAY: inject leave cash-out, prorated 13th, separation pay, CY priors.
+      if ((input.runType ?? "REGULAR") === "FINAL_PAY") {
+        const salary = e.salaryHistory[0]!;
+        const dailyRate = deriveRateForPersist(
+          salary.basicSalaryCents,
+          salary.salaryType,
+          tenant.workingDaysDenominator,
+        );
+        ci.finalPayInputs = await computeFinalPayInputsForEmployee(
+          tx,
+          input.tenantId,
+          e,
+          input.periodEnd,
+          input.separationReason,
+          dailyRate,
+          salary.basicSalaryCents,
+        );
+      }
+
       // OFF_CYCLE / skipStatutory: override cutoff logic for this book.
       if (input.skipStatutory) {
         ci.overrideStatutoryDeducted = false;
       }
+
+      // Inject any manual adjustments recorded for this employee in this book.
+      ci.adjustments = (await tx.payrollAdjustment.findMany({
+        where: { payrollBookId: book.id, employeeId: e.id },
+      })).map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        amountCents: a.amountCents,
+        isTaxable: a.isTaxable,
+        reason: a.reason,
+      }));
+
+      ci.expenseClaims = (await tx.expenseClaim.findMany({
+        where: { payrollBookId: book.id, employeeId: e.id, status: "ATTACHED" },
+      })).map((c) => ({
+        id: c.id,
+        category: c.category,
+        amountCents: c.amountCents,
+        taxTreatment: c.taxTreatment!,
+      }));
 
       const result = computeSheet(ci);
       sheets.push(resultToSheetCreate(input.tenantId, book.id, e.id, result));
@@ -541,10 +742,49 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         );
       }
 
+      // FINAL_PAY: re-inject from stored separationReason.
+      if (book.runType === "FINAL_PAY") {
+        const salary = e.salaryHistory[0]!;
+        const dailyRate = deriveRateForPersist(
+          salary.basicSalaryCents,
+          salary.salaryType,
+          tenant.workingDaysDenominator,
+        );
+        ci.finalPayInputs = await computeFinalPayInputsForEmployee(
+          tx,
+          tenantId,
+          e,
+          book.periodEnd,
+          book.separationReason ?? undefined,
+          dailyRate,
+          salary.basicSalaryCents,
+        );
+      }
+
       // Preserve skipStatutory behaviour set at creation time.
       if (book.skipStatutory) {
         ci.overrideStatutoryDeducted = false;
       }
+
+      // Inject any manual adjustments recorded for this employee in this book.
+      ci.adjustments = (await tx.payrollAdjustment.findMany({
+        where: { payrollBookId: bookId, employeeId: e.id },
+      })).map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        amountCents: a.amountCents,
+        isTaxable: a.isTaxable,
+        reason: a.reason,
+      }));
+
+      ci.expenseClaims = (await tx.expenseClaim.findMany({
+        where: { payrollBookId: bookId, employeeId: e.id, status: "ATTACHED" },
+      })).map((c) => ({
+        id: c.id,
+        category: c.category,
+        amountCents: c.amountCents,
+        taxTreatment: c.taxTreatment!,
+      }));
 
       const result = computeSheet(ci);
       sheets.push(resultToSheetCreate(tenantId, bookId, e.id, result));
@@ -622,7 +862,13 @@ export async function finalizeRun(
       });
     }
 
-    // 3. Transition the book + audit log.
+    // 3. Mark ATTACHED expense claims as PAID.
+    await tx.expenseClaim.updateMany({
+      where: { payrollBookId: bookId, status: "ATTACHED" },
+      data: { status: "PAID", paidInBookId: bookId },
+    });
+
+    // 4. Transition the book + audit log.
     const finalized = await tx.payrollBook.update({
       where: { id: bookId },
       data: {

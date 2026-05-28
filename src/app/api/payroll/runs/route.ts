@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       createdByUserId: auth.userId ?? null,
       employeeIds: d.employeeIds,
       skipStatutory: d.skipStatutory,
+      separationReason: d.separationReason,
     });
     return ok(serializePayrollBook(book), "Payroll run created", 201);
   } catch (e) {

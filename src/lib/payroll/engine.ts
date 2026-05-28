@@ -43,11 +43,16 @@ import {
   lookupBIR,
 } from "@/lib/statutory/compute";
 import type {
+  AppliedAdjustment,
+  AppliedExpenseClaim,
   AppliedLoanPayment,
   AppliedPayComponent,
+  ComputeAdjustment,
+  ComputeExpenseClaim,
   ComputeInput,
   ComputePayComponent,
   ComputeResult,
+  FinalPayBreakdown,
   StatutoryBreakdown,
 } from "./types";
 
@@ -254,6 +259,101 @@ function classifyComponents(
 }
 
 // ---------------------------------------------------------------------------
+// Adjustment helpers
+// ---------------------------------------------------------------------------
+
+interface AppliedAdjustmentsResult {
+  taxableAdditionsCents: bigint;
+  nontaxableAdditionsCents: bigint;
+  deductionsCents: bigint;
+  applied: AppliedAdjustment[];
+}
+
+function applyAdjustments(
+  adjustments: ComputeAdjustment[],
+): AppliedAdjustmentsResult {
+  let taxableAdditionsCents = 0n;
+  let nontaxableAdditionsCents = 0n;
+  let deductionsCents = 0n;
+  const applied: AppliedAdjustment[] = [];
+  for (const adj of adjustments) {
+    applied.push({
+      id: adj.id,
+      kind: adj.kind,
+      amountCents: adj.amountCents.toString(),
+      isTaxable: adj.isTaxable,
+      reason: adj.reason,
+    });
+    if (adj.kind === "ADDITION") {
+      if (adj.isTaxable) {
+        taxableAdditionsCents += adj.amountCents;
+      } else {
+        nontaxableAdditionsCents += adj.amountCents;
+      }
+    } else {
+      deductionsCents += adj.amountCents;
+    }
+  }
+  return { taxableAdditionsCents, nontaxableAdditionsCents, deductionsCents, applied };
+}
+
+// ---------------------------------------------------------------------------
+// Expense claim helpers (Phase K)
+// ---------------------------------------------------------------------------
+
+interface AppliedClaimsResult {
+  /// TAXABLE claims → flow into gross taxable income.
+  taxableAdditionsCents: bigint;
+  /// DE_MINIMIS claims → non-taxable compensation bucket.
+  nontaxableCompensationCents: bigint;
+  /// NONTAXABLE_REIMBURSEMENT claims → added back after WHT (not in gross).
+  nontaxableAdditionsCents: bigint;
+  applied: AppliedExpenseClaim[];
+}
+
+function applyExpenseClaims(
+  claims: ComputeExpenseClaim[],
+): AppliedClaimsResult {
+  let taxableAdditionsCents = 0n;
+  let nontaxableCompensationCents = 0n;
+  let nontaxableAdditionsCents = 0n;
+  const applied: AppliedExpenseClaim[] = [];
+
+  for (const c of claims) {
+    let taxable = 0n;
+    let nontaxable = 0n;
+
+    if (c.taxTreatment === "TAXABLE") {
+      taxableAdditionsCents += c.amountCents;
+      taxable = c.amountCents;
+    } else if (c.taxTreatment === "DE_MINIMIS") {
+      nontaxableCompensationCents += c.amountCents;
+      nontaxable = c.amountCents;
+    } else {
+      // NONTAXABLE_REIMBURSEMENT — added back after WHT
+      nontaxableAdditionsCents += c.amountCents;
+      nontaxable = c.amountCents;
+    }
+
+    applied.push({
+      id: c.id,
+      category: c.category,
+      amountCents: c.amountCents.toString(),
+      taxTreatment: c.taxTreatment,
+      taxablePortionCents: taxable.toString(),
+      nontaxablePortionCents: nontaxable.toString(),
+    });
+  }
+
+  return {
+    taxableAdditionsCents,
+    nontaxableCompensationCents,
+    nontaxableAdditionsCents,
+    applied,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -280,17 +380,21 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
   const { employee, salary, tenant, period, periodInput, loans, rules } = input;
   const thirteenthMonth = input.thirteenthMonthCents ?? 0n;
 
+  // Adjustments.
+  const adjs = applyAdjustments(input.adjustments);
+
   const nonTaxable13Month =
     thirteenthMonth < ANNUAL_13TH_MONTH_CAP
       ? thirteenthMonth
       : ANNUAL_13TH_MONTH_CAP;
   const taxableExcess = thirteenthMonth - nonTaxable13Month; // always ≥ 0n
 
-  // WHT only on taxable excess; use MONTHLY BIR table for one-time payment.
+  // WHT on taxable excess + taxable adjustment additions.
+  const grossTaxableIncomeCents = taxableExcess + adjs.taxableAdditionsCents;
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
-  if (taxableExcess > 0n) {
-    const bir = lookupBIR(rules.bir, "MONTHLY", taxableExcess);
+  if (grossTaxableIncomeCents > 0n) {
+    const bir = lookupBIR(rules.bir, "MONTHLY", grossTaxableIncomeCents);
     withholdingTaxCents = bir.tax;
     birBracket = {
       bracketFloorCents: bir.bracket.floor.toString(),
@@ -318,7 +422,16 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
     loanDeductionsCents += amount;
   }
 
-  const netPayCents = thirteenthMonth - withholdingTaxCents - loanDeductionsCents;
+  const grossCompensationCents = thirteenthMonth + adjs.taxableAdditionsCents;
+  const nontaxableAdditionsCents = adjs.nontaxableAdditionsCents;
+  const adjustmentDeductionsCents = adjs.deductionsCents;
+
+  const netPayCents =
+    grossCompensationCents -
+    withholdingTaxCents +
+    nontaxableAdditionsCents -
+    loanDeductionsCents -
+    adjustmentDeductionsCents;
 
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted: false,
@@ -343,15 +456,15 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
     holidayPayCents: 0n,
     restDayPayCents: 0n,
     hazardPayCents: 0n,
-    taxableAllowancesCents: taxableExcess,
+    taxableAllowancesCents: taxableExcess + adjs.taxableAdditionsCents,
 
-    grossCompensationCents: thirteenthMonth,
+    grossCompensationCents,
     mweExemptCompensationCents: 0n,
     nontaxableBasicCents: 0n,
     nontaxableCompensationCents: 0n,
     nontaxable13MonthAndBenefitsCents: nonTaxable13Month,
 
-    grossTaxableIncomeCents: taxableExcess,
+    grossTaxableIncomeCents,
 
     sssEeCents: 0n,
     sssErCents: 0n,
@@ -363,19 +476,291 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
 
     withholdingTaxCents,
 
-    nontaxableAdditionsCents: 0n,
+    nontaxableAdditionsCents,
     loanDeductionsCents,
+    adjustmentDeductionsCents,
 
     netPayCents,
 
     payComponentsApplied: [],
     loanPaymentsApplied,
+    adjustmentsApplied: adjs.applied,
+    expenseClaimsApplied: [],
     statutoryBreakdown,
     periodInputSnapshot: periodInput,
   };
 }
 
+// ---------------------------------------------------------------------------
+// FINAL_PAY compute path
+// ---------------------------------------------------------------------------
+
+/**
+ * FINAL_PAY path — invoked when `input.finalPayInputs` is present.
+ *
+ * Computes back pay for the final period (steps 1–4 identical to REGULAR),
+ * then appends:
+ *   • Leave cash-out (taxable — included in grossCompensation)
+ *   • Prorated 13th month (non-taxable up to ₱90,000 combined)
+ *   • DOLE separation pay (non-taxable for mandated causes; taxable otherwise)
+ * WHT is annualised:
+ *   annualWHT = lookupBIR(MONTHLY, (cyPriorTaxable + thisRunTaxable) / 12) × 12
+ *   thisRunWHT = max(0, annualWHT − cyPriorWHT)
+ */
+function computeFinalPay(input: ComputeInput): ComputeResult {
+  const { employee, salary, tenant, period, periodInput, loans, rules } = input;
+  const fp = input.finalPayInputs!;
+
+  // Adjustments (processed early; taxable additions feed into gross + WHT).
+  const adjs = applyAdjustments(input.adjustments);
+
+  const rates = deriveRates(input);
+  const { dailyRateCents, hourlyRateCents } = rates;
+
+  // -- Steps 1–4: back pay + premiums + pay components (same as REGULAR) ----
+  const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
+
+  const perMinuteCents = BigInt(Math.round(Number(hourlyRateCents) / 60));
+  const lateUndertimeDeductionCents =
+    perMinuteCents * BigInt(periodInput.lateUndertimeMinutes);
+
+  const otPayCents = timesUnits(hourlyRateCents, periodInput.regularOtHours * 1.25);
+  const nsdPayCents = timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.1);
+  const restDayPayCents = timesUnits(hourlyRateCents, periodInput.restDayHours * 1.3);
+  const specialHolidayPayCents = timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.3);
+  const regularHolidayPayCents = timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0);
+  const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
+  const hazardPayCents = timesUnits(hourlyRateCents, periodInput.hazardHours * 1.25);
+
+  const deMinimisCeilingByCode = new Map<string, bigint>();
+  if (rules.deMinimis) {
+    for (const item of rules.deMinimis.items) {
+      if (item.monthlyCeiling != null) {
+        deMinimisCeilingByCode.set(item.code, BigInt(item.monthlyCeiling));
+      } else if (item.annualCeiling != null) {
+        deMinimisCeilingByCode.set(item.code, BigInt(Math.floor(Number(item.annualCeiling) / 12)));
+      }
+    }
+  }
+  const buckets = classifyComponents(input.payComponents, deMinimisCeilingByCode);
+
+  // Leave cash-out: taxable compensation (included in gross).
+  const leaveCashOutCents = fp.leaveCashOutCents;
+
+  // Separation pay taxability split.
+  const separationPayCents = fp.separationPayCents;
+  const separationPayTaxable = fp.isSeparationPayTaxable ? separationPayCents : 0n;
+  const separationPayNonTaxable = fp.isSeparationPayTaxable ? 0n : separationPayCents;
+
+  // -- Step 5: gross compensation -------------------------------------------
+  const earningsSubtotal =
+    basePayCents -
+    lateUndertimeDeductionCents +
+    otPayCents +
+    nsdPayCents +
+    holidayPayCents +
+    restDayPayCents +
+    hazardPayCents;
+
+  const grossCompensationCents =
+    earningsSubtotal +
+    buckets.taxableAllowancesCents +
+    buckets.nontaxableCompensationCents +
+    leaveCashOutCents +
+    separationPayTaxable +
+    adjs.taxableAdditionsCents;
+
+  // -- Step 6: non-taxable buckets ------------------------------------------
+  const isMwe = checkMwe(input, dailyRateCents);
+  const mweExemptCompensationCents = isMwe
+    ? basePayCents + holidayPayCents + otPayCents + nsdPayCents + hazardPayCents
+    : 0n;
+  const nontaxableBasicCents = employee.nontaxableBasicAmountCents;
+
+  // Prorated 13th month: non-taxable up to ₱90,000.
+  const p13th = fp.proratedThirteenthMonthCents;
+  const nontaxable13Month = p13th < ANNUAL_13TH_MONTH_CAP ? p13th : ANNUAL_13TH_MONTH_CAP;
+  const taxable13thExcess = clampNonNegative(p13th - nontaxable13Month);
+  // The excess is added to gross taxable income (accounted for below).
+
+  // -- Step 8: statutory (cutoff rule applies; skipStatutory via override) --
+  const deducted =
+    input.overrideStatutoryDeducted !== undefined
+      ? input.overrideStatutoryDeducted
+      : isStatutoryDeducted(period.cycle, tenant.statutoryCutoffRule, period.end);
+
+  const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
+  const phic = computePhilHealth(rules.philHealth, rates.monthlyEquivalentCents);
+  const hdmf = computePagibig(rules.pagibig, rates.monthlyEquivalentCents);
+
+  const sssEeCents = deducted ? sss.employee : 0n;
+  const sssErCents = deducted ? sss.employer : 0n;
+  const sssEcCents = deducted ? sss.ec : 0n;
+  const philhealthEeCents = deducted ? phic.employee : 0n;
+  const philhealthErCents = deducted ? phic.employer : 0n;
+  const pagibigEeCents = deducted ? hdmf.employee : 0n;
+  const pagibigErCents = deducted ? hdmf.employer : 0n;
+
+  const mandatoryEeContribs = sssEeCents + philhealthEeCents + pagibigEeCents;
+
+  const nontaxableCompensationCents =
+    buckets.nontaxableCompensationCents + mandatoryEeContribs;
+
+  // -- Step 7: gross taxable income -----------------------------------------
+  const grossTaxableIncomeCents = clampNonNegative(
+    grossCompensationCents -
+      mweExemptCompensationCents -
+      nontaxableBasicCents -
+      nontaxableCompensationCents -
+      nontaxable13Month +
+      taxable13thExcess,
+  );
+
+  // -- Step 9: WHT via annualisation ----------------------------------------
+  // Annual total taxable = CY prior + this run's taxable.
+  const cyTotalTaxable =
+    fp.cyPriorTaxableIncomeCents + grossTaxableIncomeCents;
+  let withholdingTaxCents = 0n;
+  let birBracket: StatutoryBreakdown["bir"] = null;
+  let annualizedWht = 0n;
+  if (!isMwe && cyTotalTaxable > 0n) {
+    // Derive annual WHT from monthly bracket (TRAIN formula: monthly × 12).
+    const monthlyEquivalent = cyTotalTaxable / 12n;
+    const bir = lookupBIR(rules.bir, "MONTHLY", monthlyEquivalent);
+    annualizedWht = bir.tax * 12n;
+    withholdingTaxCents = clampNonNegative(
+      annualizedWht - fp.cyPriorWithholdingTaxCents,
+    );
+    birBracket = {
+      bracketFloorCents: bir.bracket.floor.toString(),
+      bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
+      bracketPlusRate: bir.bracket.plusRate,
+    };
+  }
+
+  // -- Step 10: non-taxable additions ---------------------------------------
+  // Separation pay (non-taxable portion) + reimbursements + non-taxable adj additions.
+  const nontaxableAdditionsCents =
+    buckets.nontaxableAdditionsCents + separationPayNonTaxable + adjs.nontaxableAdditionsCents;
+
+  // -- Step 11: loans -------------------------------------------------------
+  const loanPaymentsApplied: AppliedLoanPayment[] = [];
+  let loanDeductionsCents = 0n;
+  for (const loan of loans) {
+    const amount =
+      loan.installmentCents > loan.balanceCents
+        ? loan.balanceCents
+        : loan.installmentCents;
+    if (amount <= 0n) continue;
+    loanPaymentsApplied.push({
+      loanId: loan.id,
+      loanType: loan.loanType,
+      amountCents: amount.toString(),
+      balanceBeforeCents: loan.balanceCents.toString(),
+      balanceAfterCents: (loan.balanceCents - amount).toString(),
+    });
+    loanDeductionsCents += amount;
+  }
+
+  const adjustmentDeductionsCents = adjs.deductionsCents;
+
+  // -- Step 12: net pay -----------------------------------------------------
+  const netPayCents =
+    grossCompensationCents -
+    mandatoryEeContribs -
+    withholdingTaxCents +
+    nontaxableAdditionsCents -
+    loanDeductionsCents -
+    adjustmentDeductionsCents;
+
+  const statutoryBreakdown: StatutoryBreakdown = {
+    deducted,
+    bases: {
+      sssMscCents: sss.msc.toString(),
+      philHealthMscCents: phic.msc.toString(),
+      pagibigMfsCents: hdmf.mfs.toString(),
+    },
+    sss: {
+      eeRegularCents: (deducted ? sss.breakdown.eeRegular : 0n).toString(),
+      erRegularCents: (deducted ? sss.breakdown.erRegular : 0n).toString(),
+      eeMpfCents: (deducted ? sss.breakdown.eeMpf : 0n).toString(),
+      erMpfCents: (deducted ? sss.breakdown.erMpf : 0n).toString(),
+      ecCents: sssEcCents.toString(),
+    },
+    bir: birBracket,
+  };
+
+  const finalPayBreakdown: FinalPayBreakdown = {
+    backPayCents: basePayCents.toString(),
+    proratedThirteenthMonthCents: p13th.toString(),
+    leaveCashOutCents: leaveCashOutCents.toString(),
+    separationPayCents: separationPayCents.toString(),
+    isSeparationPayTaxable: fp.isSeparationPayTaxable,
+    cyPriorTaxableIncomeCents: fp.cyPriorTaxableIncomeCents.toString(),
+    cyPriorWithholdingTaxCents: fp.cyPriorWithholdingTaxCents.toString(),
+    annualizedWhtCents: annualizedWht.toString(),
+  };
+
+  return {
+    taxClassificationSnapshot: employee.taxClassification,
+    regionSnapshot: employee.region,
+    payFrequencySnapshot: employee.payFrequency,
+    salaryTypeSnapshot: salary.salaryType,
+    basicSalaryCentsSnapshot: salary.basicSalaryCents,
+    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    statutoryDeductedSnapshot: deducted,
+
+    basePayCents,
+    lateUndertimeDeductionCents,
+    otPayCents,
+    nsdPayCents,
+    holidayPayCents,
+    restDayPayCents,
+    hazardPayCents,
+
+    taxableAllowancesCents:
+      buckets.taxableAllowancesCents + leaveCashOutCents + separationPayTaxable + taxable13thExcess + adjs.taxableAdditionsCents,
+
+    grossCompensationCents,
+    mweExemptCompensationCents,
+    nontaxableBasicCents,
+    nontaxableCompensationCents,
+    nontaxable13MonthAndBenefitsCents: nontaxable13Month,
+
+    grossTaxableIncomeCents,
+
+    sssEeCents,
+    sssErCents,
+    sssEcCents,
+    philhealthEeCents,
+    philhealthErCents,
+    pagibigEeCents,
+    pagibigErCents,
+
+    withholdingTaxCents,
+
+    nontaxableAdditionsCents,
+    loanDeductionsCents,
+    adjustmentDeductionsCents,
+
+    netPayCents,
+
+    payComponentsApplied: buckets.applied,
+    loanPaymentsApplied,
+    adjustmentsApplied: adjs.applied,
+    expenseClaimsApplied: [],
+    statutoryBreakdown,
+    periodInputSnapshot: periodInput,
+    finalPayBreakdown,
+  };
+}
+
 export function computeSheet(input: ComputeInput): ComputeResult {
+  // FINAL_PAY path — triggered when persist layer supplies finalPayInputs.
+  if (input.finalPayInputs !== undefined) {
+    return computeFinalPay(input);
+  }
+
   // Year-end (13th month) path — triggered when the persist layer supplies
   // the pre-computed thirteenthMonthCents.
   if (input.thirteenthMonthCents !== undefined) {
@@ -384,6 +769,11 @@ export function computeSheet(input: ComputeInput): ComputeResult {
 
   const { employee, salary, tenant, period, periodInput, loans, rules } =
     input;
+
+  // Adjustments (taxable additions feed into gross + WHT).
+  const adjs = applyAdjustments(input.adjustments);
+  // Expense claims (Phase K).
+  const claims = applyExpenseClaims(input.expenseClaims);
 
   const rates = deriveRates(input);
   const { dailyRateCents, hourlyRateCents } = rates;
@@ -462,7 +852,10 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const grossCompensationCents =
     earningsSubtotal +
     buckets.taxableAllowancesCents +
-    buckets.nontaxableCompensationCents;
+    buckets.nontaxableCompensationCents +
+    adjs.taxableAdditionsCents +
+    claims.taxableAdditionsCents +
+    claims.nontaxableCompensationCents;
 
   // -- Step 6: non-taxable buckets ------------------------------------------
   const isMwe = checkMwe(input, dailyRateCents);
@@ -509,7 +902,9 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // EXCLUDING the MWE-exempt and 13th-month columns (those have their own
   // columns per §2.6).
   const nontaxableCompensationCents =
-    buckets.nontaxableCompensationCents + mandatoryEeContribs;
+    buckets.nontaxableCompensationCents +
+    claims.nontaxableCompensationCents +
+    mandatoryEeContribs;
 
   // 13th-month / benefits residual — deferred to year-end phase.
   const nontaxable13MonthAndBenefitsCents = 0n;
@@ -541,7 +936,10 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   }
 
   // -- Step 10: non-taxable additions ---------------------------------------
-  const nontaxableAdditionsCents = buckets.nontaxableAdditionsCents;
+  const nontaxableAdditionsCents =
+    buckets.nontaxableAdditionsCents +
+    adjs.nontaxableAdditionsCents +
+    claims.nontaxableAdditionsCents;
 
   // -- Step 11: loans --------------------------------------------------------
   const loanPaymentsApplied: AppliedLoanPayment[] = [];
@@ -563,13 +961,16 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     loanDeductionsCents += amount;
   }
 
+  const adjustmentDeductionsCents = adjs.deductionsCents;
+
   // -- Step 12: net pay ------------------------------------------------------
   const netPayCents =
     grossCompensationCents -
     mandatoryEeContribs -
     withholdingTaxCents +
     nontaxableAdditionsCents -
-    loanDeductionsCents;
+    loanDeductionsCents -
+    adjustmentDeductionsCents;
 
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted,
@@ -606,7 +1007,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     restDayPayCents,
     hazardPayCents,
 
-    taxableAllowancesCents: buckets.taxableAllowancesCents,
+    taxableAllowancesCents: buckets.taxableAllowancesCents + adjs.taxableAdditionsCents + claims.taxableAdditionsCents,
 
     grossCompensationCents,
     mweExemptCompensationCents,
@@ -628,11 +1029,14 @@ export function computeSheet(input: ComputeInput): ComputeResult {
 
     nontaxableAdditionsCents,
     loanDeductionsCents,
+    adjustmentDeductionsCents,
 
     netPayCents,
 
     payComponentsApplied: buckets.applied,
     loanPaymentsApplied,
+    adjustmentsApplied: adjs.applied,
+    expenseClaimsApplied: claims.applied,
     statutoryBreakdown,
     periodInputSnapshot: periodInput,
   };
