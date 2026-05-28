@@ -100,6 +100,7 @@ export default async function DashboardLayout({
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                   >
                     <item.icon className="h-4 w-4 shrink-0 opacity-80" />

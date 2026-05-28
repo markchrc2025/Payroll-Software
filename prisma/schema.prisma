@@ -450,6 +450,8 @@ model Tenant {
   dtrRecords            DTRRecord[]
   expenseClaims         ExpenseClaim[]
   essSessions           EssSession[]
+  otApplications        OTApplication[]
+  profileUpdateRequests ProfileUpdateRequest[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
@@ -736,6 +738,8 @@ model Employee {
   dtrRecords              DTRRecord[]
   expenseClaims           ExpenseClaim[]
   essSessions             EssSession[]
+  otApplications          OTApplication[]
+  profileUpdateRequests   ProfileUpdateRequest[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
 
@@ -1739,6 +1743,75 @@ model ExpenseClaim {
   @@index([tenantId, employeeId])
   @@index([tenantId, status])
   @@index([payrollBookId])
+}
+
+// =============================================================================
+// OT APPLICATIONS (Phase R)
+// =============================================================================
+
+/// Employee files overtime for advance approval before it is paid.
+/// On APPROVED the linked DTRRecord.otMinutes is set = hours × 60.
+model OTApplication {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Calendar date the OT will be worked (UTC midnight).
+  date          DateTime
+  /// Requested OT hours (e.g. 2.5).
+  hours         Decimal  @db.Decimal(5, 2)
+  justification String   @db.Text
+
+  status           ApprovalStatus @default(PENDING)
+  approverId       String?
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  rejectionReason  String?        @db.Text
+  cancelledAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+}
+
+// =============================================================================
+// PROFILE UPDATE REQUESTS (Phase R)
+// =============================================================================
+
+/// Employee requests a change to a sensitive profile field.
+/// On APPROVED the field on Employee is updated atomically.
+model ProfileUpdateRequest {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Name of the Employee field being changed (e.g. "bankAccountNumber").
+  field    String
+  oldValue String?  @db.Text
+  newValue String   @db.Text
+
+  status          ApprovalStatus @default(PENDING)
+  approverId      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
 }
 
 // =============================================================================
