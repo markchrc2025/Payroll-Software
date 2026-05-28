@@ -16,11 +16,22 @@
 - **Global (non-tenant) data:** the statutory configuration tables (Section 2.7) are shared national data with no `tenant_id`; they are operator-managed and read by every tenant.
 - **Operator control plane:** the Central/Master Portal runs as role-gated routes within this same application (not a separate app), under a `SUPER_ADMIN` identity that operates above tenant row-level security. `SUPER_ADMIN` is defined in Section 1.4 and Section 5.7.
 
-### 1.2 Technology
-- **Database:** PostgreSQL with row-level security for tenant isolation.
+### 1.2 Technology Stack
+- **Application framework:** Next.js (App Router) — a single full-stack application serving both the web UI and the API (route handlers under `/api/*`). The Central Portal lives as `SUPER_ADMIN`-gated routes within this same app.
+- **Language:** TypeScript.
+- **Front end:** React + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA); the Kiosk is a cross-platform web interface.
+- **Hosting & deployment:** Render, in the **Singapore** region (lowest latency to Philippine users) — a persistent web service plus background workers and scheduled cron jobs, on predictable plan-based pricing.
+- **Database:** PostgreSQL on Render's managed Postgres (Singapore region), with row-level security for tenant isolation and daily backups (point-in-time recovery added at a higher tier as volume grows).
+- **ORM / data access:** Prisma, with a client extension providing transparent field-level encrypt/decrypt (Section 1.4); raw SQL is used where needed for performance.
+- **Authentication:** Better Auth — self-hosted, with user, session, and account data stored in the app's own PostgreSQL (no per-user/MAU cost). Provides built-in multi-factor authentication (required for the `SUPER_ADMIN` operator identity, Sections 1.4 and 5.7), organizations, and RBAC that map to the multi-tenant model.
 - **Object storage:** Cloudflare R2 for documents and media (employee 201 files, receipts, selfies). Files are referenced by key from the database; access is via signed, time-limited URLs.
-- **Backend:** A single backend application exposing a REST API.
-- **Front end:** React + TypeScript + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA). The Kiosk is a cross-platform web interface.
+- **Subscription billing:** Maya for Business (primary) with PayMongo as the recurring-billing fallback, charging tenants per `plan_tier`.
+- **AI integration:** Anthropic API (Claude Haiku 4.5 by default, Sonnet for flagged tasks), routed through the metering gateway (Section 8).
+- **Email / notifications:** Resend (transactional email; React Email JSX templates) for approval routing, payslip-ready notices, and authentication flows.
+- **Background jobs:** Render scheduled cron jobs and background workers handle retention purges, the year-end annualization run, and other scheduled work. Durable multi-step jobs (e.g., large payroll runs) move to Inngest as volume grows.
+- **Document generation:** `@react-pdf/renderer` for generated documents (payslips, Quitclaim) and `pdf-lib` for filling fixed-layout official forms (BIR Form 2316). Both are pure-JS (no headless browser), keeping the Render instance light.
+- **File parsing:** PapaParse for CSV/biometric DTR imports and generic CSV export; bank batch files are generated to each bank's required format (BPI first).
+- **Testing:** Vitest, with the engine golden-case suite specified in `Engine_Test_Spec.md` (Section 4.11).
 - **Currency:** All monetary values are Philippine Peso (PHP), stored as integer centavos.
 - **Payroll engine layout:** the engine is organized as pure per-step modules under `src/lib/payroll/engine/*`, one per step of the gross-to-net waterfall (Section 4.2). All arithmetic (multiply, divide, round, share-split) is delegated to a single centralized centavo module at `src/lib/money/`; engine step modules never perform inline arithmetic. The money module owns one rounding policy applied everywhere (Section 4.1).
 
@@ -33,6 +44,7 @@
 - Data is encrypted in transit (TLS) and at rest. Field-level encryption applies to TIN, statutory ID numbers, and bank account numbers, using AES-256-GCM under an **envelope-encryption** scheme: a random Data Encryption Key (DEK) encrypts the field values, and the DEK is wrapped by a Key Encryption Key (KEK). The KEK is sourced from an environment secret initially and can later be moved to a KMS/vault by re-wrapping the DEK only — without re-encrypting stored data. The KEK is a 256-bit random value, never committed to the repository, backed up separately from the database, with a documented rotation procedure.
 - For any encrypted field that must be searched or made unique (e.g., TIN de-duplication), a keyed HMAC of the plaintext is stored in a companion indexed column; lookups and uniqueness constraints use the HMAC, since GCM ciphertext is not searchable.
 - **`SUPER_ADMIN` (operator) identity:** the SaaS operator's identity is separate from tenant RBAC. It is not a tenant `Role`, cannot be granted through tenant role management, has its own login with MFA, and every `SUPER_ADMIN` action is written to `AuditLog`. It operates above tenant row-level security to manage tenants and global statutory data.
+- Authorization is enforced at the route-handler and data-access layer, never by Next.js middleware alone (middleware-only session protection is bypassable). Every privileged and cross-tenant operation re-checks authorization at the point of data access.
 - Every create, update, delete, and sensitive read of employee, payroll, statutory, and document data is written to **AuditLog** with actor, action, entity, before/after values, and timestamp.
 - Employee consent for storing personal data, financial data, biometric data (selfies), and location data (GPS) is captured and recorded in **ConsentRecord** with type and timestamp. Biometric and location data are Sensitive Personal Information and require explicit consent before capture.
 - Each data category has a configured retention period. Raw selfies and GPS coordinates are purged after the DTR they support is finalized, per retention policy; computed results are retained. A scheduled job enforces retention.
@@ -352,6 +364,9 @@ The AI Assistant is an add-on bundled into the `PRO` tier, OFF by default, toggl
 | Field encryption | AES-256-GCM, envelope (DEK wrapped by KEK); env-var KEK now, KMS later; HMAC for searchable fields |
 | Money arithmetic | Centralized `src/lib/money/` centavo module; round half up to the centavo |
 | Engine tests | Golden-case suite (`Engine_Test_Spec.md`) required before any real payroll output |
+| Hosting | Render (Singapore region), predictable plan-based pricing |
+| Authentication | Better Auth (self-hosted in Postgres); MFA on `SUPER_ADMIN` |
+| Email | Resend (transactional) |
 
 ---
 

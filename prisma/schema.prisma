@@ -371,6 +371,22 @@ enum DTRDayStatus {
 }
 
 // =============================================================================
+// ATTENDANCE ENUMS (Phase Y)
+// =============================================================================
+
+enum PunchType {
+  IN
+  OUT
+}
+
+enum PunchSource {
+  KIOSK
+  ESS
+  IMPORT
+  MANUAL
+}
+
+// =============================================================================
 // TENANT (SaaS customer)
 // =============================================================================
 
@@ -428,6 +444,8 @@ model Tenant {
   employeeSalaries      EmployeeSalary[]
   employeeMovements     EmployeeMovement[]
   incidentReports       IncidentReport[]
+  assets               Asset[]
+  assetAssignments     AssetAssignment[]
   employeeDocuments     EmployeeDocument[]
   geofences             Geofence[]
   kiosks                Kiosk[]
@@ -448,6 +466,7 @@ model Tenant {
   shiftSchedules        ShiftSchedule[]
   shiftAssignments      EmployeeShiftAssignment[]
   dtrRecords            DTRRecord[]
+  attendanceLogs        AttendanceLog[]
   expenseClaims         ExpenseClaim[]
   essSessions           EssSession[]
   otApplications        OTApplication[]
@@ -725,6 +744,7 @@ model Employee {
   salaryHistory           EmployeeSalary[]
   movements               EmployeeMovement[]
   incidentReports         IncidentReport[]
+  assetAssignments        AssetAssignment[]
   documents               EmployeeDocument[]
   leaveBalances           LeaveBalance[]
   leaveTransactions       LeaveTransaction[]
@@ -740,6 +760,7 @@ model Employee {
   essSessions             EssSession[]
   otApplications          OTApplication[]
   profileUpdateRequests   ProfileUpdateRequest[]
+  attendanceLogs          AttendanceLog[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
 
@@ -924,6 +945,94 @@ model IncidentReport {
 }
 
 // =============================================================================
+// ASSET TRACKING (Phase X)
+// =============================================================================
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  UNDER_REPAIR
+  RETIRED
+  DISPOSED
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+model Asset {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Human-readable code (e.g. "LT-001", "PHN-005"). Unique per tenant.
+  assetCode    String
+  name         String
+  description  String?
+  /// Free-text category (Laptop, Mobile Phone, Vehicle, Office Equipment…).
+  category     String
+  serialNumber String?
+  model        String?
+  brand        String?
+
+  purchaseDate      DateTime?
+  /// Purchase cost in centavos.
+  purchaseCostCents BigInt?
+
+  status    AssetStatus    @default(AVAILABLE)
+  condition AssetCondition @default(GOOD)
+
+  notes     String?
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  assignments AssetAssignment[]
+
+  @@unique([tenantId, assetCode])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([deletedAt])
+}
+
+model AssetAssignment {
+  id         String @id @default(cuid())
+  tenantId   String
+  assetId    String
+  employeeId String
+
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
+
+  conditionAtAssign AssetCondition @default(GOOD)
+  conditionAtReturn AssetCondition?
+
+  assignmentNotes String?
+  returnNotes     String?
+
+  assignedByUserId String?
+  returnedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  asset    Asset    @relation(fields: [assetId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([employeeId])
+  @@index([returnedAt])
+}
+
+// =============================================================================
 // GPS GEOFENCING
 // =============================================================================
 
@@ -1085,8 +1194,9 @@ model Kiosk {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
-  branch Branch? @relation(fields: [branchId], references: [id])
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  branch         Branch?         @relation(fields: [branchId], references: [id])
+  attendanceLogs AttendanceLog[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -1693,6 +1803,49 @@ model DTRRecord {
   @@index([tenantId])
   @@index([tenantId, employeeId, date])
   @@index([tenantId, approvalStatus])
+}
+
+// =============================================================================
+// ATTENDANCE LOG (Phase Y) — raw punch records from kiosk / ESS / import
+// =============================================================================
+
+/// One row per clock punch (IN or OUT).  Drives DTRRecord computation.
+/// Geofence violations are flagged but never block the punch (Section 5.3).
+model AttendanceLog {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+  /// FK to Kiosk — null for ESS/import/manual punches.
+  kioskId    String?
+
+  punchType  PunchType  // IN | OUT
+  source     PunchSource // KIOSK | ESS | IMPORT | MANUAL
+  /// Server-side timestamp of the punch (stored UTC).
+  punchedAt  DateTime
+
+  /// R2 object key for selfie image.  Null when selfie was not captured.
+  selfieKey  String?
+  /// GPS latitude at punch time.  Null when location was not captured.
+  latitude   Decimal? @db.Decimal(10, 7)
+  /// GPS longitude at punch time.  Null when location was not captured.
+  longitude  Decimal? @db.Decimal(10, 7)
+  /// True when the punch was captured outside the assigned branch geofence.
+  outsideGeofence Boolean @default(false)
+  /// Haversine distance in metres from the nearest active geofence centre.
+  distanceMeters  Int?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+  kiosk    Kiosk?   @relation(fields: [kioskId], references: [id])
+
+  @@index([tenantId, employeeId, punchedAt])
+  @@index([tenantId, punchedAt])
+  @@index([kioskId])
 }
 
 // =============================================================================
