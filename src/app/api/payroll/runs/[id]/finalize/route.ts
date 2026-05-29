@@ -18,6 +18,7 @@ import {
   PayrollRunNotFoundError,
 } from "@/lib/payroll/persist";
 import { serializePayrollBook } from "@/lib/payroll/serialize";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 export async function POST(
   req: NextRequest,
@@ -30,6 +31,14 @@ export async function POST(
 
   try {
     const book = await finalizeRun(auth.tenantId, id, auth.userId ?? null);
+    void writeAuditLog({
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      action: "APPROVE",
+      entity: "PayrollBook",
+      entityId: id,
+      ipAddress: getClientIp(req),
+    });
     return ok(serializePayrollBook(book), "Payroll run finalized");
   } catch (e) {
     if (e instanceof PayrollRunNotFoundError) return notFound("PayrollBook");

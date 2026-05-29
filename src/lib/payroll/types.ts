@@ -56,9 +56,30 @@ export interface ComputePeriodInputSnapshot {
   lateUndertimeMinutes: number;
   regularOtHours: number;
   restDayHours: number;
+  /** Rest day hours worked during OT (composed 1.30 × 1.30 = 1.69×). */
+  restDayOtHours?: number;
   specialHolidayHours: number;
+  /** Special non-working holiday hours worked during OT (1.30 × 1.30 = 1.69×). */
+  specialHolidayOtHours?: number;
   regularHolidayHours: number;
+  /** Regular holiday hours worked during OT (2.00 × 1.30 = 2.60×). */
+  regularHolidayOtHours?: number;
+  /** Hours worked on a double holiday (regular + special non-working, 3.00×). */
+  doubleHolidayHours?: number;
+  /**
+   * Days on a regular holiday where the employee did not work but is entitled
+   * to 100% holiday pay (1.00 × daily rate per DOLE).
+   */
+  noWorkRegularHolidayDays?: number;
   nightDiffHours: number;
+  /** OT hours in the night-differential window — NSD premium = 0.10 × 1.25 = 0.125× base. */
+  nightDiffOtHours?: number;
+  /** Rest-day hours in the night window — NSD premium = 0.10 × 1.30 = 0.13× base. */
+  nightDiffRestDayHours?: number;
+  /** Regular holiday hours in the night window — NSD premium = 0.10 × 2.00 = 0.20× base. */
+  nightDiffRegularHolidayHours?: number;
+  /** Regular holiday OT hours in the night window — NSD premium = 0.10 × 2.60 = 0.26× base. */
+  nightDiffRegularHolidayOtHours?: number;
   hazardHours: number;
   unpaidLeaveDays: number;
 }

@@ -11,6 +11,7 @@ import {
   FileBarChart2,
   Settings,
   LogOut,
+  CalendarDays,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { signOutAction } from "./_actions/sign-out";
@@ -35,6 +36,7 @@ const navSections: {
     label: "Operations",
     items: [
       { href: "/attendance", label: "Time & Attendance", icon: CalendarClock },
+      { href: "/leave", label: "Leave", icon: CalendarDays },
       { href: "/payroll", label: "Payroll", icon: Wallet },
       { href: "/reports", label: "Reports", icon: FileBarChart2 },
     ],

@@ -15,6 +15,7 @@ import {
   notFound,
 } from "@/lib/api-response";
 import { updateEmployeeSchema } from "@/lib/validations/employee";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees/[id]
@@ -176,6 +177,15 @@ export async function PUT(
   if ("notFound" in result) return notFound("Employee");
   if ("error" in result && result.error) return err(result.error, 404);
 
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "UPDATE",
+    entity: "Employee",
+    entityId: id,
+    ipAddress: getClientIp(req),
+  });
+
   return ok(result.employee, "Employee updated");
 }
 
@@ -213,6 +223,15 @@ export async function DELETE(
   });
 
   if (!wasFound) return notFound("Employee");
+
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "DELETE",
+    entity: "Employee",
+    entityId: id,
+    ipAddress: getClientIp(req),
+  });
 
   return ok({ id }, "Employee deleted");
 }

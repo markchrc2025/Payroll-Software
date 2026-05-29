@@ -17,6 +17,7 @@ import {
   createEmployeeSchema,
   listEmployeesSchema,
 } from "@/lib/validations/employee";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees
@@ -220,6 +221,15 @@ export async function POST(req: NextRequest) {
   });
 
   if ("error" in result && result.error) return err(result.error, 404);
+
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "CREATE",
+    entity: "Employee",
+    entityId: result.employee.id,
+    ipAddress: getClientIp(req),
+  });
 
   return ok(result.employee, "Employee created successfully", 201);
 }

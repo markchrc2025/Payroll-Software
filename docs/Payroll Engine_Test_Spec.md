@@ -11,7 +11,7 @@ This is the "post-engine" regression net referenced in the build sequence — wr
 1. **No self-referential tests.** A test's expected value is **never** produced by running the engine and capturing its output. Doing so makes the test pass by construction even when the engine is wrong. Every expected value is derived independently of the engine code.
 2. **Two sources of expected values, only these two:**
    - **Formula-derived:** computed directly from the formulas and multipliers in this spec (arithmetic that does not depend on a statutory lookup table). These values are given exactly below.
-   - **Accountant-supplied:** for any value that depends on a statutory lookup table (SSS MSC brackets, BIR withholding tables, de minimis category ceilings), the expected number is **computed by hand from the official seeded table by the accountant and pasted into the test as a literal constant with a comment citing the source row.** The AI tool must NOT generate these from memory or from the engine.
+   - **Worksheet-supplied:** for any value that depends on a statutory lookup table (SSS MSC brackets, BIR withholding tables, de minimis category ceilings), the expected number comes from `Statutory_Values_Worksheet.md` — hand-computed by the accountant from the official seeded table and pasted into the test as a literal constant with a comment citing the source row. The AI tool must NOT generate these from memory or from the engine.
 3. **Golden cases, not smoke tests.** Each test asserts an exact expected amount (in centavos), not merely "returns a number" or "does not throw."
 4. **Integer centavos everywhere.** All monetary assertions are in integer centavos. A test fails if any monetary value is a floating-point number at rest.
 5. **Determinism & effective-dating.** Re-running the same inputs yields byte-identical output. A computation for a past period uses that period's effective-dated tables regardless of the current system date.
@@ -130,22 +130,28 @@ Formula-derived; exact. Strict DOLE basis (Basic Pay).
 | ₱10,000 (at cap) | 200.00 | 200.00 |
 | ₱30,000 (above cap) | 200.00 | 200.00 |
 
-### 6.3 SSS — structure tested by formula; bracket values accountant-supplied
-SSS is a bracketed MSC table with an MPF component above MSC ₱20,000 and an employer EC charge. The salary→MSC lookup is **not** reproduced here.
-- **Structure assertions (formula):** EE share = 5% × MSC; ER regular share = 10% × MSC; EC = ₱10 if MSC < ₱15,000 else ₱30; for MSC > ₱20,000 the contribution allocates an MPF portion while total remains 15% × MSC.
-- **Bracket cases (accountant-supplied):** for at least these MSC points — floor (₱5,000), a mid bracket, the MPF boundary (₱20,000), and the ceiling (₱35,000) — paste the exact EE, ER, EC, and MPF figures **from the official SSS 2026 schedule** as literal constants, each with a comment citing the schedule row. Do not derive from memory or from engine output.
+### 6.3 SSS — EE/ER formula-derived with worksheet test points; bracket assignment and SS/MPF split worksheet-supplied
+SSS is a bracketed MSC table with an MPF component above MSC ₱20,000 and an employer EC charge.
+- **Formula-derived (exact):** EE = 5% × MSC; ER cash = 10% × MSC + EC; EC = ₱10 if MSC < ₱15,000 else ₱30; total = 15% × MSC + EC. Use the pre-computed EE/ER values for the five MSC test points in `Statutory_Values_Worksheet.md` §1b (floor ₱5,000, EC-step ₱15,000, MPF boundary ₱20,000, mid ₱25,000, ceiling ₱35,000) — e.g., MSC ₱20,000 → EE ₱1,000.00, ER ₱2,030.00 (₱2,000 + ₱30 EC).
+- **Worksheet-supplied (verify against the official table):** the salary→MSC bracket assignment (which compensation maps to which MSC) and the internal SS/MPF split for MSC > ₱20,000. Paste these from `Statutory_Values_Worksheet.md` §1 with a source comment.
 
 ### 6.4 Cutoff timing
 With `payroll_cycle = semi_monthly` and `statutory_cutoff_rule = second_cutoff`, the full monthly contribution is deducted on the second (month-end) cutoff and ₱0 on the first. Assert this allocation.
+
+### 6.5 Statutory Resolver (Blueprint §3.3)
+The resolver selects the effective-dated table row for a pay period and is a hard engine dependency.
+- Given a period dated in 2026, the resolver returns the 2026 row; given a 2025-dated period, it returns the 2025 row — regardless of the current system date.
+- Re-running a finalized 2025 period after 2026 tables are loaded still uses the 2025 row.
+- A period with no matching effective-dated row raises an explicit error (the engine refuses to compute against missing statutory data rather than guessing).
 
 ---
 
 ## 7. Withholding Tax (Blueprint §3.2, §4.7)
 
-Structure tested by formula; bracket values accountant-supplied.
+Structure tested by formula; bracket values worksheet-supplied.
 - **Structure (formula):** the engine selects the BIR table matching `payroll_cycle`; tax is computed on `gross_taxable_income`; an income at or below the period's exemption threshold yields ₱0.
-- **Bracket cases (accountant-supplied):** for one income in each bracket of the seeded semi-monthly table, paste the expected tax as a literal constant **computed by hand from the official BIR withholding table**, with a comment citing the bracket. Do not fabricate.
-- **Effective-dating:** the same gross taxable income in a 2025 period vs. a 2026 period must use the respective year's table version.
+- **Bracket cases (worksheet-supplied):** for one income in each bracket of the seeded semi-monthly table, paste the expected tax from `Statutory_Values_Worksheet.md` §2b (hand-computed from the official BIR withholding table) as a literal constant, with a comment citing the bracket. Do not fabricate.
+- **Effective-dating:** the same gross taxable income in a 2025 period vs. a 2026 period must use the respective year's table version (resolved per §6.5).
 
 ---
 
@@ -157,7 +163,7 @@ Structural; no statutory table value required for the core assertions.
 - **Other taxable income on an MWE:** a taxable allowance or above-cap bonus paid to an MWE is still taxed; the minimum-wage and statutory-premium portions remain exempt. Assert that the exemption is **not** stripped by the presence of other taxable income.
 - **Classification boundary:** an employee whose basic exactly equals the regional minimum is MWE; an employee whose basic is the regional minimum **+ ₱0.01/day** is `Regular` for that period (exercises the §4.5 validation against `MinimumWageRate`).
 - **₱90,000 cap:** cumulative 13th-month + other benefits up to ₱90,000 are non-taxable; the centavo above ₱90,000 is taxable. Assert at exactly ₱90,000 (fully exempt) and ₱90,000.01 (excess taxable).
-- **De minimis ceilings (accountant-supplied):** for each category, assert within-ceiling is non-taxable and over-ceiling excess is taxable, using the seeded RR 29-2025 ceiling values pasted as constants with source comments.
+- **De minimis ceilings (worksheet-supplied):** for each category, assert within-ceiling is non-taxable and over-ceiling excess is taxable, using the RR 29-2025 ceiling values from `Statutory_Values_Worksheet.md` §3, pasted as constants with source comments.
 - **Employer-designated non-taxable basic:** `nontaxable_basic_amount` is excluded from `gross_taxable_income` and recorded in `nontaxable_basic`.
 
 ---
@@ -166,7 +172,7 @@ Structural; no statutory table value required for the core assertions.
 
 End-to-end employee scenarios. Provide formula-derived parts exactly; mark SSS/WHT expected values as accountant-supplied.
 
-**Case A — Regular monthly-paid, clean period.** ₱30,000/mo, semi-monthly, no lates/OT. Assert: base pay, PhilHealth EE ₱750.00, Pag-IBIG EE ₱200.00, SSS EE [accountant-supplied], WHT [accountant-supplied], and the net via the §4.2 waterfall.
+**Case A — Regular monthly-paid, clean period.** ₱30,000/mo, semi-monthly, no lates/OT. Assert: base pay, PhilHealth EE ₱750.00, Pag-IBIG EE ₱200.00, SSS EE (worksheet §1b for the matching MSC), WHT (worksheet §2b), and the net via the §4.2 waterfall.
 
 **Case B — Premiums + lates.** Monthly-paid, base hourly ₱100, with 90 min undertime and 2 OT hours on a Regular Holiday in the night window. Assert: undertime deduction ₱258.62 (from §3), holiday-OT-night premium 2 × ₱286.00 = ₱572.00 (from §4), and waterfall ordering (premiums added before tax base; non-taxable determined before WHT).
 
@@ -203,13 +209,16 @@ These hold for **every** PayrollSheet the engine produces, in addition to the ca
 ## 12. Definition of Done (CI gates)
 
 The engine may not produce real payroll output until all of the following pass in CI:
-- Every §1–§10 case implemented as a golden-case test with the specified expected values (formula-derived inline; accountant-supplied pasted with source comments).
+- Every §1–§10 case implemented as a golden-case test with the specified expected values (formula-derived inline; worksheet-supplied values pasted from `Statutory_Values_Worksheet.md` with source comments).
 - The full §4 stacking matrix covered (every row), plus cross-midnight and holiday-no-work cases.
 - All statutory floor/ceiling/threshold edges covered (PhilHealth floor ₱10,000 & ceiling ₱100,000; Pag-IBIG cap & the ₱1,500 1% threshold; SSS min/MPF-boundary/max MSC; the ₱90,000 cap; the MWE classification boundary at minimum and minimum + ₱0.01).
+- The §6.5 resolver tests (effective-dated selection; missing-row error) passing.
 - All §11 invariants asserted across the case suite.
 - Effective-dating test (2025 vs 2026 period) passing.
 - No test derives its expected value from engine output.
 
+This suite is the gate referenced in Blueprint §4.11.
+
 ---
 
-*Companion to the Master Blueprint. Statutory expected values (SSS brackets, BIR withholding, de minimis ceilings) are hand-computed by the accountant from the official seeded tables and pasted as commented constants; all other expected values are formula-derived from this spec.*
+*Companion to the Master Blueprint (gate at §4.11). Statutory expected values (SSS bracket assignment, BIR withholding, de minimis ceilings) come from `Statutory_Values_Worksheet.md`, hand-filled by the accountant from the official sources and pasted as commented constants; all other expected values are formula-derived from this spec.*

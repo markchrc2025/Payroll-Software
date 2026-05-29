@@ -11,6 +11,7 @@ import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 export async function POST(
   req: NextRequest,
@@ -54,5 +55,13 @@ export async function POST(
   if (result === "not_found") return notFound("LeaveTransaction");
   if (result === "wrong_type") return err("Only USAGE transactions can be approved", 422);
   if (result === "not_pending") return err("Transaction is not in PENDING status", 409);
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "APPROVE",
+    entity: "LeaveTransaction",
+    entityId: id,
+    ipAddress: getClientIp(req),
+  });
   return ok(serializeLeaveTransaction(result), "Leave request approved");
 }

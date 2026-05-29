@@ -8,6 +8,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { z } from "zod";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 const patchSchema = z.object({
   title: z.string().min(1).max(150).optional(),
@@ -111,5 +112,13 @@ export async function DELETE(
   if (result.notFound) return notFound("Position not found");
   if (result.inUse)
     return err("Cannot delete: employees are assigned to this position", 409);
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "DELETE",
+    entity: "Position",
+    entityId: id,
+    ipAddress: getClientIp(req),
+  });
   return ok({ id }, "Position deleted");
 }

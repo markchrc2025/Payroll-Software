@@ -14,6 +14,7 @@ import {
   listLoansSchema,
 } from "@/lib/validations/pay-component";
 import { serializeLoan } from "@/lib/payroll/serialize";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -86,5 +87,14 @@ export async function POST(req: NextRequest) {
   });
 
   if (!created) return notFound("Employee");
+  void writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "CREATE",
+    entity: "Loan",
+    entityId: created.id,
+    changes: { loanType: d.loanType, employeeId: d.employeeId },
+    ipAddress: getClientIp(req),
+  });
   return ok(serializeLoan(created), "Loan created", 201);
 }
