@@ -520,15 +520,29 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   // -- Steps 1–4: back pay + premiums + pay components (same as REGULAR) ----
   const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
 
-  const perMinuteCents = BigInt(Math.round(Number(hourlyRateCents) / 60));
-  const lateUndertimeDeductionCents =
-    perMinuteCents * BigInt(periodInput.lateUndertimeMinutes);
+  const lateUndertimeDeductionCents = timesUnits(
+    hourlyRateCents,
+    periodInput.lateUndertimeMinutes / 60,
+  );
 
   const otPayCents = timesUnits(hourlyRateCents, periodInput.regularOtHours * 1.25);
-  const nsdPayCents = timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.1);
-  const restDayPayCents = timesUnits(hourlyRateCents, periodInput.restDayHours * 1.3);
-  const specialHolidayPayCents = timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.3);
-  const regularHolidayPayCents = timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0);
+  const nsdPayCents =
+    timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.10) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours ?? 0) * 0.125) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours ?? 0) * 0.13) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours ?? 0) * 0.20) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours ?? 0) * 0.26);
+  const restDayPayCents =
+    timesUnits(hourlyRateCents, periodInput.restDayHours * 1.30) +
+    timesUnits(hourlyRateCents, (periodInput.restDayOtHours ?? 0) * 1.69);
+  const specialHolidayPayCents =
+    timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.30) +
+    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours ?? 0) * 1.69);
+  const regularHolidayPayCents =
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0) +
+    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours ?? 0) * 2.60) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours ?? 0) * 3.0) +
+    timesUnits(dailyRateCents, periodInput.noWorkRegularHolidayDays ?? 0);
   const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
   const hazardPayCents = timesUnits(hourlyRateCents, periodInput.hazardHours * 1.25);
 
@@ -784,34 +798,40 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
 
   // -- Step 2: late / undertime ---------------------------------------------
-  // (hourlyRate / 60) × minutes
-  const perMinuteCents = BigInt(
-    Math.round(Number(hourlyRateCents) / 60),
+  // Deduction = hourlyRate × (minutes / 60), rounded HALF-UP at the end.
+  // (Do NOT round the per-minute rate first — that loses the half-centavo.)
+  const lateUndertimeDeductionCents = timesUnits(
+    hourlyRateCents,
+    periodInput.lateUndertimeMinutes / 60,
   );
-  const lateUndertimeDeductionCents =
-    perMinuteCents * BigInt(periodInput.lateUndertimeMinutes);
 
-  // -- Step 3: premium pay (§4.3 simplified — see header comment) -----------
+  // -- Step 3: premium pay — full §4.3 stacking matrix ---------------------
+  // Each typed OT / NSD field carries its FULL composed rate, not just the
+  // premium delta. Night-diff fields carry only the 10% NSD PREMIUM so that
+  // nsdPayCents is a clean decomposition column on the payslip.
   const otPayCents = timesUnits(
     hourlyRateCents,
     periodInput.regularOtHours * 1.25,
   );
-  const nsdPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.nightDiffHours * 0.1,
-  );
-  const restDayPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.restDayHours * 1.3,
-  );
-  const specialHolidayPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.specialHolidayHours * 1.3,
-  );
-  const regularHolidayPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.regularHolidayHours * 2.0,
-  );
+  // NSD premiums: 10% of the applicable composed rate for that hour type.
+  const nsdPayCents =
+    timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.10) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours ?? 0) * 0.125) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours ?? 0) * 0.13) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours ?? 0) * 0.20) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours ?? 0) * 0.26);
+  const restDayPayCents =
+    timesUnits(hourlyRateCents, periodInput.restDayHours * 1.30) +
+    timesUnits(hourlyRateCents, (periodInput.restDayOtHours ?? 0) * 1.69);
+  const specialHolidayPayCents =
+    timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.30) +
+    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours ?? 0) * 1.69);
+  const regularHolidayPayCents =
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0) +
+    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours ?? 0) * 2.60) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours ?? 0) * 3.0) +
+    // No-work holiday: 1.00 × daily rate (DOLE); uses dailyRate, not hourly.
+    timesUnits(dailyRateCents, periodInput.noWorkRegularHolidayDays ?? 0);
   const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
   const hazardPayCents = timesUnits(
     hourlyRateCents,
@@ -919,9 +939,14 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   );
 
   // -- Step 9: withholding tax -----------------------------------------------
+  // MWE employees are exempt from WHT on their minimum-wage portions, but
+  // any taxable allowances or bonuses above the exempt base still generate
+  // WHT. The MWE exemption only zeroes GTI for the exempt components; if GTI
+  // is still > 0 after the §6 non-taxable buckets are applied (because of
+  // taxable pay components), WHT is due on that residual taxable income.
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
-  if (!isMwe) {
+  if (grossTaxableIncomeCents > 0n) {
     const bir = lookupBIR(
       rules.bir,
       period.cycle,

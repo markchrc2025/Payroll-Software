@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wallet, Eye } from "lucide-react";
+import Link from "next/link";
+import { Plus, Wallet, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Pagination } from "@/components/ui/pagination";
 
 type PayrollRun = {
   id: string;
@@ -159,7 +159,7 @@ export default function PayrollPage() {
 
       {/* Filters */}
       <div className="flex gap-2">
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v ?? filterStatus)}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
@@ -222,8 +222,8 @@ export default function PayrollPage() {
                     {new Date(run.createdAt).toLocaleDateString("en-PH")}
                   </TableCell>
                   <TableCell>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" nativeButton={false} render={<a href={`/api/payroll/runs/${run.id}`} target="_blank" rel="noreferrer" />}>
-                        <Eye className="h-3.5 w-3.5" />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" render={<Link href={`/payroll/${run.id}`} />}>
+                      <Eye className="h-3.5 w-3.5" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -235,11 +235,17 @@ export default function PayrollPage() {
 
       {/* Pagination */}
       {runs && runs.totalPages > 1 && (
-        <Pagination
-          page={page}
-          totalPages={runs.totalPages}
-          onPageChange={setPage}
-        />
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {runs.totalPages}
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= runs.totalPages} onClick={() => setPage((p) => p + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       {/* New Run Dialog */}
@@ -274,7 +280,7 @@ export default function PayrollPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Pay Cycle</Label>
-                <Select value={form.cycle} onValueChange={(v) => setForm((f) => ({ ...f, cycle: v }))}>
+                <Select value={form.cycle} onValueChange={(v) => setForm((f) => ({ ...f, cycle: v ?? f.cycle }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -288,7 +294,7 @@ export default function PayrollPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Run Type</Label>
-                <Select value={form.runType} onValueChange={(v) => setForm((f) => ({ ...f, runType: v }))}>
+                <Select value={form.runType} onValueChange={(v) => setForm((f) => ({ ...f, runType: v ?? f.runType }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

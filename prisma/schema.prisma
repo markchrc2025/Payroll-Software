@@ -474,6 +474,10 @@ model Tenant {
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
+  jobPostings    JobPosting[]
+  applicants     Applicant[]
+  applicantNotes ApplicantNote[]
+
   @@index([deletedAt])
 }
 
@@ -508,6 +512,10 @@ model User {
   assignedRole Role?     @relation(fields: [roleId], references: [id])
   employee     Employee?
   approvedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimApprover")
+
+  createdJobPostings    JobPosting[]
+  assignedApplicants    Applicant[]       @relation("ApplicantAssignedTo")
+  applicantNotes        ApplicantNote[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -597,6 +605,7 @@ model Department {
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
   employees Employee[]
+  jobPostings JobPosting[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -623,6 +632,7 @@ model Branch {
   employees    Employee[]
   geofences    Geofence[]
   kiosks       Kiosk[]
+  jobPostings  JobPosting[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -643,6 +653,7 @@ model Position {
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
   employees Employee[]
+  jobPostings JobPosting[]
 
   @@unique([tenantId, title])
   @@index([tenantId])
@@ -763,6 +774,7 @@ model Employee {
   attendanceLogs          AttendanceLog[]
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
+  hiredFromApplicant    Applicant?
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
@@ -788,6 +800,9 @@ model StatutoryId {
   type       StatutoryIdType
   /// Encrypted at app layer (AES-256-GCM) — never query by raw value.
   number     String
+  /// HMAC-SHA256 of the plaintext number using HMAC_KEY.
+  /// Used for duplicate-detection without exposing ciphertext.
+  numberHmac String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -797,6 +812,7 @@ model StatutoryId {
 
   @@unique([employeeId, type])
   @@index([tenantId])
+  @@index([type, numberHmac])
 }
 
 // =============================================================================
@@ -1965,6 +1981,147 @@ model ProfileUpdateRequest {
   @@index([tenantId])
   @@index([tenantId, employeeId])
   @@index([tenantId, status])
+}
+
+// =============================================================================
+// ESS SESSIONS (Phase M)
+//
+// Short-lived tokens for Employee Self-Service portal.  The raw 32-byte
+// random token is returned to the client; only the SHA-256 hex digest is
+// persisted.  Sessions last 8 hours and can be revoked explicitly (logout).
+// =============================================================================
+
+// =============================================================================
+// ATS — Applicant Tracking System (Phase W)
+//
+// Pipeline: JobPosting → Applicant (staged) → 1-click hire → Employee.
+// Résumés stored in R2; notes tracked per applicant.
+// All tables RLS-protected (tenant_isolation).
+// =============================================================================
+
+enum JobPostingStatus {
+  DRAFT
+  OPEN
+  ON_HOLD
+  CLOSED
+}
+
+enum ApplicantStage {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ApplicantSource {
+  REFERRAL
+  ONLINE_POSTING
+  WALK_IN
+  AGENCY
+  OTHER
+}
+
+/// A job vacancy posted by the tenant HR team.
+model JobPosting {
+  id       String @id @default(cuid())
+  tenantId String
+
+  title        String
+  /// Optional short code, unique per tenant (e.g. "DEV-SENIOR-2026").
+  code         String?
+  description  String? @db.Text
+  departmentId String?
+  branchId     String?
+  positionId   String?
+  headcount    Int     @default(1)
+
+  status   JobPostingStatus @default(DRAFT)
+  openedAt DateTime?
+  closedAt DateTime?
+
+  createdById String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  branch     Branch?     @relation(fields: [branchId], references: [id])
+  position   Position?   @relation(fields: [positionId], references: [id])
+  createdBy  User?       @relation(fields: [createdById], references: [id])
+
+  applicants Applicant[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([departmentId])
+}
+
+/// An individual who applied for a job posting.
+model Applicant {
+  id         String @id @default(cuid())
+  tenantId   String
+  jobPostingId String
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+
+  /// R2 object key for the uploaded résumé file.
+  resumeKey String?
+
+  stage  ApplicantStage  @default(APPLIED)
+  source ApplicantSource @default(ONLINE_POSTING)
+  /// Reviewer rating 1–5; null = not yet rated.
+  rating Int?
+
+  assignedToUserId String?
+  /// Set when stage=HIRED via 1-click hire conversion.
+  hiredEmployeeId  String? @unique
+
+  rejectionReason String? @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id])
+  assignedTo   User?      @relation("ApplicantAssignedTo", fields: [assignedToUserId], references: [id])
+  hiredEmployee Employee? @relation(fields: [hiredEmployeeId], references: [id])
+
+  notes ApplicantNote[]
+
+  @@index([tenantId])
+  @@index([tenantId, stage])
+  @@index([jobPostingId])
+}
+
+/// HR notes on an applicant (immutable audit trail; only soft-deleted).
+model ApplicantNote {
+  id          String @id @default(cuid())
+  tenantId    String
+  applicantId String
+
+  body     String @db.Text
+  authorId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+  author    User?     @relation(fields: [authorId], references: [id])
+
+  @@index([tenantId])
+  @@index([applicantId])
 }
 
 // =============================================================================

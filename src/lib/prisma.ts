@@ -7,7 +7,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { encrypt, decrypt, ENCRYPTED_FIELDS } from "./crypto";
+import { encrypt, decrypt, ENCRYPTED_FIELDS, hmac, HMAC_COMPANIONS } from "./crypto";
 
 function encryptArgs(model: string, data: unknown): unknown {
   const fields = ENCRYPTED_FIELDS[model];
@@ -15,7 +15,14 @@ function encryptArgs(model: string, data: unknown): unknown {
   const obj = data as Record<string, unknown>;
   for (const f of fields) {
     if (f in obj && typeof obj[f] === "string") {
-      obj[f] = encrypt(obj[f] as string);
+      const plain = obj[f] as string;
+      obj[f] = encrypt(plain);
+      // Populate the HMAC companion field if one is registered
+      const companionKey = `${model}.${f}`;
+      const companionField = HMAC_COMPANIONS[companionKey];
+      if (companionField) {
+        obj[companionField] = hmac(plain);
+      }
     }
   }
   return obj;

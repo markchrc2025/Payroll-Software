@@ -11,7 +11,7 @@
  * lets us decrypt legacy values during rotation.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHmac } from "node:crypto";
 
 const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
@@ -73,3 +73,40 @@ export const ENCRYPTED_FIELDS: Record<string, readonly string[]> = {
   StatutoryId: ["number"],
   Employee: ["bankAccountNumber"],
 };
+
+/**
+ * HMAC companion fields — when a field in ENCRYPTED_FIELDS is written,
+ * the companion HMAC field is automatically populated for searchable lookups.
+ * Key: `"Model.fieldName"` → companion field name.
+ */
+export const HMAC_COMPANIONS: Record<string, string> = {
+  "StatutoryId.number": "numberHmac",
+};
+
+let cachedHmacKey: Buffer | null = null;
+function getHmacKey(): Buffer {
+  if (cachedHmacKey) return cachedHmacKey;
+  const raw = process.env.HMAC_KEY;
+  if (!raw) {
+    // Fall back to ENCRYPTION_KEY with a domain separator so the keys are
+    // cryptographically independent even if the same env value is reused.
+    const enc = process.env.ENCRYPTION_KEY;
+    if (!enc) throw new Error("HMAC_KEY (or ENCRYPTION_KEY) env var is required");
+    cachedHmacKey = Buffer.from(
+      createHmac("sha256", Buffer.from(enc, "base64")).update("hmac-domain").digest(),
+    );
+    return cachedHmacKey;
+  }
+  cachedHmacKey = Buffer.from(raw, "base64");
+  return cachedHmacKey;
+}
+
+/**
+ * Compute HMAC-SHA256 of a plaintext value. Returns a fixed-length hex string
+ * suitable for database equality lookups.
+ * Returns null for null/empty input (mirrors encrypt() behaviour).
+ */
+export function hmac(plain: string | null | undefined): string | null {
+  if (plain == null || plain === "") return null;
+  return createHmac("sha256", getHmacKey()).update(plain, "utf8").digest("hex");
+}

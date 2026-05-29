@@ -47,3 +47,41 @@ export function formatCentavos(cents: bigint, opts?: { withSymbol?: boolean }): 
 export function centavosToJson(cents: bigint | null | undefined): string | null {
   return cents == null ? null : cents.toString();
 }
+
+/**
+ * HALF-UP round a fractional centavo value to the nearest whole centavo.
+ * Input is a raw number already in centavos (e.g. 137930.5 → 137931n).
+ * Use this as the single rounding primitive for all engine arithmetic.
+ */
+export function roundHalfUp(centavosValue: number): bigint {
+  return BigInt(Math.round(centavosValue));
+}
+
+/**
+ * Multiply BigInt centavos by a rate (JS number), rounding HALF-UP.
+ * Example: multiply(1_000_000n, 0.05) → 50_000n  (₱10,000 × 5% = ₱500)
+ */
+export function multiply(cents: bigint, rate: number): bigint {
+  return BigInt(Math.round(Number(cents) * rate));
+}
+
+/**
+ * Split `totalCentavos` into `n` equal shares, rounding HALF-UP.
+ * Any indivisible residual centavo goes to the FIRST share (index 0).
+ *
+ * Invariant: shares.reduce((a,b) => a+b, 0n) === totalCentavos (no centavo
+ * created or lost).
+ *
+ * Example: split(10001n, 2) → [5001n, 5000n]
+ */
+export function split(totalCentavos: bigint, n: number): bigint[] {
+  if (n <= 0 || !Number.isInteger(n)) {
+    throw new RangeError("split: n must be a positive integer");
+  }
+  const bigN = BigInt(n);
+  const base = totalCentavos / bigN;
+  const residual = totalCentavos % bigN;
+  return Array.from({ length: n }, (_, i) =>
+    i === 0 ? base + residual : base,
+  );
+}
