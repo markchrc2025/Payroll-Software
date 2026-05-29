@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Users,
+  Users2,
   Building2,
   GitBranch,
   LayoutDashboard,
@@ -12,6 +13,14 @@ import {
   Settings,
   LogOut,
   CalendarDays,
+  CreditCard,
+  Receipt,
+  PackageSearch,
+  AlertCircle,
+  ArrowRightLeft,
+  UserCog,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { signOutAction } from "./_actions/sign-out";
@@ -30,20 +39,41 @@ const navSections: {
       { href: "/employees", label: "Employees", icon: Users },
       { href: "/departments", label: "Departments", icon: Building2 },
       { href: "/branches", label: "Branches", icon: GitBranch },
+      { href: "/assets", label: "Assets", icon: PackageSearch },
+    ],
+  },
+  {
+    label: "HR Ops",
+    items: [
+      { href: "/incidents", label: "Incidents", icon: AlertCircle },
+      { href: "/movements", label: "Movements", icon: ArrowRightLeft },
+      { href: "/profile-update-requests", label: "Profile Requests", icon: UserCog },
+    ],
+  },
+  {
+    label: "Talent",
+    items: [
+      { href: "/recruitment", label: "Recruitment", icon: Users2 },
     ],
   },
   {
     label: "Operations",
     items: [
       { href: "/attendance", label: "Time & Attendance", icon: CalendarClock },
+      { href: "/ot-applications", label: "OT Applications", icon: Clock },
       { href: "/leave", label: "Leave", icon: CalendarDays },
       { href: "/payroll", label: "Payroll", icon: Wallet },
+      { href: "/expense-claims", label: "Expenses", icon: Receipt },
+      { href: "/loans", label: "Loans", icon: CreditCard },
       { href: "/reports", label: "Reports", icon: FileBarChart2 },
     ],
   },
   {
     label: "Administration",
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+    items: [
+      { href: "/ai", label: "AI Assistant", icon: Sparkles },
+      { href: "/settings", label: "Settings", icon: Settings },
+    ],
   },
 ];
 

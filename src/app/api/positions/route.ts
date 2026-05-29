@@ -10,7 +10,7 @@ import { z } from "zod";
 
 const createSchema = z.object({
   title: z.string().min(1).max(150),
-  level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR"]).default("MID"),
+  level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"]).default("MID"),
   description: z.string().max(500).optional().nullable(),
 });
 
