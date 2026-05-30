@@ -164,17 +164,24 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Employees</h1>
-          <p className="text-sm text-muted-foreground">
-            {listData ? `${listData.total} total` : "Loading…"}
+          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+            Employees
+          </h1>
+          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+            {isLoading ? "Loading…" : `${listData?.total ?? 0} total`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            className="h-9 text-[13px]"
+          >
+            <Upload className="mr-2 h-3.5 w-3.5" />
             Import CSV
           </Button>
           <Button
@@ -182,23 +189,29 @@ export default function EmployeesPage() {
             size="sm"
             disabled={isExporting}
             onClick={handleExport}
+            className="h-9 text-[13px]"
           >
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-3.5 w-3.5" />
             {isExporting ? "Exporting…" : "Export CSV"}
           </Button>
-          <Button size="sm" nativeButton={false} render={<Link href="/employees/new" />}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Employee
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/employees/new" />}
+            className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+          >
+            <Plus className="mr-2 h-3.5 w-3.5" />
+            Add Employee
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      {/* ── Filters toolbar ── */}
+      <div className="flex flex-wrap gap-2 p-3 bg-white rounded-xl border border-[#E8EBF1] shadow-sm">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#9AA5B4]" />
           <Input
-            className="pl-8 h-9"
+            className="pl-9 h-9 border-[#E8EBF1] text-[13px] placeholder:text-[#9AA5B4]"
             placeholder="Search by name, number, email…"
             value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
@@ -206,43 +219,37 @@ export default function EmployeesPage() {
         </div>
 
         <Select value={departmentId} onValueChange={(v: string | null) => setDepartmentId(v ?? "all")}>
-          <SelectTrigger className="w-44 h-9">
+          <SelectTrigger className="w-44 h-9 text-[13px] border-[#E8EBF1]">
             <SelectValue placeholder="All Departments" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Departments</SelectItem>
             {departments.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
+              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={branchId} onValueChange={(v: string | null) => setBranchId(v ?? "all")}>
-          <SelectTrigger className="w-40 h-9">
+          <SelectTrigger className="w-40 h-9 text-[13px] border-[#E8EBF1]">
             <SelectValue placeholder="All Branches" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Branches</SelectItem>
             {branches.map((b) => (
-              <SelectItem key={b.id} value={b.id}>
-                {b.name}
-              </SelectItem>
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={status} onValueChange={(v: string | null) => setStatus(v ?? "all")}>
-          <SelectTrigger className="w-40 h-9">
+          <SelectTrigger className="w-40 h-9 text-[13px] border-[#E8EBF1]">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             {EMPLOYMENT_STATUSES.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
+              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -251,14 +258,12 @@ export default function EmployeesPage() {
           value={String(limit)}
           onValueChange={(v: string | null) => setLimit(Number(v ?? 25))}
         >
-          <SelectTrigger className="w-24 h-9">
+          <SelectTrigger className="w-24 h-9 text-[13px] border-[#E8EBF1]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {LIMITS.map((l) => (
-              <SelectItem key={l} value={String(l)}>
-                {l} / page
-              </SelectItem>
+              <SelectItem key={l} value={String(l)}>{l} / page</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -266,7 +271,7 @@ export default function EmployeesPage() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9"
+          className="h-9 w-9 text-[#6B7A8D] hover:bg-[#F5F6FA]"
           onClick={fetchEmployees}
           title="Refresh"
         >

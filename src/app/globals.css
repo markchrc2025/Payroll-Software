@@ -50,39 +50,39 @@
 
 :root {
   /* Sentire Payroll — Enterprise Navy + Slate palette */
-  --background: oklch(0.99 0.003 240);              /* very light slate */
-  --foreground: oklch(0.22 0.03 250);               /* deep slate text */
+  --background: oklch(0.985 0.004 240);             /* very light slate */
+  --foreground: oklch(0.20 0.04 252);               /* deep slate text */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 250);
+  --card-foreground: oklch(0.20 0.04 252);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 250);
-  --primary: oklch(0.34 0.07 254);                  /* Sentire navy #1e3a5f */
+  --popover-foreground: oklch(0.20 0.04 252);
+  --primary: oklch(0.38 0.12 255);                  /* Sentire navy — brighter for better contrast */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.01 250);                /* light slate */
-  --secondary-foreground: oklch(0.30 0.05 254);
-  --muted: oklch(0.965 0.008 250);
-  --muted-foreground: oklch(0.5 0.02 250);
-  --accent: oklch(0.94 0.025 254);                  /* soft navy tint */
-  --accent-foreground: oklch(0.30 0.06 254);
+  --secondary: oklch(0.96 0.012 250);               /* light slate */
+  --secondary-foreground: oklch(0.28 0.06 254);
+  --muted: oklch(0.962 0.009 250);
+  --muted-foreground: oklch(0.50 0.022 252);
+  --accent: oklch(0.93 0.030 254);                  /* soft navy tint */
+  --accent-foreground: oklch(0.28 0.08 254);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.012 250);
-  --input: oklch(0.92 0.012 250);
-  --ring: oklch(0.45 0.10 254);                     /* navy ring */
-  --chart-1: oklch(0.45 0.12 254);                  /* navy */
-  --chart-2: oklch(0.62 0.10 220);                  /* sky-blue */
-  --chart-3: oklch(0.55 0.08 200);                  /* teal-blue */
-  --chart-4: oklch(0.70 0.12 60);                   /* warm accent (amber) */
-  --chart-5: oklch(0.55 0.16 25);                   /* warm accent (red-orange) */
+  --border: oklch(0.91 0.014 250);
+  --input: oklch(0.91 0.014 250);
+  --ring: oklch(0.48 0.13 255);                     /* navy ring */
+  --chart-1: oklch(0.48 0.15 255);                  /* navy */
+  --chart-2: oklch(0.62 0.12 220);                  /* sky-blue */
+  --chart-3: oklch(0.55 0.09 200);                  /* teal-blue */
+  --chart-4: oklch(0.70 0.13 60);                   /* warm accent (amber) */
+  --chart-5: oklch(0.55 0.18 25);                   /* warm accent (red-orange) */
   --radius: 0.625rem;
   /* Sidebar — Sentire navy theme */
-  --sidebar: oklch(0.26 0.06 254);                  /* deep navy bg */
-  --sidebar-foreground: oklch(0.92 0.015 250);      /* light slate text */
-  --sidebar-primary: oklch(0.65 0.18 254);          /* bright accent */
+  --sidebar: oklch(0.22 0.07 256);                  /* deep navy bg */
+  --sidebar-foreground: oklch(0.93 0.012 250);      /* light slate text */
+  --sidebar-primary: oklch(0.68 0.20 255);          /* bright accent */
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.32 0.07 254);           /* active item bg */
+  --sidebar-accent: oklch(0.29 0.08 256);           /* active item bg */
   --sidebar-accent-foreground: oklch(0.99 0 0);
-  --sidebar-border: oklch(0.32 0.05 254);
-  --sidebar-ring: oklch(0.65 0.18 254);
+  --sidebar-border: oklch(0.30 0.06 256);
+  --sidebar-ring: oklch(0.68 0.20 255);
 }
 
 .dark {
@@ -117,6 +117,30 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ── Sentire Mockup Design Tokens ─────────────────────────────────────────── */
+:root {
+  --ok:       #0FA36B;
+  --ok-bg:    #E5F6EE;
+  --warn:     #DB8A28;
+  --warn-bg:  #FBF0DD;
+  --bad:      #E0463B;
+  --bad-bg:   #FCE9E7;
+  --brand-hex:#2D6BE4;
+  --brand-bright:#5A93F7;
+  --brand-bg: #EAF1FD;
+  --gold:     #D7A23F;
+  --gold-bg:  #F8F0DC;
+  --canvas:   #F5F6FA;
+  --line:     #E8EBF1;
+  --num-font: var(--font-fraunces, Georgia, serif);
+}
+
+/* ── Utility: Fraunces serif for display headings + numbers ───────────────── */
+.font-display,
+.serif {
+  font-family: var(--num-font);
 }
 
 @layer base {

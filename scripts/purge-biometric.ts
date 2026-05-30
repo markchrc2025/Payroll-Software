@@ -15,12 +15,12 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const isDryRun = process.argv.includes("--dry-run");
 
-const prismaAdmin = new PrismaClient({
-  datasources: { db: { url: process.env.DIRECT_DATABASE_URL } },
-});
+const connectionString = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!;
+const prismaAdmin = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "seed": "tsx prisma/seed.ts",
+    "seed:reset": "tsx scripts/reset-seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
