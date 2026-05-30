@@ -17,6 +17,7 @@
  */
 
 import { useForm } from "react-hook-form";
+import type { Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -186,17 +187,16 @@ export function EmployeeForm({
     placeholder,
     type = "text",
   }: {
-    name: string;
+    name: Path<CreateEmployeeInput>;
     label: string;
     placeholder?: string;
     type?: string;
   }) {
     return (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       <FormField
         control={form.control}
-        name={name as any}
-        render={({ field }: { field: any }) => (
+        name={name}
+        render={({ field }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <FormControl>
@@ -223,17 +223,16 @@ export function EmployeeForm({
     options,
     placeholder,
   }: {
-    name: string;
+    name: Path<CreateEmployeeInput>;
     label: string;
     options: { value: string; label: string }[];
     placeholder?: string;
   }) {
     return (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       <FormField
         control={form.control}
-        name={name as any}
-        render={({ field }: { field: any }) => (
+        name={name}
+        render={({ field }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <Select
@@ -360,12 +359,12 @@ export function EmployeeForm({
             <FormField
               control={form.control}
               name="departmentId"
-              render={({ field }: { field: any }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Department</FormLabel>
                   <Select
                     value={field.value ?? "none"}
-                    onValueChange={(v: string) =>
+                    onValueChange={(v: string | null) =>
                       field.onChange(v === "none" ? null : v)
                     }
                   >
@@ -390,12 +389,12 @@ export function EmployeeForm({
             <FormField
               control={form.control}
               name="branchId"
-              render={({ field }: { field: any }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Branch</FormLabel>
                   <Select
                     value={field.value ?? "none"}
-                    onValueChange={(v: string) =>
+                    onValueChange={(v: string | null) =>
                       field.onChange(v === "none" ? null : v)
                     }
                   >
@@ -551,8 +550,8 @@ export function EmployeeForm({
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <FormField
             control={form.control}
-            name={"statutoryIds.taxExempt" as any}
-            render={({ field }: { field: any }) => (
+            name={"statutoryIds.taxExempt" as Path<CreateEmployeeInput>}
+            render={({ field }) => (
               <FormItem className="flex flex-row items-start gap-3 rounded-md border p-3">
                 <FormControl>
                   <Checkbox
@@ -572,8 +571,8 @@ export function EmployeeForm({
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <FormField
             control={form.control}
-            name={"statutoryIds.taxExemptReason" as any}
-            render={({ field }: { field: any }) => (
+            name={"statutoryIds.taxExemptReason" as Path<CreateEmployeeInput>}
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Tax Exemption Reason</FormLabel>
                 <FormControl>

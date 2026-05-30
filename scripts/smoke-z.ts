@@ -105,7 +105,7 @@ async function run() {
   // Z1 – encrypt produces ciphertext
   const plain = "04-1234567-8";
   const cipher = encrypt(plain);
-  check("Z1 encrypt() produces ciphertext (not plaintext)", cipher !== plain && cipher.startsWith("v1:"));
+  check("Z1 encrypt() produces ciphertext (not plaintext)", cipher != null && cipher !== plain && cipher.startsWith("v1:"));
 
   // Z2 – decrypt recovers plaintext
   const recovered = decrypt(cipher);

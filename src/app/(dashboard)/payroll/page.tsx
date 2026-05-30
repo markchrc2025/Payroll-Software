@@ -28,11 +28,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type PayrollRun = {
-  id: string;
+type PayrollRun = {  id: string;
   periodStart: string;
   periodEnd: string;
   cycle: string;
@@ -48,12 +46,6 @@ type RunsResponse = {
   page: number;
   limit: number;
   totalPages: number;
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "secondary",
-  FINALIZED: "default",
-  CANCELLED: "destructive",
 };
 
 const CYCLE_LABELS: Record<string, string> = {
@@ -143,24 +135,30 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Payroll</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+            Payroll
+          </h1>
+          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
             {runs ? `${runs.total} run${runs.total !== 1 ? "s" : ""}` : "Loading…"}
           </p>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button
+          size="sm"
+          onClick={() => setDialogOpen(true)}
+          className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+        >
+          <Plus className="mr-2 h-3.5 w-3.5" />
           New Payroll Run
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
+      {/* ── Filters toolbar ── */}
+      <div className="flex gap-2 p-3 bg-white rounded-xl border border-[#E8EBF1] shadow-sm">
         <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v ?? filterStatus)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-44 h-9 text-[13px] border-[#E8EBF1]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -172,16 +170,16 @@ export default function PayrollPage() {
         </Select>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border bg-card">
+      {/* ── Table ── */}
+      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Pay Period</TableHead>
-              <TableHead>Cycle</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
+            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Pay Period</TableHead>
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Cycle</TableHead>
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Type</TableHead>
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Status</TableHead>
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Created</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -196,38 +194,49 @@ export default function PayrollPage() {
               ))
             ) : !runs?.data.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-[#6B7A8D]">
                   <Wallet className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No payroll runs yet. Create one to get started.
                 </TableCell>
               </TableRow>
             ) : (
-              runs.data.map((run) => (
-                <TableRow key={run.id}>
-                  <TableCell className="font-medium tabular-nums text-sm">
-                    {formatPeriod(run.periodStart, run.periodEnd)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {CYCLE_LABELS[run.cycle] ?? run.cycle}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {TYPE_LABELS[run.runType] ?? run.runType}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_COLORS[run.status] as "secondary" | "default" | "destructive" ?? "secondary"}>
-                      {run.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground tabular-nums">
-                    {new Date(run.createdAt).toLocaleDateString("en-PH")}
-                  </TableCell>
-                  <TableCell>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" render={<Link href={`/payroll/${run.id}`} />}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              runs.data.map((run) => {
+                const statusStyle: Record<string, { bg: string; color: string }> = {
+                  DRAFT: { bg: "#EAF1FD", color: "#2D6BE4" },
+                  FINALIZED: { bg: "#E5F6EE", color: "#0FA36B" },
+                  CANCELLED: { bg: "#FCE9E7", color: "#E0463B" },
+                };
+                const s = statusStyle[run.status] ?? { bg: "#F5F6FA", color: "#4A586B" };
+                return (
+                  <TableRow key={run.id} className="hover:bg-[#FAFBFF]">
+                    <TableCell className="font-medium tabular-nums text-[13.5px] text-[#111827]">
+                      {formatPeriod(run.periodStart, run.periodEnd)}
+                    </TableCell>
+                    <TableCell className="text-[13px] text-[#6B7A8D]">
+                      {CYCLE_LABELS[run.cycle] ?? run.cycle}
+                    </TableCell>
+                    <TableCell className="text-[13px] text-[#6B7A8D]">
+                      {TYPE_LABELS[run.runType] ?? run.runType}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                        style={{ background: s.bg, color: s.color }}
+                      >
+                        {run.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-[13px] text-[#6B7A8D] tabular-nums">
+                      {new Date(run.createdAt).toLocaleDateString("en-PH")}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-[#6B7A8D]" render={<Link href={`/payroll/${run.id}`} />}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
