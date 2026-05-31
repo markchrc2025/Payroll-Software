@@ -38,7 +38,7 @@ export default function KioskSetupPage() {
         // 422 = token valid, body invalid (expected)
         localStorage.setItem("kiosk_token", deviceToken.trim());
         toast.success("Device paired successfully!");
-        router.replace("/kiosk");
+        router.replace("/remotekiosk");
         return;
       }
 

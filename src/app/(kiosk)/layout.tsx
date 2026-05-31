@@ -8,10 +8,10 @@ export default function KioskLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
 
   useEffect(() => {
-    if (pathname === "/kiosk/setup") return;
+    if (pathname === "/remotekiosk/setup") return;
     const token = typeof window !== "undefined" ? localStorage.getItem("kiosk_token") : null;
     if (!token) {
-      router.replace("/kiosk/setup");
+      router.replace("/remotekiosk/setup");
     }
   }, [pathname, router]);
 

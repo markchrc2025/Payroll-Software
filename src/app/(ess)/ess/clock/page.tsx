@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, LogIn, LogOut as LogOutIcon } from "lucide-react";
+import { MapPin, LogIn, LogOut as LogOutIcon, Camera } from "lucide-react";
 
 type PunchResult = {
   punchType: "IN" | "OUT";
@@ -40,13 +40,27 @@ export default function EssClockPage() {
   const [history, setHistory] = useState<AttendanceLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [capturedLocation, setCapturedLocation] = useState<CapturedLocation | null>(null);
+  const [selfieCaptured, setSelfieCaptured] = useState(false);
   const clearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Live clock
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      stopCamera();
+    };
   }, []);
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }
 
   // Auto-clear success card after 8s
   useEffect(() => {
@@ -85,8 +99,62 @@ export default function EssClockPage() {
 
     setPunching(true);
     setCapturedLocation(null);
+    setSelfieCaptured(false);
 
-    // Try to get geolocation
+    // 1. Capture selfie
+    let selfieKey: string | null = null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        // Wait a brief moment for the camera to warm up
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      // Capture frame
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      if (canvas && video && video.videoWidth > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+
+        // Convert to Blob
+        const byteStr = atob(dataUrl.split(",")[1]);
+        const ab = new ArrayBuffer(byteStr.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+        const blob = new Blob([ab], { type: "image/jpeg" });
+
+        // Presign
+        const presignRes = await fetch("/api/ess/clock/presign", {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: "selfie.jpg", mimeType: "image/jpeg", fileSize: blob.size }),
+        });
+
+        if (presignRes.ok) {
+          const { data } = await presignRes.json();
+          const putRes = await fetch(data.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "image/jpeg" },
+            body: blob,
+          });
+          if (putRes.ok) {
+            selfieKey = data.storageKey;
+            setSelfieCaptured(true);
+          }
+        }
+        // 503 = R2 not configured — silently proceed without selfieKey
+      }
+    } catch {
+      // Camera unavailable or denied — proceed without selfie
+    } finally {
+      stopCamera();
+    }
+
+    // 2. Try to get geolocation
     let latitude: number | null = null;
     let longitude: number | null = null;
     try {
@@ -104,7 +172,7 @@ export default function EssClockPage() {
       const res = await fetch("/api/ess/clock", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ punchType, latitude, longitude }),
+        body: JSON.stringify({ punchType, latitude, longitude, selfieKey }),
       });
       const data = await res.json();
 
@@ -138,8 +206,12 @@ export default function EssClockPage() {
   }, [router, loadHistory]);
 
   return (
-    <div className="p-4 space-y-4 max-w-sm mx-auto">
-      <h1 className="text-xl font-bold text-center">Time Clock</h1>
+    <div className="p-4 lg:p-8 space-y-4 max-w-xl mx-auto">
+      <h1 className="text-xl lg:text-2xl font-bold text-center lg:text-left">Time Clock</h1>
+
+      {/* Hidden selfie capture elements */}
+      <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+      <canvas ref={canvasRef} className="hidden" />
 
       {/* Live clock */}
       <Card>
@@ -173,6 +245,14 @@ export default function EssClockPage() {
           {punching ? "…" : "Clock Out"}
         </Button>
       </div>
+
+      {/* Selfie indicator */}
+      {selfieCaptured && (
+        <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+          <Camera className="h-3.5 w-3.5 shrink-0" />
+          <span>Selfie captured &amp; uploaded</span>
+        </div>
+      )}
 
       {/* Location preview — shown after a punch captures GPS */}
       {capturedLocation && (

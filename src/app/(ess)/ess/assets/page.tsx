@@ -94,10 +94,10 @@ export default function EssAssetsPage() {
   const returned = assignments.filter((a) => a.returnedAt);
 
   return (
-    <div className="p-4 space-y-6 max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold">My Assets</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">My Assets</h1>
         <p className="text-sm text-muted-foreground">
           Equipment and items assigned to you by the company
         </p>

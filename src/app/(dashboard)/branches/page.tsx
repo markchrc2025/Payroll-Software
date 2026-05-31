@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, GitBranch } from "lucide-react";
+import { Plus, Pencil, Trash2, GitBranch, MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,9 +21,23 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// Leaflet uses `window` — must be client-side only
+const GeofenceMapPicker = dynamic(
+  () => import("@/components/geofence-map-picker"),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full" /> },
+);
 
 type Branch = {
   id: string;
@@ -31,6 +46,23 @@ type Branch = {
   province: string | null;
   isHeadOffice: boolean;
   _count: { employees: number };
+};
+
+type Geofence = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  isActive: boolean;
+};
+
+const EMPTY_GEOFENCE_FORM = {
+  name: "",
+  lat: null as number | null,
+  lng: null as number | null,
+  radiusMeters: 100,
+  isActive: true,
 };
 
 const EMPTY_FORM = {
@@ -50,6 +82,13 @@ export default function BranchesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // Geofence state
+  const [geoSheetOpen, setGeoSheetOpen] = useState(false);
+  const [geoBranch, setGeoBranch] = useState<Branch | null>(null);
+  const [geoForm, setGeoForm] = useState(EMPTY_GEOFENCE_FORM);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoSubmitting, setGeoSubmitting] = useState(false);
 
   async function load() {
     setIsLoading(true);
@@ -129,6 +168,66 @@ export default function BranchesPage() {
     }
   }
 
+  async function openGeofence(branch: Branch) {
+    setGeoBranch(branch);
+    setGeoForm(EMPTY_GEOFENCE_FORM);
+    setGeoSheetOpen(true);
+    setGeoLoading(true);
+    try {
+      const res = await fetch(`/api/branches/${branch.id}/geofence`);
+      if (res.ok) {
+        const json = await res.json();
+        const g: Geofence = json.data;
+        setGeoForm({
+          name: g.name,
+          lat: g.latitude,
+          lng: g.longitude,
+          radiusMeters: g.radiusMeters,
+          isActive: g.isActive,
+        });
+      }
+      // 404 = no geofence yet, keep blank defaults
+    } finally {
+      setGeoLoading(false);
+    }
+  }
+
+  async function handleGeofenceSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!geoBranch || geoSubmitting) return;
+    if (geoForm.lat == null || geoForm.lng == null) {
+      toast.error("Please click on the map to set the geofence location");
+      return;
+    }
+    if (geoForm.radiusMeters < 10 || geoForm.radiusMeters > 5000) {
+      toast.error("Radius must be between 10 and 5000 metres");
+      return;
+    }
+    setGeoSubmitting(true);
+    try {
+      const res = await fetch(`/api/branches/${geoBranch.id}/geofence`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: geoForm.name.trim(),
+          latitude: geoForm.lat,
+          longitude: geoForm.lng,
+          radiusMeters: geoForm.radiusMeters,
+          isActive: geoForm.isActive,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Failed to save geofence");
+        return;
+      }
+      toast.success("Geofence saved");
+      setGeoSheetOpen(false);
+    } finally {
+      setGeoSubmitting(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -194,6 +293,15 @@ export default function BranchesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-end">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-sky-600 hover:text-sky-700"
+                        title="Configure Geofence"
+                        onClick={() => openGeofence(branch)}
+                      >
+                        <MapPin className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         size="icon"
                         variant="ghost"
@@ -305,6 +413,141 @@ export default function BranchesPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* Geofence Dialog — wider so the map has room */}
+      <Dialog open={geoSheetOpen} onOpenChange={setGeoSheetOpen}>
+        <DialogContent className="max-w-3xl w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-sky-600" />
+              Configure Geofence — {geoBranch?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Click on the map to drop a pin. Drag the marker to fine-tune. Use the slider to set the enforcement radius.
+            </DialogDescription>
+          </DialogHeader>
+
+          {geoLoading ? (
+            <div className="space-y-4 py-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-[340px] w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <form onSubmit={handleGeofenceSubmit} className="space-y-4">
+              {/* Label */}
+              <div className="space-y-1.5">
+                <Label htmlFor="geo-name">
+                  Label <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="geo-name"
+                  value={geoForm.name}
+                  onChange={(e) => setGeoForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Makati Head Office Geofence"
+                  required
+                  maxLength={150}
+                />
+              </div>
+
+              {/* Interactive map */}
+              <GeofenceMapPicker
+                lat={geoForm.lat}
+                lng={geoForm.lng}
+                radius={geoForm.radiusMeters}
+                onChange={(lat, lng) =>
+                  setGeoForm((f) => ({ ...f, lat, lng }))
+                }
+              />
+
+              {/* Coordinates read-out */}
+              {geoForm.lat != null ? (
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Navigation className="h-3 w-3 shrink-0" />
+                  {geoForm.lat.toFixed(6)},&nbsp;{geoForm.lng!.toFixed(6)}
+                  <span className="ml-1 italic">(click the map to move)</span>
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  Click anywhere on the map above to place the geofence pin.
+                </p>
+              )}
+
+              {/* Radius slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="geo-radius">Radius</Label>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {geoForm.radiusMeters} m
+                  </span>
+                </div>
+                <input
+                  id="geo-radius"
+                  type="range"
+                  min={10}
+                  max={1000}
+                  step={10}
+                  value={geoForm.radiusMeters}
+                  onChange={(e) =>
+                    setGeoForm((f) => ({ ...f, radiusMeters: parseInt(e.target.value) }))
+                  }
+                  className="w-full accent-sky-600"
+                />
+                {/* Preset quick-select buttons */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[50, 100, 150, 200, 300, 500].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setGeoForm((f) => ({ ...f, radiusMeters: r }))}
+                      className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                        geoForm.radiusMeters === r
+                          ? "border-sky-600 bg-sky-600 text-white"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      {r} m
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <p>Single-floor office: <strong>50–100 m</strong></p>
+                  <p>Mall / multi-floor: <strong>100–150 m</strong></p>
+                  <p>Outdoor / field site: <strong>150–300 m</strong></p>
+                  <p>Multi-building campus: <strong>200–500 m</strong></p>
+                </div>
+              </div>
+
+              {/* Active toggle */}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="geo-active"
+                  checked={geoForm.isActive}
+                  onCheckedChange={(v) =>
+                    setGeoForm((f) => ({ ...f, isActive: Boolean(v) }))
+                  }
+                />
+                <Label htmlFor="geo-active" className="cursor-pointer font-normal">
+                  Geofence is active (enforce on clock-in)
+                </Label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setGeoSheetOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={geoSubmitting}>
+                  {geoSubmitting ? "Saving…" : "Save Geofence"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

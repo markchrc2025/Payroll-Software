@@ -48,9 +48,13 @@ export async function GET(
 
   if (!employee) return notFound("Employee");
 
-  // Serialise BigInt centavos for JSON safety
+  // Serialise BigInt centavos for JSON safety.
+  // Strip bcrypt hashes — never expose them; use boolean flags instead.
+  const { essPin, kioskPinHash, ...rest } = employee;
   const serialised = {
-    ...employee,
+    ...rest,
+    hasEssPin: essPin !== null,
+    hasKioskPin: kioskPinHash !== null,
     nontaxableBasicAmountCents: centavosToJson(employee.nontaxableBasicAmountCents),
     salaryHistory: employee.salaryHistory.map((s) => ({
       ...s,

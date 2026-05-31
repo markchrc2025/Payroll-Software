@@ -123,8 +123,8 @@ export default function EssProfilePage() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-bold text-center py-3">My Profile</h1>
+    <div className="p-4 lg:p-8 space-y-4 max-w-2xl mx-auto">
+      <h1 className="text-xl lg:text-2xl font-bold lg:text-left text-center py-3 lg:py-0">My Profile</h1>
 
       {/* Profile info */}
       <Card>
