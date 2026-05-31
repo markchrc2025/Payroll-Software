@@ -361,6 +361,30 @@ enum DTRStatus {
   REJECTED
 }
 
+/// Reason an employee or supervisor provides when writing a manual time override.
+enum DTRManualReasonCode {
+  FORGOT_CLOCK_IN
+  FORGOT_CLOCK_OUT
+  GPS_FAILURE
+  KIOSK_OFFLINE
+  SYSTEM_ERROR
+  SCHEDULE_CHANGE
+  /// Requires a non-empty `manualNotes` value at the application layer.
+  OTHER
+}
+
+/// Multi-step lifecycle of a period-level DTR submission.
+enum DTRSubmissionStatus {
+  /// Employee has submitted; awaiting supervisor review.
+  SUBMITTED
+  /// Supervisor has reviewed and approved; awaiting manager sign-off.
+  SUPERVISOR_APPROVED
+  /// Manager has given final approval; eligible for payroll engine.
+  MANAGER_APPROVED
+  /// Returned by supervisor (back to employee) or manager (back to supervisor).
+  RETURNED
+}
+
 enum DTRDayStatus {
   PRESENT
   ABSENT
@@ -472,6 +496,8 @@ model Tenant {
   otApplications        OTApplication[]
   undertimeRequests     UndertimeRequest[]
   profileUpdateRequests ProfileUpdateRequest[]
+  dtrSubmissions        DTRSubmission[]
+  dtrAuditLogs          DTRAuditLog[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
@@ -774,6 +800,9 @@ model Employee {
   undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
   attendanceLogs          AttendanceLog[]
+  dtrSubmissions          DTRSubmission[]  @relation("DTRSubmissionEmployee")
+  supervisedSubmissions   DTRSubmission[]  @relation("DTRSubmissionSupervisor")
+  managedSubmissions      DTRSubmission[]  @relation("DTRSubmissionManager")
 
   defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
   hiredFromApplicant    Applicant?
@@ -1810,17 +1839,135 @@ model DTRRecord {
 
   notes String? @db.Text
 
+  // -- Official layer (sourced from AttendanceLog, immutable after write) ----
+  /// Captured clock-in timestamp from GPS/kiosk. Never updated after first write.
+  officialTimeIn  DateTime?
+  /// Captured clock-out timestamp from GPS/kiosk. Never updated after first write.
+  officialTimeOut DateTime?
+
+  // -- Manual override layer ------------------------------------------------
+  /// Employee or Supervisor manual clock-in correction.
+  manualTimeIn     DateTime?
+  /// Employee or Supervisor manual clock-out correction.
+  manualTimeOut    DateTime?
+  manualReasonCode DTRManualReasonCode?
+  manualNotes      String?             @db.Text
+  /// "EMPLOYEE" | "SUPERVISOR" — role of the last actor to write the manual layer.
+  manualActorRole  String?
+  /// References the Employee who last wrote the manual layer.
+  manualActorId    String?
+  manualUpdatedAt  DateTime?
+
+  // -- Effective layer (system-computed: Supervisor > Employee > Official) ---
+  /// The time-in value consumed by the Payroll Engine.
+  effectiveTimeIn  DateTime?
+  /// The time-out value consumed by the Payroll Engine.
+  effectiveTimeOut DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   employee      Employee       @relation(fields: [employeeId], references: [id])
   shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+  auditLogs     DTRAuditLog[]
 
   @@unique([tenantId, employeeId, date])
   @@index([tenantId])
   @@index([tenantId, employeeId, date])
   @@index([tenantId, approvalStatus])
+}
+
+// =============================================================================
+// DTR SUBMISSION (Track A — period-level submission & approval chain)
+// =============================================================================
+
+/// One row per employee per payroll cutoff period.  Created when the employee
+/// taps "Submit DTR" in the ESS.  Flows through Supervisor → Manager approval
+/// before the Payroll Engine may consume the underlying DTRRecord rows.
+model DTRSubmission {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Inclusive start of the cutoff period (UTC midnight).
+  periodStart DateTime
+  /// Inclusive end of the cutoff period (UTC midnight).
+  periodEnd   DateTime
+
+  submittedAt DateTime            @default(now())
+  status      DTRSubmissionStatus @default(SUBMITTED)
+
+  /// Employee who acted as Supervisor reviewer (usually immediateSupervisor).
+  supervisorId      String?
+  supervisorActedAt DateTime?
+
+  /// Employee who acted as Manager approver.
+  managerId      String?
+  managerActedAt DateTime?
+
+  /// Populated when status = RETURNED. Free-text reason for the return.
+  returnedReason String? @db.Text
+  returnedAt     DateTime?
+  /// "SUPERVISOR" | "MANAGER" — which role issued the Return action.
+  returnedByRole String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  employee   Employee  @relation("DTRSubmissionEmployee", fields: [employeeId], references: [id])
+  supervisor Employee? @relation("DTRSubmissionSupervisor", fields: [supervisorId], references: [id])
+  manager    Employee? @relation("DTRSubmissionManager", fields: [managerId], references: [id])
+  auditLogs  DTRAuditLog[]
+
+  @@unique([tenantId, employeeId, periodStart, periodEnd])
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@index([tenantId, periodStart, periodEnd])
+}
+
+// =============================================================================
+// DTR AUDIT LOG (Track A — immutable manual-edit trail)
+// =============================================================================
+
+/// Immutable append-only record of every manual time override written to a
+/// DTRRecord.  Visible to Managers and HR Admins; never deleted or updated.
+model DTRAuditLog {
+  id              String  @id @default(cuid())
+  tenantId        String
+  dtrRecordId     String
+  /// FK to the period submission this edit belongs to.  Null if the edit
+  /// was made by the employee before any submission existed.
+  dtrSubmissionId String?
+
+  /// "EMPLOYEE" | "SUPERVISOR"
+  actorRole String
+  /// Employee.id of the actor.
+  actorId   String
+
+  /// "manual_time_in" | "manual_time_out"
+  fieldChanged String
+  /// Previous value as ISO string; null when field was previously empty.
+  oldValue     String?
+  /// New value as ISO string.
+  newValue     String?
+
+  reasonCode DTRManualReasonCode
+  notes      String?             @db.Text
+
+  /// Immutable — use @default(now()); never expose an update endpoint.
+  createdAt DateTime @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  dtrRecord     DTRRecord      @relation(fields: [dtrRecordId], references: [id])
+  dtrSubmission DTRSubmission? @relation(fields: [dtrSubmissionId], references: [id])
+
+  @@index([tenantId])
+  @@index([dtrRecordId])
+  @@index([dtrSubmissionId])
+  @@index([actorId])
 }
 
 // =============================================================================

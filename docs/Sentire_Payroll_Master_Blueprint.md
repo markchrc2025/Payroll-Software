@@ -1,387 +1,379 @@
-# Sentire Payroll — Master Blueprint (Complete Build Specification)
+# Sentire Payroll: Master Architecture & Feature Blueprint
+**Version 2.0 — Updated with GPS Geofencing Implementation Spec**
 
-**This document is the single, complete source of truth for implementation. It describes the entire target system. Every feature, table, and workflow described here is in scope. A feature being assigned a later build priority (Section 10) does not mean it is excluded — it means it is sequenced. Build to this specification.**
+**Target Market:** Philippine SMEs (Micro-businesses to Mid-Market enterprises with 500–5,000+ employees).
 
-**Product:** A multi-tenant HRIS, Time & Attendance, and Payroll SaaS for Philippine SMEs (micro-businesses through mid-market, 500–5,000+ employees), Philippine Labor Code and BIR compliant, with a premium UX.
-
----
-
-## 1. System Architecture
-
-### 1.1 Multi-Tenancy
-- The system is a single application, single codebase, single deployment, serving all client companies ("tenants").
-- The root entity is **Tenant**. Every tenant-owned table carries `tenant_id`. All data access is scoped by `tenant_id` at the data-access layer, enforced by PostgreSQL row-level security. No query returns rows across tenants.
-- Each tenant has its own subdomain, branding (logo, colors), configuration, and feature set. A tenant's users only ever see that tenant's data.
-- A tenant can later be migrated to a dedicated isolated deployment without schema changes (the data layer is designed so tenant data is cleanly separable).
-- **Global (non-tenant) data:** the statutory configuration tables (Section 2.7) are shared national data with no `tenant_id`; they are operator-managed and read by every tenant.
-- **Operator control plane:** the Central/Master Portal runs as role-gated routes within this same application (not a separate app), under a `SUPER_ADMIN` identity that operates above tenant row-level security. `SUPER_ADMIN` is defined in Section 1.4 and Section 5.7.
-
-### 1.2 Technology Stack
-- **Application framework:** Next.js (App Router) — a single full-stack application serving both the web UI and the API (route handlers under `/api/*`). The Central Portal lives as `SUPER_ADMIN`-gated routes within this same app.
-- **Language:** TypeScript.
-- **Front end:** React + Tailwind CSS + shadcn/ui. The Employee Self-Service (ESS) interface is a Progressive Web App (PWA); the Kiosk is a cross-platform web interface.
-- **Hosting & deployment:** Render, in the **Singapore** region (lowest latency to Philippine users) — a persistent web service plus background workers and scheduled cron jobs, on predictable plan-based pricing.
-- **Database:** PostgreSQL on Render's managed Postgres (Singapore region), with row-level security for tenant isolation and daily backups (point-in-time recovery added at a higher tier as volume grows).
-- **ORM / data access:** Prisma, with a client extension providing transparent field-level encrypt/decrypt (Section 1.4); raw SQL is used where needed for performance.
-- **Authentication:** Better Auth — self-hosted, with user, session, and account data stored in the app's own PostgreSQL (no per-user/MAU cost). Provides built-in multi-factor authentication (required for the `SUPER_ADMIN` operator identity, Sections 1.4 and 5.7), organizations, and RBAC that map to the multi-tenant model.
-- **Object storage:** Cloudflare R2 for documents and media (employee 201 files, receipts, selfies). Files are referenced by key from the database; access is via signed, time-limited URLs.
-- **Subscription billing:** Maya for Business (primary) with PayMongo as the recurring-billing fallback, charging tenants per `plan_tier`.
-- **AI integration:** Anthropic API (Claude Haiku 4.5 by default, Sonnet for flagged tasks), routed through the metering gateway (Section 8).
-- **Email / notifications:** Resend (transactional email; React Email JSX templates) for approval routing, payslip-ready notices, and authentication flows.
-- **Background jobs:** Render scheduled cron jobs and background workers handle retention purges, the year-end annualization run, and other scheduled work. Durable multi-step jobs (e.g., large payroll runs) move to Inngest as volume grows.
-- **Document generation:** `@react-pdf/renderer` for generated documents (payslips, Quitclaim) and `pdf-lib` for filling fixed-layout official forms (BIR Form 2316). Both are pure-JS (no headless browser), keeping the Render instance light.
-- **File parsing:** PapaParse for CSV/biometric DTR imports and generic CSV export; bank batch files are generated to each bank's required format (BPI first).
-- **Testing:** Vitest, with the engine golden-case suite specified in `Engine_Test_Spec.md` (Section 4.11).
-- **Currency:** All monetary values are Philippine Peso (PHP), stored as integer centavos.
-- **Payroll engine layout:** the engine is organized as pure per-step modules under `src/lib/payroll/engine/*`, one per step of the gross-to-net waterfall (Section 4.2). All arithmetic (multiply, divide, round, share-split) is delegated to a single centralized centavo module at `src/lib/money/`; engine step modules never perform inline arithmetic. The money module owns one rounding policy applied everywhere (Section 4.1).
-
-### 1.3 Subscriptions & Feature Flags
-- Each tenant has a `plan_tier` (`STARTER`, `GROWTH`, `PRO`) and a set of `feature_flags`. Each tier maps to a set of feature flags; the tier-to-flag mapping is configured in the Central Portal rather than hardcoded. The AI Assistant add-on is included in the `PRO` tier.
-- The **Central/Master Portal** (Section 5.7) sets a tenant's `plan_tier` and toggles individual `feature_flags`, including the AI Assistant add-on.
-- The application reads `feature_flags` to enable or disable functionality per tenant.
-
-### 1.4 Security & Data Privacy (RA 10173)
-- Data is encrypted in transit (TLS) and at rest. Field-level encryption applies to TIN, statutory ID numbers, and bank account numbers, using AES-256-GCM under an **envelope-encryption** scheme: a random Data Encryption Key (DEK) encrypts the field values, and the DEK is wrapped by a Key Encryption Key (KEK). The KEK is sourced from an environment secret initially and can later be moved to a KMS/vault by re-wrapping the DEK only — without re-encrypting stored data. The KEK is a 256-bit random value, never committed to the repository, backed up separately from the database, with a documented rotation procedure.
-- For any encrypted field that must be searched or made unique (e.g., TIN de-duplication), a keyed HMAC of the plaintext is stored in a companion indexed column; lookups and uniqueness constraints use the HMAC, since GCM ciphertext is not searchable.
-- **`SUPER_ADMIN` (operator) identity:** the SaaS operator's identity is separate from tenant RBAC. It is not a tenant `Role`, cannot be granted through tenant role management, has its own login with MFA, and every `SUPER_ADMIN` action is written to `AuditLog`. It operates above tenant row-level security to manage tenants and global statutory data.
-- Authorization is enforced at the route-handler and data-access layer, never by Next.js middleware alone (middleware-only session protection is bypassable). Every privileged and cross-tenant operation re-checks authorization at the point of data access.
-- Every create, update, delete, and sensitive read of employee, payroll, statutory, and document data is written to **AuditLog** with actor, action, entity, before/after values, and timestamp.
-- Employee consent for storing personal data, financial data, biometric data (selfies), and location data (GPS) is captured and recorded in **ConsentRecord** with type and timestamp. Biometric and location data are Sensitive Personal Information and require explicit consent before capture.
-- Each data category has a configured retention period. Raw selfies and GPS coordinates are purged after the DTR they support is finalized, per retention policy; computed results are retained. A scheduled job enforces retention.
-- The system supports a breach-notification record and data-subject access/erasure requests.
+**Objective:** A scalable, compliant, and automated HRIS & Payroll system with a premium user experience.
 
 ---
 
-## 2. Data Model
+## 1. Core Computation Engine (Philippine Labor Code Compliant)
 
-All tables carry `id`, `tenant_id`, `created_at`, `updated_at` unless noted. `Tenant` has no `tenant_id`.
+### A. Salary Types, Conversion, & Definitions
 
-### 2.1 Tenant, Users & Access Control (Dynamic RBAC)
-- **Tenant** — `name`, `subdomain`, `branding` (JSON), `plan_tier`, `feature_flags` (JSON), `payroll_cycle`, `working_days_denominator`, `statutory_cutoff_rule`, `thirteenth_month_basis`, `default_dtr_approver_id`.
-- **User** — `email`, `password_hash`, `employee_id` (nullable), `is_active`.
-- **Role** — `name` (e.g., `Admin`, `Payroll`, `Branch Supervisor`, `Payroll Read-Only`), `is_system_default` (bool). Tenants may create custom roles.
-- **Permission** — `key` (e.g., `payroll.run`, `employee.edit`, `dtr.approve`), `description`.
-- **RolePermission** — `role_id`, `permission_id`.
-- **UserRole** — `user_id`, `role_id`.
+- **Monthly Paid:** Fixed monthly rate. (Formula: (Monthly Rate × 12) / Total Working Days in a Year [e.g., 261, 313, 365] = Daily Rate)
+- **Daily Paid:** Paid only for days worked. (Formula: Daily Rate × Days Worked)
+- **Hourly Rate Computation:** Daily Rate / Standard Hours per Day (usually 8)
+- **Late/Undertime Deduction:** (Hourly Rate / 60) × Total Late/Undertime Minutes.
+- **System Definitions:**
+  - *Regular Pay:* Fixed base rate without deductions for absences/lates.
+  - *Basic Pay:* Actual earned pay (Regular Pay minus tardiness/absences).
 
-### 2.2 Organization
-- **WorkLocation** — `name`, `region` (used for minimum-wage lookup), `address`.
-- **Branch** — `name`, `work_location_id`, `geofence_id` (nullable).
-- **Department** — `name`.
-- **Position** — `name`, `level` (`Entry` | `Mid` | `Senior` | `Manager` | `Director`).
+### B. Gross-to-Net Computation Sequence
 
-### 2.3 Employee & 201 File
-- **Employee** — `employee_no`, `first_name`, `last_name`, `birthdate`, `hire_date`, `regularization_date` (nullable), `employment_status` (`Probationary` | `Regular` | `Inactive`), `salary_type` (`Monthly` | `Daily`), `base_rate`, `derived_daily_rate`, `derived_hourly_rate`, `work_location_id`, `branch_id`, `department_id`, `position_id`, `immediate_supervisor_id` (nullable → Employee), `manager_id` (nullable → Employee), `tax_classification` (`Regular` | `MWE`), `nontaxable_basic_amount` (default 0), `bank_account` (encrypted), `ess_pin`.
-- **StatutoryId** — `employee_id`, `type` (`SSS` | `PhilHealth` | `PagIBIG` | `TIN`), `number` (encrypted), `number_hmac` (keyed HMAC for uniqueness/lookup, per Section 1.4). (Statutory IDs are stored in this normalized table, one row per ID type.)
-- **EmployeeDocument** — `employee_id`, `category` (e.g., `Contract`, `GovID`, `Certificate`, `Memo`), `file_key` (R2 object key), `file_name`, `uploaded_by_id`, `retention_until`.
-- **Asset** — `name`, `serial_number`, `category`, `condition`, `monetary_value`.
-- **AssetAssignment** — `asset_id`, `employee_id`, `assigned_on`, `returned_on` (nullable), `return_condition`.
-- **Movement** — `employee_id`, `type` (`Promotion` | `Transfer` | `Reclassification`), `effective_date`, `from_values` (JSON), `to_values` (JSON), `status`, `approver_id`.
-- **Incident** — `employee_id`, `type` (`Memo` | `NTE`), `subject`, `body`, `file_key` (nullable), `issued_by_id`, `issued_on`, `employee_response` (nullable).
+*The engine must execute this exact waterfall sequence during a payroll run to generate the Payroll Sheet:*
 
-### 2.4 Time & Attendance
-- **ShiftSchedule** — `name`, `type` (`Fixed` | `Flexible`), `time_in`, `time_out`, `break_minutes`, `crosses_midnight` (bool), `work_days` (JSON).
-- **EmployeeShiftAssignment** — `employee_id`, `shift_schedule_id`, `effective_from`, `effective_to`.
-- **Geofence** — `branch_id`, `center_lat`, `center_lng`, `radius_meters`.
-- **AttendanceLog** — `employee_id`, `date`, `time_in`, `time_out`, `source` (`Import` | `Manual` | `Kiosk` | `ESS`), `selfie_key` (R2, nullable), `gps_lat` (nullable), `gps_lng` (nullable), `geofence_status` (`Inside` | `Outside` | `Unknown`), `flagged` (bool).
-- **DailyTimeRecord (DTR)** — `employee_id`, `date`, `status` (`Present` | `Absent` | `PaidLeave` | `Holiday`), `worked_hours`, `late_minutes`, `undertime_minutes`, `approved_ot_hours`, `nsd_hours`, `holiday_type` (nullable), `approval_status` (`Pending` | `Approved` | `Rejected`), `approved_by_id` (nullable), `is_locked` (bool).
-- **HolidayCalendar** — `date`, `holiday_type` (`Regular` | `SpecialNonWorking`), `scope` (`Global` | `Branch`), `branch_id` (nullable).
+1. **Base Earnings:** Compute Base Pay.
+2. **Deduct Tardiness/Absences:** Subtract Late/Undertime deductions.
+3. **Add Premium Pay:** Add OT, Night Shift Differential (NSD), Rest Day, and Holiday pay.
+4. **Add Taxable Allowances/Bonuses:** Add custom taxable components.
+5. **Gross Taxable Income:** Sum of Steps 1 through 4.
+6. **Deduct Statutory Contributions:** SSS, PhilHealth, Pag-IBIG (applied to specific cutoffs).
+7. **Compute Withholding Tax:** Apply BIR TRAIN Law table.
+8. **Add Non-Taxable Allowances & Claims:** De Minimis benefits, approved expense reimbursements.
+9. **Deduct Loans/Others:** SSS/HDMF Loans, cash advances.
+10. **Net Take-Home Pay:** Final payable amount.
 
-### 2.5 Leave & Requests
-- **LeaveType** — `name`, `is_paid` (bool), `requires_medical_cert` (bool).
-- **LeavePolicy** — `leave_type_id`, `accrual_method` (`Accrual` | `LumpSum`), `accrual_rate`, `max_balance`, `carryover_rule`.
-- **LeaveBalance** — `employee_id`, `leave_type_id`, `balance_days`.
-- **LeaveLedger** — `employee_id`, `leave_type_id`, `change`, `reason`, `effective_date` (historical accrual/usage ledger).
-- **LeaveApplication** — `employee_id`, `leave_type_id`, `start_date`, `end_date`, `status`, `approver_id`, `medical_cert_key` (nullable).
-- **OTApplication** — `employee_id`, `date`, `hours`, `justification`, `status`, `approver_id`.
-- **ProfileUpdateRequest** — `employee_id`, `field`, `old_value`, `new_value`, `status`, `approver_id` (used for sensitive changes such as bank account).
-- **EForm** — `name`, `schema` (JSON form definition). **EFormSubmission** — `eform_id`, `employee_id`, `data` (JSON), `status`, `approver_id`.
+### C. 13th Month Pay Computation Engine
 
-### 2.6 Payroll & Pay Components
-- **PayComponent** — `name`, `kind` (`Allowance` | `Bonus` | `Deduction`), `is_taxable` (bool), `is_recurring` (bool), `is_de_minimis` (bool).
-- **EmployeePayComponent** — `employee_id`, `pay_component_id`, `amount`, `effective_from`, `effective_to`.
-- **ExpenseClaim** — `employee_id`, `amount`, `receipt_key` (R2), `category`, `tax_treatment` (`NonTaxableReimbursement` | `DeMinimis` | `Taxable`), `status`, `approver_id`, `target_payroll_book_id`.
-- **Loan** — `employee_id`, `type` (`SSS` | `PagIBIG` | `CashAdvance` | `Company`), `principal`, `installment_amount`, `balance`, `status`.
-- **PayrollBook** — `period_start`, `period_end`, `cycle`, `status` (`Draft` | `Finalized`), `run_type` (`Regular` | `OffCycle` | `FinalPay` | `YearEnd`).
-- **PayrollSheet** — `payroll_book_id`, `employee_id`, `tax_classification` (snapshot), and frozen fields: `base_pay`, `late_undertime_deduction`, `ot_pay`, `nsd_pay`, `holiday_pay`, `hazard_pay`, `taxable_allowances`, `mwe_exempt_compensation`, `nontaxable_basic`, `gross_compensation`, `nontaxable_compensation`, `nontaxable_13month_and_benefits`, `gross_taxable_income`, `sss_ee`, `sss_er`, `philhealth_ee`, `philhealth_er`, `pagibig_ee`, `pagibig_er`, `withholding_tax`, `nontaxable_additions`, `loan_deductions`, `net_pay`. Immutable once the parent `PayrollBook` is `Finalized`.
-- **PayrollAdjustment** — `employee_id`, `target_payroll_book_id`, `kind` (`Addition` | `Deduction`), `amount`, `is_taxable` (bool), `reason`.
+- **DOLE Formula:** Total Basic Salary Earned for the Year / 12.
+- **Admin Configuration Toggle:**
+  - *Option A (Strict DOLE):* Compute against **Basic Pay** (excludes unpaid lates/absences).
+  - *Option B (Company Policy):* Compute against **Regular Pay** (ignores lates/absences).
+- *Exclusions:* OT, premium pay, allowances are excluded unless customized by HR.
 
-### 2.7 Statutory Configuration (effective-dated, GLOBAL)
-- **SSS_Schedule**, **PhilHealth_Schedule**, **PagIBIG_Schedule**, **BIR_WithholdingTable**, **DeMinimis_Ceilings**, **MinimumWageRate** — each carries `effective_from`, `effective_to`, `legal_basis`, `version` (Section 3).
-- These tables are **global**: they carry **no `tenant_id`**, are shared by all tenants, and are writable only by `SUPER_ADMIN` (Section 5.7). Tenants cannot create or override statutory rows.
+### D. Premium Multipliers (DOLE Standards)
 
-### 2.8 Recruitment (ATS)
-- **Applicant** — `name`, `email`, `phone`, `position_id`, `resume_key` (R2), `stage` (`Applied` | `Shortlisted` | `Interviewed` | `Offered` | `Hired`).
-- **ApplicantNote** — `applicant_id`, `author_id`, `body`.
-
-### 2.9 Audit, Consent & AI Metering
-- **AuditLog** — `user_id`, `action`, `entity`, `entity_id`, `before` (JSON), `after` (JSON), `timestamp`.
-- **ConsentRecord** — `employee_id`, `consent_type` (`PersonalData` | `Biometric` | `Location` | `Financial`), `granted_at`.
-- **AiUsage** — `tenant_id`, `feature`, `model`, `input_tokens`, `output_tokens`, `cost_estimate`, `timestamp` (used for metering and fair-use caps; Section 8).
-
----
-
-## 3. Statutory Configuration Engine
-
-### 3.1 Rule
-No statutory rate, bracket, ceiling, or threshold is written in application code. Each lives in an effective-dated config table with `effective_from`, `effective_to`, `legal_basis`, `version`. The engine selects the row valid for the **pay period's date range**, not the current date. Re-running a past period uses that period's rules.
-
-### 3.2 Seed Data (effective 2026-01-01)
-- **SSS_Schedule** — Total 15% of Monthly Salary Credit (MSC). Employer 10%, employee 5%. MSC floor ₱5,000, ceiling ₱35,000. MSC above ₱20,000 includes a Mandatory Provident Fund (MPF) component. Employer pays Employees' Compensation (EC): ₱10 (MSC < ₱15,000) or ₱30 (MSC ≥ ₱15,000). Full bracketed MSC table (₱500 steps) loaded from the official SSS 2026 schedule. `legal_basis`: RA 11199.
-- **PhilHealth_Schedule** — 5% of monthly basic salary, split 2.5% employee / 2.5% employer. Floor ₱10,000, ceiling ₱100,000. Minimum premium ₱500, maximum ₱5,000. `legal_basis`: RA 11223, PhilHealth Circular 2025-001.
-- **PagIBIG_Schedule** — Employee 2% and employer 2%; employee 1% when monthly compensation ≤ ₱1,500. Maximum Fund Salary cap ₱10,000 → max ₱200 per share. `legal_basis`: RA 9679, HDMF Circular 460.
-- **BIR_WithholdingTable** — Stored per payroll frequency (`daily`, `weekly`, `semi_monthly`, `monthly`). Seeded from current BIR withholding tax tables (TRAIN, 2023-onward tranche; ₱250,000 annual exemption threshold). The engine selects the table matching the tenant's `payroll_cycle`.
-- **DeMinimis_Ceilings** — Per-category non-taxable ceilings, seeded from BIR Revenue Regulation 29-2025; excess over a ceiling is taxable. Combined annual exclusion cap for 13th-month pay and other benefits is ₱90,000. `legal_basis`: RA 10963 (TRAIN), RR 29-2025.
-- **MinimumWageRate** — Daily statutory minimum wage by `region` (and sector where applicable), used to classify Minimum Wage Earners. Seeded from current RTWPB wage orders per region. `legal_basis`: applicable regional Wage Order.
-
-### 3.3 Importer & Resolver
-- **Importer:** a single reusable module performs all writes to the global statutory tables, following **parse → validate → dry-run (preview the diff) → commit**. It is the only path that mutates statutory data. It is invoked by a CLI seed command and, once built, by the `SUPER_ADMIN` admin API (Section 5.7) — both call the same importer; the logic is never duplicated.
-- **Resolver:** the engine reads statutory values only through a resolver that returns the row valid for a given **pay-period date** and table version. The resolver is a hard dependency of the payroll engine and is covered by the engine test suite.
-
----
-
-## 4. Payroll Computation Engine
-
-### 4.1 Salary Types & Conversions
-- **Monthly Paid:** `derived_daily_rate = (base_rate × 12) / working_days_denominator`.
-- **Daily Paid:** pay = `derived_daily_rate × days_worked`.
-- **Hourly rate:** `derived_hourly_rate = derived_daily_rate / 8`.
-- **Late/Undertime deduction:** `(derived_hourly_rate / 60) × total_late_undertime_minutes`.
-- **Regular Pay:** fixed base rate, no absence/late deductions. **Basic Pay:** Regular Pay minus tardiness and absences.
-
-### 4.2 Gross-to-Net Waterfall
-The engine computes each employee's pay in this exact order and writes a `PayrollSheet`:
-1. Compute **Base Pay**.
-2. Deduct **tardiness and absences** (late/undertime).
-3. Add **premium pay** (OT, NSD, rest day, holiday, hazard) via the stacking matrix (4.3).
-4. Add **allowances and bonuses** (each tagged taxable or non-taxable on its `PayComponent`).
-5. **Gross Compensation** = sum of steps 1–4.
-6. Determine **non-taxable compensation** (4.5): MWE-exempt pay, mandatory contributions, non-taxable components, de-minimis-within-ceiling, 13th-month-and-other-benefits within the ₱90,000 cap, substantiated reimbursements.
-7. **Gross Taxable Income** = Gross Compensation − non-taxable compensation.
-8. Deduct **statutory contributions** (SSS, PhilHealth, Pag-IBIG) per `statutory_cutoff_rule`.
-9. Compute **withholding tax** on Gross Taxable Income via the period-specific BIR table. For MWEs, withholding on exempt components is zero.
-10. Add back **non-taxable additions** (reimbursements/items paid out but excluded from the tax base).
-11. Deduct **loans and other deductions**.
-12. **Net Take-Home Pay** = result.
-
-### 4.3 Premium Stacking Matrix
-Premium pay is computed hour by hour against the employee's shift and the night-shift window (10:00 PM–6:00 AM). Multipliers compose; they are not applied as a single day-level value.
-
-| Condition | Factor |
+| Scenario | Multiplier |
 |---|---|
-| Regular work overtime | 1.25 |
-| Night Shift Differential (within 10PM–6AM) | ×1.10 on the otherwise-applicable rate |
-| Rest day or Special Non-Working Holiday worked | 1.30 |
-| Rest day OT / Special Non-Working Holiday OT | 1.69 |
-| Regular Holiday worked | 2.00 |
-| Regular Holiday OT | 2.60 |
-| Regular Holiday on a rest day, worked | 2.60 |
-| Double Holiday worked | 3.00 |
-
-Stacking order: day-type factor, then overtime factor, then ×1.10 for hours inside the night-shift window. Example: OT between 10PM–6AM on a regular holiday = hourly rate × 2.60 × 1.10.
-
-### 4.4 13th-Month Pay
-`thirteenth_month = total_basic_salary_earned_in_calendar_year / 12`. Default basis **Strict DOLE** (Basic Pay, reflecting unpaid lates/absences; excludes OT, premium pay, allowances, COLA). Tenant setting `thirteenth_month_basis` controls the basis.
-
-### 4.5 Minimum Wage Earners & Non-Taxable Compensation
-- **MWE classification:** an employee is an MWE when `tax_classification = MWE`. The engine validates against `MinimumWageRate` for the employee's `WorkLocation.region` each period; if the basic rate exceeds the applicable regional minimum for that period, the employee is treated as `Regular` for that period.
-- **MWE exemption:** basic minimum wage (including COLA forming part of minimum wage), holiday pay, overtime pay, night shift differential, and hazard pay are exempt from income tax and withholding; recorded in `mwe_exempt_compensation`. Other taxable income an MWE receives (commissions, taxable allowances, bonuses beyond the ₱90,000 cap) remains taxable.
-- **Employer-designated non-taxable basic:** `Employee.nontaxable_basic_amount` excludes a designated portion of basic pay from `gross_taxable_income`, recorded in `nontaxable_basic`.
-- **Non-taxable compensation set:** MWE-exempt compensation; mandatory SSS/PhilHealth/Pag-IBIG employee contributions; components flagged `is_taxable = false`; de minimis within RR 29-2025 ceilings; 13th-month and other benefits up to ₱90,000; substantiated reimbursements.
-
-### 4.6 Statutory Computation Specifics
-- Each contribution is computed against the effective-dated schedule. SSS uses the MSC bracket lookup (incl. MPF and EC). PhilHealth applies 5% within floor/ceiling. Pag-IBIG applies 2%/2% (or 1% employee) capped at the Maximum Fund Salary.
-- Contributions are monthly obligations; in semi-monthly payroll they are deducted on the second (month-end) cutoff (`statutory_cutoff_rule = second_cutoff`).
-
-### 4.7 Withholding Tax
-The engine selects the BIR withholding table matching the tenant's `payroll_cycle` and applies it to taxable income for the period.
-
-### 4.8 Corrections & Off-Cycle Runs
-- A `Draft` `PayrollBook` can be re-opened and recomputed.
-- A `Finalized` `PayrollBook` is immutable. Corrections are made via an **off-cycle adjustment run** (a new `PayrollBook` with `run_type = OffCycle`) or via **PayrollAdjustment** records applied to the next book.
-
-### 4.9 Year-End Annualization
-In the final period of the calendar year, the engine runs annualization for all active employees: sum YTD taxable income and YTD withholding; compute true annual liability against the annual TRAIN table; post the over/under-withholding true-up (refund or shortfall); produce per-employee BIR 2316; and produce the Alphalist (with MWEs on the separate MWE schedule) and supporting DAT file.
-
-### 4.10 Final Pay / Offboarding Computation
-On offboarding, the engine: schedules ESS lockout for the end date; queries `AssetAssignment` and flags unreturned assets (HR may post a monetary deduction equal to asset value); converts unused convertible leave to cash via `LeaveBalance`; prorates 13th-month (YTD Basic / 12); annualizes tax (YTD income vs. YTD withheld → refund or payable); sums unpaid salary + 13th-month + leave cash-out + tax refund − asset and other deductions. Output: a Final `PayrollSheet`, an auto-populated **Quitclaim**, and the final **BIR 2316**.
-
-### 4.11 Engine Testing & Quality Gate
-The payroll engine must pass an automated golden-case regression suite, specified in the companion `Engine_Test_Spec.md`, before it produces any real payroll output. Tests are written alongside each engine module (never a phase behind it). Expected values are derived independently of the engine — from the formulas in the test spec, or hand-computed from the official statutory tables — and are never captured from the engine's own output. CI blocks merge on any failing or missing engine test.
+| Regular Work OT | 125% (1.25) |
+| Night Shift Differential (NSD) | +10% (0.10) |
+| Rest Day Work | 130% (1.30) |
+| Rest Day OT | 169% (1.69) |
+| Special Non-Working Holiday | 130% (1.30) |
+| Special Holiday OT | 169% (1.69) |
+| Regular Holiday | 200% (2.00) |
+| Regular Holiday OT | 260% (2.60) |
+| Double Holiday Worked | 300% (3.00) |
 
 ---
 
-## 5. Feature Modules
+## 2. Platform Feature Modules
 
-### 5.1 HRIS
-- **Employee master & 201 files:** all Section 2.3 fields, organizational tags, statutory IDs (StatutoryId table), and an **EmployeeDocument** vault backed by R2 (contracts, government IDs, certificates, memos) with category, retention, and audit.
-- **Company dashboard:** noticeboard, headcount, upcoming payroll, holidays, employees on leave, birthdays.
-- **Asset tracking:** assign equipment (serial, condition) and track returns for final-pay clearance.
-- **Incident management:** memos and Notices to Explain (NTE) with employee responses.
-- **Movements:** digital promotion/transfer/reclassification forms with approval and effective dating.
+### Module 1: Comprehensive HRIS
 
-### 5.2 Applicant Tracking System (ATS)
-- Kanban pipeline (Applied → Shortlisted → Interviewed → Offered → Hired), applicant notes, resume storage in R2.
-- 1-click conversion of a Hired applicant into an Active `Employee` (carrying over name, position, documents).
+- **Organizational Attributes:** Tag employees by Work Location, Branch, Department, Position, and Level (Entry, Mid, Senior, Manager, Director).
+- **Company Dashboard:** Noticeboard, Holidays, Employees on Leave, Birthdays.
+- **Employee Profile & 201 Files:** Statutory IDs, digital documents.
+- **Asset Tracking:** Track assigned equipment (serial numbers, conditions) for final pay clearance.
+- **Incident Management & Movements:** Memos, Notice to Explain (NTE), and digital Movement Forms (promotions/transfers).
 
-### 5.3 Time & Attendance
-- **Capture:** (a) import attendance via CSV/biometric-export file; (b) manual entry by Admin/Payroll; (c) **Digital time clock** in ESS and **Kiosk** mode with **selfie capture** and **GPS geofencing**.
-- **Shift logic:** fixed and flexible shifts; cross-midnight overtime; tardiness/undertime against the assigned shift.
-- **Geofence:** punches outside a branch radius are **flagged and allowed** (never hard-rejected) for HR review; consent for biometric/location capture is required (Section 1.4).
-- **DTR:** computed records with review/approval routed up the reporting chain (Section 6.4).
-- **Leave:** leave types, accrual/lump-sum policies, balances, historical ledger, and the leave/undertime application workflow.
-- **Overtime:** the overtime application workflow with attendance cross-check.
+### Module 2: Applicant Tracking System (ATS)
 
-### 5.4 Payroll, Records & Claims
-- **Payroll Book:** master historical ledger of all runs. **Payroll Sheet:** frozen per-employee line-item breakdown.
-- **Custom pay components:** Admin-built allowances/bonuses/deductions, each taxable or non-taxable, with de-minimis flags.
-- **Expense claims:** employees file reimbursements with receipt upload; Finance approves and assigns tax treatment; approved claims attach to a target payroll book.
-- **Loans:** SSS/Pag-IBIG/company loans and cash advances with installment schedules and running balances.
-- **Corrections:** off-cycle and adjustment runs (Section 4.8).
+- **Pipeline:** Kanban board (Applied → Shortlisted → Interviewed → Offered → Hired).
+- **Seamless Onboarding:** 1-click conversion from "Hired Applicant" to "Active Employee".
 
-### 5.5 Compliance & Analytics
-- **Payslips** per employee per run, published to ESS.
-- **Bank files:** BDO, BPI, UnionBank, Metrobank batch formats, plus a generic CSV.
-- **Statutory reports:** SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C, BIR 2316, Alphalist (with the separate MWE schedule) and DAT file.
-- **Filing posture:** export-only — all files are generated for the client to file through their own channels.
-- **Analytics:** pivot/slice timesheets and payroll by Department, Branch, Work Location, or Level.
+### Module 3: Time & Attendance (T&A)
 
-### 5.6 Employee Self-Service (ESS)
-- Secure payslip viewing protected by `ess_pin` (or birthdate).
-- Profile view; sensitive changes (e.g., bank account) submitted as `ProfileUpdateRequest` for HR approval.
-- E-forms (IT tickets, shift-change requests, etc.) via the e-form builder.
-- File leave, undertime, overtime, and expense claims.
+- **Digital Time Clock (ESS):** Mobile log-in with **Selfie Capture** and **GPS Geofencing** (see Section 6 for full implementation spec).
+- **Kiosk Mode:** Cross-platform web interface for branch tablets. Geofence check is bypassed — kiosk is physically fixed at the branch.
+- **Shift Logic:** Fixed/Flexible shifts, and Cross-Midnight OT recognition.
+- **Leave Entitlement:** Custom earning policies (accrual vs. lump-sum) and historical ledgers.
+- **Period DTR Submission:** At the end of each cutoff period, employees submit their packaged DTR for approval. Each daily entry contains two layers — an immutable Official record (GPS/selfie captured) and an editable Manual override section. See Workflow 10 and Workflow 11 for full logic.
+- **DTR Approval Chain:** Submitted DTR flows through Supervisor (review + edit rights) → Manager (read-only + audit log visibility) before the payroll engine consumes it.
+- **DTR Audit Log:** Every manual edit to a DTR entry is immutably logged: field changed, old value, new value, actor, timestamp, and reason.
 
-### 5.7 RBAC & Central/Master Portal
-- **Dynamic RBAC:** custom roles built from permissions (Section 2.1). Default roles `Admin`, `Payroll`, `Employee` ship as presets; tenants may add roles such as `Branch Supervisor` or `Payroll Read-Only`.
-- **Reporting lines:** `immediate_supervisor_id` / `manager_id` define approval chains, independent of roles.
-- **Central/Master Portal:** operator-facing portal for the SaaS owner to create and manage tenants, set `plan_tier`, toggle `feature_flags` (including the AI add-on), manage subscriptions, and manage the global statutory tables.
-- **Architecture:** the portal runs as role-gated routes inside the single application (not a separate app), under the `SUPER_ADMIN` identity (Section 1.4). It is not built from tenant RBAC.
-- **Statutory admin endpoints:** the global statutory tables are managed through a dedicated `/api/admin/statutory/*` namespace gated to `SUPER_ADMIN` only. There is no shared tenant/operator statutory endpoint, and tenants have no write or override access to statutory data. These endpoints call the shared importer (Section 3.3).
+### Module 4: Dynamic Payroll, Records & Claims
 
-### 5.8 AI Assistant Add-On
-A billable add-on bundled into the `PRO` tier, OFF by default, controlled per-tenant from the Central Portal. Full behavior, models, caching, and gating are defined in Section 8.
+- **Payroll Book:** A master historical ledger of all organizational payroll runs.
+- **Payroll Sheet:** A granular, printable breakdown documenting every component (base, premiums, deductions) per employee for a specific run.
+- **Custom Components:** Admins can build custom Allowances and Bonuses (Taxable/Non-Taxable).
+- **Expense Claims:** Employees file reimbursements with receipt uploads.
+
+### Module 5: Compliance & Analytics
+
+- **Data Slicing:** Pivot Timesheets/Payroll by Department, Branch, Location, or Level.
+- **Bank Files:** Auto-generate BDO, BPI, UnionBank, Metrobank batch files.
+- **Statutory Reports:** SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C, Form 2316, Alphalist.
+
+### Module 6: ESS & Multi-Tenant RBAC
+
+- **Secure Payslips:** PIN/DOB-protected viewing on mobile.
+- **E-Forms:** Digital builder for internal requests (IT tickets, shift changes).
+- **Dynamic Roles:** Custom permissions (e.g., "Branch Supervisor", "Payroll Read-Only").
+- **Master Portal:** For the Sentire SaaS owner to manage client subscriptions.
 
 ---
 
-## 6. Workflows
+## 3. Front-End UI/UX Architecture
 
-### 6.1 Tenant Setup Wizard
-Operator creates a Tenant in the Central Portal → tenant Admin completes a wizard: company profile & branding → org structure (locations with region, branches with geofences, departments, positions) → roles & permissions → employees, statutory IDs, documents, reporting lines, tax classification → pay rules (cycle, denominator, 13th-month basis, default DTR approver) → shift schedules, leave policies, holiday calendar. On completion the tenant can run payroll.
-
-### 6.2 Clock-In (Kiosk / ESS)
-Employee enters PIN → camera captures selfie → system captures GPS → queries the employee's assigned Branch and Shift → computes distance from the branch `Geofence`; if outside the radius the punch is flagged and allowed → saves `AttendanceLog` (selfie key, GPS, geofence status) → computes tardiness/undertime against the shift. Requires prior biometric/location consent.
-
-### 6.3 DTR Generation
-From imported/manual punches or from clock-in logs, the system computes each `DailyTimeRecord` against the assigned `ShiftSchedule` (worked hours, late, undertime, night-shift hours), created with `approval_status = Pending`.
-
-### 6.4 DTR Review & Approval
-DTRs route up the reporting chain: an employee's DTRs → `immediate_supervisor`; a supervisor's own DTRs → `manager`; top-of-chain (no supervisor/manager) → tenant `default_dtr_approver`. The approver may edit before approving, then sets `Approved`/`Rejected` (`approved_by_id` recorded). An `Admin` may override. A payroll run cannot finalize on `Pending`/`Rejected` DTRs without an `Admin` override.
-
-### 6.5 Leave / Undertime Application
-Employee files in ESS, attaching a medical certificate where required → status `Pending`; balance checked → routes up the reporting chain → on approval, balance decremented (ledger updated) and the DTR overwritten as `PaidLeave`, bypassing the absence deduction.
-
-### 6.6 Overtime Application
-Employee files hours + justification in ESS → system cross-references `AttendanceLog` and rejects if no supporting clock-out → routes up the reporting chain → on approval sets `approved_ot_hours`. Only approved overtime is paid.
-
-### 6.7 Expense Claims
-Employee uploads receipt + amount in ESS → routes to HR/Finance → Finance verifies and sets `tax_treatment` (non-taxable reimbursement, de-minimis-within-ceiling, or taxable) → approved claim attaches to the target payroll book and is added in the next run with the correct tax handling.
-
-### 6.8 Profile Update (Bank Change Safeguard)
-Employee edits a sensitive field (e.g., bank account) in ESS → not committed immediately; a `ProfileUpdateRequest` routes to HR → HR verifies identity and approves → change is committed and logged in `AuditLog`. The next bank file uses the new account.
-
-### 6.9 Holiday Application
-Admin adds a holiday (date, type, scope) to `HolidayCalendar` → during a run the engine intercepts DTRs on that date: no log on a Regular Holiday → inject 100% holiday pay; present → apply the holiday factor from the stacking matrix.
-
-### 6.10 Payroll Run & Corrections
-Payroll user starts a run for a period → system verifies all DTRs are `Approved` (blocks otherwise unless `Admin` override) → locks DTRs → creates a `Draft` `PayrollBook` → loops every active employee and executes the gross-to-net waterfall (4.2), pulling effective-dated tables, MWE classification, approved OT, leave, holiday factors, components, loans → writes one frozen `PayrollSheet` per employee → user reviews → on **Finalize**, the book becomes immutable, bank files and CSV are generated, and payslips are published to ESS. Corrections follow Section 4.8.
-
-### 6.11 Year-End Annualization
-In the final period of the year, the system runs the annualization described in Section 4.9 across all active employees, producing the true-up, 2316s, and Alphalist/DAT.
-
-### 6.12 BIR 2316 Generation
-Admin/Payroll opens the 2316 generator → selects a calendar year (or a separated employee), single or batch → system aggregates the employee's frozen `PayrollSheet` rows for the year plus master data → renders the BIR 2316 layout, populating gross/taxable/non-taxable lines (incl. MWE-exempt lines when `tax_classification = MWE`) → output is a per-employee PDF plus batch download, for the client to issue and file.
-
-### 6.13 Offboarding & Final Pay
-HR initiates offboarding with an end date → engine runs the final-pay computation (Section 4.10): asset clearance, leave cash-out, 13th-month proration, tax annualization, net final pay → output is a Final `PayrollSheet`, auto-populated Quitclaim, and final BIR 2316; ESS access is revoked on the end date.
-
-### 6.14 Applicant Onboarding (ATS)
-Recruiter moves an applicant through the pipeline → on Hire, 1-click conversion creates an Active `Employee`, carrying over details and documents, and launches the relevant setup steps.
+- **Branding:** "Sentire Payroll" utilizes a premium deep blue and slate palette (Tailwind CSS, shadcn/ui).
+- **Admin Desktop:** Collapsible left sidebar, top global search, metric widgets (Headcount, Payroll Trend).
+- **ESS Mobile (PWA):** Bottom navigation bar. Massive central "Clock In" button. Data tables convert to vertical "Card Views" to prevent horizontal scrolling.
+- **Kiosk Tablet:** Distraction-free, massive clock, numeric keypad/QR scanner for rapid queueing.
 
 ---
 
-## 7. UI/UX
+## 4. Data Architecture Connectivity
 
-- **Branding:** "Sentire Payroll," premium deep-blue and slate palette; Tailwind + shadcn/ui; per-tenant logo and primary color.
-- **Admin desktop:** collapsible left sidebar, top global search, dashboard metric widgets (headcount, payroll trend, upcoming payroll, holidays, on-leave, birthdays). Data grids for employees, DTRs, payroll sheets.
-- **ESS mobile (PWA):** bottom navigation bar; a large central "Clock In" button; data tables collapse to vertical card views with no horizontal scrolling; selfie capture flow; payslip viewer.
-- **Kiosk tablet:** distraction-free, large clock, numeric PIN keypad and/or QR scan for rapid queueing, selfie capture, branch-bound.
-
----
-
-## 8. AI Assistant — Integration & Gating Map
-
-The AI Assistant is an add-on bundled into the `PRO` tier, OFF by default, toggled per-tenant (and per-feature) from the Central Portal.
-
-### 8.1 Control & Metering
-- The Central Portal's `plan_tier` and `feature_flags` gate AI. Setting a tenant to `PRO` enables AI feature flags; each AI feature is independently toggleable.
-- **All AI calls route through one internal metering gateway** that tags each call with `tenant_id` + feature, logs token usage to `AiUsage`, enforces per-tenant fair-use caps, and degrades gracefully (queues or disables a feature) when a cap is hit.
-- **Cost controls:** Claude **Haiku 4.5** by default; **Sonnet** only for flagged complex reasoning; aggressive prompt-caching of system prompts, tool definitions, document templates, and per-tenant knowledge base; strict per-call max-token limits.
-
-### 8.2 Touchpoint Map
-
-| # | Feature | Default Model | Caching | Notes |
-|---|---|---|---|---|
-| 1 | Document extraction — receipts, government IDs, DTR/biometric exports | Haiku 4.5 (vision) | Extraction prompt + per-doc-type template | Highest token volume; metered hardest |
-| 2 | Always-on HR assistant (admin + ESS chat) | Haiku 4.5; escalate to Sonnet for complex policy/computation questions | System prompt + tenant knowledge base + chat history | Cap messages/day per seat |
-| 3 | Payslip / "why is my tax this?" Q&A | Haiku 4.5 | Explainer prompt + the employee's own sheet | Rides on #2 |
-| 4 | Compliance helper — explain a BIR form, summarize a circular | Sonnet | Form/circular references | Admin-only, low volume |
-| 5 | Résumé parsing (ATS) | Haiku 4.5 | Parse template | Tied to ATS |
-| 6 | Payroll-run anomaly flagging | Rules-first; AI (Sonnet) optional second pass | — | Deterministic rules preferred; AI only for fuzzy cases |
+- **Company (Tenant):** Root node. Enforces database multi-tenancy.
+- **Employee_Profile:** Central hub linking Department, Work_Location, Branch, Position, and Shift_Schedule.
+- **Attendance_Log:** Raw clock-in data (Selfie, GPS coordinates, accuracy radius in meters). Immutable — never edited.
+- **Daily_Time_Record (DTR):** The computed daily record derived from Attendance_Log vs. Shift_Schedule. Contains two layers per day:
+  - *Official layer (immutable):* `official_time_in`, `official_time_out` — sourced from Attendance_Log, locked permanently.
+  - *Manual layer (audited):* `manual_time_in`, `manual_time_out`, `manual_reason_code`, `manual_notes`, `manual_actor_id`, `manual_actor_role`, `manual_timestamp` — editable by Employee or Supervisor with a required reason.
+  - *Effective layer (computed):* `effective_time_in`, `effective_time_out` — system-derived: uses Manual values if present, otherwise Official. Supervisor's manual entry always overrides the employee's manual entry. This is the layer consumed by the Payroll Engine.
+- **DTR_Submission:** Represents a packaged cutoff-period DTR submitted by an employee for approval. One record per employee per payroll period. Fields: `employee_id`, `payroll_period_id`, `submitted_at`, `status` (Submitted / Supervisor Reviewed / Supervisor Approved / Manager Approved / Returned), `returned_reason`.
+- **DTR_Audit_Log:** Immutable log of every manual edit to any DTR day entry. Fields: `dtr_id`, `actor_id`, `actor_role` (Employee / Supervisor), `field_changed`, `old_value`, `new_value`, `reason_code`, `notes`, `timestamp`. Visible to Managers and HR Admins; read-only.
+- **DTR_Manual_Reason_Code:** Predefined lookup table of allowed reasons for manual time entries. Values: `FORGOT_CLOCK_IN`, `FORGOT_CLOCK_OUT`, `GPS_FAILURE`, `KIOSK_OFFLINE`, `SYSTEM_ERROR`, `SCHEDULE_CHANGE`, `OTHER` (requires notes).
+- **Payroll_Book:** Represents one Payroll Period (e.g., May 15–30).
+- **Payroll_Sheet:** Child of Payroll_Book. Stores the frozen Gross-to-Net line items per employee.
+- **Branch:** Stores geofence configuration — `geofence_lat`, `geofence_lng`, `geofence_radius_meters`.
 
 ---
 
-## 9. Configuration Defaults
+## 5. Deep-Dive Workflows (Structural Logic for AI)
 
-| Setting | Default |
+*The following logic dictates exactly how the front-end inputs manipulate the back-end database state.*
+
+### Workflow 1: Employee Clock-In (DTR Generation) — Updated with Geofencing
+
+- **Trigger:** Employee approaches Kiosk or uses ESS Mobile.
+- **User Action:** Opens ESS → Taps "Clock In" → Browser requests location permission → Camera snaps selfie → Taps "Confirm".
+- **System Logic:**
+  1. Browser calls `navigator.geolocation.getCurrentPosition()` with a 10-second timeout.
+  2. **Permission denied:** Clock-in is blocked. Error message: *"Location access is required to clock in. Please enable it in your browser settings."*
+  3. **GPS timeout / no signal:** Clock-in is blocked. Error message: *"Unable to detect your location. Please move to an area with better signal and try again."*
+  4. System receives `{ latitude, longitude, accuracy }` from the device.
+  5. System queries Employee_Profile → fetches assigned Branch → retrieves `geofence_lat`, `geofence_lng`, `geofence_radius_meters`.
+  6. System applies **Haversine formula** to calculate straight-line distance (meters) between device coordinates and branch center.
+  7. **Accuracy buffer applied:** Effective allowed distance = `geofence_radius_meters + min(device_accuracy_meters, 30)`. This prevents false rejections from device GPS drift (capped at 30m buffer).
+  8. **Distance > effective radius:** Clock-in is blocked. Error message: *"You are [X]m from [Branch Name]. You must be within [radius]m to clock in."*
+  9. **Distance ≤ effective radius:** Proceed.
+  10. Saves Attendance_Log: `{ employee_id, timestamp, latitude, longitude, accuracy_meters, geofence_passed: true, selfie_url }`.
+  11. Computes against Shift_Schedule to identify Tardiness/Undertime minutes.
+- **Final Output:** Updates the Daily_Time_Record row for that specific day.
+- **Kiosk Exception:** Steps 1–8 are skipped. Kiosk is physically fixed at the branch. Attendance_Log records the kiosk's stored static coordinates.
+
+### Workflow 2: Leave & Undertime (UT) Application
+
+- **Trigger:** Employee needs to be absent or leave early.
+- **User Action:** Opens ESS → "File Leave" or "File UT" → Selects dates → Uploads Medical Cert (if Sick Leave) → Submits.
+- **System Logic:**
+  1. Status set to Pending. System checks Leave_Entitlement balance.
+  2. Routes to assigned Supervisor. Supervisor clicks "Approve".
+  3. System deducts 1 day from Leave_Entitlement balance.
+  4. System overwrites the Daily_Time_Record for that date, marking it "Paid Leave" (bypassing absence deductions).
+- **Final Output:** Employee is paid basic rate for the day without penalization.
+
+### Workflow 3: Overtime (OT) Application
+
+- **Trigger:** Employee works beyond scheduled shift.
+- **User Action:** ESS → "File OT" → Inputs exact hours (e.g., 2 hours) → Adds justification.
+- **System Logic:**
+  1. System cross-references the Attendance_Log. (Rejects OT if there is no actual clock-out time supporting the claim.)
+  2. Routes to Manager. Manager clicks "Approve".
+  3. System updates the Daily_Time_Record to reflect +2 Approved OT Hours.
+- **Final Output:** The Payroll Engine will now query these 2 hours and apply the 125% multiplier during the next run. Unapproved OT is *ignored* by the engine.
+
+### Workflow 4: Expense Claims & Reimbursements
+
+- **Trigger:** Employee pays for a client meal or transportation.
+- **User Action:** ESS → "Claims" → Uploads OR/Receipt photo → Inputs amount (₱500).
+- **System Logic:**
+  1. Routes to HR/Finance. Finance verifies receipt and clicks "Approve".
+  2. System creates a Payroll_Adjustment record tagged as "Non-Taxable Addition".
+  3. System attaches this record to the *next upcoming* Payroll_Book.
+- **Final Output:** The ₱500 is added to the employee's Net Take-Home Pay in the next Payroll Sheet, completely bypassing the withholding tax computation.
+
+### Workflow 5: Profile Update (Security Safeguard)
+
+- **Trigger:** Employee changes bank accounts.
+- **User Action:** ESS → "Edit Info" → Inputs new Bank Account number.
+- **System Logic:**
+  1. To prevent fraud, the Employee_Profile is NOT updated immediately.
+  2. A Profile_Update_Request is generated and routed to HR Admin.
+  3. HR verifies identity and clicks "Approve".
+- **Final Output:** Database commits the change. The next bank file generation uses the new account.
+
+### Workflow 6: HR Applying Company Holidays
+
+- **Trigger:** A national holiday approaches.
+- **User Action:** HR Admin → Settings → "Holiday Calendar" → Selects Date → Selects Type (e.g., Regular Holiday) → Selects Scope (Global vs Branch).
+- **System Logic:**
+  1. Holiday is saved to the Holiday_Calendar table.
+  2. During the Payroll Run, the Engine intercepts the Daily_Time_Record for all employees on that date.
+  3. If DTR = "No Log", Engine injects 100% Basic Pay (Holiday Pay).
+  4. If DTR = "Present", Engine applies 200% multiplier to the base hours worked.
+- **Final Output:** Automated premium pay without manual HR intervention.
+
+### Workflow 7: End-to-End Payroll Run (The Book & The Sheet)
+
+- **Trigger:** Payroll Cutoff ends (e.g., 15th of the month).
+- **User Action:** HR navigates to "Payroll Book" → Clicks "Generate New Run".
+- **System Logic:**
+  1. **Locking:** System locks all DTRs for the period. No more employee edits allowed.
+  2. **Initialization:** Creates a new Payroll_Book ID.
+  3. **Batch Loop:** Engine loops through every active Employee_Profile.
+  4. **Computation:** Executes the Gross-to-Net sequence (Section 1B), fetching base rates, approved OT, Lates, Holiday multipliers, Claims, and Statutory Tables.
+  5. **Snapshot:** Generates a Payroll_Sheet record for each employee, permanently freezing the computed values so future salary raises don't retroactively alter past books.
+- **Final Output:** HR reviews the master Payroll Sheet data grid. Clicks "Finalize". System generates Bank Advice CSVs and publishes secure digital Payslips to the ESS.
+
+### Workflow 8: Final Pay & Offboarding Computation
+
+- **Trigger:** Employee resigns or is terminated.
+- **User Action:** HR → Employee Profile → "Initiate Offboarding" → Sets End Date.
+- **System Logic (The Offboarding Engine):**
+  1. **Access Revocation:** Schedules ESS lockout for the End Date.
+  2. **Asset Clearance:** System queries Asset_Tracking. Flags HR if the employee has unreturned laptops/uniforms. HR can input a monetary deduction equivalent to the asset cost.
+  3. **Leave Conversion:** Queries Leave_Entitlement. Converts unused Vacation Leaves into monetary value.
+  4. **13th Month Proration:** Calculates YTD Basic Pay / 12.
+  5. **Tax Annualization:** Calculates Total YTD Income vs. Total YTD Tax Withheld. Automatically generates a Tax Refund addition or Tax Payable deduction.
+  6. **Final Computation:** Sums unpaid salary + 13th Month + Leave Cash-out + Tax Refund − Asset Deductions.
+- **Final Output:** System generates a specialized Final Payroll_Sheet. Automatically populates the legal **Quitclaim** document and the final **BIR Form 2316** for the employee's signature.
+
+### Workflow 10: Period DTR Submission & Approval Chain (New)
+
+- **Trigger:** Cutoff period ends (e.g., May 31). Employee is notified via ESS to review and submit their DTR.
+- **User Action (Employee):** ESS → DTR → "My DTR" → selects the current cutoff period → reviews each day's record → taps "Submit DTR".
+- **System Logic:**
+  1. System locks the employee's ability to add new Manual entries for that period after submission.
+  2. Creates a `DTR_Submission` record with status = **Submitted**.
+  3. DTR_Submission appears immediately on the HR Admin's DTR Records view, regardless of approval status.
+  4. Notification sent to assigned Supervisor.
+- **Supervisor Review:**
+  1. Supervisor opens the DTR_Submission → sees each day as a row: Official Time In/Out (locked, greyed) + Manual Time In/Out (editable).
+  2. Supervisor can edit the Manual Time In/Out on any day — must select a `DTR_Manual_Reason_Code` and optional notes.
+  3. Every supervisor edit writes an immutable entry to `DTR_Audit_Log` (actor_role = Supervisor).
+  4. Supervisor's manual entry overrides any existing employee manual entry for that day in the Effective layer.
+  5. Supervisor clicks "Approve & Forward to Manager". Status → **Supervisor Approved**.
+  6. Supervisor may also click "Return to Employee" with a note. Status → **Returned**.
+- **Manager Review:**
+  1. Manager opens the DTR_Submission → views the daily breakdown (Official + Manual + Effective columns) — all fields read-only.
+  2. Manager can open the **DTR Audit Log** panel: see all manual edits (employee and supervisor), with timestamps and reasons.
+  3. Manager clicks "Approve". Status → **Manager Approved**. DTR is now locked and eligible for the next Payroll Run.
+  4. Manager may click "Return to Supervisor" with a note. Status → **Returned**.
+- **Payroll Engine Rule:** Only DTR_Submissions with status = **Manager Approved** are consumed during a payroll run. Unapproved or returned submissions are flagged in the Payroll Pre-Run Review and must be resolved before the run can be finalized.
+- **Final Output:** Approved DTR_Submission feeds the Gross-to-Net computation using Effective Time In/Out values for each day in the period.
+
+### Workflow 11: Manual DTR Entry (Employee & Supervisor) (New)
+
+- **Trigger:** An employee's Official clock-in or clock-out is missing, incorrect, or needs a legitimate correction.
+- **Employee User Action:** ESS → DTR → selects the cutoff period → finds the affected day → taps the Manual Time In or Manual Time Out field.
+- **System Logic (Employee):**
+  1. System displays a form: Manual Time field (time picker) + Reason Code dropdown + Notes (required if Reason = OTHER).
+  2. Employee cannot edit: Official Time In, Official Time Out, or Effective values directly.
+  3. On submit: Manual value is saved. `DTR_Audit_Log` entry written (actor_role = Employee).
+  4. The Effective layer immediately recalculates using the new Manual value.
+  5. Employee can only enter manual entries before submitting the period DTR. After submission, the Manual fields are locked to the employee.
+- **Supervisor User Action:** Admin Desktop → DTR Records → opens a DTR_Submission → selects the affected day row → clicks the Manual Time In or Manual Time Out cell.
+  1. Same form appears: time picker + Reason Code + Notes.
+  2. Supervisor can edit Manual entries at any point during their review, even after employee has already submitted.
+  3. Supervisor's entry always takes precedence over the employee's manual entry in the Effective layer.
+  4. `DTR_Audit_Log` entry written (actor_role = Supervisor).
+- **Override Priority (Effective Layer):**
+  - Priority 1: Supervisor's manual entry (if exists)
+  - Priority 2: Employee's manual entry (if exists)
+  - Priority 3: Official captured value (GPS/selfie)
+- **Final Output:** The Effective Time In/Out reflects the correct values for payroll computation while the Official record remains permanently intact as the audit baseline.
+
+### Workflow 9: HR Branch Geofence Setup (New)
+
+- **Trigger:** A new branch is created, or HR needs to update an existing branch's geofence.
+- **User Action:** HR Admin → Settings → Branch Management → Select Branch → "Configure Geofence".
+- **System Logic:**
+  1. HR is presented with an interactive map (Google Maps Embed API or Mapbox GL JS).
+  2. HR drags a pin to the exact branch location (or searches the address to auto-center).
+  3. HR sets the **enforcement radius** using a slider (minimum: 30m, maximum: 500m, default: 100m).
+  4. A visual circle overlay shows the geofence boundary in real time on the map.
+  5. HR clicks "Save Geofence".
+  6. System writes `geofence_lat`, `geofence_lng`, `geofence_radius_meters` to the Branch record.
+  7. System immediately begins enforcing the new geofence on all subsequent clock-ins for employees assigned to that branch.
+- **Final Output:** Branch record updated. All affected employees will be subject to the new geofence on their next clock-in attempt.
+
+---
+
+## 6. Technical Implementation Notes
+
+### GPS Geofencing — Implementation Spec
+
+#### Tech Stack (Zero-Cost Core)
+
+| Component | Technology | Cost | Purpose |
+|---|---|---|---|
+| Device Location | Browser Geolocation API (`navigator.geolocation`) | Free (built-in) | Retrieves device GPS coordinates |
+| Distance Calculation | Haversine Formula (pure JS/backend math) | Free (no API) | Computes straight-line distance between two lat/lng points |
+| Map UI for HR Setup | Google Maps Embed API or Mapbox GL JS | Free tier sufficient | Visual pin placement and radius circle for HR admin |
+| Geofence Data | Branch table in app DB | — | Stores center coordinates + radius per branch |
+
+#### Haversine Formula Reference
+
+```
+R = 6,371,000  // Earth radius in meters
+
+φ1, φ2 = latitude of point 1 and 2 (in radians)
+Δφ = φ2 − φ1
+Δλ = λ2 − λ1
+
+a = sin²(Δφ/2) + cos(φ1) × cos(φ2) × sin²(Δλ/2)
+c = 2 × atan2(√a, √(1−a))
+distance = R × c  // Result in meters
+```
+
+This is computed server-side (not client-side) to prevent tampering.
+
+#### GPS Accuracy & Drift Handling
+
+Mobile GPS accuracy varies from ~5m (clear outdoor signal) to ~50m+ (indoors/urban canyon). To prevent legitimate employees from being falsely rejected:
+
+- The device reports `coords.accuracy` — a radius in meters within which the true location lies.
+- The system applies an **accuracy buffer:** effective allowed distance = `geofence_radius + min(coords.accuracy, 30)`.
+- The 30m cap prevents abuse (employees in poor signal areas cannot exploit unlimited buffers).
+- The raw accuracy value is logged to Attendance_Log for audit purposes.
+
+#### Enforcement Radius Guidance for HR
+
+| Branch Type | Recommended Radius |
 |---|---|
-| Deployment | Single application, logical multi-tenancy by `tenant_id` |
-| Payroll cycle | Semi-monthly |
-| Statutory deduction timing | Second (month-end) cutoff |
-| Monthly-paid denominator | 261 working days |
-| 13th-month basis | Strict DOLE (Basic Pay) |
-| 13th-month & other benefits exclusion cap | ₱90,000 combined, annual |
-| Employee tax classification | `Regular` by default; `MWE` per employee, validated vs. regional minimum wage |
-| Compliance filing posture | Export-only (the client files) |
-| First bank file format | BPI (others available) |
-| DTR approval before payroll | Required (Admin override available) |
-| Geofence handling | Flag-and-allow (never hard-reject) |
-| Plan tiers | `STARTER`, `GROWTH`, `PRO` (AI add-on bundled into `PRO`) |
-| Default roles | `Admin`, `Payroll`, `Employee` (custom roles supported) |
-| Operator identity | `SUPER_ADMIN`, separate from tenant RBAC, MFA, fully audited |
-| Statutory tables | Global (no `tenant_id`), `SUPER_ADMIN`-managed via the shared importer |
-| Statutory admin endpoints | `/api/admin/statutory/*`, `SUPER_ADMIN` only; no tenant override |
-| Field encryption | AES-256-GCM, envelope (DEK wrapped by KEK); env-var KEK now, KMS later; HMAC for searchable fields |
-| Money arithmetic | Centralized `src/lib/money/` centavo module; round half up to the centavo |
-| Engine tests | Golden-case suite (`Engine_Test_Spec.md`) required before any real payroll output |
-| Hosting | Render (Singapore region), predictable plan-based pricing |
-| Authentication | Better Auth (self-hosted in Postgres); MFA on `SUPER_ADMIN` |
-| Email | Resend (transactional) |
+| Single-floor office | 50–100m |
+| Mall / multi-floor building | 100–150m |
+| Outdoor / field site | 150–300m |
+| Multi-building campus | 200–500m |
+
+#### Kiosk Mode Exception
+
+Kiosk devices are physically installed at the branch. GPS checks are not performed on Kiosk clock-ins. Instead, the system records the **Branch's stored geofence center coordinates** in the Attendance_Log as the clock-in location. This maintains a consistent audit trail.
+
+#### Clock-In Error States
+
+| Condition | User-Facing Message | System Action |
+|---|---|---|
+| Location permission denied | "Location access is required to clock in. Please enable it in your browser settings." | Block clock-in |
+| GPS timeout (>10 seconds) | "Unable to detect your location. Please move to an area with better signal." | Block clock-in |
+| Outside geofence | "You are [X]m from [Branch Name]. You must be within [radius]m to clock in." | Block clock-in, log attempt |
+| Inside geofence | *(none — proceeds normally)* | Allow clock-in |
+
+#### Audit Trail
+
+Every Attendance_Log record stores:
+
+```
+{
+  employee_id,
+  timestamp,
+  latitude,
+  longitude,
+  accuracy_meters,
+  geofence_passed,       // true / false
+  geofence_distance_m,   // actual computed distance
+  geofence_radius_m,     // branch radius at time of attempt
+  clock_in_method,       // "ESS_MOBILE" or "KIOSK"
+  selfie_url
+}
+```
+
+This allows HR to audit disputed clock-in rejections with full evidence.
 
 ---
 
-## 10. Recommended Build Sequence
-
-This section is sequencing guidance only. All features in Sections 1–9 are in scope; this is the order that delivers a sellable system fastest and keeps compliance risk contained. Nothing here is excluded.
-
-1. **Foundation:** multi-tenancy + `tenant_id` row-level security, dynamic RBAC, security/DPA (envelope encryption, audit log, consent), R2 storage, the `src/lib/money/` centavo module, and the tenant setup wizard.
-2. **Statutory core (D1 scope):** the effective-dated statutory tables seeded via the shared importer run as a **CLI seed** (no admin UI yet), plus the **resolver** the engine reads through. The `SUPER_ADMIN` statutory admin endpoints (`/api/admin/statutory/*`) are deferred to a later phase and reuse the same importer when built.
-3. **Core payroll wedge:** employee master + StatutoryId + documents; **manual day-level DTR entry** + shift logic; DTR approval routing; leave & OT; the gross-to-net engine (stacking matrix, MWE/non-taxable, 13th-month) — built behind the `Engine_Test_Spec.md` quality gate; payroll book/sheet with corrections; payslips; BPI bank file + CSV; 1601-C data + 2316.
-4. **Compliance depth:** year-end annualization + Alphalist; remaining statutory reports (R-3, RF1, MCRF); additional bank files; expense claims; loans; leave accrual automation; offboarding & final pay.
-5. **Attendance & engagement:** CSV/biometric DTR import; ESS time clock with selfie + GPS geofence; Kiosk mode; e-forms; profile-update requests; analytics/pivots; statutory admin UI/endpoints.
-6. **Growth modules:** ATS; asset tracking; incident/NTE; movements.
-7. **AI Assistant add-on:** metering gateway, then the touchpoint features (Section 8), gated to `PRO`.
-
----
-
-*Complete build specification. Compliance parameters (BIR withholding tables, de minimis ceilings, regional minimum wage) are loaded as effective-dated configuration data and verified against current BIR and RTWPB issuances before seeding.*
+*End of Blueprint v2.0*

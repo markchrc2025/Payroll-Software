@@ -39,7 +39,17 @@ export async function GET(req: NextRequest) {
     Promise.all([
       tx.dTRRecord.findMany({
         where,
-        orderBy: [{ employeeId: "asc" }, { date: "desc" }],
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              employeeNumber: true,
+            },
+          },
+        },
+        orderBy: [{ date: "desc" }, { employeeId: "asc" }],
         skip: (page - 1) * limit,
         take: limit,
       }),

@@ -95,3 +95,58 @@ export const aggregateDtrSchema = z.object({
   periodEnd: z.string().date(),
   replace: z.boolean().default(false),
 });
+
+// ---------------------------------------------------------------------------
+// DTR Submissions
+// ---------------------------------------------------------------------------
+
+export const DTR_MANUAL_REASON_CODES = [
+  "FORGOT_CLOCK_IN",
+  "FORGOT_CLOCK_OUT",
+  "GPS_FAILURE",
+  "KIOSK_OFFLINE",
+  "SYSTEM_ERROR",
+  "SCHEDULE_CHANGE",
+  "OTHER",
+] as const;
+
+export const DTR_SUBMISSION_STATUSES = [
+  "SUBMITTED",
+  "SUPERVISOR_APPROVED",
+  "MANAGER_APPROVED",
+  "RETURNED",
+] as const;
+
+export const createDtrSubmissionSchema = z.object({
+  employeeId: z.string().cuid(),
+  periodStart: z.string().date(),
+  periodEnd: z.string().date(),
+});
+
+export const listDtrSubmissionsSchema = z.object({
+  employeeId: z.string().cuid().optional(),
+  status: z.enum(DTR_SUBMISSION_STATUSES).optional(),
+  periodStart: z.string().date().optional(),
+  periodEnd: z.string().date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export const returnDtrSubmissionSchema = z.object({
+  reason: z.string().min(1).max(1000),
+});
+
+// ---------------------------------------------------------------------------
+// Manual time override (admin/supervisor)
+// ---------------------------------------------------------------------------
+
+export const manualTimeOverrideSchema = z.object({
+  /** "manualTimeIn" | "manualTimeOut" */
+  field: z.enum(["manualTimeIn", "manualTimeOut"]),
+  /** Full ISO-8601 datetime string, or null to clear the override. */
+  value: z.string().datetime({ offset: true }).nullable(),
+  reasonCode: z.enum(DTR_MANUAL_REASON_CODES),
+  notes: z.string().max(1000).optional().nullable(),
+  /** Link the audit entry to the open submission, if known. */
+  dtrSubmissionId: z.string().cuid().optional().nullable(),
+});

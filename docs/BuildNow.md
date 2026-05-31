@@ -1,75 +1,95 @@
-## What's Already Built ✅
+## T&A / DTR: Blueprint vs. Current System
 
-### Admin Desktop (Part 2)
-| Journey Phase | Implementation |
-|---|---|
-| Company setup — Branches, Departments, Positions, Work Locations, Shift Schedules | `/branches`, `/departments`, `/positions`, `/work-locations`, `/shift-schedules` |
-| Holiday Calendar, Leave Policies, Pay Rules, Roles | `/settings/holidays`, `/settings/leave-policies`, `/settings/pay-rules`, `/settings/roles` |
-| Employee create/edit/import (CSV bulk) | `/employees`, `/employees/new`, `/employees/[id]/edit`, `api/employees/bulk-import` |
-| ATS — Job postings + Applicant pipeline | `/recruitment` + `api/job-postings`, `api/applicants` |
-| Daily T&A dashboard + DTR override | `/attendance` |
-| Leave approval (Admin) | `/leave` |
-| OT approval (Admin) with approve/reject | `/ot-applications` |
-| Expense claim approval (Admin) | `/expense-claims` |
-| Profile update request approval | `/profile-update-requests` |
-| Payroll run — generate, recompute, finalize | `/payroll`, `/payroll/[id]` |
-| FINAL_PAY run type | Exists in payroll |
-| Tax annualization | `api/payroll/runs/[id]/annualize` |
-| Bank file generation (6 banks) | `api/payroll/runs/[id]/bank-files` |
-| All statutory reports | SSS, PhilHealth, Pag-IBIG, BIR 1601-C, BIR 2316, Alphalist — all under `api/payroll/reports/` |
-| Assets, Loans, Incidents, Movements | Dedicated pages + APIs |
+### What the Blueprint Defines
 
-### ESS Mobile (Part 3)
-| Journey Phase | Implementation |
-|---|---|
-| GPS Clock-In / Clock-Out with selfie | `/ess/clock` |
-| Leave filing | `/ess/leaves` |
-| Payslip viewing (PIN-protected) | `/ess/payslips` |
-| Kiosk clock-in (PIN entry) | `/(kiosk)` |
+The DTR workflow has **three distinct layers** per day and a **period-level submission** concept:
+
+**Three Layers per Day:**
+| Layer | Fields | Who Owns It | Mutable? |
+|---|---|---|---|
+| **Official** | `official_time_in`, `official_time_out` | GPS/selfie capture | Immutable (never edited) |
+| **Manual** | `manual_time_in`, `manual_time_out` + `reason_code` + `notes` + `actor` | Employee (pre-submit) or Supervisor | Audited override |
+| **Effective** | `effective_time_in`, `effective_time_out` | System-computed | Auto-derived |
+
+**Override priority:** Supervisor manual > Employee manual > Official captured.
+
+**Period Submission Flow (not daily):**
+```
+Employee submits DTR (end of cutoff)
+    → Supervisor reviews/edits manual layer → Supervisor Approved
+        → Manager reviews audit log (read-only) → Manager Approved
+            → Payroll Engine consumes
+```
+The payroll engine **only accepts `Manager Approved` submissions** — unapproved ones are flagged in pre-run review.
+
+**Supporting models required:**
+- `DTRSubmission` — one row per employee per cutoff period; tracks multi-step status (`SUBMITTED / SUPERVISOR_APPROVED / MANAGER_APPROVED / RETURNED`)
+- `DTRAuditLog` — immutable log of every manual field edit (actor, role, old/new value, reason, timestamp)
 
 ---
 
-## Gaps — Missing from the User Journey 🔴
+### What Currently Exists
 
-### ESS Module (High Priority)
-These are defined in the User Journey but have **no ESS UI page**:
+**Schema — `DTRRecord`** (schema.prisma):
+- Stores **computed aggregate minutes**: `workedMinutes`, `lateMinutes`, `undertimeMinutes`, `otMinutes`, `nsdMinutes`
+- `approvalStatus: DTRStatus` — only `PENDING / APPROVED / REJECTED` (flat, single-step)
+- **No three-layer time fields** — official/manual/effective timestamps don't exist
+- Has `isLocked` for payroll finalize
 
-| Journey Step | Missing ESS Route | Notes |
+**Schema — `AttendanceLog`** (schema.prisma):
+- Raw punch records (IN/OUT) with GPS, selfie key, geofence flags — this IS the official layer source
+- Correctly immutable
+
+**Schema — `DTRApprovalConfig`** (schema.prisma):
+- Config model exists (`requiresSupervisorVerification`, `requiresManagerApproval`, deadline hours)
+- The *config* is ready, but the *process* it governs isn't implemented yet
+
+**Missing from schema:**
+- `DTRSubmission` — period-level grouping model with multi-step status
+- `DTRAuditLog` (or equivalent) — audit trail for manual edits
+- The three-layer time columns on `DTRRecord`
+
+**API — `/api/dtr`** (route.ts):
+- Lists and upserts individual `DTRRecord` rows
+- `/api/dtr/[id]/approve` and `/reject` — single-step approval only
+
+**UI — `DtrRecordsTab`** (DtrRecordsTab.tsx):
+- Shows individual daily rows per employee
+- Approve/Reject buttons on each row
+- **Does not match the blueprint's period-submission view** (should be one row per employee per cutoff, drill-down to daily breakdown)
+
+---
+
+### Gap Summary & What Needs to Be Built
+
+| # | Gap | Impact |
 |---|---|---|
-| Step 7 — File OT Request | `/ess/ot-applications` | API (`api/ot-applications`) exists; ESS UI missing |
-| Step 8 — File Undertime | `/ess/undertime` | Neither API nor UI exists |
-| Step 9 — Submit Expense Claim | `/ess/expense-claims` | `api/ess/expense-claims` exists; ESS UI missing |
-| Step 12 — Request Profile Update | `/ess/profile` | `api/ess/profile` exists; ESS UI missing |
-| Step 13 — View Assigned Assets | `/ess/assets` | No ESS-side asset viewer |
-| Step 6 — View Leave Balance | `/ess/leaves` (balance tab) | Needs balance sub-view (may be partial) |
-| Step 14–15 — Offboarding final payslip + revocation notice | ESS lockout screen | No final confirmation screen |
-
-### Admin Desktop (Medium Priority)
-| Journey Step | Gap |
-|---|---|
-| Step 22–25 — Offboarding workflow | No "Initiate Offboarding" UI on `/employees/[id]`. Final Pay run type exists but the wizard (separation type, last day, asset clearance, quitclaim/2316 generation) is not wired up |
-| Step 11 — 1-Click Convert Applicant to Employee | Needs verification — the recruitment page may not have this conversion trigger |
-| Step 1 — Setup Wizard on first login | No guided onboarding wizard for new tenants |
-| Step 8 — Employee bank account on profile update | Needs confirm this is editable in the employee edit page |
-
-### Compliance / Reports
-| Item | Status |
-|---|---|
-| Quitclaim auto-generation (PDF) | Not found — mentioned in blueprint |
-| BIR 2316 PDF for final pay | API exists; PDF rendering needs confirmation |
+| 1 | `DTRRecord` has no `official_time_in/out`, `manual_time_in/out`, `effective_time_in/out` columns | Payroll engine cannot compute hours correctly from time data; currently uses pre-aggregated minutes |
+| 2 | No `DTRSubmission` model | Can't track period-level approval state; supervisor/manager chain has no data anchor |
+| 3 | No `DTRAuditLog` model | Manager has no audit trail to review; DOLE audit exposure |
+| 4 | Approval flow is single-step (APPROVED/REJECTED) | Doesn't match Submitted → Supervisor Approved → Manager Approved chain |
+| 5 | Admin DTR UI shows daily rows, not period submissions | Wrong mental model; HR can't see "which employees have submitted for this cutoff" |
+| 6 | ESS manual entry flow (`/ess/dtr`) not wired to `DTRRecord` manual layer | Employees can't correct missed clock-ins before submitting |
 
 ---
 
-## Recommended Build Order
+### How I Would Apply This
 
-```
-1. ESS — OT filing page        (uses existing api/ot-applications)
-2. ESS — Expense claims page   (uses existing api/ess/expense-claims)
-3. ESS — Profile update page   (uses existing api/ess/profile)
-4. ESS — Undertime filing      (new API + UI)
-5. ESS — Asset viewer          (read-only)
-6. Admin — Offboarding wizard  (/employees/[id]/offboard — highest complexity)
-7. Admin — ATS 1-click convert to employee
-```
+The build is naturally sequenced in two tracks:
 
-The payroll engine, statutory reports, and approval workflows are well-built. The main gap is the **ESS self-service surface** — employees can clock in and view payslips, but can't file OT, claims, undertime, or manage their profile from mobile yet.
+**Track A — Schema migration (foundation):**
+1. Add `official_time_in/out`, `manual_time_in/out`, `manual_reason_code`, `manual_actor_id/role`, `effective_time_in/out` to `DTRRecord`
+2. Add `DTRSubmission` model with `status` enum (`SUBMITTED / SUPERVISOR_APPROVED / MANAGER_APPROVED / RETURNED`) and FK to `PayrollPeriod` + `Employee`
+3. Add `DTRAuditLog` model (immutable append)
+4. Migrate `DTRStatus` from 3-value to match the new submission statuses
+
+**Track B — API + UI layer (on top of schema):**
+5. New `/api/dtr/submissions` — list by cutoff, filter by status
+6. `/api/dtr/submissions/[id]/approve-supervisor` and `approve-manager` and `return`
+7. Admin UI: rewrite `DtrRecordsTab` to show period-submission view with daily drill-down
+8. ESS: wire manual entry form to save `manual_time_in/out` + write `DTRAuditLog`
+
+**Payroll engine dependency:**
+Currently the engine reads `PeriodInput` (manually entered `daysWorked`, `lateUndertimeMinutes`, etc.). Once the DTR pipeline is complete, a new step compiles `DTRSubmission` (Manager Approved) → `PeriodInput` automatically, removing the need for manual HR data entry.
+
+---
