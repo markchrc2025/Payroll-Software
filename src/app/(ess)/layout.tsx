@@ -27,7 +27,7 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
   const isLogin = pathname === "/ess/login";
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] pb-16">
+    <div className="min-h-screen bg-[#F0F4F8] pb-16 font-[family-name:var(--font-plus-jakarta-sans)]">
       {children}
       {!isLogin && (
         <nav className="fixed bottom-0 inset-x-0 h-16 bg-white border-t border-gray-100 flex items-center justify-around z-50">

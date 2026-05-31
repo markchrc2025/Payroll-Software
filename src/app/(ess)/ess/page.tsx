@@ -286,10 +286,10 @@ export default function EssDashboard() {
       <div className="bg-[#1E3A5F]">
         {/* Status row */}
         <div className="px-5 pt-3 flex justify-between items-center">
-          <span className="text-[11px] text-white/60">
+          <span className="text-[11px] text-white/60" suppressHydrationWarning>
             {now.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}
           </span>
-          <span className="text-[11px] text-white/40">
+          <span className="text-[11px] text-white/40" suppressHydrationWarning>
             {now.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}
           </span>
         </div>
@@ -477,98 +477,6 @@ export default function EssDashboard() {
         )}
       </div>
 
-    </div>
-  );
-}
-
-
-interface EssProfile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  employeeNumber: string;
-}
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-const QUICK_LINKS = [
-  { href: "/ess/payslips", label: "Payslips", icon: FileText, description: "View your pay history" },
-  { href: "/ess/leaves", label: "Leave", icon: CalendarDays, description: "Check balances & file requests" },
-  { href: "/ess/clock", label: "Clock In / Out", icon: Timer, description: "Record your attendance" },
-  { href: "/ess/ot-applications", label: "Overtime", icon: Clock4, description: "File & track OT requests" },
-  { href: "/ess/expense-claims", label: "Expense Claims", icon: Receipt, description: "Submit reimbursement requests" },
-  { href: "/ess/undertime", label: "Undertime", icon: LogIn, description: "Report early departures" },
-  { href: "/ess/assets", label: "My Assets", icon: Package, description: "View assigned equipment" },
-];
-
-export default function EssDashboard() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<EssProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const token = localStorage.getItem("ess_token");
-    if (!token) { router.replace("/ess/login"); return; }
-
-    fetch("/api/ess/profile", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => {
-        if (r.status === 401) { localStorage.removeItem("ess_token"); router.replace("/ess/login"); return null; }
-        return r.json();
-      })
-      .then((d) => { if (d) setProfile(d?.data ?? null); })
-      .finally(() => setLoading(false));
-  }, [router]);
-
-  return (
-    <div className="p-4 space-y-6 max-w-lg mx-auto">
-      {/* Greeting card */}
-      <Card className="bg-sky-500 text-white">
-        <CardContent className="pt-6 pb-4">
-          {loading ? (
-            <Skeleton className="h-7 w-56 bg-sky-400" />
-          ) : (
-            <>
-              <p className="text-lg font-semibold">{getGreeting()}, {profile?.firstName ?? "Employee"}!</p>
-              <p className="text-sky-100 text-sm">{profile?.employeeNumber}</p>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quick links */}
-      <div className="grid grid-cols-1 gap-3">
-        {QUICK_LINKS.map(({ href, label, icon: Icon, description }) => (
-          <Link key={href} href={href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader className="flex flex-row items-center gap-3 pb-2 pt-4">
-                <div className="p-2 rounded-full bg-sky-50 text-sky-500">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">{label}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{description}</p>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      {/* Sign out */}
-      <button
-        className="w-full text-sm text-red-500 underline text-center"
-        onClick={() => {
-          localStorage.removeItem("ess_token");
-          router.replace("/ess/login");
-        }}
-      >
-        Sign out
-      </button>
     </div>
   );
 }
