@@ -23,36 +23,40 @@ import {
 } from "@/lib/validations/payroll-run";
 
 export async function GET(req: NextRequest) {
-  const guard = await requirePermission(req, "PAYROLL", "READ");
-  if (guard instanceof Response) return guard;
-  const { ctx: auth } = guard;
+  try {
+    const guard = await requirePermission(req, "PAYROLL", "READ");
+    if (guard instanceof Response) return guard;
+    const { ctx: auth } = guard;
 
-  const qp = Object.fromEntries(req.nextUrl.searchParams);
-  const parsed = listPayrollRunsSchema.safeParse(qp);
-  if (!parsed.success) return err("Invalid query", 422, parsed.error.flatten());
-  const { page, limit, status, runType } = parsed.data;
+    const qp = Object.fromEntries(req.nextUrl.searchParams);
+    const parsed = listPayrollRunsSchema.safeParse(qp);
+    if (!parsed.success) return err("Invalid query", 422, parsed.error.flatten());
+    const { page, limit, status, runType } = parsed.data;
 
-  const { total, rows } = await listRuns({
-    tenantId: auth.tenantId,
-    page,
-    limit,
-    status,
-    runType,
-  });
-  return paginated(rows.map((r) => serializePayrollBook(r)), total, page, limit);
+    const { total, rows } = await listRuns({
+      tenantId: auth.tenantId,
+      page,
+      limit,
+      status,
+      runType,
+    });
+    return paginated(rows.map((r) => serializePayrollBook(r)), total, page, limit);
+  } catch (e) {
+    return serverError(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requirePermission(req, "PAYROLL", "CREATE");
-  if (guard instanceof Response) return guard;
-  const { ctx: auth } = guard;
-
-  const body = await req.json().catch(() => null);
-  const parsed = createPayrollRunSchema.safeParse(body);
-  if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
-  const d = parsed.data;
-
   try {
+    const guard = await requirePermission(req, "PAYROLL", "CREATE");
+    if (guard instanceof Response) return guard;
+    const { ctx: auth } = guard;
+
+    const body = await req.json().catch(() => null);
+    const parsed = createPayrollRunSchema.safeParse(body);
+    if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
+    const d = parsed.data;
+
     const book = await createDraftRun({
       tenantId: auth.tenantId,
       periodStart: d.periodStart,

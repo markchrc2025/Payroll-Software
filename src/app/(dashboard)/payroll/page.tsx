@@ -89,7 +89,8 @@ export default function PayrollPage() {
     });
     const res = await fetch(`/api/payroll/runs?${params}`);
     const json = await res.json();
-    setRuns(json);
+    if (res.ok) setRuns(json);
+    else toast.error(json.error ?? "Failed to load payroll runs");
     setIsLoading(false);
   }, [page, filterStatus]);
 
@@ -192,7 +193,7 @@ export default function PayrollPage() {
                   ))}
                 </TableRow>
               ))
-            ) : !runs?.data.length ? (
+            ) : !runs?.data?.length ? (
               <TableRow>
                 <TableCell colSpan={6} className="py-12 text-center text-[#6B7A8D]">
                   <Wallet className="mx-auto mb-2 h-8 w-8 opacity-30" />
@@ -230,7 +231,7 @@ export default function PayrollPage() {
                       {new Date(run.createdAt).toLocaleDateString("en-PH")}
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-[#6B7A8D]" render={<Link href={`/payroll/${run.id}`} />}>
+                      <Button size="icon" variant="ghost" nativeButton={false} className="h-7 w-7 text-[#6B7A8D]" render={<Link href={`/payroll/${run.id}`} />}>
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>

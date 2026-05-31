@@ -470,6 +470,7 @@ model Tenant {
   expenseClaims         ExpenseClaim[]
   essSessions           EssSession[]
   otApplications        OTApplication[]
+  undertimeRequests     UndertimeRequest[]
   profileUpdateRequests ProfileUpdateRequest[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
@@ -770,6 +771,7 @@ model Employee {
   expenseClaims           ExpenseClaim[]
   essSessions             EssSession[]
   otApplications          OTApplication[]
+  undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
   attendanceLogs          AttendanceLog[]
 
@@ -1937,6 +1939,42 @@ model OTApplication {
   rejectedAt       DateTime?
   rejectionReason  String?        @db.Text
   cancelledAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+}
+
+// =============================================================================
+// UNDERTIME REQUESTS (Phase V)
+// =============================================================================
+
+/// Employee files an early-departure notification for supervisor approval.
+/// On APPROVED the linked DTRRecord.undertimeMinutes is set.
+model UndertimeRequest {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Calendar date of early departure (UTC midnight).
+  date             DateTime
+  /// Number of minutes departed early.
+  undertimeMinutes Int
+  reason           String   @db.Text
+
+  status          ApprovalStatus @default(PENDING)
+  approverId      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?        @db.Text
+  cancelledAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

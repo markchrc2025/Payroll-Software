@@ -408,7 +408,7 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
   if (!run) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" className="-ml-2 gap-1" render={<Link href="/payroll" />}>
+        <Button variant="ghost" size="sm" nativeButton={false} className="-ml-2 gap-1" render={<Link href="/payroll" />}>
           <ArrowLeft className="h-4 w-4" /> Back to Payroll
         </Button>
         <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">
@@ -442,7 +442,7 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       {/* Back link */}
-      <Button variant="ghost" size="sm" className="-ml-2 gap-1" render={<Link href="/payroll" />}>
+      <Button variant="ghost" size="sm" nativeButton={false} className="-ml-2 gap-1" render={<Link href="/payroll" />}>
         <ArrowLeft className="h-4 w-4" /> Back to Payroll
       </Button>
 

@@ -16,7 +16,7 @@
 import type { NextRequest } from "next/server";
 import type { PermissionAction, PermissionModule } from "@prisma/client";
 import { getAuthContext, type AuthContext } from "@/lib/auth";
-import { withTenant } from "@/lib/with-tenant";
+import prismaAdmin from "@/lib/prisma-admin";
 import { forbidden, unauthorized } from "@/lib/api-response";
 
 /**
@@ -29,14 +29,15 @@ export async function checkPermission(
   module: PermissionModule,
   action: PermissionAction,
 ): Promise<boolean> {
-  const result = await withTenant(tenantId, (tx) =>
-    tx.rolePermission.findFirst({
-      where: {
-        roleId,
-        permission: { module, action },
-      },
-    }),
-  );
+  // Use prismaAdmin (bypasses RLS) — safe because the query is already
+  // scoped by roleId, which is tenant-specific. Avoids transaction pool
+  // exhaustion (P2028) that occurs under concurrent load on Render free tier.
+  const result = await prismaAdmin.rolePermission.findFirst({
+    where: {
+      roleId,
+      permission: { module, action },
+    },
+  });
   return result !== null;
 }
 

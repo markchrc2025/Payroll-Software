@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FileText, LogOut, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -168,6 +168,12 @@ export function buildColumns(
                 <FileText className="mr-2 h-4 w-4" />
                 201 File
               </DropdownMenuItem>
+              {!["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus) && (
+                <DropdownMenuItem render={<Link href={`/employees/${emp.id}/offboard`} />}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Offboard
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"

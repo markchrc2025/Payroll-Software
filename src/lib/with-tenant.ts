@@ -32,5 +32,5 @@ export async function withTenant<T>(
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
     return fn(tx as unknown as TenantTx);
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }
