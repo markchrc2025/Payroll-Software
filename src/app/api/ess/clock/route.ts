@@ -21,6 +21,7 @@ import { z } from "zod";
 import { getEssContext } from "@/lib/ess-auth";
 import { executePunch } from "@/lib/attendance/punch";
 import { err, ok, unauthorized } from "@/lib/api-response";
+import { withTenant } from "@/lib/with-tenant";
 
 const bodySchema = z.object({
   punchType: z.enum(["IN", "OUT"]),
@@ -67,4 +68,42 @@ export async function POST(req: NextRequest) {
     d.punchType === "IN" ? "Clocked in" : "Clocked out",
     201,
   );
+}
+
+/**
+ * GET /api/ess/clock?date=YYYY-MM-DD
+ *
+ * Returns the employee's AttendanceLogs for the given date (defaults to today).
+ */
+export async function GET(req: NextRequest) {
+  const ess = await getEssContext(req);
+  if (!ess) return unauthorized();
+
+  const dateParam = new URL(req.url).searchParams.get("date");
+  const date = dateParam ? new Date(dateParam) : new Date();
+  const startOfDay = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0));
+  const endOfDay   = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999));
+
+  const logs = await withTenant(ess.tenantId, (tx) =>
+    tx.attendanceLog.findMany({
+      where: {
+        tenantId:   ess.tenantId,
+        employeeId: ess.employeeId,
+        punchedAt:  { gte: startOfDay, lte: endOfDay },
+      },
+      orderBy: { punchedAt: "asc" },
+      select: {
+        id:             true,
+        punchType:      true,
+        punchedAt:      true,
+        source:         true,
+        latitude:       true,
+        longitude:      true,
+        outsideGeofence: true,
+        distanceMeters:  true,
+      },
+    }),
+  );
+
+  return ok(logs);
 }

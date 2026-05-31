@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "seed": "tsx prisma/seed.ts",
+    "seed:dtr": "tsx scripts/seed-dtr.ts",
     "seed:reset": "tsx scripts/reset-seed.ts"
   },
   "prisma": {
