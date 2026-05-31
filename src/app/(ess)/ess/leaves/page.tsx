@@ -146,9 +146,9 @@ export default function EssLeavesPage() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-4 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Leave</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Leave</h1>
         <Button size="sm" onClick={() => setSheetOpen(true)}>+ File Leave</Button>
       </div>
 

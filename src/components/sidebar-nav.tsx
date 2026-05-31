@@ -32,6 +32,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Monitor,
 } from "lucide-react";
 
 type NavItem = {
@@ -113,6 +114,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/holidays", label: "Holiday Calendar", icon: CalendarDays },
       { href: "/settings/leave-policies", label: "Leave Policies", icon: CalendarOff },
       { href: "/settings/roles", label: "Roles & Permissions", icon: KeyRound },
+      { href: "/settings/kiosk", label: "Kiosks", icon: Monitor },
       { href: "/ai", label: "AI Assistant", icon: Sparkles },
     ],
   },
@@ -231,7 +233,7 @@ export function SidebarNav({
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-1">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {NAV_SECTIONS.map((section) => (
           <div key={section.label}>
             {/* Section label — hidden when collapsed */}

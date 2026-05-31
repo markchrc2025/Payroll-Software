@@ -1,12 +1,6 @@
 "use client";
 
-/**
- * Column definitions for the Employee data table.
- * Optimized for the paginated list view — shows essential info at a glance.
- */
-
 import type { ColumnDef } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,47 +29,74 @@ export type EmployeeRow = {
   employmentStatus: string;
   employmentType: string;
   payFrequency: string;
+  salaryType: string;
   hireDate: string;
   department: { id: string; name: string } | null;
   branch: { id: string; name: string } | null;
+  position: { id: string; title: string; level: string | null } | null;
   salaryHistory: { basicSalaryCents: string | null; effectiveDate: string }[];
 };
 
 // ---------------------------------------------------------------------------
-// Status badge colours
+// Avatar color palette — deterministic from name
 // ---------------------------------------------------------------------------
 
-const statusColour: Record<string, string> = {
-  REGULAR: "bg-green-100 text-green-800 border-green-200",
-  PROBATIONARY: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  CONTRACTUAL: "bg-blue-100 text-blue-800 border-blue-200",
-  PROJECT_BASED: "bg-purple-100 text-purple-800 border-purple-200",
-  RESIGNED: "bg-gray-100 text-gray-600 border-gray-200",
-  TERMINATED: "bg-red-100 text-red-800 border-red-200",
-  SEPARATED: "bg-red-50 text-red-700 border-red-200",
+const AVATAR_COLORS = [
+  { bg: "#EAF1FD", color: "#2D6BE4" },
+  { bg: "#F8F0DC", color: "#A87A1E" },
+  { bg: "#E5F6EE", color: "#0FA36B" },
+  { bg: "#FBF0DD", color: "#DB8A28" },
+  { bg: "#EEF1F6", color: "#4A586B" },
+  { bg: "#F0EDFC", color: "#6D28D9" },
+];
+
+export function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+export function getInitials(first: string, last: string) {
+  return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
+
+// ---------------------------------------------------------------------------
+// Status pill
+// ---------------------------------------------------------------------------
+
+const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  REGULAR:      { bg: "#E5F6EE", color: "#0FA36B", label: "Regular" },
+  PROBATIONARY: { bg: "#FBF0DD", color: "#DB8A28", label: "Probationary" },
+  CONTRACTUAL:  { bg: "#EAF1FD", color: "#2D6BE4", label: "Contractual" },
+  PROJECT_BASED:{ bg: "#F0EDFC", color: "#6D28D9", label: "Project-Based" },
+  RESIGNED:     { bg: "#EEF1F6", color: "#8E9AAC", label: "Resigned" },
+  TERMINATED:   { bg: "#FCE9E7", color: "#E0463B", label: "Terminated" },
+  RETIRED:      { bg: "#EEF1F6", color: "#8E9AAC", label: "Retired" },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const cls = statusColour[status] ?? "bg-muted text-muted-foreground";
+export function StatusPill({ status }: { status: string }) {
+  const s = STATUS_STYLE[status] ?? { bg: "#EEF1F6", color: "#8E9AAC", label: status.replace(/_/g, " ") };
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap"
+      style={{ background: s.bg, color: s.color }}
     >
-      {status.replace(/_/g, " ")}
+      {s.label}
     </span>
   );
 }
 
-function formatPeso(cents: string | null | undefined): string {
+// ---------------------------------------------------------------------------
+// Salary formatting
+// ---------------------------------------------------------------------------
+
+function formatRate(cents: string | null | undefined, salaryType: string): string {
   if (!cents) return "—";
   const n = Number(cents) / 100;
   if (isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
+  const fmt = `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return salaryType === "DAILY" ? `${fmt}/day` : fmt;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,29 +108,26 @@ export function buildColumns(
 ): ColumnDef<EmployeeRow>[] {
   return [
     {
-      accessorKey: "employeeNumber",
-      header: "Emp #",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.employeeNumber}</span>
-      ),
-      size: 90,
-    },
-    {
-      id: "fullName",
-      header: "Name",
+      id: "employee",
+      header: "Employee",
       cell: ({ row }) => {
-        const { firstName, middleName, lastName, suffix } = row.original;
-        const full = [firstName, middleName, lastName, suffix]
-          .filter(Boolean)
-          .join(" ");
+        const { firstName, lastName, employeeNumber } = row.original;
+        const { bg, color } = getAvatarColor(`${firstName}${lastName}`);
+        const initials = getInitials(firstName, lastName);
         return (
-          <div>
-            <p className="font-medium leading-none">{full}</p>
-            {row.original.jobTitle && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {row.original.jobTitle}
-              </p>
-            )}
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-none"
+              style={{ background: bg, color }}
+            >
+              {initials}
+            </div>
+            <div>
+              <div className="font-semibold text-[13.5px] leading-tight text-[#0E1B2E]">
+                {firstName} {lastName}
+              </div>
+              <div className="text-[11.5px] text-[#8E9AAC]">{employeeNumber}</div>
+            </div>
           </div>
         );
       },
@@ -117,33 +135,58 @@ export function buildColumns(
     {
       id: "department",
       header: "Department",
-      cell: ({ row }) => row.original.department?.name ?? <span className="text-muted-foreground">—</span>,
+      cell: ({ row }) => (
+        <span className="text-[13.5px] text-[#0E1B2E]">
+          {row.original.department?.name ?? <span className="text-[#8E9AAC]">—</span>}
+        </span>
+      ),
+    },
+    {
+      id: "position",
+      header: "Position",
+      cell: ({ row }) => {
+        const title = row.original.position?.title ?? row.original.jobTitle;
+        return (
+          <span className="text-[13.5px] text-[#0E1B2E]">
+            {title ?? <span className="text-[#8E9AAC]">—</span>}
+          </span>
+        );
+      },
     },
     {
       id: "branch",
       header: "Branch",
-      cell: ({ row }) => row.original.branch?.name ?? <span className="text-muted-foreground">—</span>,
+      cell: ({ row }) => (
+        <span className="text-[13.5px] text-[#0E1B2E]">
+          {row.original.branch?.name ?? <span className="text-[#8E9AAC]">—</span>}
+        </span>
+      ),
     },
     {
-      accessorKey: "employmentStatus",
+      id: "salaryType",
+      header: "Salary type",
+      cell: ({ row }) => {
+        const map: Record<string, string> = { MONTHLY: "Monthly", DAILY: "Daily", HOURLY: "Hourly" };
+        return (
+          <span className="text-[13.5px] text-[#0E1B2E]">
+            {map[row.original.salaryType] ?? row.original.salaryType}
+          </span>
+        );
+      },
+    },
+    {
+      id: "monthlyRate",
+      header: () => <span className="block text-right">Monthly rate</span>,
+      cell: ({ row }) => (
+        <span className="text-[13.5px] text-[#0E1B2E] font-[tabular-nums] block text-right">
+          {formatRate(row.original.salaryHistory?.[0]?.basicSalaryCents, row.original.salaryType)}
+        </span>
+      ),
+    },
+    {
+      id: "status",
       header: "Status",
-      cell: ({ row }) => <StatusBadge status={row.original.employmentStatus} />,
-    },
-    {
-      accessorKey: "hireDate",
-      header: "Hire Date",
-      cell: ({ row }) =>
-        new Date(row.original.hireDate).toLocaleDateString("en-PH", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }),
-    },
-    {
-      id: "basicSalary",
-      header: "Basic Salary",
-      cell: ({ row }) =>
-        formatPeso(row.original.salaryHistory?.[0]?.basicSalaryCents),
+      cell: ({ row }) => <StatusPill status={row.original.employmentStatus} />,
     },
     {
       id: "actions",
@@ -154,24 +197,28 @@ export function buildColumns(
         return (
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" className="h-8 w-8" />}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-[#8E9AAC] hover:text-[#0E1B2E] hover:bg-[#EEF1F6]"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                />
+              }
             >
               <MoreHorizontal className="h-4 w-4" />
               <span className="sr-only">Open menu</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem render={<Link href={`/employees/${emp.id}/edit`} />}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
+                <Pencil className="mr-2 h-4 w-4" />Edit
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/employees/${emp.id}/documents`} />}>
-                <FileText className="mr-2 h-4 w-4" />
-                201 File
+                <FileText className="mr-2 h-4 w-4" />201 File
               </DropdownMenuItem>
               {!["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus) && (
                 <DropdownMenuItem render={<Link href={`/employees/${emp.id}/offboard`} />}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Offboard
+                  <LogOut className="mr-2 h-4 w-4" />Offboard
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -179,8 +226,7 @@ export function buildColumns(
                 className="text-destructive focus:text-destructive"
                 onClick={() => onDelete(emp.id, name)}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                <Trash2 className="mr-2 h-4 w-4" />Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

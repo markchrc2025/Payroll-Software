@@ -189,11 +189,11 @@ export default function EssUndertimePage() {
     !!form.date && totalMins >= 1 && form.reason.trim().length >= 5;
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-4 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Undertime</h1>
+          <h1 className="text-xl lg:text-2xl font-bold">Undertime</h1>
           <p className="text-sm text-muted-foreground">
             File and track early departure requests
           </p>

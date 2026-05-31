@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requirePermission(req, "SETTINGS", "CREATE");
+  const guard = await requirePermission(req, "SETTINGS", "UPDATE");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
 

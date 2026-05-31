@@ -84,7 +84,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requirePermission(req, "SETTINGS", "DELETE");
+  const guard = await requirePermission(req, "SETTINGS", "UPDATE");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
   const { id } = await params;

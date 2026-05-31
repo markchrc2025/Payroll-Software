@@ -165,7 +165,7 @@ export default function EssProfileUpdateRequestsPage() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-4 max-w-4xl mx-auto">
       {/* Back navigation */}
       <Link
         href="/ess/profile"
@@ -178,7 +178,7 @@ export default function EssProfileUpdateRequestsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Profile Update Requests</h1>
+          <h1 className="text-xl lg:text-2xl font-bold">Profile Update Requests</h1>
           <p className="text-sm text-muted-foreground">
             Request changes to your personal information
           </p>

@@ -203,11 +203,11 @@ export default function EssExpenseClaimsPage() {
     !!form.claimDate;
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-4 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Expense Claims</h1>
+          <h1 className="text-xl lg:text-2xl font-bold">Expense Claims</h1>
           <p className="text-sm text-muted-foreground">
             Submit and track reimbursement requests
           </p>

@@ -6,13 +6,21 @@
  */
 
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
+import { EssPinCard } from "@/components/employees/EssPinCard";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+async function authHeaders(): Promise<HeadersInit> {
+  const store = await cookies();
+  const cookieHeader = store.getAll().map((c) => `${c.name}=${c.value}`).join("; ");
+  return { Cookie: cookieHeader };
+}
+
 async function getEmployee(id: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/employees/${id}`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/employees/${id}`, { cache: "no-store", headers: await authHeaders() });
   if (!res.ok) return null;
   const json = await res.json();
   return json.data ?? null;
@@ -20,7 +28,7 @@ async function getEmployee(id: string) {
 
 async function getDepartments() {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/departments`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/departments`, { cache: "no-store", headers: await authHeaders() });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
@@ -28,7 +36,7 @@ async function getDepartments() {
 
 async function getBranches() {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/branches`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/branches`, { cache: "no-store", headers: await authHeaders() });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
@@ -99,6 +107,8 @@ export default async function EditEmployeePage({
         departments={departments}
         branches={branches}
       />
+
+      <EssPinCard employeeId={id} hasPin={!!employee.hasEssPin} />
     </div>
   );
 }

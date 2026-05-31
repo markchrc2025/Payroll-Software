@@ -119,11 +119,57 @@ export default function KioskPage() {
 
     let selfieKey: string | undefined;
 
-    // Capture selfie frame — in a real deployment this would be uploaded to R2
-    // first and the key returned. Here we skip the upload step and pass undefined
-    // since there is no upload API in scope for this UI phase.
+    // Capture & upload selfie to R2 if this kiosk requires it
     if (requiresSelfie) {
-      captureFrame(); // captured but not uploaded
+      const dataUrl = captureFrame();
+      if (dataUrl) {
+        try {
+          // Convert data URL to Blob
+          const byteString = atob(dataUrl.split(",")[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+          const blob = new Blob([ab], { type: "image/jpeg" });
+
+          // Request presigned URL
+          const presignRes = await fetch("/api/kiosk/presign", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Kiosk ${deviceToken}`,
+            },
+            body: JSON.stringify({
+              employeeNumber: employeeNumber.trim(),
+              fileName: "selfie.jpg",
+              mimeType: "image/jpeg",
+              fileSize: blob.size,
+            }),
+          });
+
+          if (presignRes.ok) {
+            const presignData = await presignRes.json();
+            const { uploadUrl, storageKey } = presignData.data as {
+              uploadUrl: string;
+              storageKey: string;
+            };
+
+            // PUT the blob directly to R2
+            const putRes = await fetch(uploadUrl, {
+              method: "PUT",
+              headers: { "Content-Type": "image/jpeg" },
+              body: blob,
+            });
+
+            if (putRes.ok) {
+              selfieKey = storageKey;
+            }
+            // If PUT fails, proceed without selfieKey — don't block the punch
+          }
+          // 503 = R2 not configured, proceed silently without selfieKey
+        } catch {
+          // Camera/network error — proceed without selfieKey
+        }
+      }
     }
 
     let latitude: number | undefined;
