@@ -136,7 +136,7 @@ export default function RemoteKioskPage() {
       setPin(next);
     } else if (key === "OK") {
       submitPunch();
-    } else if (pinRef.current.length < 8) {
+    } else if (pinRef.current.length < 6) {
       const next = pinRef.current + key;
       pinRef.current = next;
       setPin(next);
@@ -145,7 +145,7 @@ export default function RemoteKioskPage() {
 
   async function submitPunch() {
     const currentPin = pinRef.current;
-    if (currentPin.length < 4) return;
+    if (currentPin.length < 6) return;
     if (submitting) return;
     setSubmitting(true);
 
@@ -242,10 +242,10 @@ export default function RemoteKioskPage() {
       }
 
       setResult({
-        employee: data.employee ?? { firstName: "Unknown", lastName: "" },
+        employee: data.data?.employee ?? { firstName: "Unknown", lastName: "" },
         punchType: punchTypeRef.current,
-        timestamp: data.timestamp ?? new Date().toISOString(),
-        geofenceStatus: data.geofenceStatus,
+        timestamp: data.data?.timestamp ?? new Date().toISOString(),
+        geofenceStatus: data.data?.geofenceStatus,
       });
       setScreen("SUCCESS");
       stopCamera();
@@ -331,7 +331,7 @@ export default function RemoteKioskPage() {
 
             {/* PIN dots */}
             <div className="flex justify-center gap-3">
-              {Array.from({ length: 8 }).map((_, i) => (
+              {Array.from({ length: 6 }).map((_, i) => (
                 <span
                   key={i}
                   className={`text-2xl leading-none transition-colors ${
@@ -343,12 +343,10 @@ export default function RemoteKioskPage() {
               ))}
             </div>
 
-            {/* Selfie preview */}
-            {requiresSelfie && (
-              <div className="mx-auto w-32 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-              </div>
-            )}
+            {/* Selfie preview — always shown (selfie is always required) */}
+            <div className="mx-auto w-32 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+            </div>
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Keypad */}

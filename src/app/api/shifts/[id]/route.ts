@@ -69,6 +69,7 @@ export async function PATCH(
         ...(d.timeIn !== undefined && { timeIn: d.timeIn }),
         ...(d.timeOut !== undefined && { timeOut: d.timeOut }),
         ...(d.breakMinutes !== undefined && { breakMinutes: d.breakMinutes }),
+        ...(d.breakPolicy !== undefined && { breakPolicy: d.breakPolicy }),
         ...(d.crossesMidnight !== undefined && {
           crossesMidnight: d.crossesMidnight,
         }),

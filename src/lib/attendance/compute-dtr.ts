@@ -28,6 +28,11 @@ export interface ShiftContext {
   timeOut: string;
   breakMinutes: number;
   crossesMidnight: boolean;
+  /**
+   * FIXED_DEDUCTION (default): auto-deduct breakMinutes from firstIN→lastOUT span.
+   * TRACK_ACTUAL: sum each paired IN-OUT interval; break = time spent clocked out.
+   */
+  breakPolicy: "FIXED_DEDUCTION" | "TRACK_ACTUAL";
 }
 
 export interface DtrComputed {
@@ -158,15 +163,39 @@ export function computeDtrFields(
       )
     : 0;
 
-  const workedMinutes = actualOut
-    ? Math.max(
-        0,
-        Math.round(
-          (actualOut.getTime() - actualIn.getTime()) / 60_000 -
-            shift.breakMinutes,
-        ),
-      )
-    : 0;
+  let workedMinutes: number;
+  if (shift.breakPolicy === "TRACK_ACTUAL") {
+    // Sum each paired IN-OUT interval chronologically.
+    // Pair up: sort all INs and OUTs by time, then walk through them.
+    const sortedIns  = [...inPunches].sort((a, b) => a.punchedAt.getTime() - b.punchedAt.getTime());
+    const sortedOuts = [...outPunches].sort((a, b) => a.punchedAt.getTime() - b.punchedAt.getTime());
+    let total = 0;
+    let outIdx = 0;
+    for (const inPunch of sortedIns) {
+      // Find the first OUT that comes after this IN
+      while (outIdx < sortedOuts.length && sortedOuts[outIdx].punchedAt <= inPunch.punchedAt) {
+        outIdx++;
+      }
+      if (outIdx < sortedOuts.length) {
+        total += Math.round(
+          (sortedOuts[outIdx].punchedAt.getTime() - inPunch.punchedAt.getTime()) / 60_000,
+        );
+        outIdx++; // consume this OUT so it isn't matched again
+      }
+    }
+    workedMinutes = Math.max(0, total);
+  } else {
+    // FIXED_DEDUCTION: span minus fixed break
+    workedMinutes = actualOut
+      ? Math.max(
+          0,
+          Math.round(
+            (actualOut.getTime() - actualIn.getTime()) / 60_000 -
+              shift.breakMinutes,
+          ),
+        )
+      : 0;
+  }
 
   const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut) : 0;
 

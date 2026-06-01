@@ -135,6 +135,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             timeIn:         true,
             timeOut:        true,
             breakMinutes:   true,
+            breakPolicy:    true,
             crossesMidnight: true,
           },
         },
@@ -160,7 +161,10 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         punchType: p.punchType as PunchType,
         punchedAt: p.punchedAt,
       })),
-      shift,
+      shift ? {
+        ...shift,
+        breakPolicy: (shift.breakPolicy ?? "FIXED_DEDUCTION") as "FIXED_DEDUCTION" | "TRACK_ACTUAL",
+      } : null,
     );
 
     // 7. Upsert DTRRecord — skip if locked (payroll finalized)

@@ -49,6 +49,7 @@ type ShiftSchedule = {
   timeIn: string;
   timeOut: string;
   breakMinutes: number;
+  breakPolicy: "FIXED_DEDUCTION" | "TRACK_ACTUAL";
   crossesMidnight: boolean;
   workDays: string[];
   isActive: boolean;
@@ -60,6 +61,7 @@ const EMPTY_FORM = {
   timeIn: "08:00",
   timeOut: "17:00",
   breakMinutes: 60,
+  breakPolicy: "FIXED_DEDUCTION" as "FIXED_DEDUCTION" | "TRACK_ACTUAL",
   crossesMidnight: false,
   workDays: ["MON", "TUE", "WED", "THU", "FRI"],
 };
@@ -96,6 +98,7 @@ export default function ShiftSchedulesPage() {
       timeIn: row.timeIn,
       timeOut: row.timeOut,
       breakMinutes: row.breakMinutes,
+      breakPolicy: row.breakPolicy ?? "FIXED_DEDUCTION",
       crossesMidnight: row.crossesMidnight,
       workDays: Array.isArray(row.workDays) ? row.workDays : [],
     });
@@ -221,7 +224,12 @@ export default function ShiftSchedulesPage() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-[13px] text-[#6B7A8D]">{row.breakMinutes}m</TableCell>
+                  <TableCell className="text-[13px] text-[#6B7A8D]">
+                    {row.breakMinutes}m
+                    {row.breakPolicy === "TRACK_ACTUAL" && (
+                      <span className="ml-1.5 text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1 py-0.5 font-medium">Tracked</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row)}>
@@ -279,6 +287,25 @@ export default function ShiftSchedulesPage() {
                   onChange={(e) => setForm({ ...form, breakMinutes: Number(e.target.value) })}
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Break Policy</Label>
+              <Select
+                value={form.breakPolicy}
+                onValueChange={(v) => setForm({ ...form, breakPolicy: v as "FIXED_DEDUCTION" | "TRACK_ACTUAL" })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FIXED_DEDUCTION">Fixed Deduction — auto-deduct {form.breakMinutes}min, no lunch punch-out needed</SelectItem>
+                  <SelectItem value="TRACK_ACTUAL">Track Actual — employee must clock out &amp; in for lunch</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11.5px] text-[#6B7A8D] mt-1">
+                {form.breakPolicy === "TRACK_ACTUAL"
+                  ? "Worked hours = sum of all clock-in/out pairs. Break time is whatever the employee spends clocked out."
+                  : `Worked hours = (last clock-out − first clock-in) − ${form.breakMinutes} min. Employee does not need to punch out for lunch.`
+                }
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

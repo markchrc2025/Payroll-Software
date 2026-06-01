@@ -17,6 +17,7 @@ export const createShiftScheduleSchema = z.object({
   timeIn: HH_MM,
   timeOut: HH_MM,
   breakMinutes: z.number().int().min(0).max(480).default(60),
+  breakPolicy: z.enum(["FIXED_DEDUCTION", "TRACK_ACTUAL"]).default("FIXED_DEDUCTION"),
   crossesMidnight: z.boolean().default(false),
   workDays: z
     .array(z.enum(WEEKDAY_CODES))

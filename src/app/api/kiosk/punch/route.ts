@@ -30,7 +30,7 @@ import { isR2Configured } from "@/lib/r2";
 
 const bodySchema = z.object({
   employeeNumber: z.string().min(1),
-  pin:            z.string().min(4).max(8),
+  pin:            z.string().length(6),
   punchType:      z.enum(["IN", "OUT"]),
   selfieKey:      z.string().optional().nullable(),
   // base64-encoded JPEG sent by the kiosk when R2 is not configured
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       employeeNumber: d.employeeNumber,
       deletedAt:      null,
     },
-    select: { id: true, kioskPinHash: true },
+    select: { id: true, kioskPinHash: true, firstName: true, lastName: true },
   });
   if (!employee) return err("Employee not found", 404);
   if (!employee.kioskPinHash) return err("Kiosk PIN not set for this employee", 422);
@@ -107,10 +107,11 @@ export async function POST(req: NextRequest) {
 
   return ok(
     {
-      logId:          (result as Extract<typeof result, { ok: true }>).log.id,
+      logId:           (result as Extract<typeof result, { ok: true }>).log.id,
       outsideGeofence: (result as Extract<typeof result, { ok: true }>).log.outsideGeofence,
       distanceMeters:  (result as Extract<typeof result, { ok: true }>).log.distanceMeters,
       dtrId:           (result as Extract<typeof result, { ok: true }>).dtr.id,
+      employee: { firstName: employee.firstName, lastName: employee.lastName },
     },
     d.punchType === "IN" ? "Clocked in" : "Clocked out",
     201,

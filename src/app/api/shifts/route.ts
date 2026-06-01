@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
         timeIn: d.timeIn,
         timeOut: d.timeOut,
         breakMinutes: d.breakMinutes,
+        breakPolicy: d.breakPolicy,
         crossesMidnight: d.crossesMidnight,
         workDays: d.workDays,
       },

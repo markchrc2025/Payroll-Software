@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, FileText, CalendarDays, UserCircle, LogOut } from "lucide-react";
+import { LayoutDashboard, FileText, CalendarDays, UserCircle, LogOut, ClipboardList } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/ess", label: "Home", icon: LayoutDashboard },
   { href: "/ess/payslips", label: "Payslips", icon: FileText },
   { href: "/ess/leaves", label: "Leave", icon: CalendarDays },
+  { href: "/ess/dtr", label: "My DTR", icon: ClipboardList },
   { href: "/ess/profile", label: "Profile", icon: UserCircle },
 ];
 

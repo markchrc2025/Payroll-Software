@@ -355,6 +355,15 @@ enum ShiftType {
   FLEXIBLE
 }
 
+enum BreakPolicy {
+  /// System auto-deducts breakMinutes from the total span (firstIN → lastOUT).
+  /// Employee does NOT clock out for lunch.
+  FIXED_DEDUCTION
+  /// System sums only actual paired IN-OUT intervals.
+  /// Employee must clock out before lunch and clock back in after.
+  TRACK_ACTUAL
+}
+
 enum DTRStatus {
   PENDING
   APPROVED
@@ -1766,6 +1775,7 @@ model ShiftSchedule {
   /// Expected time-out in 24-hour "HH:MM" format (e.g. "17:00").
   timeOut      String
   breakMinutes Int       @default(60)
+  breakPolicy  BreakPolicy @default(FIXED_DEDUCTION)
   /// True when the shift spans midnight (e.g. night shift 22:00–06:00).
   crossesMidnight Boolean @default(false)
   /// JSON array of ISO weekday names: ["MON","TUE","WED","THU","FRI"].
