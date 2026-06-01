@@ -259,9 +259,7 @@ export default function KiosksPage() {
                       {kiosk.branch?.name ?? <span className="italic opacity-40">—</span>}
                     </TableCell>
                     <TableCell className="text-center">
-                      {kiosk.requiresSelfie
-                        ? <Badge variant="default" className="text-xs">Required</Badge>
-                        : <Badge variant="secondary" className="text-xs">Optional</Badge>}
+                      <Badge variant="default" className="text-xs">Required</Badge>
                     </TableCell>
                     <TableCell className="text-center">
                       {kiosk.isActive
@@ -377,17 +375,6 @@ export default function KiosksPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border p-3">
-              <Checkbox
-                id="kiosk-selfie"
-                checked={form.requiresSelfie}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, requiresSelfie: Boolean(v) }))}
-              />
-              <div>
-                <Label htmlFor="kiosk-selfie" className="cursor-pointer font-medium">Require Selfie</Label>
-                <p className="text-xs text-muted-foreground">Employee must capture a photo on each punch</p>
-              </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg border p-3">
               <Checkbox

@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import { Fingerprint } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { getAvatarColor, getInitials, StatusPill } from "@/components/employees/columns";
 
 // ---------------------------------------------------------------------------
@@ -314,6 +320,30 @@ export function EmployeeProfileClient({
   leaveBalances: LeaveBalance[];
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("Personal & Gov't IDs");
+  const [kioskPinOpen, setKioskPinOpen] = useState(false);
+  const [kioskPin, setKioskPin] = useState("");
+  const [kioskPinConfirm, setKioskPinConfirm] = useState("");
+  const [savingKioskPin, setSavingKioskPin] = useState(false);
+
+  async function handleSaveKioskPin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(kioskPin)) { toast.error("PIN must be exactly 6 digits"); return; }
+    if (kioskPin !== kioskPinConfirm) { toast.error("PINs do not match"); return; }
+    setSavingKioskPin(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/kiosk-pin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: kioskPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.error ?? "Failed to set PIN"); return; }
+      toast.success("Kiosk PIN set for " + employee.firstName);
+      setKioskPinOpen(false);
+      setKioskPin(""); setKioskPinConfirm("");
+    } catch { toast.error("Network error"); }
+    finally { setSavingKioskPin(false); }
+  }
 
   return (
     <div
@@ -326,7 +356,8 @@ export function EmployeeProfileClient({
       {/* Right */}
       <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] flex flex-col overflow-hidden">
         {/* Tab bar */}
-        <div className="flex border-b border-[#E8EBF1] px-5 overflow-x-auto">
+        <div className="flex items-center border-b border-[#E8EBF1] px-5 overflow-x-auto gap-2">
+          <div className="flex flex-1 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab}
@@ -343,6 +374,14 @@ export function EmployeeProfileClient({
               {tab}
             </button>
           ))}
+          </div>
+          <button
+            onClick={() => setKioskPinOpen(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+          >
+            <Fingerprint className="h-3.5 w-3.5" />
+            Set Kiosk PIN
+          </button>
         </div>
 
         {/* Tab content */}
@@ -354,5 +393,53 @@ export function EmployeeProfileClient({
         {activeTab === "Payslips" && <PlaceholderTab label="Payslips" />}
       </div>
     </div>
+
+      {/* Kiosk PIN dialog */}
+      <Dialog open={kioskPinOpen} onOpenChange={setKioskPinOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set Kiosk PIN — {employee.firstName} {employee.lastName}</DialogTitle>
+            <DialogDescription>
+              Assign a 4–8 digit PIN for this employee to use at the kiosk time &amp; attendance terminal.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveKioskPin} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>New PIN (6 digits)</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="Enter PIN"
+                value={kioskPin}
+                onChange={(e) => setKioskPin(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Confirm PIN</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="Confirm PIN"
+                value={kioskPinConfirm}
+                onChange={(e) => setKioskPinConfirm(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setKioskPinOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingKioskPin} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {savingKioskPin ? "Saving…" : "Save PIN"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
   );
 }

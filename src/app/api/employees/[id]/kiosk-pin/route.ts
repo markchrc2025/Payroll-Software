@@ -18,7 +18,7 @@ import { writeAuditLog, getClientIp } from "@/lib/audit";
 const kioskPinSchema = z.object({
   pin: z
     .string()
-    .regex(/^\d{4,8}$/, "PIN must be 4–8 digits")
+    .regex(/^\d{6}$/, "PIN must be exactly 6 digits")
     .nullable(),
 });
 

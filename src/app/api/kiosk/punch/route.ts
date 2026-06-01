@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
   const d = parsed.data;
 
-  // Enforce selfie: must have selfieKey (R2) OR selfieData (base64 fallback)
+  // Selfie is ALWAYS required — must have selfieKey (R2) OR selfieData (base64 fallback)
   const hasSelfie = !!(d.selfieKey || d.selfieData);
-  if (kiosk.requiresSelfie && !hasSelfie) {
-    return err("Selfie is required for this kiosk", 422);
+  if (!hasSelfie) {
+    return err("Selfie is required for kiosk punch", 422);
   }
 
   // Look up employee by employeeNumber within the kiosk's tenant

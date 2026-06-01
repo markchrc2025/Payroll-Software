@@ -161,35 +161,53 @@ export default function EssLeavesPage() {
         {/* Balances */}
         <TabsContent value="balances" className="mt-4">
           {balancesLoading ? (
-            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
+            </div>
+          ) : balances.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">No leave balances</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Leave Type</TableHead>
-                  <TableHead className="text-right">Opening</TableHead>
-                  <TableHead className="text-right">Earned</TableHead>
-                  <TableHead className="text-right">Used</TableHead>
-                  <TableHead className="text-right">Forfeited</TableHead>
-                  <TableHead className="text-right">Available</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {balances.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No leave balances</TableCell></TableRow>
-                )}
-                {balances.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell className="font-medium">{b.leaveType.name} <span className="text-xs text-muted-foreground">({b.leaveType.unit})</span></TableCell>
-                    <TableCell className="text-right">{parseFloat(b.openingBalance).toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{parseFloat(b.earned).toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-red-500">{parseFloat(b.used).toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-orange-500">{parseFloat(b.forfeited).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-medium text-green-600">{availableBalance(b).toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {balances.map((b) => {
+                const avail = availableBalance(b);
+                return (
+                  <div key={b.id} className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-base leading-tight">{b.leaveType.name}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">{b.leaveType.code} · {b.leaveType.unit}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold ${avail > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                          {avail.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Available</p>
+                      </div>
+                    </div>
+                    {/* Stats row */}
+                    <div className="grid grid-cols-4 divide-x rounded-lg bg-muted/50 text-center text-xs">
+                      <div className="py-2 px-1">
+                        <p className="font-medium text-sm">{parseFloat(b.openingBalance).toFixed(1)}</p>
+                        <p className="text-muted-foreground">Opening</p>
+                      </div>
+                      <div className="py-2 px-1">
+                        <p className="font-medium text-sm">{parseFloat(b.earned).toFixed(1)}</p>
+                        <p className="text-muted-foreground">Earned</p>
+                      </div>
+                      <div className="py-2 px-1">
+                        <p className="font-medium text-sm text-red-500">{parseFloat(b.used).toFixed(1)}</p>
+                        <p className="text-muted-foreground">Used</p>
+                      </div>
+                      <div className="py-2 px-1">
+                        <p className="font-medium text-sm text-orange-500">{parseFloat(b.forfeited).toFixed(1)}</p>
+                        <p className="text-muted-foreground">Forfeited</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
 

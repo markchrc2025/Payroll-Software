@@ -8,7 +8,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { LogOut, UserCircle, ClipboardList } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { LogOut, UserCircle, ClipboardList, Fingerprint } from "lucide-react";
 import Link from "next/link";
 
 interface EssProfile {
@@ -57,6 +59,12 @@ export default function EssProfilePage() {
   const [consents, setConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+
+  // Kiosk PIN dialog
+  const [kioskPinOpen, setKioskPinOpen] = useState(false);
+  const [kioskPin, setKioskPin] = useState("");
+  const [kioskPinConfirm, setKioskPinConfirm] = useState("");
+  const [savingKioskPin, setSavingKioskPin] = useState(false);
 
   const loadData = useCallback(async () => {
     const token = localStorage.getItem("ess_token");
@@ -120,6 +128,26 @@ export default function EssProfilePage() {
   function handleLogout() {
     localStorage.removeItem("ess_token");
     router.replace("/ess/login");
+  }
+
+  async function handleSaveKioskPin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(kioskPin)) { toast.error("PIN must be exactly 6 digits"); return; }
+    if (kioskPin !== kioskPinConfirm) { toast.error("PINs do not match"); return; }
+    setSavingKioskPin(true);
+    try {
+      const res = await fetch("/api/ess/kiosk-pin", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ pin: kioskPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.error ?? "Failed to set PIN"); return; }
+      toast.success("Kiosk PIN set successfully");
+      setKioskPinOpen(false);
+      setKioskPin(""); setKioskPinConfirm("");
+    } catch { toast.error("Network error"); }
+    finally { setSavingKioskPin(false); }
   }
 
   return (
@@ -202,6 +230,68 @@ export default function EssProfilePage() {
           </div>
         </div>
       </Link>
+
+      {/* Kiosk PIN */}
+      <div
+        className="flex items-center gap-3 p-4 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+        onClick={() => setKioskPinOpen(true)}
+      >
+        <div className="p-2 rounded-full bg-indigo-50 text-indigo-500">
+          <Fingerprint className="h-5 w-5" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium">Set Kiosk PIN</p>
+          <p className="text-xs text-muted-foreground">4–8 digit PIN used at the time &amp; attendance kiosk terminal</p>
+        </div>
+      </div>
+
+      {/* Kiosk PIN dialog */}
+      <Dialog open={kioskPinOpen} onOpenChange={setKioskPinOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set Kiosk PIN</DialogTitle>
+            <DialogDescription>
+              This PIN is used to clock in/out at the shared kiosk terminal. Keep it private.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveKioskPin} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>New PIN (6 digits)</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="Enter PIN"
+                value={kioskPin}
+                onChange={(e) => setKioskPin(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Confirm PIN</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="Confirm PIN"
+                value={kioskPinConfirm}
+                onChange={(e) => setKioskPinConfirm(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setKioskPinOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingKioskPin} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {savingKioskPin ? "Saving…" : "Save PIN"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Log out */}
       <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" onClick={handleLogout}>

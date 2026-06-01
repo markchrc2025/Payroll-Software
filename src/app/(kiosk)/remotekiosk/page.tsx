@@ -26,18 +26,10 @@ export default function RemoteKioskPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<PunchResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  // State for JSX reactivity; ref kept in sync for use inside event handlers
-  const [requiresSelfie, setRequiresSelfie] = useState(() => {
-    // Read synchronously so it's correct before any async fetch resolves
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("kiosk_requires_selfie") === "true";
-    }
-    return false;
-  });
 
   // Refs for volatile values so PIN-screen handlers always see fresh data
   const deviceTokenRef = useRef("");
-  const requiresSelfieRef = useRef(false);
+  const requiresSelfieRef = useRef(true); // Selfie is always required for kiosk punch
   const employeeNumberRef = useRef("");
   const punchTypeRef = useRef<PunchType>("IN");
   const pinRef = useRef("");
@@ -52,50 +44,22 @@ export default function RemoteKioskPage() {
   useEffect(() => { employeeNumberRef.current = employeeNumber; }, [employeeNumber]);
   useEffect(() => { punchTypeRef.current = punchType; }, [punchType]);
   useEffect(() => { pinRef.current = pin; }, [pin]);
-  useEffect(() => {
-    requiresSelfieRef.current = requiresSelfie;
-  }, [requiresSelfie]);
 
-  // Also sync the ref immediately from the lazy initializer value (before effects run)
-  requiresSelfieRef.current = requiresSelfie;
-
-  // Start camera AFTER PIN screen is in the DOM
+  // Start camera AFTER PIN screen is in the DOM (selfie is always required)
   useEffect(() => {
-    if (screen === "PIN" && requiresSelfie) {
+    if (screen === "PIN") {
       startCamera();
     }
     if (screen !== "PIN") {
       stopCamera();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, requiresSelfie]);
+  }, [screen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const token = localStorage.getItem("kiosk_token") ?? "";
     deviceTokenRef.current = token;
-
-    if (token) {
-      // Always fetch latest config from server so requiresSelfie is authoritative
-      fetch("/api/kiosk/info", {
-        headers: { Authorization: `Kiosk ${token}` },
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.data) {
-            const val = !!data.data.requiresSelfie;
-            setRequiresSelfie(val);
-            requiresSelfieRef.current = val;
-            localStorage.setItem("kiosk_requires_selfie", String(val));
-          }
-        })
-        .catch(() => {
-          // Fall back to cached value if offline
-          const cached = localStorage.getItem("kiosk_requires_selfie") === "true";
-          setRequiresSelfie(cached);
-          requiresSelfieRef.current = cached;
-        });
-    }
 
     return () => {
       if (successTimer.current) clearTimeout(successTimer.current);
@@ -187,53 +151,52 @@ export default function RemoteKioskPage() {
 
     let selfieKey: string | undefined;
     let selfieData: string | undefined; // base64 fallback when R2 is not available
-    if (requiresSelfieRef.current) {
-      // Wait up to 3s for camera to produce a frame
-      const blob = await waitForCameraFrame(3000);
-      if (!blob) {
-        // Camera not ready or permission denied — surface a clear error
-        setSubmitting(false);
-        setErrorMsg("Camera unavailable. Please allow camera access and try again.");
-        setScreen("ERROR");
-        errorTimer.current = setTimeout(resetToLookup, 4000);
-        return;
-      }
 
-      // Try R2 upload first
-      let r2Succeeded = false;
-      try {
-        const presignRes = await fetch("/api/kiosk/presign", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Kiosk ${deviceTokenRef.current}`,
-          },
-          body: JSON.stringify({
-            employeeNumber: employeeNumberRef.current.trim(),
-            fileName: "selfie.jpg",
-            mimeType: "image/jpeg",
-            fileSize: blob.size,
-          }),
+    // Selfie is always required — wait up to 3s for camera to produce a frame
+    const blob = await waitForCameraFrame(3000);
+    if (!blob) {
+      // Camera not ready or permission denied — surface a clear error
+      setSubmitting(false);
+      setErrorMsg("Camera unavailable. Please allow camera access and try again.");
+      setScreen("ERROR");
+      errorTimer.current = setTimeout(resetToLookup, 4000);
+      return;
+    }
+
+    // Try R2 upload first
+    let r2Succeeded = false;
+    try {
+      const presignRes = await fetch("/api/kiosk/presign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Kiosk ${deviceTokenRef.current}`,
+        },
+        body: JSON.stringify({
+          employeeNumber: employeeNumberRef.current.trim(),
+          fileName: "selfie.jpg",
+          mimeType: "image/jpeg",
+          fileSize: blob.size,
+        }),
+      });
+      if (presignRes.ok) {
+        const { data: pd } = await presignRes.json();
+        const putRes = await fetch(pd.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
         });
-        if (presignRes.ok) {
-          const { data: pd } = await presignRes.json();
-          const putRes = await fetch(pd.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": "image/jpeg" },
-            body: blob,
-          });
-          if (putRes.ok) { selfieKey = pd.storageKey; r2Succeeded = true; }
-        }
-      } catch { /* fall through to base64 */ }
-
-      // R2 not available — encode as base64 for direct DB storage
-      if (!r2Succeeded) {
-        const ab = await blob.arrayBuffer();
-        const bytes = new Uint8Array(ab);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        selfieData = btoa(binary);
+        if (putRes.ok) { selfieKey = pd.storageKey; r2Succeeded = true; }
       }
+    } catch { /* fall through to base64 */ }
+
+    // R2 not available — encode as base64 for direct DB storage
+    if (!r2Succeeded) {
+      const ab = await blob.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      selfieData = btoa(binary);
     }
 
     let latitude: number | null = null;
