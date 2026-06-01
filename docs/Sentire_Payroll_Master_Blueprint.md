@@ -21,18 +21,20 @@
 
 ### B. Gross-to-Net Computation Sequence
 
-*The engine must execute this exact waterfall sequence during a payroll run to generate the Payroll Sheet:*
+*The engine must execute this exact 12-step waterfall sequence during a payroll run to generate the Payroll Sheet:*
 
-1. **Base Earnings:** Compute Base Pay.
-2. **Deduct Tardiness/Absences:** Subtract Late/Undertime deductions.
-3. **Add Premium Pay:** Add OT, Night Shift Differential (NSD), Rest Day, and Holiday pay.
-4. **Add Taxable Allowances/Bonuses:** Add custom taxable components.
-5. **Gross Taxable Income:** Sum of Steps 1 through 4.
-6. **Deduct Statutory Contributions:** SSS, PhilHealth, Pag-IBIG (applied to specific cutoffs).
-7. **Compute Withholding Tax:** Apply BIR TRAIN Law table.
-8. **Add Non-Taxable Allowances & Claims:** De Minimis benefits, approved expense reimbursements.
-9. **Deduct Loans/Others:** SSS/HDMF Loans, cash advances.
-10. **Net Take-Home Pay:** Final payable amount.
+1. **Base Pay:** `basicSalary × daysWorked / workingDaysDenominator`.
+2. **Deduct Tardiness/Absences:** `(hourlyRate / 60) × lateUndertimeMinutes`.
+3. **Add Premium Pay:** OT (125%), Night Shift Differential (+10%), Rest Day (130%), Holiday (200%/130%), Hazard pay.
+4. **Add Pay Components:** Taxable allowances and bonuses from the tenant's Pay Component catalog.
+5. **Gross Compensation:** Sum of Steps 1–4.
+6. **Determine Non-Taxable Compensation:** MWE statutory exemption, De Minimis ceilings (RR 29-2025), statutory contributions, and employee non-taxable basic amount.
+7. **Gross Taxable Income:** Gross Compensation − Non-Taxable Compensation (Step 6).
+8. **Deduct Statutory Contributions:** SSS, PhilHealth, Pag-IBIG — applied only on the cutoff governed by the tenant's `statutoryCutoffRule`. MWE employees are exempt.
+9. **Compute Withholding Tax:** Apply BIR TRAIN Law table to Gross Taxable Income. Zero for MWE.
+10. **Add Non-Taxable Additions:** Approved expense reimbursements and non-taxable pay components added back after WHT.
+11. **Deduct Loans:** SSS loan, Pag-IBIG loan, cash advances, and company loans.
+12. **Net Take-Home Pay:** Final payable amount.
 
 ### C. 13th Month Pay Computation Engine
 
@@ -70,7 +72,8 @@
 
 ### Module 2: Applicant Tracking System (ATS)
 
-- **Pipeline:** Kanban board (Applied → Shortlisted → Interviewed → Offered → Hired).
+- **Pipeline:** Kanban board (Applied → Screening → Interview → Offer → Hired).
+- **Applicant Stages:** `APPLIED`, `SCREENING`, `INTERVIEW`, `OFFER`, `HIRED`, `REJECTED`, `WITHDRAWN`.
 - **Seamless Onboarding:** 1-click conversion from "Hired Applicant" to "Active Employee".
 
 ### Module 3: Time & Attendance (T&A)
@@ -117,18 +120,19 @@
 ## 4. Data Architecture Connectivity
 
 - **Company (Tenant):** Root node. Enforces database multi-tenancy.
-- **Employee_Profile:** Central hub linking Department, Work_Location, Branch, Position, and Shift_Schedule.
-- **Attendance_Log:** Raw clock-in data (Selfie, GPS coordinates, accuracy radius in meters). Immutable — never edited.
-- **Daily_Time_Record (DTR):** The computed daily record derived from Attendance_Log vs. Shift_Schedule. Contains two layers per day:
-  - *Official layer (immutable):* `official_time_in`, `official_time_out` — sourced from Attendance_Log, locked permanently.
-  - *Manual layer (audited):* `manual_time_in`, `manual_time_out`, `manual_reason_code`, `manual_notes`, `manual_actor_id`, `manual_actor_role`, `manual_timestamp` — editable by Employee or Supervisor with a required reason.
-  - *Effective layer (computed):* `effective_time_in`, `effective_time_out` — system-derived: uses Manual values if present, otherwise Official. Supervisor's manual entry always overrides the employee's manual entry. This is the layer consumed by the Payroll Engine.
-- **DTR_Submission:** Represents a packaged cutoff-period DTR submitted by an employee for approval. One record per employee per payroll period. Fields: `employee_id`, `payroll_period_id`, `submitted_at`, `status` (Submitted / Supervisor Reviewed / Supervisor Approved / Manager Approved / Returned), `returned_reason`.
-- **DTR_Audit_Log:** Immutable log of every manual edit to any DTR day entry. Fields: `dtr_id`, `actor_id`, `actor_role` (Employee / Supervisor), `field_changed`, `old_value`, `new_value`, `reason_code`, `notes`, `timestamp`. Visible to Managers and HR Admins; read-only.
-- **DTR_Manual_Reason_Code:** Predefined lookup table of allowed reasons for manual time entries. Values: `FORGOT_CLOCK_IN`, `FORGOT_CLOCK_OUT`, `GPS_FAILURE`, `KIOSK_OFFLINE`, `SYSTEM_ERROR`, `SCHEDULE_CHANGE`, `OTHER` (requires notes).
-- **Payroll_Book:** Represents one Payroll Period (e.g., May 15–30).
-- **Payroll_Sheet:** Child of Payroll_Book. Stores the frozen Gross-to-Net line items per employee.
-- **Branch:** Stores geofence configuration — `geofence_lat`, `geofence_lng`, `geofence_radius_meters`.
+- **Employee_Profile:** Central hub linking Department, Work_Location, Branch, Position, and Shift_Schedule. Carries `immediateSupervisorId` and `managerId` for approval chain routing. `taxClassification` (REGULAR / MWE) drives BIR withholding and statutory exemptions.
+- **Attendance_Log:** Append-only record of every clock punch (IN or OUT). Fields include: `punchType` (IN/OUT), `source` (KIOSK/ESS/IMPORT/MANUAL), `punchedAt` (server-side timestamp), `selfieKey` (R2 object key, nullable), `latitude`, `longitude`, `outsideGeofence` (boolean flag — violations are recorded but never block the punch), `distanceMeters` (Haversine result in meters). Immutable — never edited.
+- **Daily_Time_Record (DTR):** The computed daily record derived from Attendance_Log vs. Shift_Schedule. Contains three layers per day:
+  - *Official layer (immutable):* `officialTimeIn`, `officialTimeOut` — sourced from Attendance_Log, locked permanently.
+  - *Manual layer (audited):* `manualTimeIn`, `manualTimeOut`, `manualReasonCode`, `manualNotes`, `manualActorId`, `manualActorRole`, `manualUpdatedAt` — editable by Employee or Supervisor with a required reason.
+  - *Effective layer (computed):* `effectiveTimeIn`, `effectiveTimeOut` — system-derived: uses Manual values if present, otherwise Official. Supervisor's manual entry always overrides the employee's manual entry. This is the layer consumed by the Payroll Engine.
+- **DTR_Submission:** Represents a packaged cutoff-period DTR submitted by an employee for approval. One record per employee per payroll period. `status` values: `SUBMITTED / SUPERVISOR_APPROVED / MANAGER_APPROVED / RETURNED`.
+- **DTR_Audit_Log:** Immutable log of every manual edit to any DTR day entry. Fields: `dtrRecordId`, `dtrSubmissionId`, `actorId`, `actorRole` (EMPLOYEE / SUPERVISOR), `fieldChanged`, `oldValue`, `newValue`, `reasonCode`, `notes`, `createdAt`. Visible to Managers and HR Admins; read-only.
+- **DTR_Manual_Reason_Code:** Predefined enum of allowed reasons for manual time entries. Values: `FORGOT_CLOCK_IN`, `FORGOT_CLOCK_OUT`, `GPS_FAILURE`, `KIOSK_OFFLINE`, `SYSTEM_ERROR`, `SCHEDULE_CHANGE`, `OTHER` (requires non-empty notes).
+- **Payroll_Book:** Represents one Payroll Period (e.g., May 15–30). Has `skipStatutory` flag for off-cycle bonus runs where statutory was already collected in the regular cycle.
+- **Payroll_Sheet:** Child of Payroll_Book. Stores the frozen 12-step Gross-to-Net line items per employee. All monetary amounts stored as BigInt centavos.
+- **Geofence:** Separate model linked to a Branch. Fields: `latitude`, `longitude`, `radiusMeters`, `isActive`. A branch may have one active geofence. Geofence data is NOT stored directly on the Branch record.
+- **Work_Location:** Linked to Branch. Carries a `region` field (PSGC/DOLE region code, e.g. "NCR", "07") used to resolve the applicable minimum wage rate during payroll computation.
 
 ---
 
@@ -144,16 +148,16 @@
   1. Browser calls `navigator.geolocation.getCurrentPosition()` with a 10-second timeout.
   2. **Permission denied:** Clock-in is blocked. Error message: *"Location access is required to clock in. Please enable it in your browser settings."*
   3. **GPS timeout / no signal:** Clock-in is blocked. Error message: *"Unable to detect your location. Please move to an area with better signal and try again."*
-  4. System receives `{ latitude, longitude, accuracy }` from the device.
-  5. System queries Employee_Profile → fetches assigned Branch → retrieves `geofence_lat`, `geofence_lng`, `geofence_radius_meters`.
-  6. System applies **Haversine formula** to calculate straight-line distance (meters) between device coordinates and branch center.
-  7. **Accuracy buffer applied:** Effective allowed distance = `geofence_radius_meters + min(device_accuracy_meters, 30)`. This prevents false rejections from device GPS drift (capped at 30m buffer).
-  8. **Distance > effective radius:** Clock-in is blocked. Error message: *"You are [X]m from [Branch Name]. You must be within [radius]m to clock in."*
-  9. **Distance ≤ effective radius:** Proceed.
-  10. Saves Attendance_Log: `{ employee_id, timestamp, latitude, longitude, accuracy_meters, geofence_passed: true, selfie_url }`.
-  11. Computes against Shift_Schedule to identify Tardiness/Undertime minutes.
-- **Final Output:** Updates the Daily_Time_Record row for that specific day.
-- **Kiosk Exception:** Steps 1–8 are skipped. Kiosk is physically fixed at the branch. Attendance_Log records the kiosk's stored static coordinates.
+  4. System verifies employee has granted biometric/location consent (`ConsentRecord`). If not, clock-in is blocked with a consent-required error.
+  5. System receives `{ latitude, longitude }` from the device.
+  6. System queries Employee_Profile → fetches assigned Branch → retrieves the active `Geofence` record for that branch (`latitude`, `longitude`, `radiusMeters`).
+  7. System applies **Haversine formula** server-side to calculate straight-line distance (meters) between device coordinates and the geofence center.
+  8. **Distance > radiusMeters:** Clock-in is **allowed** but flagged — `outsideGeofence = true` and `distanceMeters` are recorded in the Attendance_Log. No blocking occurs.
+  9. **Distance ≤ radiusMeters (or no geofence configured):** Clock-in proceeds normally. `outsideGeofence = false`.
+  10. Saves Attendance_Log: `{ employeeId, punchType, source: "ESS", punchedAt, latitude, longitude, outsideGeofence, distanceMeters, selfieKey }`.
+  11. Computes against Shift_Schedule to identify Tardiness/Undertime minutes and upserts the DTRRecord for that date.
+- **Final Output:** Updates the DTRRecord row for that specific day.
+- **Kiosk Exception:** Steps 1–9 are skipped. Kiosk is physically fixed at the branch. `source` is recorded as "KIOSK" in the Attendance_Log.
 
 ### Workflow 2: Leave & Undertime (UT) Application
 
@@ -287,9 +291,9 @@
   3. HR sets the **enforcement radius** using a slider (minimum: 30m, maximum: 500m, default: 100m).
   4. A visual circle overlay shows the geofence boundary in real time on the map.
   5. HR clicks "Save Geofence".
-  6. System writes `geofence_lat`, `geofence_lng`, `geofence_radius_meters` to the Branch record.
-  7. System immediately begins enforcing the new geofence on all subsequent clock-ins for employees assigned to that branch.
-- **Final Output:** Branch record updated. All affected employees will be subject to the new geofence on their next clock-in attempt.
+  6. System writes or updates the `Geofence` record (`latitude`, `longitude`, `radiusMeters`, `isActive = true`) linked to the Branch.
+  7. System immediately begins evaluating the new geofence on all subsequent clock-ins for employees assigned to that branch.
+- **Final Output:** Geofence record updated. All subsequent punches for employees at this branch will be evaluated against the new boundary.
 
 ---
 
@@ -304,7 +308,7 @@
 | Device Location | Browser Geolocation API (`navigator.geolocation`) | Free (built-in) | Retrieves device GPS coordinates |
 | Distance Calculation | Haversine Formula (pure JS/backend math) | Free (no API) | Computes straight-line distance between two lat/lng points |
 | Map UI for HR Setup | Google Maps Embed API or Mapbox GL JS | Free tier sufficient | Visual pin placement and radius circle for HR admin |
-| Geofence Data | Branch table in app DB | — | Stores center coordinates + radius per branch |
+| Geofence Data | Geofence table in app DB | — | Separate model linked to Branch; stores center coordinates, radius, and isActive flag |
 
 #### Haversine Formula Reference
 
@@ -324,12 +328,7 @@ This is computed server-side (not client-side) to prevent tampering.
 
 #### GPS Accuracy & Drift Handling
 
-Mobile GPS accuracy varies from ~5m (clear outdoor signal) to ~50m+ (indoors/urban canyon). To prevent legitimate employees from being falsely rejected:
-
-- The device reports `coords.accuracy` — a radius in meters within which the true location lies.
-- The system applies an **accuracy buffer:** effective allowed distance = `geofence_radius + min(coords.accuracy, 30)`.
-- The 30m cap prevents abuse (employees in poor signal areas cannot exploit unlimited buffers).
-- The raw accuracy value is logged to Attendance_Log for audit purposes.
+Mobile GPS accuracy varies from ~5m (clear outdoor signal) to ~50m+ (indoors/urban canyon). The Haversine check compares the raw reported coordinates against the geofence `radiusMeters`. GPS drift may result in `outsideGeofence = true` for employees near the boundary, but this is a flag only — it does not block the clock-in. HR can audit flagged punches using the `distanceMeters` value recorded in the Attendance_Log.
 
 #### Enforcement Radius Guidance for HR
 
@@ -350,7 +349,8 @@ Kiosk devices are physically installed at the branch. GPS checks are not perform
 |---|---|---|
 | Location permission denied | "Location access is required to clock in. Please enable it in your browser settings." | Block clock-in |
 | GPS timeout (>10 seconds) | "Unable to detect your location. Please move to an area with better signal." | Block clock-in |
-| Outside geofence | "You are [X]m from [Branch Name]. You must be within [radius]m to clock in." | Block clock-in, log attempt |
+| No consent record | *(consent gate shown)* | Block clock-in; consent required before GPS/selfie is accepted |
+| Outside geofence | *(none — punch proceeds)* | Allow clock-in; `outsideGeofence = true`, `distanceMeters` recorded in Attendance_Log |
 | Inside geofence | *(none — proceeds normally)* | Allow clock-in |
 
 #### Audit Trail
@@ -359,20 +359,19 @@ Every Attendance_Log record stores:
 
 ```
 {
-  employee_id,
-  timestamp,
+  employeeId,
+  punchType,          // "IN" | "OUT"
+  source,             // "ESS" | "KIOSK" | "IMPORT" | "MANUAL"
+  punchedAt,          // server-side UTC timestamp
   latitude,
   longitude,
-  accuracy_meters,
-  geofence_passed,       // true / false
-  geofence_distance_m,   // actual computed distance
-  geofence_radius_m,     // branch radius at time of attempt
-  clock_in_method,       // "ESS_MOBILE" or "KIOSK"
-  selfie_url
+  outsideGeofence,    // true if punch was outside active geofence
+  distanceMeters,     // Haversine result in metres; null if no geofence
+  selfieKey           // R2 object key; null when selfie not captured
 }
 ```
 
-This allows HR to audit disputed clock-in rejections with full evidence.
+This allows HR to audit flagged out-of-geofence punches with full context.
 
 ---
 

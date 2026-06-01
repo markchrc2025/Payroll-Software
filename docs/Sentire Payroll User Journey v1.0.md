@@ -187,12 +187,12 @@ Each step is structured as: **Phase** → **Step** → **Actor** → **System Re
 - Job opening appears as the first column in the Kanban board: **Applied**
 
 ### Step 10 — Manage the Applicant Pipeline
-- Drag applicant cards across Kanban stages: **Applied → Shortlisted → Interviewed → Offered**
+- Drag applicant cards across Kanban stages: **Applied → Screening → Interview → Offer**
 - Log interview notes and scores on each applicant card
-- Mark a stage as rejected with a rejection reason for recordkeeping
+- Mark a stage as rejected (`REJECTED`) or withdrawn (`WITHDRAWN`) with a reason for recordkeeping
 
 ### Step 11 — Hire & Convert to Employee
-- HR moves applicant to **Offered** stage → extends offer (salary, start date, benefits)
+- HR moves applicant to **Offer** stage → extends offer (salary, start date, benefits)
 - On acceptance, click **1-Click Convert to Employee**
 - System pre-fills the employee profile form from the applicant record
 - HR completes statutory IDs, bank account, and shift assignment
@@ -382,9 +382,9 @@ HR reviews and confirms before generating documents.
 |---|---|---|
 | Employee | Opens ESS app. Taps the large **Clock In** button on the home screen. | App checks if it is within the employee's scheduled shift window. |
 | Browser | Requests location permission if not already granted. | Employee taps **Allow**. GPS acquires coordinates (up to 10-second timeout). |
-| System | Calculates distance from assigned branch using the Haversine formula. | If outside geofence radius: shows error — *"You are [X]m from [Branch]. Must be within [Y]m to clock in."* Clock-in is blocked. |
-| System | If inside geofence: opens the device camera for selfie capture. | Employee sees live camera feed. A circle overlay guides the selfie frame. |
-| Employee | Positions face within the circle. Taps **Confirm**. | System saves the Attendance Log: timestamp, GPS coordinates, accuracy, selfie photo, geofence result. DTR for the day is updated. |
+| System | Calculates distance from assigned branch using the Haversine formula (server-side). | If outside geofence radius: punch is **allowed** but flagged — `outsideGeofence = true` and distance in metres are recorded in the Attendance Log. No error is shown; clock-in proceeds. |
+| System | Opens the device camera for selfie capture (consent verified first). | Employee sees live camera feed. A circle overlay guides the selfie frame. |
+| Employee | Positions face within the circle. Taps **Confirm**. | System saves the Attendance Log: timestamp, GPS coordinates, `outsideGeofence` flag, distance in metres, selfie key, punch source. DTR for the day is updated. |
 | Employee | Clock-in confirmed. Recorded time stamp is displayed. | Employee proceeds to their workstation. |
 
 ### Step 2a — Manual Time Entry (ESS) *(Blueprint Workflow 11)*

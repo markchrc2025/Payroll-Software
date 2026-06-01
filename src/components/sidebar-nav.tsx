@@ -156,6 +156,9 @@ export function SidebarNav({
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
+    // Exact match for /settings so sub-pages (/settings/pay-rules etc.) don't
+    // keep "Company & Branding" highlighted — each sub-page has its own nav item.
+    if (href === "/settings") return pathname === "/settings";
     return pathname === href || pathname.startsWith(href + "/");
   }
 
@@ -294,28 +297,6 @@ export function SidebarNav({
         ))}
       </nav>
 
-      {/* Footer */}
-      <div
-        className={[
-          "flex items-center border-t border-white/[0.06] py-3",
-          isCollapsed ? "justify-center px-2" : "gap-2.5 px-3.5",
-        ].join(" ")}
-      >
-        <div
-          title={isCollapsed ? `${userName} · ${userRole}` : undefined}
-          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#D7A23F] to-[#B07F22] text-[12.5px] font-bold text-white cursor-default"
-        >
-          {userInitials}
-        </div>
-        {!isCollapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-[12.5px] font-semibold text-[#EAF1FB]">
-              {userName}
-            </div>
-            <div className="text-[11px] text-[#7E8FA8]">{userRole}</div>
-          </div>
-        )}
-      </div>
     </aside>
   );
 }
