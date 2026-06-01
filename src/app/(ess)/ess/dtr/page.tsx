@@ -251,8 +251,7 @@ export default function EssDtrPage() {
         return (
           <Card key={period.periodStart} className="overflow-hidden">
             <Collapsible open={isOpen} onOpenChange={() => togglePeriod(period.periodStart)}>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors pb-3 pt-4">
+              <CollapsibleTrigger render={<CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors pb-3 pt-4" />}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -328,7 +327,6 @@ export default function EssDtrPage() {
                       }
                     </div>
                   </div>
-                </CardHeader>
               </CollapsibleTrigger>
 
               <CollapsibleContent>
