@@ -149,7 +149,7 @@ export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props)
     <div
       ref={containerRef}
       className="w-full rounded-lg overflow-hidden border border-border"
-      style={{ height: 340, zIndex: 0 }}
+      style={{ height: 300, zIndex: 0 }}
     />
   );
 }

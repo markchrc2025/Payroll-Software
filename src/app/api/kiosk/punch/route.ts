@@ -26,12 +26,15 @@ import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
 import { executePunch } from "@/lib/attendance/punch";
 import { err, ok } from "@/lib/api-response";
+import { isR2Configured } from "@/lib/r2";
 
 const bodySchema = z.object({
   employeeNumber: z.string().min(1),
   pin:            z.string().min(4).max(8),
   punchType:      z.enum(["IN", "OUT"]),
   selfieKey:      z.string().optional().nullable(),
+  // base64-encoded JPEG sent by the kiosk when R2 is not configured
+  selfieData:     z.string().optional().nullable(),
   latitude:       z.number().min(-90).max(90).optional().nullable(),
   longitude:      z.number().min(-180).max(180).optional().nullable(),
 });
@@ -61,8 +64,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
   const d = parsed.data;
 
-  // Enforce selfie requirement for kiosks that mandate it
-  if (kiosk.requiresSelfie && !d.selfieKey) {
+  // Enforce selfie: must have selfieKey (R2) OR selfieData (base64 fallback)
+  const hasSelfie = !!(d.selfieKey || d.selfieData);
+  if (kiosk.requiresSelfie && !hasSelfie) {
     return err("Selfie is required for this kiosk", 422);
   }
 
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
     source:     "KIOSK",
     kioskId:    kiosk.id,
     selfieKey:  d.selfieKey ?? null,
+    selfieData: d.selfieData ? Buffer.from(d.selfieData, "base64") : null,
     latitude:   d.latitude  ?? null,
     longitude:  d.longitude ?? null,
     ipAddress:  req.headers.get("x-forwarded-for") ?? null,

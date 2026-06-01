@@ -1990,6 +1990,8 @@ model AttendanceLog {
 
   /// R2 object key for selfie image.  Null when selfie was not captured.
   selfieKey  String?
+  /// Raw JPEG bytes stored directly in DB when R2 is not configured.
+  selfieData Bytes?
   /// GPS latitude at punch time.  Null when location was not captured.
   latitude   Decimal? @db.Decimal(10, 7)
   /// GPS longitude at punch time.  Null when location was not captured.

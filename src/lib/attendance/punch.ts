@@ -26,7 +26,8 @@ export interface PunchInput {
   punchType:  PunchType;
   source:     PunchSource;
   kioskId?:   string | null;
-  selfieKey?: string | null;
+  selfieKey?:  string | null;
+  selfieData?: Buffer | null;
   latitude?:  number | null;
   longitude?: number | null;
   ipAddress?: string | null;
@@ -55,9 +56,9 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     if (!employee) return { ok: false, code: "EMPLOYEE_NOT_FOUND" };
 
     // 2. Consent check — if selfie or GPS provided, employee must have granted consent
-    if (input.selfieKey || (input.latitude != null && input.longitude != null)) {
+    if (input.selfieKey || input.selfieData || (input.latitude != null && input.longitude != null)) {
       const checks: { types: string[] }[] = [];
-      if (input.selfieKey) {
+      if (input.selfieKey || input.selfieData) {
         checks.push({ types: ["BIOMETRIC_SELFIE", "KIOSK_PHOTO"] });
       }
       if (input.latitude != null && input.longitude != null) {
@@ -103,7 +104,8 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         punchType:       input.punchType,
         source:          input.source,
         punchedAt:       now,
-        selfieKey:       input.selfieKey ?? null,
+        selfieKey:       input.selfieKey  ?? null,
+        selfieData:      input.selfieData  ?? null,
         latitude:        input.latitude  != null ? input.latitude  : null,
         longitude:       input.longitude != null ? input.longitude : null,
         outsideGeofence: geofenceResult.outsideGeofence,

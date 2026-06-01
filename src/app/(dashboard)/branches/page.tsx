@@ -416,7 +416,7 @@ export default function BranchesPage() {
 
       {/* Geofence Dialog — wider so the map has room */}
       <Dialog open={geoSheetOpen} onOpenChange={setGeoSheetOpen}>
-        <DialogContent className="max-w-3xl w-full">
+        <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-sky-600" />
@@ -464,7 +464,7 @@ export default function BranchesPage() {
               {geoForm.lat != null ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Navigation className="h-3 w-3 shrink-0" />
-                  {geoForm.lat.toFixed(6)},&nbsp;{geoForm.lng!.toFixed(6)}
+                  {Number(geoForm.lat).toFixed(6)},&nbsp;{Number(geoForm.lng).toFixed(6)}
                   <span className="ml-1 italic">(click the map to move)</span>
                 </p>
               ) : (

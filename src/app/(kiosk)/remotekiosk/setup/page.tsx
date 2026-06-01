@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function KioskSetupPage() {
   const router = useRouter();
@@ -19,14 +18,8 @@ export default function KioskSetupPage() {
     setPairing(true);
 
     try {
-      // Send an intentionally malformed body — a 422 (not 401) means the token is valid
-      const res = await fetch("/api/kiosk/punch", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Kiosk ${deviceToken.trim()}`,
-        },
-        body: JSON.stringify({}), // intentionally invalid — we expect 422
+      const res = await fetch("/api/kiosk/info", {
+        headers: { Authorization: `Kiosk ${deviceToken.trim()}` },
       });
 
       if (res.status === 401) {
@@ -34,9 +27,11 @@ export default function KioskSetupPage() {
         return;
       }
 
-      if (res.status === 422 || res.ok) {
-        // 422 = token valid, body invalid (expected)
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data ?? json;
         localStorage.setItem("kiosk_token", deviceToken.trim());
+        localStorage.setItem("kiosk_requires_selfie", String(!!data.requiresSelfie));
         toast.success("Device paired successfully!");
         router.replace("/remotekiosk");
         return;
@@ -51,32 +46,34 @@ export default function KioskSetupPage() {
   }
 
   return (
-    <div className="w-full max-w-sm p-4">
-      <Card className="bg-gray-900 border-gray-700 text-white">
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl text-sky-400">Kiosk Setup</CardTitle>
-          <CardDescription className="text-gray-400">
+    <div className="min-h-screen bg-white flex items-center justify-center px-6">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center space-y-1">
+          <h1 className="text-2xl font-bold text-gray-900">Kiosk Setup</h1>
+          <p className="text-sm text-gray-500">
             Enter the device token provided by your administrator to pair this terminal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={pairDevice} className="space-y-4">
-            <div className="space-y-1">
-              <Label className="text-gray-300">Device Token</Label>
-              <Input
-                className="bg-gray-800 border-gray-600 text-white placeholder-gray-500 focus:border-sky-500"
-                placeholder="Enter device token..."
-                value={deviceToken}
-                onChange={(e) => setDeviceToken(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full bg-sky-500 hover:bg-sky-600" disabled={pairing}>
-              {pairing ? "Pairing…" : "Pair Device"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+        <form onSubmit={pairDevice} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-gray-700">Device Token</Label>
+            <Input
+              className="border-gray-300 font-mono"
+              placeholder="Paste device token…"
+              value={deviceToken}
+              onChange={(e) => setDeviceToken(e.target.value)}
+              required
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white"
+            disabled={pairing}
+          >
+            {pairing ? "Pairing…" : "Pair Device"}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
