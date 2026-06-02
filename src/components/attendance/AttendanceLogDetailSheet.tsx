@@ -31,7 +31,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
@@ -387,7 +386,7 @@ export function AttendanceLogDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+      <DialogContent className="w-full max-w-[70vw] sm:max-w-[70vw] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -406,20 +405,18 @@ export function AttendanceLogDetailSheet({
               "Attendance Detail"
             )}
           </DialogTitle>
-          <DialogDescription asChild className="text-xs">
-            <span>
-              {isLoading ? (
-                <Skeleton className="h-3 w-56" />
-              ) : log ? (
-                <>
-                  <span className="font-medium">{employeeName}</span>
-                  {employeeNumber && (
-                    <span className="text-muted-foreground"> ({employeeNumber})</span>
-                  )}
-                </>
-              ) : null}
-            </span>
-          </DialogDescription>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {isLoading ? (
+              <span className="inline-block h-3 w-56 bg-muted animate-pulse rounded" />
+            ) : log ? (
+              <>
+                <span className="font-medium text-foreground">{employeeName}</span>
+                {employeeNumber && (
+                  <span className="text-muted-foreground"> ({employeeNumber})</span>
+                )}
+              </>
+            ) : null}
+          </div>
         </DialogHeader>
 
         {/* Loading skeleton */}

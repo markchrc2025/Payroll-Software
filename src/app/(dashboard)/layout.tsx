@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { LogOut } from "lucide-react";
 import { auth } from "@/auth";
-import { signOutAction } from "./_actions/sign-out";
 import { GlobalSearch } from "@/components/global-search";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { UserMenu } from "@/components/user-menu";
 import prismaAdmin from "@/lib/prisma-admin";
 
 export default async function DashboardLayout({
@@ -83,26 +82,7 @@ export default async function DashboardLayout({
 
           <div className="flex-1" />
 
-          {/* User badge — desktop */}
-          <div className="hidden lg:flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary ring-1 ring-primary/20">
-              {initials}
-            </div>
-            <span className="text-sm font-medium text-foreground/80 max-w-[140px] truncate">
-              {displayName}
-            </span>
-          </div>
-
-          {/* Sign-out — mobile */}
-          <form action={signOutAction} className="lg:hidden">
-            <button
-              type="submit"
-              className="p-2 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </form>
+          <UserMenu displayName={displayName} initials={initials} />
         </header>
 
         <main className="flex-1 p-6 lg:p-8 overflow-auto">{children}</main>

@@ -1,0 +1,421 @@
+
+<h2 class="sr-only">Sentire Central Portal — 6-screen interactive desktop mockup covering Dashboard, Tenants, Tenant Detail, Feature Configuration, Provider Billing, and Tenant Self-Service Subscription</h2>
+
+<div style="padding:8px 0 16px">
+
+<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+  <button class="sct" id="sct-dashboard" onclick="goS('dashboard')" style="background:#1E3A5F;color:white;border:1px solid #1E3A5F;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:500">Dashboard</button>
+  <button class="sct" id="sct-tenants" onclick="goS('tenants')" style="background:transparent;color:#6B7280;border:1px solid #E5E7EB;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">Tenants</button>
+  <button class="sct" id="sct-detail" onclick="goS('detail')" style="background:transparent;color:#6B7280;border:1px solid #E5E7EB;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">Tenant detail</button>
+  <button class="sct" id="sct-features" onclick="goS('features')" style="background:transparent;color:#6B7280;border:1px solid #E5E7EB;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">Feature config</button>
+  <button class="sct" id="sct-billing" onclick="goS('billing')" style="background:transparent;color:#6B7280;border:1px solid #E5E7EB;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">Provider billing</button>
+  <button class="sct" id="sct-sub" onclick="goS('sub')" style="background:transparent;color:#6B7280;border:1px solid #E5E7EB;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">My subscription</button>
+</div>
+
+<div style="background:#E8EAED;border-radius:12px 12px 0 0;padding:8px 14px;display:flex;align-items:center;gap:10px;border:0.5px solid #D1D5DB;border-bottom:none">
+  <div style="display:flex;gap:5px">
+    <div style="width:11px;height:11px;border-radius:50%;background:#FC5F57"></div>
+    <div style="width:11px;height:11px;border-radius:50%;background:#FDBB2D"></div>
+    <div style="width:11px;height:11px;border-radius:50%;background:#28C840"></div>
+  </div>
+  <div style="flex:1;background:white;border-radius:6px;padding:4px 12px;font-size:11px;color:#6B7280" id="url-bar">portal.sentire.ph/dashboard</div>
+  <i class="ti ti-refresh" style="font-size:14px;color:#9CA3AF" aria-hidden="true"></i>
+</div>
+
+<div style="display:flex;height:520px;border:0.5px solid #D1D5DB;border-radius:0 0 12px 12px;overflow:hidden">
+
+  <div id="cp-sidebar" style="width:56px;background:#1E3A5F;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;flex-shrink:0">
+    <div style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+      <span style="color:white;font-size:15px;font-weight:500">S</span>
+    </div>
+    <div class="si" id="si-home" style="width:38px;height:38px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="goS('dashboard')" title="Dashboard">
+      <i class="ti ti-layout-dashboard" style="font-size:18px;color:white" aria-hidden="true"></i>
+    </div>
+    <div class="si" id="si-tenants" style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="goS('tenants')" title="Tenants">
+      <i class="ti ti-building-community" style="font-size:18px;color:rgba(255,255,255,0.5)" aria-hidden="true"></i>
+    </div>
+    <div class="si" id="si-billing" style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="goS('billing')" title="Billing">
+      <i class="ti ti-receipt" style="font-size:18px;color:rgba(255,255,255,0.5)" aria-hidden="true"></i>
+    </div>
+    <div class="si" id="si-support" style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Support">
+      <i class="ti ti-headset" style="font-size:18px;color:rgba(255,255,255,0.5)" aria-hidden="true"></i>
+    </div>
+    <div style="margin-top:auto;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center">
+      <span style="color:white;font-size:11px;font-weight:500">MC</span>
+    </div>
+  </div>
+
+  <div id="cp-content" style="flex:1;background:#F8FAFC;overflow-y:auto;padding:20px">
+  
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div>
+        <p style="font-size:15px;font-weight:500;color:#111827;margin:0">Central Portal</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0 0">Tuesday, June 3, 2026</p>
+      </div>
+      <button style="background:#1E3A5F;color:white;border:none;border-radius:8px;padding:7px 13px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-plus" style="font-size:13px" aria-hidden="true"></i> New tenant
+      </button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px">
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:11px;color:#6B7280;margin:0 0 5px;display:flex;align-items:center;gap:4px"><i class="ti ti-building" style="font-size:13px" aria-hidden="true"></i> Tenants</p>
+        <p style="font-size:22px;font-weight:500;color:#111827;margin:0">47</p>
+        <p style="font-size:10px;color:#16A34A;margin:4px 0 0">+3 this month</p>
+      </div>
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:11px;color:#6B7280;margin:0 0 5px;display:flex;align-items:center;gap:4px"><i class="ti ti-coin" style="font-size:13px" aria-hidden="true"></i> MRR</p>
+        <p style="font-size:22px;font-weight:500;color:#111827;margin:0">₱245K</p>
+        <p style="font-size:10px;color:#16A34A;margin:4px 0 0">+8.2% vs last mo</p>
+      </div>
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:11px;color:#6B7280;margin:0 0 5px;display:flex;align-items:center;gap:4px"><i class="ti ti-users" style="font-size:13px" aria-hidden="true"></i> Employees</p>
+        <p style="font-size:22px;font-weight:500;color:#111827;margin:0">8,240</p>
+        <p style="font-size:10px;color:#6B7280;margin:4px 0 0">Across all tenants</p>
+      </div>
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:11px;color:#6B7280;margin:0 0 5px;display:flex;align-items:center;gap:4px"><i class="ti ti-heart-rate-monitor" style="font-size:13px" aria-hidden="true"></i> Health</p>
+        <p style="font-size:22px;font-weight:500;color:#111827;margin:0">91%</p>
+        <p style="font-size:10px;color:#D97706;margin:4px 0 0">4 need attention</p>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 10px">Requires attention</p>
+        <div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid #F3F4F6">
+          <div style="width:7px;height:7px;border-radius:50%;background:#D97706;margin-top:3px;flex-shrink:0"></div>
+          <div>
+            <p style="font-size:11px;color:#111827;margin:0 0 2px;font-weight:500">Bright Futures Corp</p>
+            <p style="font-size:10px;color:#6B7280;margin:0">No payroll run in 52 days</p>
+          </div>
+          <span style="margin-left:auto;font-size:10px;background:#FEF3C7;color:#92400E;border-radius:20px;padding:2px 8px;flex-shrink:0">Trial</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid #F3F4F6">
+          <div style="width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-top:3px;flex-shrink:0"></div>
+          <div>
+            <p style="font-size:11px;color:#111827;margin:0 0 2px;font-weight:500">LMN Services Inc</p>
+            <p style="font-size:10px;color:#6B7280;margin:0">Trial expires in 3 days</p>
+          </div>
+          <span style="margin-left:auto;font-size:10px;background:#FEE2E2;color:#991B1B;border-radius:20px;padding:2px 8px;flex-shrink:0">Expiring</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0">
+          <div style="width:7px;height:7px;border-radius:50%;background:#D97706;margin-top:3px;flex-shrink:0"></div>
+          <div>
+            <p style="font-size:11px;color:#111827;margin:0 0 2px;font-weight:500">Pacific Trading Co.</p>
+            <p style="font-size:10px;color:#6B7280;margin:0">Invoice overdue by 8 days</p>
+          </div>
+          <span style="margin-left:auto;font-size:10px;background:#FEF3C7;color:#92400E;border-radius:20px;padding:2px 8px;flex-shrink:0">Overdue</span>
+        </div>
+      </div>
+      <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+        <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 10px">Recent signups</p>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid #F3F4F6">
+          <div style="width:28px;height:28px;border-radius:7px;background:#DBEAFE;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:500;color:#1D4ED8">MR</span></div>
+          <div style="flex:1"><p style="font-size:11px;color:#111827;margin:0;font-weight:500">Metro Retail Inc</p><p style="font-size:10px;color:#6B7280;margin:0">Starter · 45 emp · May 28</p></div>
+          <span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 7px">Active</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid #F3F4F6">
+          <div style="width:28px;height:28px;border-radius:7px;background:#EDE9FE;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:500;color:#6D28D9">SK</span></div>
+          <div style="flex:1"><p style="font-size:11px;color:#111827;margin:0;font-weight:500">SkyBridge Logistics</p><p style="font-size:10px;color:#6B7280;margin:0">Growth · 220 emp · May 20</p></div>
+          <span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 7px">Active</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0">
+          <div style="width:28px;height:28px;border-radius:7px;background:#FEF3C7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:500;color:#92400E">BF</span></div>
+          <div style="flex:1"><p style="font-size:11px;color:#111827;margin:0;font-weight:500">Bright Futures Corp</p><p style="font-size:10px;color:#6B7280;margin:0">Trial · 8 emp · May 15</p></div>
+          <span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:20px;padding:2px 7px">Trial</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+const URLS = {
+  dashboard:'portal.sentire.ph/dashboard',
+  tenants:'portal.sentire.ph/tenants',
+  detail:'portal.sentire.ph/tenants/demo-corp-ph',
+  features:'portal.sentire.ph/tenants/demo-corp-ph/features',
+  billing:'portal.sentire.ph/tenants/demo-corp-ph/billing',
+  sub:'app.sentire.ph/settings/subscription'
+};
+
+const SIDEBAR_MAP = {
+  dashboard:'si-home',tenants:'si-tenants',detail:'si-tenants',
+  features:'si-tenants',billing:'si-billing',sub:'si-billing'
+};
+
+const tenantHeader = `
+  <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;background:white;border-bottom:0.5px solid #E5E7EB;margin:-20px -20px 18px">
+    <div style="width:38px;height:38px;border-radius:10px;background:#DBEAFE;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:14px;font-weight:500;color:#1D4ED8">DC</span></div>
+    <div style="flex:1"><p style="font-size:14px;font-weight:500;color:#111827;margin:0">Demo Corp Philippines</p><p style="font-size:11px;color:#6B7280;margin:2px 0 0">demo-corp-ph &nbsp;·&nbsp; Since Jan 2026</p></div>
+    <span style="font-size:11px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:3px 10px;font-weight:500">Growth</span>
+    <span style="font-size:11px;background:#F0FDF4;color:#166534;border-radius:20px;padding:3px 10px">Active</span>
+    <button style="background:#1E3A5F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;cursor:pointer">Actions</button>
+  </div>`;
+
+const statRow = `
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px">
+    <div style="background:#F8FAFC;border-radius:8px;padding:12px;border:0.5px solid #E5E7EB"><p style="font-size:10px;color:#6B7280;margin:0 0 4px">Employees</p><p style="font-size:18px;font-weight:500;color:#111827;margin:0">150</p></div>
+    <div style="background:#F8FAFC;border-radius:8px;padding:12px;border:0.5px solid #E5E7EB"><p style="font-size:10px;color:#6B7280;margin:0 0 4px">Branches</p><p style="font-size:18px;font-weight:500;color:#111827;margin:0">8</p></div>
+    <div style="background:#F8FAFC;border-radius:8px;padding:12px;border:0.5px solid #E5E7EB"><p style="font-size:10px;color:#6B7280;margin:0 0 4px">Monthly fee</p><p style="font-size:18px;font-weight:500;color:#111827;margin:0">₱37,350</p></div>
+    <div style="background:#F8FAFC;border-radius:8px;padding:12px;border:0.5px solid #E5E7EB"><p style="font-size:10px;color:#6B7280;margin:0 0 4px">Last payroll</p><p style="font-size:18px;font-weight:500;color:#111827;margin:0">May 31</p></div>
+  </div>`;
+
+const tabBar = (active) => {
+  const tabs = ['Overview','Features','Billing','Activity'];
+  const screens = ['detail','features','billing','detail'];
+  return '<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:0.5px solid #E5E7EB">' +
+    tabs.map((t,i) => `<button onclick="goS('${screens[i]}')" style="border:none;background:transparent;padding:8px 14px;font-size:12px;color:${active===t?'#1E3A5F':'#6B7280'};font-weight:${active===t?'500':'400'};border-bottom:${active===t?'2px solid #1E3A5F':'2px solid transparent'};cursor:pointer;margin-bottom:-0.5px">${t}</button>`).join('') + '</div>';
+};
+
+const SCREENS = {
+
+tenants: `<div style="padding:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <p style="font-size:15px;font-weight:500;color:#111827;margin:0">Tenants <span style="font-size:12px;color:#6B7280;font-weight:400">47 total</span></p>
+    <button style="background:#1E3A5F;color:white;border:none;border-radius:8px;padding:7px 13px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:13px" aria-hidden="true"></i> Add tenant</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input placeholder="Search tenants..." style="flex:1;border:0.5px solid #E5E7EB;border-radius:8px;padding:7px 12px;font-size:12px;outline:none;background:white">
+    <select style="border:0.5px solid #E5E7EB;border-radius:8px;padding:7px 10px;font-size:12px;color:#374151;background:white;outline:none"><option>All plans</option><option>Starter</option><option>Growth</option><option>Enterprise</option></select>
+    <select style="border:0.5px solid #E5E7EB;border-radius:8px;padding:7px 10px;font-size:12px;color:#374151;background:white;outline:none"><option>All status</option><option>Active</option><option>Trial</option><option>Suspended</option></select>
+  </div>
+  <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <thead><tr style="background:#F9FAFB;border-bottom:0.5px solid #E5E7EB">
+        <th style="text-align:left;padding:9px 12px;font-size:10px;color:#6B7280;font-weight:500;width:28%">Company</th>
+        <th style="text-align:left;padding:9px 8px;font-size:10px;color:#6B7280;font-weight:500;width:14%">Plan</th>
+        <th style="text-align:left;padding:9px 8px;font-size:10px;color:#6B7280;font-weight:500;width:10%">Emp.</th>
+        <th style="text-align:left;padding:9px 8px;font-size:10px;color:#6B7280;font-weight:500;width:13%">Status</th>
+        <th style="text-align:left;padding:9px 8px;font-size:10px;color:#6B7280;font-weight:500;width:16%">Last payroll</th>
+        <th style="text-align:left;padding:9px 8px;font-size:10px;color:#6B7280;font-weight:500;width:19%">Actions</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:0.5px solid #F3F4F6">
+          <td style="padding:10px 12px"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">Demo Corp Philippines</p><p style="font-size:10px;color:#9CA3AF;margin:0">demo-corp-ph</p></td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:2px 8px">Growth</span></td>
+          <td style="padding:10px 8px;font-size:12px;color:#374151">150</td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px">Active</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151">May 31, 2026</td>
+          <td style="padding:10px 8px"><button onclick="goS('detail')" style="font-size:10px;border:0.5px solid #E5E7EB;border-radius:6px;padding:4px 9px;background:white;cursor:pointer;color:#374151">View</button></td>
+        </tr>
+        <tr style="border-bottom:0.5px solid #F3F4F6">
+          <td style="padding:10px 12px"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">Global BPO Solutions</p><p style="font-size:10px;color:#9CA3AF;margin:0">global-bpo</p></td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#EDE9FE;color:#6D28D9;border-radius:20px;padding:2px 8px">Enterprise</span></td>
+          <td style="padding:10px 8px;font-size:12px;color:#374151">1,240</td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px">Active</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151">May 31, 2026</td>
+          <td style="padding:10px 8px"><button style="font-size:10px;border:0.5px solid #E5E7EB;border-radius:6px;padding:4px 9px;background:white;cursor:pointer;color:#374151">View</button></td>
+        </tr>
+        <tr style="border-bottom:0.5px solid #F3F4F6">
+          <td style="padding:10px 12px"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">SkyBridge Logistics</p><p style="font-size:10px;color:#9CA3AF;margin:0">skybridge</p></td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:2px 8px">Growth</span></td>
+          <td style="padding:10px 8px;font-size:12px;color:#374151">220</td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px">Active</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151">May 30, 2026</td>
+          <td style="padding:10px 8px"><button style="font-size:10px;border:0.5px solid #E5E7EB;border-radius:6px;padding:4px 9px;background:white;cursor:pointer;color:#374151">View</button></td>
+        </tr>
+        <tr style="border-bottom:0.5px solid #F3F4F6">
+          <td style="padding:10px 12px"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">Metro Retail Inc</p><p style="font-size:10px;color:#9CA3AF;margin:0">metro-retail</p></td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#F3F4F6;color:#374151;border-radius:20px;padding:2px 8px">Starter</span></td>
+          <td style="padding:10px 8px;font-size:12px;color:#374151">45</td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px">Active</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151">May 31, 2026</td>
+          <td style="padding:10px 8px"><button style="font-size:10px;border:0.5px solid #E5E7EB;border-radius:6px;padding:4px 9px;background:white;cursor:pointer;color:#374151">View</button></td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">Bright Futures Corp</p><p style="font-size:10px;color:#9CA3AF;margin:0">bright-futures</p></td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:20px;padding:2px 8px">Trial</span></td>
+          <td style="padding:10px 8px;font-size:12px;color:#374151">8</td>
+          <td style="padding:10px 8px"><span style="font-size:10px;background:#FEF3C7;color:#92400E;border-radius:20px;padding:2px 8px">Trial</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#9CA3AF">—</td>
+          <td style="padding:10px 8px"><button style="font-size:10px;border:0.5px solid #E5E7EB;border-radius:6px;padding:4px 9px;background:white;cursor:pointer;color:#374151">View</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>`,
+
+detail: `<div style="padding:20px">${tenantHeader}${statRow}${tabBar('Overview')}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 12px">Primary contact</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:34px;height:34px;border-radius:50%;background:#DBEAFE;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:11px;font-weight:500;color:#1D4ED8">JR</span></div>
+        <div><p style="font-size:12px;font-weight:500;color:#111827;margin:0">Jose Reyes</p><p style="font-size:10px;color:#6B7280;margin:0">HR Director</p></div>
+      </div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr><td style="color:#6B7280;padding:4px 0">Email</td><td style="color:#185FA5;text-align:right;padding:4px 0">jose@democorp.ph</td></tr>
+        <tr><td style="color:#6B7280;padding:4px 0">Phone</td><td style="color:#374151;text-align:right;padding:4px 0">+63 917 555 0101</td></tr>
+        <tr><td style="color:#6B7280;padding:4px 0">Region</td><td style="color:#374151;text-align:right;padding:4px 0">NCR</td></tr>
+      </table>
+    </div>
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 12px">Subscription</p>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr><td style="color:#6B7280;padding:5px 0">Plan</td><td style="text-align:right;padding:5px 0"><span style="font-size:10px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:2px 8px">Growth</span></td></tr>
+        <tr><td style="color:#6B7280;padding:5px 0">Rate</td><td style="color:#374151;text-align:right;padding:5px 0">₱249 / employee / mo</td></tr>
+        <tr><td style="color:#6B7280;padding:5px 0">Monthly total</td><td style="color:#111827;font-weight:500;text-align:right;padding:5px 0">₱37,350</td></tr>
+        <tr><td style="color:#6B7280;padding:5px 0">Next billing</td><td style="color:#374151;text-align:right;padding:5px 0">July 1, 2026</td></tr>
+        <tr><td style="color:#6B7280;padding:5px 0">Payment</td><td style="text-align:right;padding:5px 0"><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px">Current</span></td></tr>
+      </table>
+    </div>
+  </div>
+</div>`,
+
+features: `<div style="padding:20px">${tenantHeader}${statRow}${tabBar('Features')}
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+    ${[
+      ['HRIS Core','ti-users',true,'Employee profiles, 201 files, org chart'],
+      ['Applicant Tracking','ti-briefcase',true,'ATS Kanban pipeline, hiring'],
+      ['Time & Attendance','ti-clock',true,'DTR, shifts, leave management'],
+      ['GPS Geofencing','ti-map-pin',true,'Location-based clock-in verification'],
+      ['Kiosk Mode','ti-device-tablet',false,'Branch tablet clock-in kiosk'],
+      ['ESS Mobile PWA','ti-device-mobile',true,'Employee self-service app'],
+      ['Basic Payroll','ti-calculator',true,'Gross-to-net, statutory deductions'],
+      ['Bank File Export','ti-file-export',true,'BDO, BPI, UnionBank, Metrobank'],
+      ['Compliance Reports','ti-file-certificate',true,'SSS, PhilHealth, Pag-IBIG, BIR'],
+      ['Advanced Analytics','ti-chart-bar',true,'Payroll trend, headcount reports'],
+      ['Custom Reports','ti-table',false,'Build your own report templates'],
+      ['API Access','ti-api',false,'REST API for integrations'],
+    ].map(([name,icon,on,desc]) => `
+      <div style="background:white;border-radius:10px;border:0.5px solid ${on?'#E5E7EB':'#F3F4F6'};padding:12px;opacity:${on?'1':'0.7'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <i class="ti ${icon}" style="font-size:15px;color:${on?'#1E3A5F':'#9CA3AF'}" aria-hidden="true"></i>
+            <p style="font-size:11px;font-weight:500;color:${on?'#111827':'#6B7280'};margin:0">${name}</p>
+          </div>
+          <div onclick="this.parentElement.parentElement.querySelector('.tog').classList.toggle('ton')" style="width:30px;height:17px;border-radius:20px;background:${on?'#1E3A5F':'#D1D5DB'};cursor:pointer;position:relative;flex-shrink:0">
+            <div class="tog ${on?'ton':''}" style="width:13px;height:13px;border-radius:50%;background:white;position:absolute;top:2px;left:${on?'15px':'2px'};transition:left 0.2s"></div>
+          </div>
+        </div>
+        <p style="font-size:10px;color:#9CA3AF;margin:0">${desc}</p>
+      </div>`).join('')}
+  </div>
+  <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
+    <button style="border:0.5px solid #E5E7EB;border-radius:8px;padding:8px 14px;font-size:12px;background:white;cursor:pointer;color:#374151">Discard</button>
+    <button style="background:#1E3A5F;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-weight:500">Save changes</button>
+  </div>
+</div>`,
+
+billing: `<div style="padding:20px">${tenantHeader}${statRow}${tabBar('Billing')}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 12px">Plan configuration</p>
+      <div style="margin-bottom:12px">
+        <label style="font-size:10px;color:#6B7280;display:block;margin-bottom:4px">Current plan</label>
+        <select style="width:100%;border:0.5px solid #E5E7EB;border-radius:8px;padding:8px 10px;font-size:12px;color:#111827;background:white;outline:none">
+          <option>Growth — ₱249/emp/mo</option>
+          <option>Starter — ₱299/emp/mo</option>
+          <option>Enterprise — Custom</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:10px;color:#6B7280;display:block;margin-bottom:4px">Custom monthly rate (override)</label>
+        <div style="display:flex;align-items:center;border:0.5px solid #E5E7EB;border-radius:8px;overflow:hidden;background:white">
+          <span style="padding:8px 10px;font-size:12px;color:#6B7280;background:#F9FAFB;border-right:0.5px solid #E5E7EB">₱</span>
+          <input type="text" placeholder="Leave blank to use plan default" value="37350" style="flex:1;border:none;padding:8px 10px;font-size:12px;outline:none;color:#111827">
+        </div>
+        <p style="font-size:10px;color:#9CA3AF;margin:4px 0 0">Overrides standard rate. Use for negotiated enterprise pricing.</p>
+      </div>
+      <div style="display:flex;gap:8px;padding-top:8px;border-top:0.5px solid #F3F4F6">
+        <button style="flex:1;background:#1E3A5F;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;cursor:pointer;font-weight:500">Update plan</button>
+        <button style="border:0.5px solid #FEE2E2;border-radius:8px;padding:8px 12px;font-size:12px;background:white;cursor:pointer;color:#991B1B">Suspend</button>
+      </div>
+    </div>
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 12px">Invoice history</p>
+      ${[
+        ['June 2026','₱37,350','Paid','Jun 1'],
+        ['May 2026','₱37,350','Paid','May 1'],
+        ['April 2026','₱34,860','Paid','Apr 1'],
+        ['March 2026','₱32,370','Paid','Mar 1'],
+      ].map(([mo,amt,st,date]) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid #F3F4F6">
+          <div><p style="font-size:11px;color:#111827;margin:0;font-weight:500">${mo}</p><p style="font-size:10px;color:#9CA3AF;margin:0">Billed ${date}</p></div>
+          <div style="text-align:right"><p style="font-size:12px;font-weight:500;color:#111827;margin:0">${amt}</p><span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 7px">${st}</span></div>
+        </div>`).join('')}
+      <button style="width:100%;margin-top:8px;border:0.5px solid #E5E7EB;border-radius:7px;padding:7px;font-size:11px;background:white;cursor:pointer;color:#374151">View all invoices</button>
+    </div>
+  </div>
+</div>`,
+
+sub: `<div style="padding:20px">
+  <div style="display:flex;align-items:center;gap:8px;background:#FEF3C7;border:0.5px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-bottom:16px">
+    <i class="ti ti-info-circle" style="font-size:14px;color:#92400E" aria-hidden="true"></i>
+    <p style="font-size:11px;color:#92400E;margin:0">Tenant view — <strong>app.sentire.ph/settings/subscription</strong> — this is what Demo Corp's admin sees</p>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><p style="font-size:15px;font-weight:500;color:#111827;margin:0">Your subscription</p><p style="font-size:11px;color:#6B7280;margin:2px 0 0">Manage your plan and billing</p></div>
+  </div>
+  <div style="background:white;border-radius:10px;border:2px solid #1E3A5F;padding:14px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:11px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:2px 8px;font-weight:500">Growth — Current plan</span>
+        </div>
+        <p style="font-size:13px;color:#6B7280;margin:4px 0 0">₱249 per employee · month</p>
+      </div>
+      <p style="font-size:20px;font-weight:500;color:#111827;margin:0">₱37,350<span style="font-size:12px;font-weight:400;color:#6B7280">/mo</span></p>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:#6B7280">Employees</span><span style="font-size:11px;color:#374151">150 / 500</span></div>
+      <div style="height:6px;background:#E5E7EB;border-radius:3px"><div style="width:30%;height:6px;background:#1E3A5F;border-radius:3px"></div></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:#6B7280">Storage</span><span style="font-size:11px;color:#374151">2.3 GB / 20 GB</span></div>
+      <div style="height:6px;background:#E5E7EB;border-radius:3px"><div style="width:11.5%;height:6px;background:#1E3A5F;border-radius:3px"></div></div>
+    </div>
+  </div>
+  <p style="font-size:12px;font-weight:500;color:#111827;margin:0 0 10px">Available plans</p>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:13px;font-weight:500;color:#111827;margin:0 0 4px">Starter</p>
+      <p style="font-size:18px;font-weight:500;color:#111827;margin:0 0 2px">₱299<span style="font-size:11px;font-weight:400;color:#6B7280">/emp/mo</span></p>
+      <p style="font-size:10px;color:#6B7280;margin:0 0 12px">Up to 50 employees</p>
+      ${['HRIS Core','Time & Attendance','Basic Payroll','ESS Mobile'].map(f=>`<p style="font-size:10px;color:#374151;margin:4px 0;display:flex;align-items:center;gap:5px"><i class="ti ti-check" style="font-size:12px;color:#16A34A" aria-hidden="true"></i>${f}</p>`).join('')}
+      <button style="width:100%;margin-top:12px;border:0.5px solid #E5E7EB;border-radius:8px;padding:8px;font-size:11px;background:white;cursor:pointer;color:#D97706">Downgrade</button>
+    </div>
+    <div style="background:white;border-radius:10px;border:2px solid #1E3A5F;padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <p style="font-size:13px;font-weight:500;color:#111827;margin:0">Growth</p>
+        <span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;padding:2px 7px">Current</span>
+      </div>
+      <p style="font-size:18px;font-weight:500;color:#111827;margin:0 0 2px">₱249<span style="font-size:11px;font-weight:400;color:#6B7280">/emp/mo</span></p>
+      <p style="font-size:10px;color:#6B7280;margin:0 0 12px">51 – 500 employees</p>
+      ${['All Starter features','ATS Pipeline','GPS Geofencing','Compliance Reports','Bank File Export'].map(f=>`<p style="font-size:10px;color:#374151;margin:4px 0;display:flex;align-items:center;gap:5px"><i class="ti ti-check" style="font-size:12px;color:#16A34A" aria-hidden="true"></i>${f}</p>`).join('')}
+      <button style="width:100%;margin-top:12px;border:0.5px solid #E5E7EB;border-radius:8px;padding:8px;font-size:11px;background:#F9FAFB;cursor:default;color:#9CA3AF">Current plan</button>
+    </div>
+    <div style="background:white;border-radius:10px;border:0.5px solid #E5E7EB;padding:14px">
+      <p style="font-size:13px;font-weight:500;color:#111827;margin:0 0 4px">Enterprise</p>
+      <p style="font-size:18px;font-weight:500;color:#111827;margin:0 0 2px">Custom</p>
+      <p style="font-size:10px;color:#6B7280;margin:0 0 12px">500+ employees</p>
+      ${['All Growth features','Custom Reports','API Access','Dedicated CSM','99.9% SLA'].map(f=>`<p style="font-size:10px;color:#374151;margin:4px 0;display:flex;align-items:center;gap:5px"><i class="ti ti-check" style="font-size:12px;color:#16A34A" aria-hidden="true"></i>${f}</p>`).join('')}
+      <button style="width:100%;margin-top:12px;border:none;border-radius:8px;padding:8px;font-size:11px;background:#1E3A5F;cursor:pointer;color:white;font-weight:500">Contact sales</button>
+    </div>
+  </div>
+</div>`
+
+};
+
+function goS(name) {
+  document.querySelectorAll('.sct').forEach(b => {
+    b.style.background = 'transparent';
+    b.style.color = '#6B7280';
+    b.style.border = '1px solid #E5E7EB';
+    b.style.fontWeight = '400';
+  });
+  const tb = document.getElementById('sct-' + name);
+  if(tb){ tb.style.background='#1E3A5F'; tb.style.color='white'; tb.style.border='1px solid #1E3A5F'; tb.style.fontWeight='500'; }
+  document.getElementById('url-bar').textContent = URLS[name] || 'portal.sentire.ph';
+  document.querySelectorAll('.si').forEach(s => { s.style.background='transparent'; s.querySelectorAll('i').forEach(i=>i.style.color='rgba(255,255,255,0.5)'); });
+  const sid = document.getElementById(SIDEBAR_MAP[name]);
+  if(sid){ sid.style.background='rgba(255,255,255,0.15)'; sid.querySelectorAll('i').forEach(i=>i.style.color='white'); }
+  const sb = document.getElementById('cp-sidebar');
+  if(name==='sub'){ sb.style.background='#2D4A6B'; } else { sb.style.background='#1E3A5F'; }
+  if(SCREENS[name]) document.getElementById('cp-content').innerHTML = SCREENS[name];
+}
+</script>

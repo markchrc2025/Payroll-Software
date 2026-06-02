@@ -6,8 +6,13 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   Timer, LogOut as LogOutIcon, Umbrella, Clock, FileText, Zap, MapPin,
+  Camera, RefreshCw, CheckCircle2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +31,8 @@ interface AttendanceLog {
   punchedAt: string;
   outsideGeofence: boolean;
 }
+
+type SelfieStep = "idle" | "opening" | "preview" | "captured";
 
 interface LeaveBalance {
   id: string;
@@ -107,11 +114,25 @@ export default function EssDashboard() {
   const [elapsed, setElapsed] = useState("");
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // selfie modal
+  const [selfieOpen, setSelfieOpen] = useState(false);
+  const [selfieStep, setSelfieStep] = useState<SelfieStep>("idle");
+  const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null);
+  const [pendingPunchType, setPendingPunchType] = useState<"IN" | "OUT" | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   // ── Live clock tick ────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    return () => { clearInterval(id); stopCamera(); };
   }, []);
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
 
   // ── Auth headers ───────────────────────────────────────────────────────────
   function authHeaders() {
@@ -197,11 +218,106 @@ export default function EssDashboard() {
     return () => { if (elapsedRef.current) clearInterval(elapsedRef.current); };
   }, [clockedIn, clockInTime]);
 
-  // ── Punch handler ─────────────────────────────────────────────────────────
-  async function doPunch() {
+  // ── Punch handler — Step 1: open selfie modal ────────────────────────────
+  const handlePunchClick = useCallback(async () => {
+    const token = localStorage.getItem("ess_token");
+    if (!token) { router.replace("/ess/login"); return; }
+    const punchType: "IN" | "OUT" = clockedIn ? "OUT" : "IN";
+    setPendingPunchType(punchType);
+    setCapturedDataUrl(null);
+    setSelfieStep("opening");
+    setSelfieOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setSelfieStep("preview");
+    } catch {
+      // Camera denied — proceed without selfie
+      setSelfieStep("idle");
+      setSelfieOpen(false);
+      submitPunch(punchType, null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clockedIn, router]);
+
+  // ── Step 2: capture frame ─────────────────────────────────────────────────
+  function captureSelfie() {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video || video.videoWidth === 0) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    setCapturedDataUrl(canvas.toDataURL("image/jpeg", 0.8));
+    stopCamera();
+    setSelfieStep("captured");
+  }
+
+  function retakeSelfie() {
+    setCapturedDataUrl(null);
+    setSelfieStep("opening");
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+      .then((stream) => {
+        streamRef.current = stream;
+        if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); }
+        setSelfieStep("preview");
+      })
+      .catch(() => setSelfieStep("captured"));
+  }
+
+  function cancelSelfie() {
+    stopCamera();
+    setSelfieOpen(false);
+    setSelfieStep("idle");
+    setCapturedDataUrl(null);
+    setPendingPunchType(null);
+  }
+
+  // ── Step 3: confirm → submit ──────────────────────────────────────────────
+  const confirmAndPunch = useCallback(async () => {
+    if (!pendingPunchType) return;
+    setSelfieOpen(false);
+    stopCamera();
+    await submitPunch(pendingPunchType, capturedDataUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPunchType, capturedDataUrl]);
+
+  // ── Core submission ───────────────────────────────────────────────────────
+  const submitPunch = useCallback(async (punchType: "IN" | "OUT", dataUrl: string | null) => {
     const token = localStorage.getItem("ess_token");
     if (!token) { router.replace("/ess/login"); return; }
     setPunching(true);
+
+    // Upload selfie if captured
+    let selfieKey: string | null = null;
+    if (dataUrl) {
+      try {
+        const byteStr = atob(dataUrl.split(",")[1]);
+        const ab = new ArrayBuffer(byteStr.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+        const blob = new Blob([ab], { type: "image/jpeg" });
+        const presignRes = await fetch("/api/ess/clock/presign", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ fileName: "selfie.jpg", mimeType: "image/jpeg", fileSize: blob.size }),
+        });
+        if (presignRes.ok) {
+          const { data: pd } = await presignRes.json();
+          const putRes = await fetch(pd.uploadUrl, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: blob });
+          if (putRes.ok) selfieKey = pd.storageKey;
+        }
+      } catch { /* proceed without selfie key */ }
+    }
+
+    // Capture GPS
     let latitude: number | null = null;
     let longitude: number | null = null;
     try {
@@ -213,15 +329,14 @@ export default function EssDashboard() {
     } catch { /* proceed without location */ }
 
     try {
-      const punchType = clockedIn ? "OUT" : "IN";
       const res = await fetch("/api/ess/clock", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ punchType, latitude, longitude }),
+        body: JSON.stringify({ punchType, latitude, longitude, selfieKey }),
       });
       const data = await res.json();
       if (res.status === 401) { localStorage.removeItem("ess_token"); router.replace("/ess/login"); return; }
-      if (res.status === 403) { toast.error("Please accept biometric / location consent in your profile."); return; }
+      if (res.status === 403) { toast.error("Please accept biometric / location consent in your profile settings before clocking in."); return; }
       if (!res.ok) { toast.error(data?.error ?? "Clock failed. Try again."); return; }
       toast.success(punchType === "IN" ? "Clocked in successfully!" : "Clocked out successfully!");
       loadPunches();
@@ -229,8 +344,12 @@ export default function EssDashboard() {
       toast.error("Network error. Try again.");
     } finally {
       setPunching(false);
+      setSelfieStep("idle");
+      setCapturedDataUrl(null);
+      setPendingPunchType(null);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, loadPunches]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const hoursToday = computeHoursToday(punches);
@@ -328,6 +447,7 @@ export default function EssDashboard() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
 
@@ -399,7 +519,7 @@ export default function EssDashboard() {
         {/* Clock button */}
         <div className="bg-white px-5 pt-7 pb-5 flex flex-col items-center border-b border-gray-100">
           <button
-            onClick={doPunch}
+            onClick={handlePunchClick}
             disabled={punching || punchesLoading}
             aria-label={clockedIn ? "Clock out" : "Clock in"}
             className={`w-[116px] h-[116px] rounded-full flex flex-col items-center justify-center mb-4 transition-all active:scale-95 disabled:opacity-60 select-none
@@ -468,6 +588,73 @@ export default function EssDashboard() {
         </div>
       </div>
 
+      {/* ── Selfie dialog (shared mobile + desktop) ──────────────────── */}
+      <canvas ref={canvasRef} className="hidden" />
+      <Dialog open={selfieOpen} onOpenChange={(open) => { if (!open) cancelSelfie(); }}>
+        <DialogContent className="max-w-sm w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-sky-600" />
+              {pendingPunchType === "IN" ? "Clock In" : "Clock Out"} — Take a Selfie
+            </DialogTitle>
+            <DialogDescription>
+              Position your face in the frame, then tap &quot;Capture&quot;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3] flex items-center justify-center">
+              {selfieStep === "opening" && (
+                <div className="text-white text-sm flex flex-col items-center gap-2">
+                  <RefreshCw className="h-6 w-6 animate-spin" />
+                  <span>Starting camera…</span>
+                </div>
+              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${selfieStep === "preview" ? "block" : "hidden"}`}
+                style={{ transform: "scaleX(-1)" }}
+              />
+              {selfieStep === "captured" && capturedDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={capturedDataUrl}
+                  alt="Selfie preview"
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+              )}
+              {selfieStep === "captured" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <CheckCircle2 className="h-16 w-16 text-green-400" />
+                </div>
+              )}
+            </div>
+            {selfieStep === "preview" && (
+              <Button className="w-full" onClick={captureSelfie}>
+                <Camera className="h-4 w-4 mr-2" /> Capture Selfie
+              </Button>
+            )}
+            {selfieStep === "captured" && (
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={retakeSelfie}>
+                  <RefreshCw className="h-4 w-4 mr-2" /> Retake
+                </Button>
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={confirmAndPunch} disabled={punching}>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  {pendingPunchType === "IN" ? "Confirm Clock In" : "Confirm Clock Out"}
+                </Button>
+              </div>
+            )}
+            <Button variant="ghost" className="w-full text-muted-foreground" onClick={cancelSelfie}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ════════════════════════════════════════════════════════════════
           DESKTOP LAYOUT  (hidden below lg)
           ════════════════════════════════════════════════════════════════ */}
@@ -525,7 +712,7 @@ export default function EssDashboard() {
 
             {/* Big clock button */}
             <button
-              onClick={doPunch}
+              onClick={handlePunchClick}
               disabled={punching || punchesLoading}
               aria-label={clockedIn ? "Clock out" : "Clock in"}
               className={`w-36 h-36 rounded-full flex flex-col items-center justify-center mb-5 transition-all hover:scale-105 active:scale-95 disabled:opacity-60 select-none shadow-lg
