@@ -102,6 +102,7 @@ type DtrRecordRow = {
   workedMinutes: number;
   lateMinutes: number;
   otMinutes: number;
+  undertimeMinutes: number;
   nsdMinutes: number;
   isLocked: boolean;
 };
@@ -818,13 +819,15 @@ function SubmissionDetailSheet({
                         <TableHead className="text-xs text-destructive">
                           Late
                         </TableHead>
+                        <TableHead className="text-xs text-blue-600">OT</TableHead>
+                        <TableHead className="text-xs text-amber-600">UT</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {detail.dtrRecords.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={10}
+                            colSpan={12}
                             className="text-center text-muted-foreground py-8 text-sm"
                           >
                             No DTR records found for this period.
@@ -890,6 +893,12 @@ function SubmissionDetailSheet({
                             </TableCell>
                             <TableCell className="text-xs text-destructive">
                               {fmtMinutes(r.lateMinutes)}
+                            </TableCell>
+                            <TableCell className="text-xs text-blue-600">
+                              {r.otMinutes > 0 ? fmtMinutes(r.otMinutes) : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-amber-600">
+                              {r.undertimeMinutes > 0 ? fmtMinutes(r.undertimeMinutes) : "—"}
                             </TableCell>
                           </TableRow>
                         ))

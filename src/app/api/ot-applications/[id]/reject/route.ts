@@ -33,9 +33,10 @@ export async function POST(
       where: { id, tenantId: auth.tenantId },
     });
     if (!ota) return { notFound: true as const };
-    if (ota.status !== "PENDING")
-      return { notPending: true as const, status: ota.status };
+    if (ota.status !== "PENDING" && ota.status !== "APPROVED")
+      return { notRejectable: true as const, status: ota.status };
 
+    const prevApproved = ota.status === "APPROVED";
     const updated = await tx.oTApplication.update({
       where: { id },
       data: {
@@ -45,11 +46,24 @@ export async function POST(
         rejectionReason: parsed.data.rejectionReason,
       },
     });
-    return { notFound: false as const, notPending: false as const, row: updated };
+
+    // If was previously APPROVED, reverse the DTR otMinutes sync
+    if (prevApproved) {
+      await tx.dTRRecord.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          employeeId: ota.employeeId,
+          date: ota.date,
+        },
+        data: { otMinutes: 0 },
+      });
+    }
+
+    return { notFound: false as const, notRejectable: false as const, row: updated };
   });
 
   if (result.notFound) return notFound("OT application not found");
-  if (result.notPending)
+  if (result.notRejectable)
     return err(`Cannot reject a ${result.status} application`, 409);
   return ok(result.row, "OT application rejected");
 }

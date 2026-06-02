@@ -39,7 +39,7 @@ type OTApplication = {
   id: string;
   employeeId: string;
   date: string;
-  hoursRequested: number;
+  hours: number;
   justification: string;
   status: string;
   createdAt: string;
@@ -137,7 +137,7 @@ export default function OTApplicationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         date: form.date,
-        hoursRequested: parseFloat(form.hoursRequested),
+        hours: parseFloat(form.hoursRequested),
         justification: form.justification.trim(),
       }),
     });
@@ -266,7 +266,7 @@ export default function OTApplicationsPage() {
                     <span className="block text-xs text-muted-foreground">{app.employee.employeeNumber}</span>
                   </TableCell>
                   <TableCell className="text-sm">{app.date.slice(0, 10)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{app.hoursRequested}h</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{Number(app.hours).toFixed(1)}h</TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={app.justification}>
                     {app.justification.slice(0, 80)}{app.justification.length > 80 ? "…" : ""}
                   </TableCell>
@@ -370,7 +370,7 @@ export default function OTApplicationsPage() {
             {rejectTarget && (
               <div className="rounded-md bg-muted/50 p-3 text-sm">
                 <p className="font-medium">{rejectTarget.employee.lastName}, {rejectTarget.employee.firstName}</p>
-                <p className="text-muted-foreground">{rejectTarget.date.slice(0, 10)} · {rejectTarget.hoursRequested}h</p>
+                <p className="text-muted-foreground">{rejectTarget.date.slice(0, 10)} · {Number(rejectTarget.hours).toFixed(1)}h</p>
               </div>
             )}
             <div className="space-y-1.5">

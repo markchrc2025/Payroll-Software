@@ -52,6 +52,7 @@ interface DtrPeriod {
   totalWorkedMinutes: number;
   totalLateMinutes: number;
   totalOTMinutes: number;
+  totalUndertimeMinutes: number;
   presentDays: number;
   absentDays: number;
   recordCount: number;
@@ -84,6 +85,13 @@ function fmtMins(mins: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function fmtMinsDash(mins: number) {
+  if (!mins || mins === 0) return "—";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function statusBadge(status: string) {
   const map: Record<string, { label: string; className: string }> = {
     SUBMITTED:          { label: "Submitted",     className: "bg-sky-100 text-sky-700 border-sky-200" },
@@ -100,16 +108,21 @@ function statusBadge(status: string) {
 }
 
 function dayStatusBadge(status: string) {
-  const map: Record<string, string> = {
-    PRESENT:      "text-green-700",
-    ABSENT:       "text-red-600",
-    PAID_LEAVE:   "text-sky-600",
-    UNPAID_LEAVE: "text-orange-500",
-    HOLIDAY:      "text-purple-600",
-    REST_DAY:     "text-gray-400",
+  const map: Record<string, { bg: string; text: string }> = {
+    PRESENT:      { bg: "bg-green-50 border-green-200",   text: "text-green-700" },
+    ABSENT:       { bg: "bg-red-50 border-red-200",       text: "text-red-600" },
+    PAID_LEAVE:   { bg: "bg-sky-50 border-sky-200",       text: "text-sky-700" },
+    UNPAID_LEAVE: { bg: "bg-orange-50 border-orange-200", text: "text-orange-600" },
+    HOLIDAY:      { bg: "bg-amber-50 border-amber-200",   text: "text-amber-700" },
+    REST_DAY:     { bg: "bg-gray-50 border-gray-200",     text: "text-gray-500" },
   };
-  const label = status.replace("_", " ");
-  return <span className={`text-xs font-medium ${map[status] ?? "text-gray-500"}`}>{label}</span>;
+  const style = map[status] ?? { bg: "bg-gray-50 border-gray-200", text: "text-gray-500" };
+  const label = status.replace(/_/g, " ");
+  return (
+    <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${style.bg} ${style.text}`}>
+      {label}
+    </span>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -287,6 +300,12 @@ export default function EssDtrPage() {
                             {fmtMins(period.totalOTMinutes)} OT
                           </span>
                         )}
+                        {(period.totalUndertimeMinutes ?? 0) > 0 && (
+                          <span className="flex items-center gap-1 text-amber-600">
+                            <TrendingDown className="h-3 w-3" />
+                            {fmtMins(period.totalUndertimeMinutes)} UT
+                          </span>
+                        )}
                         {period.absentDays > 0 && (
                           <span className="flex items-center gap-1 text-red-500">
                             <AlertCircle className="h-3 w-3" />
@@ -337,39 +356,43 @@ export default function EssDtrPage() {
                         No daily records for this period.
                       </p>
                     ) : (
-                      <div className="space-y-0">
-                        {/* Table header */}
-                        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-2 py-1 text-[11px] font-medium text-muted-foreground border-b mb-1">
-                          <span>Date</span>
-                          <span className="text-right">In</span>
-                          <span className="text-right">Out</span>
-                          <span className="text-right">Hours</span>
-                          <span className="text-right">Status</span>
-                        </div>
-
-                        {/* Day rows */}
+                      <div className="divide-y divide-gray-100">
                         {[...period.records]
                           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                          .map((r) => (
-                            <div
-                              key={r.id}
-                              className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-2 py-1.5 text-xs hover:bg-muted/20 rounded items-center"
-                            >
-                              <span className="font-medium text-gray-700 truncate">{fmtDate(r.date)}</span>
-                              <span className="text-right tabular-nums text-gray-600 min-w-[52px]">
-                                {fmtTime(r.timeIn)}
-                              </span>
-                              <span className="text-right tabular-nums text-gray-600 min-w-[52px]">
-                                {fmtTime(r.timeOut)}
-                              </span>
-                              <span className="text-right tabular-nums text-gray-700 font-medium min-w-[44px]">
-                                {r.dayStatus === "PRESENT" ? fmtMins(r.workedMinutes) : "—"}
-                              </span>
-                              <span className="text-right">
-                                {dayStatusBadge(r.dayStatus)}
-                              </span>
-                            </div>
-                          ))}
+                          .map((r) => {
+                            const isPresent = r.dayStatus === "PRESENT";
+                            const hasOT = r.otMinutes > 0;
+                            const hasUT = r.undertimeMinutes > 0;
+                            return (
+                              <div key={r.id} className="px-2 py-2.5 hover:bg-muted/20 space-y-0.5">
+                                {/* Line 1: Date + Status */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-gray-800">{fmtDate(r.date)}</span>
+                                  {dayStatusBadge(r.dayStatus)}
+                                </div>
+                                {/* Line 2: Times + Hours (PRESENT only) */}
+                                {isPresent && (
+                                  <div className="text-[11px] text-gray-500 pl-0.5">
+                                    {fmtTime(r.timeIn)}&nbsp;&rarr;&nbsp;{fmtTime(r.timeOut)}
+                                    {" · "}
+                                    <span className="font-medium text-gray-700">{fmtMins(r.workedMinutes)}</span>
+                                  </div>
+                                )}
+                                {/* Line 3: OT */}
+                                {hasOT && (
+                                  <div className="text-[11px] font-medium text-blue-600 pl-0.5">
+                                    OT: {fmtMinsDash(r.otMinutes)}
+                                  </div>
+                                )}
+                                {/* Line 4: Undertime */}
+                                {hasUT && (
+                                  <div className="text-[11px] font-medium text-amber-600 pl-0.5">
+                                    UT: {fmtMinsDash(r.undertimeMinutes)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                       </div>
                     )}
 

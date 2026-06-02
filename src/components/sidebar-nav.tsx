@@ -18,7 +18,6 @@ import {
   UserSearch,
   Clock,
   CalendarDays,
-  Timer,
   CalendarOff,
   FileText,
   SlidersHorizontal,
@@ -85,8 +84,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Time",
     items: [
       { href: "/attendance", label: "Time & Attendance", icon: Clock },
-      { href: "/shift-schedules", label: "Shift Schedules", icon: CalendarDays },
-      { href: "/ot-applications", label: "OT Applications", icon: Timer },
       { href: "/leave", label: "Leave", icon: CalendarOff },
     ],
   },

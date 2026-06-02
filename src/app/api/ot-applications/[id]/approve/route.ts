@@ -37,15 +37,24 @@ export async function POST(
       },
     });
 
-    // Sync DTRRecord.otMinutes if the record exists for this employee+date
+    // Sync DTRRecord.otMinutes — upsert so REST DAY OT creates a record too
     const otMinutes = Math.round(Number(ota.hours) * 60);
-    await tx.dTRRecord.updateMany({
+    await tx.dTRRecord.upsert({
       where: {
+        tenantId_employeeId_date: {
+          tenantId: auth.tenantId,
+          employeeId: ota.employeeId,
+          date: ota.date,
+        },
+      },
+      update: { otMinutes },
+      create: {
         tenantId: auth.tenantId,
         employeeId: ota.employeeId,
         date: ota.date,
+        dayStatus: "REST_DAY",
+        otMinutes,
       },
-      data: { otMinutes },
     });
 
     return { notFound: false as const, terminal: false as const, row: updated };

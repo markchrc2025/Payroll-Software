@@ -420,6 +420,50 @@ enum PunchSource {
 }
 
 // =============================================================================
+// HOLIDAY CALENDAR ENUMS (Phase AD)
+// =============================================================================
+
+/// DOLE holiday category — drives the payroll multiplier applied to the day.
+enum HolidayCategory {
+  /// Regular Holiday (Art. 94 Labor Code) — 200% pay if worked, 100% if not worked.
+  LEGAL
+  /// Special Non-Working Day (nationwide proclamation) — 130% if worked, no pay if not.
+  SPECIAL_NON_WORKING
+  /// Special One-Time Holiday (presidential proclamation) — 130% if worked.
+  SPECIAL_ONE_TIME
+  /// City/province/region-scoped holiday — 130% if worked, applies to matching branches only.
+  AREA_SPECIFIC
+}
+
+enum HolidayScope {
+  /// Applies to all employees regardless of branch.
+  COMPANY_WIDE
+  /// Applies only to employees in the listed branch IDs.
+  BRANCH_SPECIFIC
+}
+
+enum PremiumMultiplierKey {
+  OT
+  NSD
+  REST_DAY
+  REST_DAY_OT
+  SPECIAL_HOLIDAY
+  SPECIAL_HOLIDAY_OT
+  SPECIAL_HOLIDAY_REST_DAY
+  SPECIAL_HOLIDAY_REST_DAY_OT
+  REGULAR_HOLIDAY
+  REGULAR_HOLIDAY_OT
+  REGULAR_HOLIDAY_REST_DAY
+  REGULAR_HOLIDAY_REST_DAY_OT
+  DOUBLE_HOLIDAY
+  DOUBLE_HOLIDAY_OT
+  DOUBLE_HOLIDAY_REST_DAY
+  DOUBLE_HOLIDAY_REST_DAY_OT
+  HAZARD
+  NO_WORK_REGULAR_HOLIDAY
+}
+
+// =============================================================================
 // TENANT (SaaS customer)
 // =============================================================================
 
@@ -513,6 +557,8 @@ model Tenant {
   jobPostings    JobPosting[]
   applicants     Applicant[]
   applicantNotes ApplicantNote[]
+  holidays       Holiday[]
+  premiumRateConfigs PremiumRateConfig[]
 
   @@index([deletedAt])
 }
@@ -1502,6 +1548,44 @@ model PeriodInput {
 
   unpaidLeaveDays Decimal @default(0) @db.Decimal(6, 2)
 
+  /// Full rest-day worked: daily-rate-based (one entry per full day off-duty worked).
+  dayOffDutyDays                        Decimal @default(0) @db.Decimal(6, 2)
+
+  // ─── OT extensions (already in types.ts, now persisted) ───────────────────
+  restDayOtHours           Decimal @default(0) @db.Decimal(6, 2)
+  specialHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2)
+  regularHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2)
+  doubleHolidayHours       Decimal @default(0) @db.Decimal(6, 2)
+  doubleHolidayOtHours     Decimal @default(0) @db.Decimal(6, 2)
+
+  // ─── No-work holiday (already in types.ts, now persisted) ─────────────────
+  noWorkRegularHolidayDays Decimal @default(0) @db.Decimal(6, 2)
+
+  // ─── Rest-day + holiday compound scenarios ────────────────────────────────
+  restDaySpecialHolidayHours      Decimal @default(0) @db.Decimal(6, 2) // 1.50×
+  restDaySpecialHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2) // 1.95×
+  restDayRegularHolidayHours      Decimal @default(0) @db.Decimal(6, 2) // 2.60×
+  restDayRegularHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2) // 3.38×
+  restDayDoubleHolidayHours       Decimal @default(0) @db.Decimal(6, 2) // 3.90×
+  restDayDoubleHolidayOtHours     Decimal @default(0) @db.Decimal(6, 2) // 5.07×
+
+  // ─── NSD differential hours (already partially in types.ts) ───────────────
+  nightDiffOtHours                         Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRestDayHours                    Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRestDayOtHours                  Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayHours             Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayOtHours           Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayRestDayHours      Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayRestDayOtHours    Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayHours             Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayOtHours           Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayRestDayHours      Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayRestDayOtHours    Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayHours              Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayOtHours            Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayRestDayHours       Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayRestDayOtHours     Decimal @default(0) @db.Decimal(6, 2)
+
   notes String?
 
   createdAt DateTime @default(now())
@@ -2348,4 +2432,86 @@ model EssSession {
   @@index([tenantId])
   @@index([employeeId])
   @@index([expiresAt])
+}
+
+// =============================================================================
+// HOLIDAY CALENDAR (Phase AD)
+//
+// Tenant-managed public / company holiday registry.  The payroll engine reads
+// this table when resolving holiday multipliers for a given date and employee.
+//
+// Lookup contract:
+//   1. Find rows where `date` falls within the payroll period.
+//   2. Check `scope`:
+//      • COMPANY_WIDE → applies to all employees.
+//      • BRANCH_SPECIFIC → applies only when employee.branchId is in `branchIds`.
+//   3. For AREA_SPECIFIC category → additionally restrict to employees whose
+//      branch.workLocation.region matches `region`.
+//   4. Multiple holidays on the same date → use the highest multiplier
+//      (LEGAL > SPECIAL_NON_WORKING / SPECIAL_ONE_TIME / AREA_SPECIFIC).
+// =============================================================================
+
+model Holiday {
+  id       String @id @default(cuid())
+  tenantId String
+
+  name     String
+  category HolidayCategory
+  /// Calendar date of the holiday (stored as UTC midnight, e.g. 2026-06-12T00:00:00Z).
+  date     DateTime
+
+  /// When true, the holiday recurs every year on the same month+day.
+  recurringAnnually Boolean @default(false)
+
+  scope    HolidayScope @default(COMPANY_WIDE)
+  /// Non-empty only when scope = BRANCH_SPECIFIC. Array of Branch IDs.
+  branchIds Json @default("[]")
+
+  /// Non-empty only when category = AREA_SPECIFIC. PH region code (e.g. "NCR").
+  region       String?
+  /// Optional city/province qualifier for AREA_SPECIFIC holidays.
+  provinceCity String?
+
+  /// Presidential / IATF proclamation number for traceability.
+  proclamationReference String?
+  notes                 String? @db.Text
+
+  /// True when the exact date is not yet fixed by proclamation (e.g. Eid dates).
+  isTentative Boolean @default(false)
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, date])
+  @@index([tenantId, category])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// PREMIUM RATE CONFIG (Phase AE1)
+//
+// Tenant-overridable premium multipliers. Rows exist only for rates that
+// differ from DOLE minimums. The engine falls back to DOLE defaults for any
+// key not present in this table.
+// =============================================================================
+
+model PremiumRateConfig {
+  id           String               @id @default(cuid())
+  tenantId     String
+  multiplierKey PremiumMultiplierKey
+  /// Multiplier value (e.g. 1.30 for REST_DAY). Must be >= DOLE floor.
+  rate         Decimal              @db.Decimal(8, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, multiplierKey])
+  @@index([tenantId])
 }

@@ -125,9 +125,10 @@ export async function GET(req: NextRequest) {
         .slice(0, limitParam)
         .map(({ periodStart, periodEnd, records: recs }) => {
           const sub = subMap.get(periodStart.toISOString()) ?? null;
-          const totalWorked = recs.reduce((sum, r) => sum + r.workedMinutes, 0);
-          const totalLate   = recs.reduce((sum, r) => sum + r.lateMinutes, 0);
-          const totalOT     = recs.reduce((sum, r) => sum + r.otMinutes, 0);
+          const totalWorked    = recs.reduce((sum, r) => sum + r.workedMinutes, 0);
+          const totalLate      = recs.reduce((sum, r) => sum + r.lateMinutes, 0);
+          const totalOT        = recs.reduce((sum, r) => sum + r.otMinutes, 0);
+          const totalUndertime = recs.reduce((sum, r) => sum + r.undertimeMinutes, 0);
           const presentDays = recs.filter((r) => r.dayStatus === "PRESENT").length;
           const absentDays  = recs.filter((r) => r.dayStatus === "ABSENT").length;
 
@@ -136,7 +137,8 @@ export async function GET(req: NextRequest) {
             periodEnd:   periodEnd.toISOString(),
             totalWorkedMinutes: totalWorked,
             totalLateMinutes:   totalLate,
-            totalOTMinutes:     totalOT,
+            totalOTMinutes:        totalOT,
+            totalUndertimeMinutes: totalUndertime,
             presentDays,
             absentDays,
             recordCount: recs.length,

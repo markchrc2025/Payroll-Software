@@ -157,8 +157,10 @@ async function main() {
     { module: "COMPLIANCE", action: "READ",   label: "View compliance data" },
     { module: "COMPLIANCE", action: "EXPORT", label: "Export compliance data" },
     // SETTINGS
+    { module: "SETTINGS",  action: "CREATE",  label: "Create settings records" },
     { module: "SETTINGS",  action: "READ",    label: "View tenant settings" },
     { module: "SETTINGS",  action: "UPDATE",  label: "Edit tenant settings" },
+    { module: "SETTINGS",  action: "DELETE",  label: "Delete settings records" },
     // ROLES
     { module: "ROLES",     action: "CREATE",  label: "Create roles" },
     { module: "ROLES",     action: "READ",    label: "View roles" },

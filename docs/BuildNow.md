@@ -1,95 +1,214 @@
-## T&A / DTR: Blueprint vs. Current System
 
-### What the Blueprint Defines
+## THE PROMPT
 
-The DTR workflow has **three distinct layers** per day and a **period-level submission** concept:
+Rebuild the Holiday Calendar page (`/settings/holiday-calendar` or equivalent) from scratch. The current implementation is a plain list/table. Replace it entirely with a **visual full-month calendar** where HR Admins can see, add, edit, and delete holidays directly from the calendar grid. The design and behavior are specified in full below.
 
-**Three Layers per Day:**
-| Layer | Fields | Who Owns It | Mutable? |
-|---|---|---|---|
-| **Official** | `official_time_in`, `official_time_out` | GPS/selfie capture | Immutable (never edited) |
-| **Manual** | `manual_time_in`, `manual_time_out` + `reason_code` + `notes` + `actor` | Employee (pre-submit) or Supervisor | Audited override |
-| **Effective** | `effective_time_in`, `effective_time_out` | System-computed | Auto-derived |
+---
 
-**Override priority:** Supervisor manual > Employee manual > Official captured.
+### Layout overview
 
-**Period Submission Flow (not daily):**
+The page has two main areas side by side:
+
+**Left — Calendar panel (main, ~65% width)**
+- Full month calendar grid
+- Year + month navigation
+- Holidays rendered as colored chips on their dates
+- Clicking a date opens the Add Holiday modal (pre-filled with that date)
+- Clicking an existing holiday chip opens the Edit Holiday modal
+
+**Right — Holiday list panel (~35% width)**
+- Shows all holidays for the currently selected month, sorted by date
+- Each item shows: date, name, category badge, region (if area-specific)
+- Edit and delete actions per item
+- A "Load PH National Holidays" quick-fill button at the top (see below)
+
+---
+
+### Calendar grid specification
+
+- Display a standard 7-column grid: **Sun → Sat**
+- Header row: Sun · Mon · Tue · Wed · Thu · Fri · Sat (short labels, muted color)
+- Each day cell: shows the day number top-left
+- Cells for days outside the current month are greyed out and non-interactive
+- Today's date: subtle background highlight (e.g., `bg-blue-50 border border-blue-200`)
+- Holidays on a date appear as **colored pill chips** below the day number, stacked vertically if multiple holidays fall on the same date
+- If more than 2 holidays fall on one date, show 2 chips and a `+N more` overflow link
+- Month navigation: `← Previous` and `Next →` arrow buttons with the current month + year label centered between them (e.g., `June 2026`)
+- Year jump: a year selector dropdown next to the month label so HR can quickly jump to a different year (range: current year − 1 to current year + 3)
+
+---
+
+### Holiday categories, colors, and payroll multipliers
+
+Use these 4 categories consistently across the calendar chips, list panel, and form dropdowns:
+
+| Category | Chip color | Badge label | DOLE Multiplier | Notes |
+|---|---|---|---|---|
+| Legal Holiday | Red — `bg-red-100 text-red-700 border-red-200` | Legal Holiday | 200% | Also called Regular Holiday under DOLE |
+| Special Non-Working Holiday | Amber — `bg-amber-100 text-amber-700 border-amber-200` | Special Non-Working | 130% | Nationwide, declared by proclamation |
+| Special One-Time Holiday | Purple — `bg-purple-100 text-purple-700 border-purple-200` | Special One-Time | 130% | Presidential proclamation, not recurring |
+| Area-Specific Holiday | Teal — `bg-teal-100 text-teal-700 border-teal-200` | Area-Specific | 130% | Region/city/province-level holiday |
+
+Show the DOLE multiplier as a small muted label inside the chips on the calendar (e.g., `Rizal Day · 200%`) so HR always sees the payroll impact at a glance.
+
+---
+
+### Add / Edit Holiday modal
+
+Use the **centered floating modal** design from Prompt 1 (max-w-lg, rounded-2xl, header + scrollable body + footer).
+
+**Fields:**
+
 ```
-Employee submits DTR (end of cutoff)
-    → Supervisor reviews/edits manual layer → Supervisor Approved
-        → Manager reviews audit log (read-only) → Manager Approved
-            → Payroll Engine consumes
+Holiday Name *           [text input]
+Category *               [dropdown: Legal Holiday / Special Non-Working / Special One-Time / Area-Specific]
+Date *                   [date picker — pre-filled if opened by clicking a calendar cell]
+Recurring Annually       [toggle/checkbox — if ON, this holiday repeats every year on the same date]
 ```
-The payroll engine **only accepts `Manager Approved` submissions** — unapproved ones are flagged in pre-run review.
 
-**Supporting models required:**
-- `DTRSubmission` — one row per employee per cutoff period; tracks multi-step status (`SUBMITTED / SUPERVISOR_APPROVED / MANAGER_APPROVED / RETURNED`)
-- `DTRAuditLog` — immutable log of every manual field edit (actor, role, old/new value, reason, timestamp)
+**Conditional field — show only when Category = "Area-Specific":**
 
----
+```
+Region *                 [dropdown — Philippine regions listed below]
+Province / City          [optional text input or secondary dropdown for more granular scoping]
+```
 
-### What Currently Exists
+**Conditional field — scope (show for all categories):**
 
-**Schema — `DTRRecord`** (schema.prisma):
-- Stores **computed aggregate minutes**: `workedMinutes`, `lateMinutes`, `undertimeMinutes`, `otMinutes`, `nsdMinutes`
-- `approvalStatus: DTRStatus` — only `PENDING / APPROVED / REJECTED` (flat, single-step)
-- **No three-layer time fields** — official/manual/effective timestamps don't exist
-- Has `isLocked` for payroll finalize
+```
+Scope                    [radio buttons]
+                           ○ Company-wide (applies to all branches)
+                           ○ Branch-specific (multiselect of active branches)
+```
 
-**Schema — `AttendanceLog`** (schema.prisma):
-- Raw punch records (IN/OUT) with GPS, selfie key, geofence flags — this IS the official layer source
-- Correctly immutable
+**If Branch-specific is selected:**
+```
+Select Branches *        [multiselect dropdown of all active company branches]
+```
 
-**Schema — `DTRApprovalConfig`** (schema.prisma):
-- Config model exists (`requiresSupervisorVerification`, `requiresManagerApproval`, deadline hours)
-- The *config* is ready, but the *process* it governs isn't implemented yet
+**Optional:**
+```
+Proclamation Reference   [text input, optional — e.g., "Proclamation No. 368, s. 2023"]
+Notes                    [textarea, optional]
+```
 
-**Missing from schema:**
-- `DTRSubmission` — period-level grouping model with multi-step status
-- `DTRAuditLog` (or equivalent) — audit trail for manual edits
-- The three-layer time columns on `DTRRecord`
-
-**API — `/api/dtr`** (route.ts):
-- Lists and upserts individual `DTRRecord` rows
-- `/api/dtr/[id]/approve` and `/reject` — single-step approval only
-
-**UI — `DtrRecordsTab`** (DtrRecordsTab.tsx):
-- Shows individual daily rows per employee
-- Approve/Reject buttons on each row
-- **Does not match the blueprint's period-submission view** (should be one row per employee per cutoff, drill-down to daily breakdown)
+**Footer buttons:**
+- Cancel — `variant outline`
+- Save Holiday — `bg-[#1E3A5F] text-white`
 
 ---
 
-### Gap Summary & What Needs to Be Built
+### Philippine regions for the Area-Specific dropdown
 
-| # | Gap | Impact |
-|---|---|---|
-| 1 | `DTRRecord` has no `official_time_in/out`, `manual_time_in/out`, `effective_time_in/out` columns | Payroll engine cannot compute hours correctly from time data; currently uses pre-aggregated minutes |
-| 2 | No `DTRSubmission` model | Can't track period-level approval state; supervisor/manager chain has no data anchor |
-| 3 | No `DTRAuditLog` model | Manager has no audit trail to review; DOLE audit exposure |
-| 4 | Approval flow is single-step (APPROVED/REJECTED) | Doesn't match Submitted → Supervisor Approved → Manager Approved chain |
-| 5 | Admin DTR UI shows daily rows, not period submissions | Wrong mental model; HR can't see "which employees have submitted for this cutoff" |
-| 6 | ESS manual entry flow (`/ess/dtr`) not wired to `DTRRecord` manual layer | Employees can't correct missed clock-ins before submitting |
+Populate the Region dropdown with the complete official list:
+
+```
+NCR — National Capital Region
+CAR — Cordillera Administrative Region
+Region I — Ilocos Region
+Region II — Cagayan Valley
+Region III — Central Luzon
+Region IV-A — CALABARZON
+Region IV-B — MIMAROPA
+Region V — Bicol Region
+Region VI — Western Visayas
+Region VII — Central Visayas
+Region VIII — Eastern Visayas
+Region IX — Zamboanga Peninsula
+Region X — Northern Mindanao
+Region XI — Davao Region
+Region XII — SOCCSKSARGEN
+Region XIII — Caraga
+BARMM — Bangsamoro Autonomous Region in Muslim Mindanao
+```
+
+---
+
+### "Load PH National Holidays" quick-fill button
+
+Place this button at the top of the right-side list panel. When clicked:
+- Show a confirmation modal: "Load official Philippine national holidays for [selected year]? This will not overwrite existing holidays — only add missing ones."
+- On confirm: seed the calendar with the standard Legal Holidays and Special Non-Working Holidays for the selected year
+- The pre-loaded holidays to seed (recurring annually):
+
+**Legal Holidays (200%):**
+- January 1 — New Year's Day
+- April 9 — Araw ng Kagitingan (Bataan and Corregidor Day)
+- May 1 — Labor Day
+- June 12 — Independence Day
+- August 25 — National Heroes Day (last Monday of August — compute dynamically)
+- November 30 — Bonifacio Day
+- December 25 — Christmas Day
+- December 30 — Rizal Day
+- Moveable: Maundy Thursday, Good Friday (compute from Easter for the selected year)
+- Moveable: Eid'l Fitr, Eid'l Adha (mark as TBD if exact date not yet proclaimed — show with a `*` and a tooltip "Exact date subject to proclamation")
+
+**Special Non-Working Holidays (130%):**
+- August 21 — Ninoy Aquino Day
+- November 1 — All Saints' Day
+- November 2 — All Souls' Day
+- December 8 — Feast of the Immaculate Conception
+- December 24 — Christmas Eve
+- December 31 — New Year's Eve
+
+Do not seed Special One-Time or Area-Specific holidays — those are manual.
 
 ---
 
-### How I Would Apply This
+### Delete behavior
 
-The build is naturally sequenced in two tracks:
-
-**Track A — Schema migration (foundation):**
-1. Add `official_time_in/out`, `manual_time_in/out`, `manual_reason_code`, `manual_actor_id/role`, `effective_time_in/out` to `DTRRecord`
-2. Add `DTRSubmission` model with `status` enum (`SUBMITTED / SUPERVISOR_APPROVED / MANAGER_APPROVED / RETURNED`) and FK to `PayrollPeriod` + `Employee`
-3. Add `DTRAuditLog` model (immutable append)
-4. Migrate `DTRStatus` from 3-value to match the new submission statuses
-
-**Track B — API + UI layer (on top of schema):**
-5. New `/api/dtr/submissions` — list by cutoff, filter by status
-6. `/api/dtr/submissions/[id]/approve-supervisor` and `approve-manager` and `return`
-7. Admin UI: rewrite `DtrRecordsTab` to show period-submission view with daily drill-down
-8. ESS: wire manual entry form to save `manual_time_in/out` + write `DTRAuditLog`
-
-**Payroll engine dependency:**
-Currently the engine reads `PeriodInput` (manually entered `daysWorked`, `lateUndertimeMinutes`, etc.). Once the DTR pipeline is complete, a new step compiles `DTRSubmission` (Manager Approved) → `PeriodInput` automatically, removing the need for manual HR data entry.
+- Clicking Delete on a holiday shows a confirmation: "Delete [Holiday Name] on [Date]? This will remove it from payroll computation for all future runs."
+- If the holiday is `recurring = true`, ask: "Delete only this year's occurrence, or all future occurrences?"
+  - Option A: Delete this year only
+  - Option B: Delete permanently (removes the recurring record)
 
 ---
+
+### Data model changes required
+
+Add or update the `Holiday` table to support:
+
+```
+id
+company_id (tenant)
+name
+category: ENUM('LEGAL', 'SPECIAL_NON_WORKING', 'SPECIAL_ONE_TIME', 'AREA_SPECIFIC')
+date (YYYY-MM-DD)
+recurring_annually: boolean
+scope: ENUM('COMPANY_WIDE', 'BRANCH_SPECIFIC')
+branch_ids: array (null if company-wide)
+region: string (null unless AREA_SPECIFIC)
+province_city: string (optional)
+proclamation_reference: string (optional)
+notes: text (optional)
+created_by: user_id
+created_at
+updated_at
+```
+
+The payroll engine must read from this table when determining holiday multipliers. It should:
+1. Match by `date` for the payroll period
+2. Check `scope` — if `BRANCH_SPECIFIC`, only apply to employees assigned to the matching branches
+3. If `AREA_SPECIFIC`, only apply to employees whose assigned branch is in the matching region
+
+---
+
+### Validation checklist after implementation
+
+- [ ] Calendar renders as a proper month grid with correct day-of-week alignment
+- [ ] Month and year navigation works correctly
+- [ ] Holiday chips appear on the correct dates with the correct category colors
+- [ ] DOLE multiplier (200% / 130%) is visible on each chip
+- [ ] Clicking a date opens Add Holiday modal with date pre-filled
+- [ ] Clicking a chip opens Edit Holiday modal pre-filled with that holiday's data
+- [ ] Area-Specific category shows the Region dropdown
+- [ ] Branch-specific scope shows the branch multiselect
+- [ ] Load PH National Holidays seeds correctly without overwriting existing entries
+- [ ] Moveable holidays (Easter-based, Eid) are computed correctly or flagged as TBD
+- [ ] Delete with recurring confirmation works for both single-year and permanent deletion
+- [ ] Payroll engine correctly reads holiday data by date, scope, and branch
+- [ ] Area-Specific holidays only apply to employees in the matching region's branches
+
+---
+
+*Do not change the payroll computation multipliers — those are already correct in the engine. Only fix the Holiday Calendar UI, its data model, and the engine's holiday lookup query.*
