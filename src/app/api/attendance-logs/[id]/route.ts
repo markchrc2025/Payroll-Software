@@ -2,12 +2,13 @@
  * GET /api/attendance-logs/[id]
  *
  * Returns full details of a single attendance log for HR review.
- * Includes geolocation, selfie availability flag, kiosk, source, and audit fields.
+ * Also returns all sibling punches for the same employee on the same date
+ * and the DTR record for that day — used to power the two-tab attendance modal.
  */
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
-import { ok, notFound } from "@/lib/api-response";
+import { ok, notFound, serverError } from "@/lib/api-response";
 
 export async function GET(
   req: NextRequest,
@@ -19,33 +20,108 @@ export async function GET(
 
   const { id } = await params;
 
-  const log = await withTenant(auth.tenantId, (tx) =>
-    tx.attendanceLog.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      include: {
-        employee: {
+  try {
+    const log = await withTenant(auth.tenantId, (tx) =>
+      tx.attendanceLog.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              employeeNumber: true,
+              department: { select: { name: true } },
+              branch: { select: { name: true } },
+            },
+          },
+          kiosk: { select: { id: true, name: true } },
+        },
+      })
+    );
+
+    if (!log) return notFound("Attendance log");
+
+    // Date window for sibling punches + DTR: midnight–midnight on the punch date
+    const punchDate = new Date(log.punchedAt);
+    const dayStart = new Date(
+      Date.UTC(punchDate.getUTCFullYear(), punchDate.getUTCMonth(), punchDate.getUTCDate())
+    );
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const [siblingLogs, dtr] = await withTenant(auth.tenantId, (tx) =>
+      Promise.all([
+        // All punches for the same employee on the same calendar day
+        tx.attendanceLog.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            employeeId: log.employeeId,
+            punchedAt: { gte: dayStart, lt: dayEnd },
+          },
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            employeeNumber: true,
-            department: { select: { name: true } },
-            branch: { select: { name: true } },
+            punchType: true,
+            source: true,
+            punchedAt: true,
+            outsideGeofence: true,
+            distanceMeters: true,
+            latitude: true,
+            longitude: true,
+            ipAddress: true,
+            userAgent: true,
+            selfieKey: true,
+            selfieData: true,
+            kiosk: { select: { id: true, name: true } },
           },
-        },
-        kiosk: { select: { id: true, name: true } },
-      },
-    })
-  );
+          orderBy: { punchedAt: "asc" },
+        }),
+        // DTR record for the same employee + day
+        tx.dTRRecord.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            employeeId: log.employeeId,
+            date: { gte: dayStart, lt: dayEnd },
+          },
+        }),
+      ])
+    );
 
-  if (!log) return notFound("Attendance log");
+    // Build the primary log response — no raw bytes/key
+    const { selfieData, selfieKey, ...rest } = log;
 
-  // Build the response — expose hasSelfie instead of raw bytes/key for security
-  const { selfieData, selfieKey, ...rest } = log;
-  return ok({
-    ...rest,
-    latitude: log.latitude != null ? Number(log.latitude) : null,
-    longitude: log.longitude != null ? Number(log.longitude) : null,
-    hasSelfie: !!(selfieKey || selfieData),
-  });
+    return ok({
+      ...rest,
+      latitude: log.latitude != null ? Number(log.latitude) : null,
+      longitude: log.longitude != null ? Number(log.longitude) : null,
+      hasSelfie: !!(selfieKey || selfieData),
+      // Sibling punches for the day (TIME CLOCK tab)
+      dayPunches: siblingLogs.map(({ selfieData: sd, selfieKey: sk, latitude, longitude, ...p }) => ({
+        ...p,
+        latitude: latitude != null ? Number(latitude) : null,
+        longitude: longitude != null ? Number(longitude) : null,
+        hasSelfie: !!(sk || sd),
+      })),
+      // DTR aggregate for the day (ATTENDANCE tab)
+      dtr: dtr
+        ? {
+            id: dtr.id,
+            date: dtr.date,
+            dayStatus: dtr.dayStatus,
+            workedMinutes: dtr.workedMinutes,
+            lateMinutes: dtr.lateMinutes,
+            undertimeMinutes: dtr.undertimeMinutes,
+            otMinutes: dtr.otMinutes,
+            officialTimeIn: dtr.officialTimeIn,
+            officialTimeOut: dtr.officialTimeOut,
+            effectiveTimeIn: dtr.effectiveTimeIn,
+            effectiveTimeOut: dtr.effectiveTimeOut,
+            approvalStatus: dtr.approvalStatus,
+            isLocked: dtr.isLocked,
+            notes: dtr.notes,
+          }
+        : null,
+    });
+  } catch (e) {
+    return serverError(e);
+  }
 }
