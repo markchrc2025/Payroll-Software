@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Search, RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
+import { AttendanceLogDetailSheet } from "@/components/attendance/AttendanceLogDetailSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +94,8 @@ export function AttendanceLogsTab() {
   const [geofenceFilter, setGeofenceFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -199,7 +202,11 @@ export function AttendanceLogsTab() {
               </TableRow>
             ) : (
               data.data.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow
+                  key={log.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => { setSelectedLogId(log.id); setSheetOpen(true); }}
+                >
                   <TableCell className="font-medium text-sm">
                     {log.employee
                       ? `${log.employee.firstName} ${log.employee.lastName}`
@@ -248,6 +255,12 @@ export function AttendanceLogsTab() {
           </TableBody>
         </Table>
       </div>
+
+      <AttendanceLogDetailSheet
+        logId={selectedLogId}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
 
       {data && data.totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">

@@ -170,6 +170,12 @@ export default function EssDashboard() {
     loadPunches();
   }, [router, loadPunches]);
 
+  // ── Poll punch state every 30 s (picks up Kiosk punches made elsewhere) ──
+  useEffect(() => {
+    const id = setInterval(() => { loadPunches(); }, 30_000);
+    return () => clearInterval(id);
+  }, [loadPunches]);
+
   // ── Derive clock state ────────────────────────────────────────────────────
   const lastPunch = punches[punches.length - 1] ?? null;
   const clockedIn = lastPunch?.punchType === "IN";

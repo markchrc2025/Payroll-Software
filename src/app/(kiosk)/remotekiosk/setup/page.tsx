@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,41 @@ import { Label } from "@/components/ui/label";
 
 export default function KioskSetupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [deviceToken, setDeviceToken] = useState("");
   const [pairing, setPairing] = useState(false);
+
+  async function autoPair(token: string) {
+    setPairing(true);
+    try {
+      const res = await fetch("/api/kiosk/info", {
+        headers: { Authorization: `Kiosk ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data ?? json;
+        localStorage.setItem("kiosk_token", token);
+        localStorage.setItem("kiosk_requires_selfie", String(!!data.requiresSelfie));
+        toast.success("Device paired successfully!");
+        router.replace("/remotekiosk");
+        return;
+      }
+      toast.error("Invalid device token in setup link. Please check and try again.");
+    } catch {
+      toast.error("Network error. Please check your connection.");
+    } finally {
+      setPairing(false);
+    }
+  }
+
+  useEffect(() => {
+    const token = searchParams.get("token");
+    if (token) {
+      setDeviceToken(token);
+      autoPair(token);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function pairDevice(e: React.FormEvent) {
     e.preventDefault();

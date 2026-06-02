@@ -14,6 +14,10 @@ export default auth((req) => {
   const isPublic =
     path === "/login" ||
     path.startsWith("/api/auth/") ||
+    path.startsWith("/api/kiosk/") ||
+    path.startsWith("/api/ess/") ||
+    path.startsWith("/ess") ||
+    path.startsWith("/remotekiosk") ||
     path.startsWith("/_next/") ||
     path === "/favicon.ico";
 

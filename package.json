@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "dev:keepalive": "bash scripts/dev-keepalive.sh start",
+    "dev:auto": "bash scripts/dev-keepalive.sh start-auto",
+    "dev:auto:status": "bash scripts/dev-keepalive.sh status-auto",
     "dev:health": "bash scripts/dev-keepalive.sh health",
+    "dev:prewarm": "bash scripts/dev-keepalive.sh prewarm",
     "dev:stop": "bash scripts/dev-keepalive.sh stop",
     "dev:logs": "bash scripts/dev-keepalive.sh logs",
     "build": "next build",

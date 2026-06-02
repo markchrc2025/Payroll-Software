@@ -261,8 +261,8 @@ export default function RemoteKioskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 py-8">
+      <div className={`w-full transition-all ${screen === "PIN" ? "max-w-2xl" : "max-w-sm"}  space-y-6`}>
 
         {/* ── LOOKUP SCREEN ─────────────────────────────── */}
         {screen === "LOOKUP" && (
@@ -317,66 +317,83 @@ export default function RemoteKioskPage() {
 
         {/* ── PIN SCREEN ────────────────────────────────── */}
         {screen === "PIN" && (
-          <div className="space-y-5">
-            <div className="text-center space-y-1">
-              <h2 className="text-2xl font-bold text-gray-900">Enter PIN</h2>
-              <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-700">{employeeNumber}</span>
-                {" · "}
-                <span className={punchType === "IN" ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+          <div className="flex flex-col md:flex-row md:gap-10 md:items-start">
+
+            {/* ── Camera / Selfie (left on md+, top on mobile) ── */}
+            <div className="w-full md:w-1/2 md:flex-shrink-0 space-y-3">
+              <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 shadow-sm">
+                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+              </div>
+              <canvas ref={canvasRef} className="hidden" />
+              {/* Employee label under camera — visible on md+ only */}
+              <div className="hidden md:block text-center space-y-0.5 pt-1">
+                <p className="text-base font-semibold text-gray-700">{employeeNumber}</p>
+                <p className={`text-sm font-medium ${
+                  punchType === "IN" ? "text-emerald-600" : "text-rose-600"
+                }`}>
                   {punchType === "IN" ? "Clock In" : "Clock Out"}
-                </span>
-              </p>
+                </p>
+              </div>
             </div>
 
-            {/* PIN dots */}
-            <div className="flex justify-center gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <span
-                  key={i}
-                  className={`text-2xl leading-none transition-colors ${
-                    i < pin.length ? "text-indigo-600" : "text-gray-200"
-                  }`}
-                >
-                  ●
-                </span>
-              ))}
-            </div>
+            {/* ── PIN pad (right on md+, below camera on mobile) ── */}
+            <div className="w-full md:w-1/2 space-y-5 mt-5 md:mt-0">
+              <div className="text-center space-y-1">
+                <h2 className="text-2xl font-bold text-gray-900">Enter PIN</h2>
+                {/* Employee label — mobile only (md+ shows it under camera) */}
+                <p className="text-sm text-gray-500 md:hidden">
+                  <span className="font-medium text-gray-700">{employeeNumber}</span>
+                  {" · "}
+                  <span className={punchType === "IN" ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                    {punchType === "IN" ? "Clock In" : "Clock Out"}
+                  </span>
+                </p>
+              </div>
 
-            {/* Selfie preview — always shown (selfie is always required) */}
-            <div className="mx-auto w-32 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-            </div>
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Keypad */}
-            <div className="grid grid-cols-3 gap-2.5">
-              {KEYS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => handlePinKey(k)}
-                  disabled={submitting}
-                  className={`h-14 rounded-xl font-semibold text-lg select-none transition-all active:scale-95 disabled:opacity-50
-                    ${k === "OK"
-                      ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                      : k === "DEL"
-                        ? "bg-gray-100 hover:bg-gray-200 text-gray-500 text-base"
-                        : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+              {/* PIN dots */}
+              <div className="flex justify-center gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`text-2xl leading-none transition-colors ${
+                      i < pin.length ? "text-indigo-600" : "text-gray-200"
                     }`}
-                >
-                  {k === "DEL" ? "⌫" : k}
-                </button>
-              ))}
+                  >
+                    ●
+                  </span>
+                ))}
+              </div>
+
+              {/* Keypad */}
+              <div className="grid grid-cols-3 gap-2.5">
+                {KEYS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => handlePinKey(k)}
+                    disabled={submitting}
+                    className={`h-14 rounded-xl font-semibold text-lg select-none transition-all active:scale-95 disabled:opacity-50
+                      ${k === "OK"
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                        : k === "DEL"
+                          ? "bg-gray-100 hover:bg-gray-200 text-gray-500 text-base"
+                          : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                      }`}
+                  >
+                    {k === "DEL" ? "⌫" : k}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={resetToLookup}
+                className="w-full text-sm text-gray-400 hover:text-gray-600 py-1"
+              >
+                ← Back
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={resetToLookup}
-              className="w-full text-sm text-gray-400 hover:text-gray-600 py-1"
-            >
-              ← Back
-            </button>
           </div>
         )}
 

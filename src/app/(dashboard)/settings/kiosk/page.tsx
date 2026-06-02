@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Monitor, Copy, Check, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Monitor, Copy, Check, Eye, EyeOff, Link2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +76,10 @@ export default function KiosksPage() {
 
   // Per-row token reveal state
   const [revealedTokens, setRevealedTokens] = useState<Set<string>>(new Set());
+
+  // Regenerate token state
+  const [regenKiosk, setRegenKiosk] = useState<Kiosk | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   async function load() {
     setIsLoading(true);
@@ -177,6 +181,40 @@ export default function KiosksPage() {
       load();
     } else {
       toast.error("Failed to update kiosk");
+    }
+  }
+
+  const copySetupLink = useCallback(async (token: string) => {
+    try {
+      const link = `${window.location.origin}/remotekiosk/setup?token=${token}`;
+      await navigator.clipboard.writeText(link);
+      toast.success("Setup link copied to clipboard");
+    } catch {
+      toast.error("Failed to copy — please copy manually");
+    }
+  }, []);
+
+  async function handleRegenerate() {
+    if (!regenKiosk) return;
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/kiosks/${regenKiosk.id}/regenerate-token`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Failed to regenerate token");
+        return;
+      }
+      const newDeviceToken: string = json.data?.deviceToken ?? "";
+      setKiosks((prev) =>
+        prev.map((k) => k.id === regenKiosk.id ? { ...k, deviceToken: newDeviceToken } : k)
+      );
+      setRegenKiosk(null);
+      setNewToken(newDeviceToken);
+      setNewKioskName(regenKiosk.name);
+      setTokenCopied(false);
+      setTokenDialog(true);
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -294,6 +332,15 @@ export default function KiosksPage() {
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 shrink-0"
+                          title="Copy setup link"
+                          onClick={() => copySetupLink(kiosk.deviceToken)}
+                        >
+                          <Link2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -315,6 +362,15 @@ export default function KiosksPage() {
                           onClick={() => toggleActive(kiosk)}
                         >
                           <Monitor className={`h-3.5 w-3.5 ${kiosk.isActive ? "text-green-600" : "text-muted-foreground"}`} />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title="Regenerate token"
+                          onClick={() => setRegenKiosk(kiosk)}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           size="icon"
@@ -399,7 +455,33 @@ export default function KiosksPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Device Token Dialog — shown once on creation */}
+      {/* Regenerate Token Confirm Dialog */}
+      <Dialog open={!!regenKiosk} onOpenChange={(open) => { if (!open) setRegenKiosk(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Regenerate Device Token?</DialogTitle>
+            <DialogDescription>
+              This will immediately invalidate the current token for{" "}
+              <strong>{regenKiosk?.name}</strong>. Any paired device will stop working until re-paired with the new token.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-2">
+            <Button
+              className="flex-1"
+              variant="destructive"
+              disabled={regenerating}
+              onClick={handleRegenerate}
+            >
+              {regenerating ? "Regenerating…" : "Yes, Regenerate"}
+            </Button>
+            <Button variant="outline" onClick={() => setRegenKiosk(null)} disabled={regenerating}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Device Token Dialog — shown once on creation or after regeneration */}
       <Dialog open={tokenDialog} onOpenChange={setTokenDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -431,6 +513,12 @@ export default function KiosksPage() {
                 ) : (
                   <><Copy className="mr-2 h-4 w-4" />Copy Token</>
                 )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => copySetupLink(newToken)}
+              >
+                <Link2 className="mr-2 h-4 w-4" />Copy Setup Link
               </Button>
               <Button variant="outline" onClick={() => setTokenDialog(false)}>
                 Done
