@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { computeSheet } from "@/lib/payroll/engine";
-import type { ComputeInput } from "@/lib/payroll/types";
+import type { ComputeInput, ComputeMultiplierConfig } from "@/lib/payroll/types";
 import type {
   BirWithholdingPayload,
   DeMinimisCeilingPayload,
@@ -107,6 +107,7 @@ function makeInput(overrides: {
   overrideStatutoryDeducted?: boolean;
   thirteenthMonthCents?: bigint;
   statutoryCutoffRule?: "FIRST_CUTOFF" | "SECOND_CUTOFF";
+  multiplierConfig?: ComputeMultiplierConfig;
 }): ComputeInput {
   const salaryType = overrides.salaryType ?? "DAILY";
   const basicSalaryCents = overrides.basicSalaryCents ?? 80_000n; // ₱800/day → ₱100/hr
@@ -160,6 +161,7 @@ function makeInput(overrides: {
     },
     overrideStatutoryDeducted: overrides.overrideStatutoryDeducted,
     thirteenthMonthCents: overrides.thirteenthMonthCents,
+    multiplierConfig: overrides.multiplierConfig,
   };
 }
 
@@ -1097,5 +1099,149 @@ describe("§6.5 Statutory resolver effective-dating (structure test)", () => {
       cycle: "MONTHLY",
     }));
     expect(result.grossCompensationCents).toBeGreaterThan(0n);
+  });
+});
+
+// ===========================================================================
+// §AE1 — Compound Premium Stacking Matrix + PremiumRateConfig overrides
+// Base: DAILY ₱800/day → hourlyRate = 10,000 centavos = ₱100
+//       dailyRate = 80,000 centavos = ₱800
+// ===========================================================================
+describe("§AE1 Compound premium stacking matrix (Phase AE1)", () => {
+  // DAILY ₱800/day → dailyRateCents = 80,000 ; hourlyRateCents = 10,000
+
+  it("restDaySpecialHolidayHours = 2 → holidayPayCents = 2 × 10,000 × 1.50 = 30,000", () => {
+    // DOLE: Special Holiday + Rest Day = 1.50× hourly (explicitly defined, NOT 1.30×1.30=1.69)
+    const result = computeSheet(makeInput({
+      periodInput: { restDaySpecialHolidayHours: 2 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(30_000n); // 2 × 10,000 × 1.50
+  });
+
+  it("restDaySpecialHolidayOtHours = 1 → holidayPayCents = 10,000 × 1.95 = 19,500", () => {
+    // DOLE: Special Holiday + Rest Day + OT = 1.95× (1.50 × 1.30)
+    const result = computeSheet(makeInput({
+      periodInput: { restDaySpecialHolidayOtHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(19_500n); // 10,000 × 1.95
+  });
+
+  it("dayOffDutyDays = 1 → restDayPayCents = 80,000 × 1.30 = 104,000", () => {
+    // Full day worked on rest day (>= scheduled shift) → daily-rate × REST_DAY multiplier
+    const result = computeSheet(makeInput({
+      periodInput: { dayOffDutyDays: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.restDayPayCents).toBe(104_000n); // 80,000 × 1.30
+  });
+
+  it("restDayOtHours = 1 → restDayPayCents = 10,000 × 1.69 = 16,900", () => {
+    // Rest day OT = 1.30 × 1.30 = 1.69×
+    const result = computeSheet(makeInput({
+      periodInput: { restDayOtHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.restDayPayCents).toBe(16_900n); // 10,000 × 1.69
+  });
+
+  it("noWorkRegularHolidayDays = 1 → holidayPayCents = 80,000 × 1.00 = 80,000", () => {
+    // Regular holiday, employee did not work → 100% holiday pay (daily rate × 1.00)
+    const result = computeSheet(makeInput({
+      periodInput: { noWorkRegularHolidayDays: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(80_000n); // 80,000 × 1.00
+  });
+
+  it("restDayRegularHolidayHours = 1 → holidayPayCents = 10,000 × 2.60 = 26,000", () => {
+    // Regular holiday + rest day regular hours = 2.00 × 1.30 = 2.60×
+    const result = computeSheet(makeInput({
+      periodInput: { restDayRegularHolidayHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(26_000n); // 10,000 × 2.60
+  });
+
+  it("doubleHolidayHours = 1 → holidayPayCents = 10,000 × 3.00 = 30,000", () => {
+    // Double holiday = LEGAL + SPECIAL on the same day = 3.00×
+    const result = computeSheet(makeInput({
+      periodInput: { doubleHolidayHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(30_000n); // 10,000 × 3.00
+  });
+
+  it("doubleHolidayOtHours = 1 → holidayPayCents = 10,000 × 3.90 = 39,000", () => {
+    // Double holiday OT = 3.00 × 1.30 = 3.90×
+    const result = computeSheet(makeInput({
+      periodInput: { doubleHolidayOtHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(39_000n); // 10,000 × 3.90
+  });
+
+  it("restDayDoubleHolidayHours = 1 → holidayPayCents = 10,000 × 3.90 = 39,000", () => {
+    // Double holiday + rest day = 3.00 × 1.30 = 3.90×
+    const result = computeSheet(makeInput({
+      periodInput: { restDayDoubleHolidayHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(39_000n); // 10,000 × 3.90
+  });
+
+  it("restDayDoubleHolidayOtHours = 1 → holidayPayCents = 10,000 × 5.07 = 50,700", () => {
+    // Double holiday + rest day + OT = 3.90 × 1.30 = 5.07×
+    const result = computeSheet(makeInput({
+      periodInput: { restDayDoubleHolidayOtHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(50_700n); // 10,000 × 5.07
+  });
+
+  it("custom multiplierConfig.OT = 1.50 overrides DOLE default 1.25", () => {
+    // Tenant has negotiated OT at 1.50× instead of the DOLE floor 1.25×
+    const result = computeSheet(makeInput({
+      periodInput: { regularOtHours: 1 },
+      multiplierConfig: { OT: 1.50 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.otPayCents).toBe(15_000n); // 10,000 × 1.50 (not 12,500)
+  });
+
+  it("custom multiplierConfig.REST_DAY = 1.50 overrides default 1.30", () => {
+    // Verify partial override does not disturb other DOLE defaults
+    const result = computeSheet(makeInput({
+      periodInput: { restDayHours: 1, regularOtHours: 1 },
+      multiplierConfig: { REST_DAY: 1.50 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.restDayPayCents).toBe(15_000n); // 10,000 × 1.50
+    expect(result.otPayCents).toBe(12_500n);       // 10,000 × 1.25 (unaffected)
+  });
+
+  it("multiplierConfig.OT must not go below DOLE floor (API enforces, engine uses as given)", () => {
+    // The API layer validates floors; the engine is a pure function and uses whatever is passed.
+    // This test documents that the engine itself does NOT enforce the floor.
+    const result = computeSheet(makeInput({
+      periodInput: { regularOtHours: 1 },
+      multiplierConfig: { OT: 1.00 }, // below DOLE floor of 1.25 — API would reject this
+      overrideStatutoryDeducted: false,
+    }));
+    // Engine faithfully computes: 10,000 × 1.00 = 10,000
+    expect(result.otPayCents).toBe(10_000n);
+  });
+
+  it("combined multi-scenario: special holiday OT + rest day = sum of parts", () => {
+    // specialHolidayOtHours = 1  (1.69×)  and  restDayHours = 1  (1.30×)
+    // holidayPayCents = 10,000 × 1.69 = 16,900
+    // restDayPayCents = 10,000 × 1.30 = 13,000
+    const result = computeSheet(makeInput({
+      periodInput: { specialHolidayOtHours: 1, restDayHours: 1 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.holidayPayCents).toBe(16_900n);
+    expect(result.restDayPayCents).toBe(13_000n);
   });
 });

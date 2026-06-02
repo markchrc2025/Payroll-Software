@@ -12,6 +12,7 @@ import type {
   PayComponentKind,
   PayComponentTaxability,
   PayFrequency,
+  PremiumMultiplierKey,
   SalaryType,
   StatutoryCutoffRule,
   TaxClassification,
@@ -56,30 +57,72 @@ export interface ComputePeriodInputSnapshot {
   lateUndertimeMinutes: number;
   regularOtHours: number;
   restDayHours: number;
-  /** Rest day hours worked during OT (composed 1.30 × 1.30 = 1.69×). */
+  /** Full rest-day days worked — daily-rate × REST_DAY multiplier. */
+  dayOffDutyDays?: number;
+  /** Rest day OT hours (1.30 × OT = 1.69× DOLE default). */
   restDayOtHours?: number;
   specialHolidayHours: number;
-  /** Special non-working holiday hours worked during OT (1.30 × 1.30 = 1.69×). */
+  /** Special holiday OT hours (1.30 × 1.30 = 1.69× DOLE default). */
   specialHolidayOtHours?: number;
+  /** Special holiday + rest day hours (1.50× per DOLE, NOT 1.30×1.30). */
+  restDaySpecialHolidayHours?: number;
+  /** Special holiday + rest day OT hours (1.95×). */
+  restDaySpecialHolidayOtHours?: number;
   regularHolidayHours: number;
-  /** Regular holiday hours worked during OT (2.00 × 1.30 = 2.60×). */
+  /** Regular holiday OT hours (2.00 × 1.30 = 2.60×). */
   regularHolidayOtHours?: number;
-  /** Hours worked on a double holiday (regular + special non-working, 3.00×). */
+  /** Regular holiday + rest day hours (2.60×). */
+  restDayRegularHolidayHours?: number;
+  /** Regular holiday + rest day OT hours (3.38×). */
+  restDayRegularHolidayOtHours?: number;
+  /** Double holiday hours (3.00×). */
   doubleHolidayHours?: number;
+  /** Double holiday OT hours (3.90×). */
+  doubleHolidayOtHours?: number;
+  /** Double holiday + rest day hours (3.90×). */
+  restDayDoubleHolidayHours?: number;
+  /** Double holiday + rest day OT hours (5.07×). */
+  restDayDoubleHolidayOtHours?: number;
   /**
    * Days on a regular holiday where the employee did not work but is entitled
    * to 100% holiday pay (1.00 × daily rate per DOLE).
    */
   noWorkRegularHolidayDays?: number;
+
+  // ── Night-shift differential (NSD) compound hours ─────────────────────────
+  // NSD premium = NSD_rate × base_scenario_rate  (10% of whatever the base is)
   nightDiffHours: number;
-  /** OT hours in the night-differential window — NSD premium = 0.10 × 1.25 = 0.125× base. */
+  /** OT hours in the NSD window. */
   nightDiffOtHours?: number;
-  /** Rest-day hours in the night window — NSD premium = 0.10 × 1.30 = 0.13× base. */
+  /** Rest-day hours in the NSD window. */
   nightDiffRestDayHours?: number;
-  /** Regular holiday hours in the night window — NSD premium = 0.10 × 2.00 = 0.20× base. */
+  /** Rest-day OT hours in the NSD window. */
+  nightDiffRestDayOtHours?: number;
+  /** Special holiday hours in the NSD window. */
+  nightDiffSpecialHolidayHours?: number;
+  /** Special holiday OT hours in the NSD window. */
+  nightDiffSpecialHolidayOtHours?: number;
+  /** Special holiday + rest day hours in the NSD window. */
+  nightDiffSpecialHolidayRestDayHours?: number;
+  /** Special holiday + rest day OT hours in the NSD window. */
+  nightDiffSpecialHolidayRestDayOtHours?: number;
+  /** Regular holiday hours in the NSD window. */
   nightDiffRegularHolidayHours?: number;
-  /** Regular holiday OT hours in the night window — NSD premium = 0.10 × 2.60 = 0.26× base. */
+  /** Regular holiday OT hours in the NSD window. */
   nightDiffRegularHolidayOtHours?: number;
+  /** Regular holiday + rest day hours in the NSD window. */
+  nightDiffRegularHolidayRestDayHours?: number;
+  /** Regular holiday + rest day OT hours in the NSD window. */
+  nightDiffRegularHolidayRestDayOtHours?: number;
+  /** Double holiday hours in the NSD window. */
+  nightDiffDoubleHolidayHours?: number;
+  /** Double holiday OT hours in the NSD window. */
+  nightDiffDoubleHolidayOtHours?: number;
+  /** Double holiday + rest day hours in the NSD window. */
+  nightDiffDoubleHolidayRestDayHours?: number;
+  /** Double holiday + rest day OT hours in the NSD window. */
+  nightDiffDoubleHolidayRestDayOtHours?: number;
+
   hazardHours: number;
   unpaidLeaveDays: number;
 }
@@ -123,6 +166,15 @@ export interface ComputeStatutoryRules {
   deMinimis: DeMinimisCeilingPayload | null;
 }
 
+/**
+ * Tenant-overridable premium multipliers.  All keys are optional — the engine
+ * falls back to DOLE minimums for any key that is absent.
+ *
+ * The PremiumMultiplierKey values mirror the Prisma enum so the persist layer
+ * can map DB rows directly to this record.
+ */
+export type ComputeMultiplierConfig = Partial<Record<PremiumMultiplierKey, number>>;
+
 export interface ComputeInput {
   employee: ComputeEmployeeSnapshot;
   salary: ComputeSalarySnapshot;
@@ -164,6 +216,12 @@ export interface ComputeInput {
    * totals; the engine uses them for the annualized WHT true-up.
    */
   finalPayInputs?: FinalPayInputs;
+  /**
+   * Tenant-overridable premium multipliers.  If absent the engine uses
+   * DOLE statutory minimums.  The persist layer loads these from
+   * `PremiumRateConfig` and passes them here.
+   */
+  multiplierConfig?: ComputeMultiplierConfig;
 }
 
 /**

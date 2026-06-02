@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Monitor,
+  Percent,
 } from "lucide-react";
 
 type NavItem = {
@@ -108,6 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/settings", label: "Company & Branding", icon: Building2 },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: ClipboardList },
+      { href: "/settings/premium-rates", label: "Premium Rates", icon: Percent },
       { href: "/settings/holidays", label: "Holiday Calendar", icon: CalendarDays },
       { href: "/settings/leave-policies", label: "Leave Policies", icon: CalendarOff },
       { href: "/settings/roles", label: "Roles & Permissions", icon: KeyRound },

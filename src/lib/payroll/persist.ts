@@ -25,6 +25,7 @@ import { computeSheet } from "./engine";
 import type {
   ComputeInput,
   ComputeLoan,
+  ComputeMultiplierConfig,
   ComputePayComponent,
   ComputePeriodInputSnapshot,
   ComputeResult,
@@ -112,23 +113,41 @@ function periodInputSnapshot(
     daysWorked: n(row.daysWorked),
     lateUndertimeMinutes: (row as { lateUndertimeMinutes: number })
       .lateUndertimeMinutes,
-    regularOtHours: n(
-      (row as { regularOtHours: unknown }).regularOtHours,
-    ),
+    regularOtHours: n((row as { regularOtHours: unknown }).regularOtHours),
     restDayHours: n((row as { restDayHours: unknown }).restDayHours),
-    specialHolidayHours: n(
-      (row as { specialHolidayHours: unknown }).specialHolidayHours,
-    ),
-    regularHolidayHours: n(
-      (row as { regularHolidayHours: unknown }).regularHolidayHours,
-    ),
-    nightDiffHours: n(
-      (row as { nightDiffHours: unknown }).nightDiffHours,
-    ),
+    dayOffDutyDays: n((row as { dayOffDutyDays: unknown }).dayOffDutyDays),
+    restDayOtHours: n((row as { restDayOtHours: unknown }).restDayOtHours),
+    specialHolidayHours: n((row as { specialHolidayHours: unknown }).specialHolidayHours),
+    specialHolidayOtHours: n((row as { specialHolidayOtHours: unknown }).specialHolidayOtHours),
+    restDaySpecialHolidayHours: n((row as { restDaySpecialHolidayHours: unknown }).restDaySpecialHolidayHours),
+    restDaySpecialHolidayOtHours: n((row as { restDaySpecialHolidayOtHours: unknown }).restDaySpecialHolidayOtHours),
+    regularHolidayHours: n((row as { regularHolidayHours: unknown }).regularHolidayHours),
+    regularHolidayOtHours: n((row as { regularHolidayOtHours: unknown }).regularHolidayOtHours),
+    restDayRegularHolidayHours: n((row as { restDayRegularHolidayHours: unknown }).restDayRegularHolidayHours),
+    restDayRegularHolidayOtHours: n((row as { restDayRegularHolidayOtHours: unknown }).restDayRegularHolidayOtHours),
+    doubleHolidayHours: n((row as { doubleHolidayHours: unknown }).doubleHolidayHours),
+    doubleHolidayOtHours: n((row as { doubleHolidayOtHours: unknown }).doubleHolidayOtHours),
+    restDayDoubleHolidayHours: n((row as { restDayDoubleHolidayHours: unknown }).restDayDoubleHolidayHours),
+    restDayDoubleHolidayOtHours: n((row as { restDayDoubleHolidayOtHours: unknown }).restDayDoubleHolidayOtHours),
+    noWorkRegularHolidayDays: n((row as { noWorkRegularHolidayDays: unknown }).noWorkRegularHolidayDays),
+    nightDiffHours: n((row as { nightDiffHours: unknown }).nightDiffHours),
+    nightDiffOtHours: n((row as { nightDiffOtHours: unknown }).nightDiffOtHours),
+    nightDiffRestDayHours: n((row as { nightDiffRestDayHours: unknown }).nightDiffRestDayHours),
+    nightDiffRestDayOtHours: n((row as { nightDiffRestDayOtHours: unknown }).nightDiffRestDayOtHours),
+    nightDiffSpecialHolidayHours: n((row as { nightDiffSpecialHolidayHours: unknown }).nightDiffSpecialHolidayHours),
+    nightDiffSpecialHolidayOtHours: n((row as { nightDiffSpecialHolidayOtHours: unknown }).nightDiffSpecialHolidayOtHours),
+    nightDiffSpecialHolidayRestDayHours: n((row as { nightDiffSpecialHolidayRestDayHours: unknown }).nightDiffSpecialHolidayRestDayHours),
+    nightDiffSpecialHolidayRestDayOtHours: n((row as { nightDiffSpecialHolidayRestDayOtHours: unknown }).nightDiffSpecialHolidayRestDayOtHours),
+    nightDiffRegularHolidayHours: n((row as { nightDiffRegularHolidayHours: unknown }).nightDiffRegularHolidayHours),
+    nightDiffRegularHolidayOtHours: n((row as { nightDiffRegularHolidayOtHours: unknown }).nightDiffRegularHolidayOtHours),
+    nightDiffRegularHolidayRestDayHours: n((row as { nightDiffRegularHolidayRestDayHours: unknown }).nightDiffRegularHolidayRestDayHours),
+    nightDiffRegularHolidayRestDayOtHours: n((row as { nightDiffRegularHolidayRestDayOtHours: unknown }).nightDiffRegularHolidayRestDayOtHours),
+    nightDiffDoubleHolidayHours: n((row as { nightDiffDoubleHolidayHours: unknown }).nightDiffDoubleHolidayHours),
+    nightDiffDoubleHolidayOtHours: n((row as { nightDiffDoubleHolidayOtHours: unknown }).nightDiffDoubleHolidayOtHours),
+    nightDiffDoubleHolidayRestDayHours: n((row as { nightDiffDoubleHolidayRestDayHours: unknown }).nightDiffDoubleHolidayRestDayHours),
+    nightDiffDoubleHolidayRestDayOtHours: n((row as { nightDiffDoubleHolidayRestDayOtHours: unknown }).nightDiffDoubleHolidayRestDayOtHours),
     hazardHours: n((row as { hazardHours: unknown }).hazardHours),
-    unpaidLeaveDays: n(
-      (row as { unpaidLeaveDays: unknown }).unpaidLeaveDays,
-    ),
+    unpaidLeaveDays: n((row as { unpaidLeaveDays: unknown }).unpaidLeaveDays),
   };
 }
 
@@ -243,6 +262,7 @@ async function buildComputeInputForEmployee(
   cycle: ComputeInput["period"]["cycle"],
   tenantSettings: ComputeInput["tenant"],
   rules: ComputeStatutoryRules,
+  multiplierConfig?: ComputeMultiplierConfig,
 ): Promise<ComputeInput | null> {
   const salary = employee.salaryHistory[0];
   if (!salary) return null; // No effective salary → skip
@@ -293,6 +313,7 @@ async function buildComputeInputForEmployee(
     adjustments: [], // Injected by caller after bookId is known
     expenseClaims: [], // Injected by caller after bookId is known
     rules,
+    multiplierConfig,
     // tenantId not in ComputeInput — used by caller only
   } as ComputeInput;
 }
@@ -577,6 +598,16 @@ export async function createDraftRun(input: CreateDraftRunInput) {
     });
     const rules = await resolveAllRules(tx, input.tenantId, input.periodEnd);
 
+    // Load tenant-configured premium multipliers (if any).
+    const premiumRateRows = await tx.premiumRateConfig.findMany({
+      where: { tenantId: input.tenantId },
+      select: { multiplierKey: true, rate: true },
+    });
+    const multiplierConfig: ComputeMultiplierConfig =
+      premiumRateRows.length > 0
+        ? Object.fromEntries(premiumRateRows.map((r) => [r.multiplierKey, Number(r.rate)]))
+        : {};
+
     // 3. Create the book.
     const book = await tx.payrollBook.create({
       data: {
@@ -614,6 +645,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         input.cycle,
         tenant,
         rules,
+        multiplierConfig,
       );
       if (!ci) continue;
 
@@ -710,6 +742,16 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
 
+    // Load tenant-configured premium multipliers (if any).
+    const premiumRateRowsR = await tx.premiumRateConfig.findMany({
+      where: { tenantId },
+      select: { multiplierKey: true, rate: true },
+    });
+    const multiplierConfigR: ComputeMultiplierConfig =
+      premiumRateRowsR.length > 0
+        ? Object.fromEntries(premiumRateRowsR.map((r) => [r.multiplierKey, Number(r.rate)]))
+        : {};
+
     // Wipe + recompute.
     await tx.payrollSheet.deleteMany({ where: { payrollBookId: bookId } });
 
@@ -729,6 +771,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         book.cycle,
         tenant,
         rules,
+        multiplierConfigR,
       );
       if (!ci) continue;
 

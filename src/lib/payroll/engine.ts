@@ -50,6 +50,7 @@ import type {
   ComputeAdjustment,
   ComputeExpenseClaim,
   ComputeInput,
+  ComputeMultiplierConfig,
   ComputePayComponent,
   ComputeResult,
   FinalPayBreakdown,
@@ -72,6 +73,58 @@ function timesUnits(centavos: bigint, units: number): bigint {
 
 function clampNonNegative(v: bigint): bigint {
   return v < 0n ? 0n : v;
+}
+
+// ---------------------------------------------------------------------------
+// Premium multiplier resolution — DOLE floors + tenant overrides
+// ---------------------------------------------------------------------------
+
+/** DOLE statutory minimum multipliers (Art. 87–94, Labor Code, as amended). */
+const DOLE_DEFAULTS = {
+  OT: 1.25,
+  NSD: 0.10,
+  REST_DAY: 1.30,
+  REST_DAY_OT: 1.69,                     // 1.30 × 1.30
+  SPECIAL_HOLIDAY: 1.30,
+  SPECIAL_HOLIDAY_OT: 1.69,              // 1.30 × 1.30
+  SPECIAL_HOLIDAY_REST_DAY: 1.50,        // DOLE explicitly: NOT 1.30²
+  SPECIAL_HOLIDAY_REST_DAY_OT: 1.95,     // 1.50 × 1.30
+  REGULAR_HOLIDAY: 2.00,
+  REGULAR_HOLIDAY_OT: 2.60,              // 2.00 × 1.30
+  REGULAR_HOLIDAY_REST_DAY: 2.60,        // 2.00 × 1.30
+  REGULAR_HOLIDAY_REST_DAY_OT: 3.38,     // 2.60 × 1.30
+  DOUBLE_HOLIDAY: 3.00,
+  DOUBLE_HOLIDAY_OT: 3.90,               // 3.00 × 1.30
+  DOUBLE_HOLIDAY_REST_DAY: 3.90,         // 3.00 × 1.30
+  DOUBLE_HOLIDAY_REST_DAY_OT: 5.07,      // 3.90 × 1.30
+  HAZARD: 1.25,
+  NO_WORK_REGULAR_HOLIDAY: 1.00,
+} as const;
+
+type ResolvedMultipliers = typeof DOLE_DEFAULTS;
+
+function resolveMultipliers(config?: ComputeMultiplierConfig): ResolvedMultipliers {
+  if (!config) return DOLE_DEFAULTS;
+  return {
+    OT:                          config.OT                          ?? DOLE_DEFAULTS.OT,
+    NSD:                         config.NSD                         ?? DOLE_DEFAULTS.NSD,
+    REST_DAY:                    config.REST_DAY                    ?? DOLE_DEFAULTS.REST_DAY,
+    REST_DAY_OT:                 config.REST_DAY_OT                 ?? DOLE_DEFAULTS.REST_DAY_OT,
+    SPECIAL_HOLIDAY:             config.SPECIAL_HOLIDAY             ?? DOLE_DEFAULTS.SPECIAL_HOLIDAY,
+    SPECIAL_HOLIDAY_OT:          config.SPECIAL_HOLIDAY_OT          ?? DOLE_DEFAULTS.SPECIAL_HOLIDAY_OT,
+    SPECIAL_HOLIDAY_REST_DAY:    config.SPECIAL_HOLIDAY_REST_DAY    ?? DOLE_DEFAULTS.SPECIAL_HOLIDAY_REST_DAY,
+    SPECIAL_HOLIDAY_REST_DAY_OT: config.SPECIAL_HOLIDAY_REST_DAY_OT ?? DOLE_DEFAULTS.SPECIAL_HOLIDAY_REST_DAY_OT,
+    REGULAR_HOLIDAY:             config.REGULAR_HOLIDAY             ?? DOLE_DEFAULTS.REGULAR_HOLIDAY,
+    REGULAR_HOLIDAY_OT:          config.REGULAR_HOLIDAY_OT          ?? DOLE_DEFAULTS.REGULAR_HOLIDAY_OT,
+    REGULAR_HOLIDAY_REST_DAY:    config.REGULAR_HOLIDAY_REST_DAY    ?? DOLE_DEFAULTS.REGULAR_HOLIDAY_REST_DAY,
+    REGULAR_HOLIDAY_REST_DAY_OT: config.REGULAR_HOLIDAY_REST_DAY_OT ?? DOLE_DEFAULTS.REGULAR_HOLIDAY_REST_DAY_OT,
+    DOUBLE_HOLIDAY:              config.DOUBLE_HOLIDAY              ?? DOLE_DEFAULTS.DOUBLE_HOLIDAY,
+    DOUBLE_HOLIDAY_OT:           config.DOUBLE_HOLIDAY_OT           ?? DOLE_DEFAULTS.DOUBLE_HOLIDAY_OT,
+    DOUBLE_HOLIDAY_REST_DAY:     config.DOUBLE_HOLIDAY_REST_DAY     ?? DOLE_DEFAULTS.DOUBLE_HOLIDAY_REST_DAY,
+    DOUBLE_HOLIDAY_REST_DAY_OT:  config.DOUBLE_HOLIDAY_REST_DAY_OT  ?? DOLE_DEFAULTS.DOUBLE_HOLIDAY_REST_DAY_OT,
+    HAZARD:                      config.HAZARD                      ?? DOLE_DEFAULTS.HAZARD,
+    NO_WORK_REGULAR_HOLIDAY:     config.NO_WORK_REGULAR_HOLIDAY     ?? DOLE_DEFAULTS.NO_WORK_REGULAR_HOLIDAY,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -525,26 +578,47 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     periodInput.lateUndertimeMinutes / 60,
   );
 
-  const otPayCents = timesUnits(hourlyRateCents, periodInput.regularOtHours * 1.25);
+  const mFP = resolveMultipliers(input.multiplierConfig);
+
+  const otPayCents = timesUnits(hourlyRateCents, periodInput.regularOtHours * mFP.OT);
   const nsdPayCents =
-    timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.10) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours ?? 0) * 0.125) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours ?? 0) * 0.13) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours ?? 0) * 0.20) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours ?? 0) * 0.26);
+    timesUnits(hourlyRateCents, periodInput.nightDiffHours                                               * mFP.NSD) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours                          ?? 0) * mFP.NSD * mFP.OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours                     ?? 0) * mFP.NSD * mFP.REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayOtHours                   ?? 0) * mFP.NSD * mFP.REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayHours              ?? 0) * mFP.NSD * mFP.SPECIAL_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayOtHours            ?? 0) * mFP.NSD * mFP.SPECIAL_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayRestDayHours       ?? 0) * mFP.NSD * mFP.SPECIAL_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayRestDayOtHours     ?? 0) * mFP.NSD * mFP.SPECIAL_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours              ?? 0) * mFP.NSD * mFP.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours            ?? 0) * mFP.NSD * mFP.REGULAR_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayRestDayHours       ?? 0) * mFP.NSD * mFP.REGULAR_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayRestDayOtHours     ?? 0) * mFP.NSD * mFP.REGULAR_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayHours               ?? 0) * mFP.NSD * mFP.DOUBLE_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayOtHours             ?? 0) * mFP.NSD * mFP.DOUBLE_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayRestDayHours        ?? 0) * mFP.NSD * mFP.DOUBLE_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayRestDayOtHours      ?? 0) * mFP.NSD * mFP.DOUBLE_HOLIDAY_REST_DAY_OT);
   const restDayPayCents =
-    timesUnits(hourlyRateCents, periodInput.restDayHours * 1.30) +
-    timesUnits(hourlyRateCents, (periodInput.restDayOtHours ?? 0) * 1.69);
+    timesUnits(dailyRateCents,  (periodInput.dayOffDutyDays                            ?? 0) * mFP.REST_DAY) +
+    timesUnits(hourlyRateCents, periodInput.restDayHours                                     * mFP.REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayOtHours                            ?? 0) * mFP.REST_DAY_OT);
   const specialHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.30) +
-    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours ?? 0) * 1.69);
+    timesUnits(hourlyRateCents, periodInput.specialHolidayHours                              * mFP.SPECIAL_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours                     ?? 0) * mFP.SPECIAL_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayHours                ?? 0) * mFP.SPECIAL_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayOtHours              ?? 0) * mFP.SPECIAL_HOLIDAY_REST_DAY_OT);
   const regularHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0) +
-    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours ?? 0) * 2.60) +
-    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours ?? 0) * 3.0) +
-    timesUnits(dailyRateCents, periodInput.noWorkRegularHolidayDays ?? 0);
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * mFP.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours                     ?? 0) * mFP.REGULAR_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayHours                ?? 0) * mFP.REGULAR_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayOtHours              ?? 0) * mFP.REGULAR_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours                        ?? 0) * mFP.DOUBLE_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayOtHours                      ?? 0) * mFP.DOUBLE_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDayDoubleHolidayHours                 ?? 0) * mFP.DOUBLE_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayDoubleHolidayOtHours               ?? 0) * mFP.DOUBLE_HOLIDAY_REST_DAY_OT) +
+    timesUnits(dailyRateCents,  (periodInput.noWorkRegularHolidayDays                  ?? 0) * mFP.NO_WORK_REGULAR_HOLIDAY);
   const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
-  const hazardPayCents = timesUnits(hourlyRateCents, periodInput.hazardHours * 1.25);
+  const hazardPayCents = timesUnits(hourlyRateCents, periodInput.hazardHours * mFP.HAZARD);
 
   const deMinimisCeilingByCode = new Map<string, bigint>();
   if (rules.deMinimis) {
@@ -807,36 +881,56 @@ export function computeSheet(input: ComputeInput): ComputeResult {
 
   // -- Step 3: premium pay — full §4.3 stacking matrix ---------------------
   // Each typed OT / NSD field carries its FULL composed rate, not just the
-  // premium delta. Night-diff fields carry only the 10% NSD PREMIUM so that
-  // nsdPayCents is a clean decomposition column on the payslip.
-  const otPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.regularOtHours * 1.25,
-  );
-  // NSD premiums: 10% of the applicable composed rate for that hour type.
+  // premium delta. Night-diff fields carry only the NSD PREMIUM (NSD_rate ×
+  // base_scenario_rate) so that nsdPayCents is a clean decomposition column.
+  const m = resolveMultipliers(input.multiplierConfig);
+
+  const otPayCents = timesUnits(hourlyRateCents, periodInput.regularOtHours * m.OT);
+
+  // NSD premiums: NSD_rate × base_scenario_rate for each compound hour bucket.
   const nsdPayCents =
-    timesUnits(hourlyRateCents, periodInput.nightDiffHours * 0.10) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours ?? 0) * 0.125) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours ?? 0) * 0.13) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours ?? 0) * 0.20) +
-    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours ?? 0) * 0.26);
+    timesUnits(hourlyRateCents, periodInput.nightDiffHours                                             * m.NSD) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffOtHours                          ?? 0) * m.NSD * m.OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayHours                     ?? 0) * m.NSD * m.REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRestDayOtHours                   ?? 0) * m.NSD * m.REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayHours              ?? 0) * m.NSD * m.SPECIAL_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayOtHours            ?? 0) * m.NSD * m.SPECIAL_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayRestDayHours       ?? 0) * m.NSD * m.SPECIAL_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffSpecialHolidayRestDayOtHours     ?? 0) * m.NSD * m.SPECIAL_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayHours              ?? 0) * m.NSD * m.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayOtHours            ?? 0) * m.NSD * m.REGULAR_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayRestDayHours       ?? 0) * m.NSD * m.REGULAR_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffRegularHolidayRestDayOtHours     ?? 0) * m.NSD * m.REGULAR_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayHours               ?? 0) * m.NSD * m.DOUBLE_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayOtHours             ?? 0) * m.NSD * m.DOUBLE_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayRestDayHours        ?? 0) * m.NSD * m.DOUBLE_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.nightDiffDoubleHolidayRestDayOtHours      ?? 0) * m.NSD * m.DOUBLE_HOLIDAY_REST_DAY_OT);
+
+  // Rest-day pay (hourly premium + full rest-day = daily-rate basis).
   const restDayPayCents =
-    timesUnits(hourlyRateCents, periodInput.restDayHours * 1.30) +
-    timesUnits(hourlyRateCents, (periodInput.restDayOtHours ?? 0) * 1.69);
+    timesUnits(dailyRateCents,  (periodInput.dayOffDutyDays                            ?? 0) * m.REST_DAY) +
+    timesUnits(hourlyRateCents, periodInput.restDayHours                                     * m.REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayOtHours                            ?? 0) * m.REST_DAY_OT);
+
   const specialHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.specialHolidayHours * 1.30) +
-    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours ?? 0) * 1.69);
+    timesUnits(hourlyRateCents, periodInput.specialHolidayHours                              * m.SPECIAL_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.specialHolidayOtHours                     ?? 0) * m.SPECIAL_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayHours                ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayOtHours              ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY_OT);
+
   const regularHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.regularHolidayHours * 2.0) +
-    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours ?? 0) * 2.60) +
-    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours ?? 0) * 3.0) +
-    // No-work holiday: 1.00 × daily rate (DOLE); uses dailyRate, not hourly.
-    timesUnits(dailyRateCents, periodInput.noWorkRegularHolidayDays ?? 0);
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * m.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours                     ?? 0) * m.REGULAR_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayHours                ?? 0) * m.REGULAR_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayOtHours              ?? 0) * m.REGULAR_HOLIDAY_REST_DAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayHours                        ?? 0) * m.DOUBLE_HOLIDAY) +
+    timesUnits(hourlyRateCents, (periodInput.doubleHolidayOtHours                      ?? 0) * m.DOUBLE_HOLIDAY_OT) +
+    timesUnits(hourlyRateCents, (periodInput.restDayDoubleHolidayHours                 ?? 0) * m.DOUBLE_HOLIDAY_REST_DAY) +
+    timesUnits(hourlyRateCents, (periodInput.restDayDoubleHolidayOtHours               ?? 0) * m.DOUBLE_HOLIDAY_REST_DAY_OT) +
+    // No-work regular holiday: 1.00 × daily rate per DOLE (daily-rate basis).
+    timesUnits(dailyRateCents,  (periodInput.noWorkRegularHolidayDays                  ?? 0) * m.NO_WORK_REGULAR_HOLIDAY);
   const holidayPayCents = specialHolidayPayCents + regularHolidayPayCents;
-  const hazardPayCents = timesUnits(
-    hourlyRateCents,
-    periodInput.hazardHours * 1.25,
-  );
+  const hazardPayCents = timesUnits(hourlyRateCents, periodInput.hazardHours * m.HAZARD);
 
   // -- Step 4: pay components ------------------------------------------------
   const deMinimisCeilingByCode = new Map<string, bigint>();
