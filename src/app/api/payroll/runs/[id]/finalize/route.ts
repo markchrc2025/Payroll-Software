@@ -19,6 +19,7 @@ import {
 } from "@/lib/payroll/persist";
 import { serializePayrollBook } from "@/lib/payroll/serialize";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { enqueuePayslipPublish } from "@/lib/jobs/workers";
 
 export async function POST(
   req: NextRequest,
@@ -39,6 +40,20 @@ export async function POST(
       entityId: id,
       ipAddress: getClientIp(req),
     });
+
+    // Enqueue one payslip.publish job per sheet (best-effort)
+    if ("sheets" in book && Array.isArray(book.sheets)) {
+      for (const sheet of book.sheets as Array<{ id: string }>) {
+        void enqueuePayslipPublish({
+          tenantId: auth.tenantId,
+          bookId: id,
+          sheetId: sheet.id,
+        }).catch((e) =>
+          console.error("[api/finalize] Failed to enqueue payslip.publish:", e),
+        );
+      }
+    }
+
     return ok(serializePayrollBook(book), "Payroll run finalized");
   } catch (e) {
     if (e instanceof PayrollRunNotFoundError) return notFound("PayrollBook");

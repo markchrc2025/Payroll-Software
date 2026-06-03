@@ -8,7 +8,7 @@ SUPERVISOR_PID_FILE="${DEV_SUPERVISOR_PID_FILE:-/tmp/payroll-next-dev-supervisor
 STOP_FILE="${DEV_STOP_FILE:-/tmp/payroll-next-dev.stop}"
 HEALTH_URL="${DEV_HEALTH_URL:-http://127.0.0.1:3000/}"
 SERVER_BASE_URL="${DEV_BASE_URL:-http://127.0.0.1:3000}"
-PREWARM_ROUTES="${DEV_PREWARM_ROUTES:-/login?callbackUrl=%2F /ess /remotekiosk}"
+PREWARM_ROUTES="${DEV_PREWARM_ROUTES:-/centralportal/login /login?callbackUrl=%2F /ess /remotekiosk}"
 
 print_usage() {
   cat <<EOF

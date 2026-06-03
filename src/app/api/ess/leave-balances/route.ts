@@ -12,6 +12,8 @@ import type { NextRequest } from "next/server";
 import { getEssContext } from "@/lib/ess-auth";
 import { ok, serverError, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
+import { getOrSet } from "@/lib/cache/cache";
+import { CacheKeys, TTL } from "@/lib/cache/keys";
 
 export async function GET(req: NextRequest) {
   const ctx = await getEssContext(req);
@@ -21,16 +23,21 @@ export async function GET(req: NextRequest) {
   const year = Number(searchParams.get("year") ?? new Date().getFullYear());
 
   try {
-    const balances = await withTenant(ctx.tenantId, async (tx) =>
-      tx.leaveBalance.findMany({
-        where: {
-          tenantId: ctx.tenantId,
-          employeeId: ctx.employeeId,
-          year,
-        },
-        include: { leaveType: { select: { name: true, code: true, isPaid: true, unit: true } } },
-        orderBy: { leaveType: { name: "asc" } },
-      }),
+    const balances = await getOrSet(
+      CacheKeys.leaveBalance(ctx.tenantId, ctx.employeeId, year),
+      TTL.LEAVE_BALANCE,
+      () =>
+        withTenant(ctx.tenantId, (tx) =>
+          tx.leaveBalance.findMany({
+            where: {
+              tenantId: ctx.tenantId,
+              employeeId: ctx.employeeId,
+              year,
+            },
+            include: { leaveType: { select: { name: true, code: true, isPaid: true, unit: true } } },
+            orderBy: { leaveType: { name: "asc" } },
+          }),
+        ),
     );
 
     const serialized = balances.map((b) => ({

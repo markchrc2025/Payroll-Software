@@ -16,6 +16,8 @@ import type { Prisma } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { checkGeofence } from "@/lib/attendance/geofence";
 import { computeDtrFields } from "@/lib/attendance/compute-dtr";
+import { getOrSet } from "@/lib/cache/cache";
+import { CacheKeys, TTL } from "@/lib/cache/keys";
 
 export type PunchSource = "KIOSK" | "ESS" | "IMPORT" | "MANUAL";
 export type PunchType   = "IN" | "OUT";
@@ -83,15 +85,20 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     // 3. Geofence check — only if GPS provided and branch has a geofence
     let geofenceResult = { outsideGeofence: false, distanceMeters: null as number | null };
     if (input.latitude != null && input.longitude != null && employee.branchId) {
-      const geofence = await tx.geofence.findFirst({
-        where: {
-          branchId:  employee.branchId,
-          tenantId:  input.tenantId,
-          isActive:  true,
-          deletedAt: null,
-        },
-        select: { latitude: true, longitude: true, radiusMeters: true },
-      });
+      const geofence = await getOrSet(
+        CacheKeys.geofence(input.tenantId, employee.branchId),
+        TTL.GEOFENCE,
+        () =>
+          tx.geofence.findFirst({
+            where: {
+              branchId:  employee.branchId!,
+              tenantId:  input.tenantId,
+              isActive:  true,
+              deletedAt: null,
+            },
+            select: { latitude: true, longitude: true, radiusMeters: true },
+          }),
+      );
       geofenceResult = checkGeofence(input.latitude, input.longitude, geofence);
     }
 

@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
+import { enqueueOtApproved } from "@/lib/jobs/workers";
 
 export async function POST(
   req: NextRequest,
@@ -63,5 +64,14 @@ export async function POST(
   if (result.notFound) return notFound("OT application not found");
   if (result.terminal)
     return err(`Cannot approve a ${result.status} application`, 409);
+
+  // Enqueue notification (best-effort — don't block response)
+  void enqueueOtApproved({
+    tenantId: auth.tenantId,
+    otApplicationId: id,
+  }).catch((e) =>
+    console.error("[api/ot-applications/approve] Failed to enqueue ot.approved:", e),
+  );
+
   return ok(result.row, "OT application approved");
 }

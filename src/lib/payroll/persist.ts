@@ -34,6 +34,8 @@ import type {
 } from "./types";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
+import { getOrSet } from "@/lib/cache/cache";
+import { CacheKeys, TTL } from "@/lib/cache/keys";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -184,40 +186,47 @@ async function resolveAllRules(
   tenantId: string,
   asOf: Date,
 ): Promise<ComputeStatutoryRules> {
-  const cats: StatutoryCategory[] = [
-    "SSS_SCHEDULE",
-    "PHILHEALTH_SCHEDULE",
-    "PAGIBIG_SCHEDULE",
-    "BIR_WITHHOLDING_TABLE",
-  ];
-  const [sss, phic, hdmf, bir] = await Promise.all(
-    cats.map((c) => getActiveRule(tx, tenantId, c, asOf)),
+  const asOfKey = asOf.toISOString().split("T")[0]; // date-only string for stable cache key
+  return getOrSet(
+    CacheKeys.statutory(tenantId, asOfKey),
+    TTL.STATUTORY,
+    async () => {
+      const cats: StatutoryCategory[] = [
+        "SSS_SCHEDULE",
+        "PHILHEALTH_SCHEDULE",
+        "PAGIBIG_SCHEDULE",
+        "BIR_WITHHOLDING_TABLE",
+      ];
+      const [sss, phic, hdmf, bir] = await Promise.all(
+        cats.map((c) => getActiveRule(tx, tenantId, c, asOf)),
+      );
+
+      // Optional rules — don't fail if not seeded.
+      let minWage: ComputeStatutoryRules["minWage"] = null;
+      try {
+        const r = await getActiveRule(tx, tenantId, "MINIMUM_WAGE_RATE", asOf);
+        minWage = r.payload;
+      } catch {
+        /* ignore — only required when MWE employees exist */
+      }
+      let deMinimis: ComputeStatutoryRules["deMinimis"] = null;
+      try {
+        const r = await getActiveRule(tx, tenantId, "DE_MINIMIS_CEILING", asOf);
+        deMinimis = r.payload;
+      } catch {
+        /* ignore */
+      }
+
+      return {
+        sss: sss!.payload as ComputeStatutoryRules["sss"],
+        philHealth: phic!.payload as ComputeStatutoryRules["philHealth"],
+        pagibig: hdmf!.payload as ComputeStatutoryRules["pagibig"],
+        bir: bir!.payload as ComputeStatutoryRules["bir"],
+        minWage,
+        deMinimis,
+      };
+    },
   );
-
-  // Optional rules — don't fail if not seeded.
-  let minWage: ComputeStatutoryRules["minWage"] = null;
-  try {
-    const r = await getActiveRule(tx, tenantId, "MINIMUM_WAGE_RATE", asOf);
-    minWage = r.payload;
-  } catch {
-    /* ignore — only required when MWE employees exist */
-  }
-  let deMinimis: ComputeStatutoryRules["deMinimis"] = null;
-  try {
-    const r = await getActiveRule(tx, tenantId, "DE_MINIMIS_CEILING", asOf);
-    deMinimis = r.payload;
-  } catch {
-    /* ignore */
-  }
-
-  return {
-    sss: sss!.payload as ComputeStatutoryRules["sss"],
-    philHealth: phic!.payload as ComputeStatutoryRules["philHealth"],
-    pagibig: hdmf!.payload as ComputeStatutoryRules["pagibig"],
-    bir: bir!.payload as ComputeStatutoryRules["bir"],
-    minWage,
-    deMinimis,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -985,5 +994,172 @@ export async function listRuns(input: ListRunsInput) {
       }),
     ]);
     return { total, rows };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Async / queued payroll run (PROCESSING lifecycle)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a minimal PayrollBook in PROCESSING status without computing sheets.
+ * The caller is responsible for enqueuing a `payroll.run` job immediately
+ * after this returns.
+ */
+export async function queueRun(input: CreateDraftRunInput) {
+  return withTenant(input.tenantId, async (tx) => {
+    const existing = await tx.payrollBook.findUnique({
+      where: {
+        tenantId_periodStart_periodEnd_runType: {
+          tenantId: input.tenantId,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          runType: input.runType ?? "REGULAR",
+        },
+      },
+    });
+    if (existing) {
+      throw new PayrollRunConflictError(
+        `A payroll run already exists for this period (${existing.id}).`,
+      );
+    }
+
+    return tx.payrollBook.create({
+      data: {
+        tenantId: input.tenantId,
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+        cycle: input.cycle,
+        runType: input.runType ?? "REGULAR",
+        notes: input.notes ?? null,
+        createdByUserId: input.createdByUserId ?? null,
+        skipStatutory: input.skipStatutory ?? false,
+        separationReason: input.separationReason ?? null,
+        status: "PROCESSING",
+      },
+    });
+  });
+}
+
+/**
+ * Compute sheets for a PROCESSING PayrollBook, then transition it to DRAFT.
+ * Called exclusively from the `payroll.run` background job handler.
+ */
+export async function processRun(tenantId: string, bookId: string) {
+  return withTenant(tenantId, async (tx) => {
+    const book = await tx.payrollBook.findUnique({ where: { id: bookId } });
+    if (!book) throw new PayrollRunNotFoundError(bookId);
+    if (book.status !== "PROCESSING") {
+      throw new PayrollRunConflictError(
+        `processRun expects PROCESSING status, got ${book.status}.`,
+      );
+    }
+
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: {
+        workingDaysDenominator: true,
+        statutoryCutoffRule: true,
+        thirteenthMonthBasis: true,
+      },
+    });
+    const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
+
+    const premiumRateRows = await tx.premiumRateConfig.findMany({
+      where: { tenantId },
+      select: { multiplierKey: true, rate: true },
+    });
+    const multiplierConfig: ComputeMultiplierConfig =
+      premiumRateRows.length > 0
+        ? Object.fromEntries(premiumRateRows.map((r) => [r.multiplierKey, Number(r.rate)]))
+        : {};
+
+    const allEmployees = await loadActiveEmployees(
+      tx,
+      book.periodStart,
+      book.periodEnd,
+    );
+
+    const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
+    for (const e of allEmployees) {
+      const ci = await buildComputeInputForEmployee(
+        tx,
+        tenantId,
+        e,
+        book.periodStart,
+        book.periodEnd,
+        book.cycle,
+        tenant,
+        rules,
+        multiplierConfig,
+      );
+      if (!ci) continue;
+
+      if (book.runType === "YEAR_END") {
+        ci.thirteenthMonthCents = await computeThirteenthMonthCents(
+          tx,
+          tenantId,
+          e.id,
+          book.periodEnd,
+        );
+      }
+
+      if (book.runType === "FINAL_PAY") {
+        const salary = e.salaryHistory[0]!;
+        const dailyRate = deriveRateForPersist(
+          salary.basicSalaryCents,
+          salary.salaryType,
+          tenant.workingDaysDenominator,
+        );
+        ci.finalPayInputs = await computeFinalPayInputsForEmployee(
+          tx,
+          tenantId,
+          e,
+          book.periodEnd,
+          book.separationReason ?? undefined,
+          dailyRate,
+          salary.basicSalaryCents,
+        );
+      }
+
+      if (book.skipStatutory) {
+        ci.overrideStatutoryDeducted = false;
+      }
+
+      ci.adjustments = (
+        await tx.payrollAdjustment.findMany({
+          where: { payrollBookId: bookId, employeeId: e.id },
+        })
+      ).map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        amountCents: a.amountCents,
+        isTaxable: a.isTaxable,
+        reason: a.reason,
+      }));
+
+      ci.expenseClaims = (
+        await tx.expenseClaim.findMany({
+          where: { payrollBookId: bookId, employeeId: e.id, status: "ATTACHED" },
+        })
+      ).map((c) => ({
+        id: c.id,
+        category: c.category,
+        amountCents: c.amountCents,
+        taxTreatment: c.taxTreatment!,
+      }));
+
+      const result = computeSheet(ci);
+      sheets.push(resultToSheetCreate(tenantId, bookId, e.id, result));
+    }
+
+    if (sheets.length > 0) {
+      await tx.payrollSheet.createMany({ data: sheets });
+    }
+
+    return tx.payrollBook.update({
+      where: { id: bookId },
+      data: { status: "DRAFT", updatedAt: new Date() },
+    });
   });
 }

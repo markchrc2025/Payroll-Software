@@ -15,6 +15,8 @@ import { getAuthContext } from "@/lib/auth";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { aggregateDtrSchema } from "@/lib/validations/dtr";
 import { isEntitledToHolidayPay } from "@/lib/payroll/holiday-entitlement";
+import { getOrSet } from "@/lib/cache/cache";
+import { CacheKeys, TTL } from "@/lib/cache/keys";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,14 +144,20 @@ export async function POST(
     });
 
     // Build holiday map: dateKey -> [HolidayCategory]
-    const holidays = await tx.holiday.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        date: { gte: periodStartDate, lte: periodEndDate },
-        deletedAt: null,
-      },
-      select: { date: true, category: true },
-    });
+    const yearMonth = periodStartDate.toISOString().slice(0, 7); // YYYY-MM
+    const holidays = await getOrSet(
+      CacheKeys.holidays(auth.tenantId, yearMonth),
+      TTL.HOLIDAYS,
+      () =>
+        tx.holiday.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            date: { gte: periodStartDate, lte: periodEndDate },
+            deletedAt: null,
+          },
+          select: { date: true, category: true },
+        }),
+    );
     const holidayMap = new Map<string, HolidayCategory[]>();
     for (const h of holidays) {
       const k = dateKey(h.date);

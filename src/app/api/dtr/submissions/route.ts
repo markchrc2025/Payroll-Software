@@ -12,6 +12,7 @@ import {
   createDtrSubmissionSchema,
   listDtrSubmissionsSchema,
 } from "@/lib/validations/dtr";
+import { enqueueDtrSubmitted } from "@/lib/jobs/workers";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -109,5 +110,14 @@ export async function POST(req: NextRequest) {
   if (result === "NOT_FOUND_EMP") return err("Employee not found", 404);
   if (result === "DUPLICATE")
     return err("A submission already exists for this employee and period", 409);
+
+  // Enqueue supervisor notification (best-effort)
+  void enqueueDtrSubmitted({
+    tenantId: auth.tenantId,
+    submissionId: result.id,
+  }).catch((e) =>
+    console.error("[api/dtr/submissions] Failed to enqueue dtr.submitted:", e),
+  );
+
   return ok(result, "DTR submission created", 201);
 }

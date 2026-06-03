@@ -309,6 +309,7 @@ enum LoanStatus {
 /// were created in error before finalize.
 enum PayrollBookStatus {
   DRAFT
+  PROCESSING
   FINALIZED
   CANCELLED
 }
@@ -1791,6 +1792,9 @@ model PayrollSheet {
   adjustmentsApplied   Json?
   /// Array of { id, category, amountCents, taxTreatment, taxablePortionCents, nontaxablePortionCents }.
   expenseClaimsApplied Json?
+
+  /// R2 object key for the published payslip PDF.  Null until payslip.publish job completes.
+  payslipKey String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

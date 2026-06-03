@@ -183,6 +183,83 @@ export async function sendPayslipReadyEmail({
 }
 
 // ---------------------------------------------------------------------------
+// OT Approved
+// ---------------------------------------------------------------------------
+
+export async function sendOtApprovedEmail({
+  to,
+  name,
+  date,
+  hours,
+  reviewUrl,
+}: {
+  to: string;
+  name: string;
+  date: string; // e.g. "June 3, 2026"
+  hours: string; // e.g. "2.5"
+  reviewUrl: string;
+}): Promise<void> {
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">Overtime application approved</p>
+    <p style="margin:0 0 24px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(name)}, your overtime application for <strong>${escapeHtml(date)}</strong>
+      (${escapeHtml(hours)} hour${Number(hours) !== 1 ? "s" : ""}) has been <strong>approved</strong>.
+    </p>
+    <a href="${escapeHtml(reviewUrl)}"
+       style="display:inline-block;padding:12px 28px;background:#1E3A5F;color:#FFFFFF;font-size:14px;font-weight:600;border-radius:8px;text-decoration:none;">
+      View Details
+    </a>
+  `);
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Your overtime on ${date} has been approved`,
+    html,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// DTR Submission — notify supervisor
+// ---------------------------------------------------------------------------
+
+export async function sendDtrSubmittedEmail({
+  to,
+  supervisorName,
+  employeeName,
+  periodStart,
+  periodEnd,
+  reviewUrl,
+}: {
+  to: string;
+  supervisorName: string;
+  employeeName: string;
+  periodStart: string;
+  periodEnd: string;
+  reviewUrl: string;
+}): Promise<void> {
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">DTR submitted for your review</p>
+    <p style="margin:0 0 24px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(supervisorName)}, <strong>${escapeHtml(employeeName)}</strong> has submitted
+      their Daily Time Record for <strong>${escapeHtml(periodStart)}</strong> to
+      <strong>${escapeHtml(periodEnd)}</strong> and it is awaiting your review.
+    </p>
+    <a href="${escapeHtml(reviewUrl)}"
+       style="display:inline-block;padding:12px 28px;background:#1E3A5F;color:#FFFFFF;font-size:14px;font-weight:600;border-radius:8px;text-decoration:none;">
+      Review DTR
+    </a>
+  `);
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `DTR review needed: ${employeeName} (${periodStart} – ${periodEnd})`,
+    html,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
 

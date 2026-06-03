@@ -1,7 +1,9 @@
 /**
  * /api/payroll/runs
  *   GET  — list payroll runs (filter: status, runType)
- *   POST — create a DRAFT payroll run (auto-fans-out compute across employees)
+ *   POST — create a PROCESSING payroll run and enqueue the compute job.
+ *          Returns 202 with the book stub; status transitions to DRAFT once
+ *          the background job completes.
  */
 import type { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/require-permission";
@@ -12,7 +14,7 @@ import {
   serverError,
 } from "@/lib/api-response";
 import {
-  createDraftRun,
+  queueRun,
   listRuns,
   PayrollRunConflictError,
 } from "@/lib/payroll/persist";
@@ -21,6 +23,7 @@ import {
   createPayrollRunSchema,
   listPayrollRunsSchema,
 } from "@/lib/validations/payroll-run";
+import { enqueuePayrollRun } from "@/lib/jobs/workers";
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
     const d = parsed.data;
 
-    const book = await createDraftRun({
+    const book = await queueRun({
       tenantId: auth.tenantId,
       periodStart: d.periodStart,
       periodEnd: d.periodEnd,
@@ -69,7 +72,13 @@ export async function POST(req: NextRequest) {
       skipStatutory: d.skipStatutory,
       separationReason: d.separationReason,
     });
-    return ok(serializePayrollBook(book), "Payroll run created", 201);
+
+    // Fire-and-forget enqueue — computation happens asynchronously
+    void enqueuePayrollRun({ tenantId: auth.tenantId, bookId: book.id }).catch(
+      (e) => console.error("[api/payroll/runs] Failed to enqueue payroll.run:", e),
+    );
+
+    return ok(serializePayrollBook(book), "Payroll run queued", 202);
   } catch (e) {
     if (e instanceof PayrollRunConflictError) return err(e.message, 409);
     return serverError(e);
