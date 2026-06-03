@@ -157,12 +157,11 @@ export async function POST(
     // ── Audit log ───────────────────────────────────────────────────────────
     await writeAuditLog({
       tenantId: ctx.tenantId,
-      actorId: ctx.userId ?? "system",
-      action: "OFFBOARD",
+      actorUserId: ctx.userId ?? null,
+      action: "UPDATE",
       entity: "Employee",
       entityId: id,
-      before: null,
-      after: {
+      changes: {
         employmentStatus: employee.employmentStatus,
         separationReason,
         lastWorkingDay: lastWorkingDay.toISOString(),

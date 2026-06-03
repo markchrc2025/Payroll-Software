@@ -1,214 +1,322 @@
+## ITEM 2 — Background Jobs with pg-boss
 
-## THE PROMPT
+### Why pg-boss
 
-Rebuild the Holiday Calendar page (`/settings/holiday-calendar` or equivalent) from scratch. The current implementation is a plain list/table. Replace it entirely with a **visual full-month calendar** where HR Admins can see, add, edit, and delete holidays directly from the calendar grid. The design and behavior are specified in full below.
+pg-boss uses the existing Supabase PostgreSQL database as its job queue — no new service or infrastructure is needed. It is the right choice for this stage.
+
+### Installation
+
+```bash
+npm install pg-boss
+```
+
+### Setup
+
+Create a singleton pg-boss client at `lib/jobs/client.ts`:
+
+```typescript
+import PgBoss from 'pg-boss';
+
+let boss: PgBoss;
+
+export async function getJobQueue(): Promise<PgBoss> {
+  if (!boss) {
+    boss = new PgBoss(process.env.DATABASE_URL!);
+    await boss.start();
+  }
+  return boss;
+}
+```
+
+Create a job worker bootstrap file at `lib/jobs/workers.ts` that registers all workers on startup. Call this from your Next.js instrumentation file (`instrumentation.ts`) so workers start when the server starts.
 
 ---
 
-### Layout overview
+### Jobs to implement
 
-The page has two main areas side by side:
-
-**Left — Calendar panel (main, ~65% width)**
-- Full month calendar grid
-- Year + month navigation
-- Holidays rendered as colored chips on their dates
-- Clicking a date opens the Add Holiday modal (pre-filled with that date)
-- Clicking an existing holiday chip opens the Edit Holiday modal
-
-**Right — Holiday list panel (~35% width)**
-- Shows all holidays for the currently selected month, sorted by date
-- Each item shows: date, name, category badge, region (if area-specific)
-- Edit and delete actions per item
-- A "Load PH National Holidays" quick-fill button at the top (see below)
+Implement each job as a separate file under `lib/jobs/handlers/`. Each handler receives the job data and executes the async work.
 
 ---
 
-### Calendar grid specification
+#### Job 1: `payroll.run`
 
-- Display a standard 7-column grid: **Sun → Sat**
-- Header row: Sun · Mon · Tue · Wed · Thu · Fri · Sat (short labels, muted color)
-- Each day cell: shows the day number top-left
-- Cells for days outside the current month are greyed out and non-interactive
-- Today's date: subtle background highlight (e.g., `bg-blue-50 border border-blue-200`)
-- Holidays on a date appear as **colored pill chips** below the day number, stacked vertically if multiple holidays fall on the same date
-- If more than 2 holidays fall on one date, show 2 chips and a `+N more` overflow link
-- Month navigation: `← Previous` and `Next →` arrow buttons with the current month + year label centered between them (e.g., `June 2026`)
-- Year jump: a year selector dropdown next to the month label so HR can quickly jump to a different year (range: current year − 1 to current year + 3)
+**Trigger:** HR clicks "Generate New Run" on the Payroll Runs page.
 
----
+**Why async:** For tenants with 100+ employees, the Gross-to-Net loop can take 5–30 seconds — too long for a synchronous API route response. Offload it to a background job.
 
-### Holiday categories, colors, and payroll multipliers
+**Implementation:**
+1. The API route (`POST /api/payroll/runs`) creates a `payroll_books` record with `status = 'PROCESSING'` and immediately enqueues a `payroll.run` job with the `payroll_book_id`.
+2. Return a `202 Accepted` response to the client. The UI polls or subscribes via Supabase Realtime for the status change.
+3. The job handler executes the full Gross-to-Net waterfall for each active employee in the period.
+4. On completion: update `payroll_books.status = 'COMPLETED'`. On failure: set `status = 'FAILED'` and log the error.
 
-Use these 4 categories consistently across the calendar chips, list panel, and form dropdowns:
-
-| Category | Chip color | Badge label | DOLE Multiplier | Notes |
-|---|---|---|---|---|
-| Legal Holiday | Red — `bg-red-100 text-red-700 border-red-200` | Legal Holiday | 200% | Also called Regular Holiday under DOLE |
-| Special Non-Working Holiday | Amber — `bg-amber-100 text-amber-700 border-amber-200` | Special Non-Working | 130% | Nationwide, declared by proclamation |
-| Special One-Time Holiday | Purple — `bg-purple-100 text-purple-700 border-purple-200` | Special One-Time | 130% | Presidential proclamation, not recurring |
-| Area-Specific Holiday | Teal — `bg-teal-100 text-teal-700 border-teal-200` | Area-Specific | 130% | Region/city/province-level holiday |
-
-Show the DOLE multiplier as a small muted label inside the chips on the calendar (e.g., `Rizal Day · 200%`) so HR always sees the payroll impact at a glance.
-
----
-
-### Add / Edit Holiday modal
-
-Use the **centered floating modal** design from Prompt 1 (max-w-lg, rounded-2xl, header + scrollable body + footer).
-
-**Fields:**
-
-```
-Holiday Name *           [text input]
-Category *               [dropdown: Legal Holiday / Special Non-Working / Special One-Time / Area-Specific]
-Date *                   [date picker — pre-filled if opened by clicking a calendar cell]
-Recurring Annually       [toggle/checkbox — if ON, this holiday repeats every year on the same date]
-```
-
-**Conditional field — show only when Category = "Area-Specific":**
-
-```
-Region *                 [dropdown — Philippine regions listed below]
-Province / City          [optional text input or secondary dropdown for more granular scoping]
-```
-
-**Conditional field — scope (show for all categories):**
-
-```
-Scope                    [radio buttons]
-                           ○ Company-wide (applies to all branches)
-                           ○ Branch-specific (multiselect of active branches)
-```
-
-**If Branch-specific is selected:**
-```
-Select Branches *        [multiselect dropdown of all active company branches]
-```
-
-**Optional:**
-```
-Proclamation Reference   [text input, optional — e.g., "Proclamation No. 368, s. 2023"]
-Notes                    [textarea, optional]
-```
-
-**Footer buttons:**
-- Cancel — `variant outline`
-- Save Holiday — `bg-[#1E3A5F] text-white`
-
----
-
-### Philippine regions for the Area-Specific dropdown
-
-Populate the Region dropdown with the complete official list:
-
-```
-NCR — National Capital Region
-CAR — Cordillera Administrative Region
-Region I — Ilocos Region
-Region II — Cagayan Valley
-Region III — Central Luzon
-Region IV-A — CALABARZON
-Region IV-B — MIMAROPA
-Region V — Bicol Region
-Region VI — Western Visayas
-Region VII — Central Visayas
-Region VIII — Eastern Visayas
-Region IX — Zamboanga Peninsula
-Region X — Northern Mindanao
-Region XI — Davao Region
-Region XII — SOCCSKSARGEN
-Region XIII — Caraga
-BARMM — Bangsamoro Autonomous Region in Muslim Mindanao
+**Job data shape:**
+```typescript
+{ payroll_book_id: string; company_id: string; initiated_by: string }
 ```
 
 ---
 
-### "Load PH National Holidays" quick-fill button
+#### Job 2: `ot.approved`
 
-Place this button at the top of the right-side list panel. When clicked:
-- Show a confirmation modal: "Load official Philippine national holidays for [selected year]? This will not overwrite existing holidays — only add missing ones."
-- On confirm: seed the calendar with the standard Legal Holidays and Special Non-Working Holidays for the selected year
-- The pre-loaded holidays to seed (recurring annually):
+**Trigger:** An OT application's status is updated to `APPROVED`.
 
-**Legal Holidays (200%):**
-- January 1 — New Year's Day
-- April 9 — Araw ng Kagitingan (Bataan and Corregidor Day)
-- May 1 — Labor Day
-- June 12 — Independence Day
-- August 25 — National Heroes Day (last Monday of August — compute dynamically)
-- November 30 — Bonifacio Day
-- December 25 — Christmas Day
-- December 30 — Rizal Day
-- Moveable: Maundy Thursday, Good Friday (compute from Easter for the selected year)
-- Moveable: Eid'l Fitr, Eid'l Adha (mark as TBD if exact date not yet proclaimed — show with a `*` and a tooltip "Exact date subject to proclamation")
+**What it does:**
+1. Fetch the OT application: `{ employee_id, date, hours }`.
+2. Find the `daily_time_records` row for that `employee_id + date`.
+3. Update `ot_hours` to the approved value.
+4. Recalculate `total_hours_worked = effective_hours + ot_hours`.
+5. Write to `dtr_audit_logs`: `{ actor: 'SYSTEM', action: 'OT_APPROVAL_SYNC', ... }`.
+6. If no DTR row exists for the date (rest day OT), create one with `day_status = 'REST_DAY_OT'`.
+7. Invalidate the Redis cache key for this employee's leave/hours summary if it exists.
 
-**Special Non-Working Holidays (130%):**
-- August 21 — Ninoy Aquino Day
-- November 1 — All Saints' Day
-- November 2 — All Souls' Day
-- December 8 — Feast of the Immaculate Conception
-- December 24 — Christmas Eve
-- December 31 — New Year's Eve
-
-Do not seed Special One-Time or Area-Specific holidays — those are manual.
+**Job data shape:**
+```typescript
+{ ot_application_id: string; employee_id: string; date: string; hours: number; company_id: string }
+```
 
 ---
 
-### Delete behavior
+#### Job 3: `dtr.submitted`
 
-- Clicking Delete on a holiday shows a confirmation: "Delete [Holiday Name] on [Date]? This will remove it from payroll computation for all future runs."
-- If the holiday is `recurring = true`, ask: "Delete only this year's occurrence, or all future occurrences?"
-  - Option A: Delete this year only
-  - Option B: Delete permanently (removes the recurring record)
+**Trigger:** Employee submits their period DTR.
+
+**What it does:** Send a notification (email or in-app) to the assigned supervisor that a DTR is awaiting their review. Log the notification in the database.
+
+**Job data shape:**
+```typescript
+{ dtr_submission_id: string; employee_id: string; supervisor_id: string; period: string; company_id: string }
+```
 
 ---
 
-### Data model changes required
+#### Job 4: `payslip.publish`
 
-Add or update the `Holiday` table to support:
+**Trigger:** HR finalizes a payroll run (`payroll_books.status` changes to `FINALIZED`).
 
-```
-id
-company_id (tenant)
-name
-category: ENUM('LEGAL', 'SPECIAL_NON_WORKING', 'SPECIAL_ONE_TIME', 'AREA_SPECIFIC')
-date (YYYY-MM-DD)
-recurring_annually: boolean
-scope: ENUM('COMPANY_WIDE', 'BRANCH_SPECIFIC')
-branch_ids: array (null if company-wide)
-region: string (null unless AREA_SPECIFIC)
-province_city: string (optional)
-proclamation_reference: string (optional)
-notes: text (optional)
-created_by: user_id
-created_at
-updated_at
+**What it does:**
+1. For each employee in the payroll run, generate a PDF payslip using `@react-pdf/renderer`.
+2. Upload the PDF to Cloudflare R2 under `payslips/{company_id}/{payroll_book_id}/{employee_id}.pdf`.
+3. Update the `payroll_sheets` record with `payslip_url` (R2 object key).
+4. Mark the payslip as `published = true` so it appears in the employee's ESS.
+
+**Job data shape:**
+```typescript
+{ payroll_book_id: string; company_id: string }
 ```
 
-The payroll engine must read from this table when determining holiday multipliers. It should:
-1. Match by `date` for the payroll period
-2. Check `scope` — if `BRANCH_SPECIFIC`, only apply to employees assigned to the matching branches
-3. If `AREA_SPECIFIC`, only apply to employees whose assigned branch is in the matching region
+---
+
+#### Cron Job: `leave.accrual`
+
+**Schedule:** Run on the 1st of every month at 1:00 AM.
+
+**What it does:** For every active employee with an accrual-type leave policy (not lump-sum), compute and add the monthly accrual amount to their `leave_entitlements` balance. Cap at the policy's `max_accrual_balance` if set.
+
+**Setup:** Register this as a pg-boss cron schedule in `workers.ts`:
+```typescript
+await boss.schedule('leave.accrual', '0 1 1 * *');
+```
+
+---
+
+### Error handling for all jobs
+
+- All jobs must have a `retryLimit` of 3 with exponential backoff.
+- On final failure, write to an `job_failures` log table: `{ job_name, job_data, error_message, failed_at }`.
+- Do not throw unhandled errors — always catch and log.
+
+---
+
+## ITEM 3 — Caching with Upstash Redis
+
+### Installation
+
+```bash
+npm install @upstash/redis
+```
+
+### Setup
+
+Create a singleton Redis client at `lib/cache/client.ts`:
+
+```typescript
+import { Redis } from '@upstash/redis';
+
+export const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+```
+
+Add to `.env.local`:
+```
+UPSTASH_REDIS_REST_URL=your_url
+UPSTASH_REDIS_REST_TOKEN=your_token
+```
+
+---
+
+### Cache utility
+
+Create a generic cache helper at `lib/cache/cache.ts` with a `getOrSet` function:
+
+```typescript
+export async function getOrSet<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlSeconds?: number
+): Promise<T> {
+  const cached = await redis.get<T>(key);
+  if (cached !== null) return cached;
+  const fresh = await fetcher();
+  if (ttlSeconds) {
+    await redis.set(key, fresh, { ex: ttlSeconds });
+  } else {
+    await redis.set(key, fresh);
+  }
+  return fresh;
+}
+
+export async function invalidate(key: string): Promise<void> {
+  await redis.del(key);
+}
+
+export async function invalidatePattern(pattern: string): Promise<void> {
+  const keys = await redis.keys(pattern);
+  if (keys.length > 0) await redis.del(...keys);
+}
+```
+
+---
+
+### Cache keys and TTLs — implement exactly as specified
+
+Create constants at `lib/cache/keys.ts`:
+
+```typescript
+export const CacheKeys = {
+  statutory: (companyId: string, type: string) =>
+    `sentire:${companyId}:statutory:${type}`,
+
+  geofence: (companyId: string, branchId: string) =>
+    `sentire:${companyId}:geofence:${branchId}`,
+
+  employeeProfile: (companyId: string, employeeId: string) =>
+    `sentire:${companyId}:employee:${employeeId}`,
+
+  holidayCalendar: (companyId: string, year: number) =>
+    `sentire:${companyId}:holidays:${year}`,
+
+  leaveBalance: (companyId: string, employeeId: string) =>
+    `sentire:${companyId}:leave:${employeeId}`,
+
+  payrollSheet: (payrollSheetId: string) =>
+    `sentire:payroll_sheet:${payrollSheetId}`,
+};
+
+export const TTL = {
+  STATUTORY: 60 * 60 * 24 * 30,  // 30 days
+  GEOFENCE: 60 * 60,              // 1 hour
+  EMPLOYEE_PROFILE: 60 * 15,      // 15 minutes
+  HOLIDAY_CALENDAR: 60 * 60 * 24, // 24 hours
+  LEAVE_BALANCE: 60 * 5,          // 5 minutes
+  PAYROLL_SHEET: undefined,       // indefinite — immutable once finalized
+};
+```
+
+---
+
+### Where to apply caching — integrate at these exact points
+
+**1. Statutory tables** — wrap the DB fetch in the payroll computation engine:
+```typescript
+const sssTable = await getOrSet(
+  CacheKeys.statutory(companyId, 'sss'),
+  () => db.statutory_tables.findMany({ where: { type: 'SSS', company_id: companyId } }),
+  TTL.STATUTORY
+);
+```
+Apply the same pattern for `philhealth`, `pagibig`, and `bir_train`.
+
+**2. Branch geofence** — wrap the fetch in the clock-in API route (`POST /api/attendance/clock-in`):
+```typescript
+const geofence = await getOrSet(
+  CacheKeys.geofence(companyId, branchId),
+  () => db.branches.findUnique({ where: { id: branchId }, select: { geofence_lat, geofence_lng, geofence_radius_meters } }),
+  TTL.GEOFENCE
+);
+```
+**Invalidate** in the branch geofence update API route after a successful save.
+
+**3. Employee profile + shift** — wrap the fetch in any route that reads employee profile for computation (clock-in, DTR generation, payroll run):
+```typescript
+const employee = await getOrSet(
+  CacheKeys.employeeProfile(companyId, employeeId),
+  () => db.employee_profiles.findUnique({ where: { id: employeeId } }),
+  TTL.EMPLOYEE_PROFILE
+);
+```
+**Invalidate** when a Profile Update Request is approved.
+
+**4. Holiday calendar** — wrap the fetch in the payroll engine's holiday lookup:
+```typescript
+const holidays = await getOrSet(
+  CacheKeys.holidayCalendar(companyId, year),
+  () => db.holidays.findMany({ where: { company_id: companyId, year } }),
+  TTL.HOLIDAY_CALENDAR
+);
+```
+**Invalidate** when HR adds, edits, or deletes a holiday.
+
+**5. Leave balance summary** — wrap the ESS leave balance fetch:
+```typescript
+const balance = await getOrSet(
+  CacheKeys.leaveBalance(companyId, employeeId),
+  () => db.leave_entitlements.findMany({ where: { employee_id: employeeId } }),
+  TTL.LEAVE_BALANCE
+);
+```
+**Invalidate** when a leave request is approved or rejected.
+
+**6. Finalized Payroll Sheets** — cache after a payroll sheet is frozen:
+```typescript
+await redis.set(CacheKeys.payrollSheet(payrollSheetId), payrollSheetData);
+```
+Never invalidate this key — payroll sheets are immutable by design.
+
+---
+
+### Environment variables to add
+
+```
+# pg-boss (uses existing Supabase DB — same DATABASE_URL already in use)
+# No additional env vars needed for pg-boss
+
+# Upstash Redis
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
 
 ---
 
 ### Validation checklist after implementation
 
-- [ ] Calendar renders as a proper month grid with correct day-of-week alignment
-- [ ] Month and year navigation works correctly
-- [ ] Holiday chips appear on the correct dates with the correct category colors
-- [ ] DOLE multiplier (200% / 130%) is visible on each chip
-- [ ] Clicking a date opens Add Holiday modal with date pre-filled
-- [ ] Clicking a chip opens Edit Holiday modal pre-filled with that holiday's data
-- [ ] Area-Specific category shows the Region dropdown
-- [ ] Branch-specific scope shows the branch multiselect
-- [ ] Load PH National Holidays seeds correctly without overwriting existing entries
-- [ ] Moveable holidays (Easter-based, Eid) are computed correctly or flagged as TBD
-- [ ] Delete with recurring confirmation works for both single-year and permanent deletion
-- [ ] Payroll engine correctly reads holiday data by date, scope, and branch
-- [ ] Area-Specific holidays only apply to employees in the matching region's branches
+- [ ] pg-boss initializes on server start without errors
+- [ ] `payroll.run` job is enqueued when HR clicks Generate New Run — API returns 202 immediately
+- [ ] Payroll run completes asynchronously and updates `payroll_books.status` to COMPLETED
+- [ ] `ot.approved` job fires when OT status changes to APPROVED and updates the correct DTR row
+- [ ] `payslip.publish` job fires after payroll finalization and uploads PDFs to R2
+- [ ] `leave.accrual` cron is registered and runs on schedule
+- [ ] Failed jobs after 3 retries are logged to `job_failures` table
+- [ ] Upstash Redis client connects without errors
+- [ ] Statutory tables are fetched from cache on the second payroll run (no DB query)
+- [ ] Geofence data is served from cache on second clock-in for the same branch
+- [ ] Cache invalidates correctly when geofence is updated by HR
+- [ ] Leave balance invalidates when a leave request is approved
+- [ ] Finalized payroll sheets are cached indefinitely and never re-fetched from DB
+- [ ] No existing API routes, payroll logic, or auth flows are broken
 
 ---
 
-*Do not change the payroll computation multipliers — those are already correct in the engine. Only fix the Holiday Calendar UI, its data model, and the engine's holiday lookup query.*
+*Do not install Inngest, Vercel Cron, or any other job queue. Do not replace pg-boss with a different tool. Do not add Vercel KV — use Upstash Redis only.*

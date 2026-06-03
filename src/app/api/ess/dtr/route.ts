@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
     return ok(result);
   } catch (e) {
     console.error("[ess/dtr GET]", e);
-    return serverError();
+    return serverError(e);
   }
 }
 
@@ -246,9 +246,9 @@ export async function POST(req: NextRequest) {
     if (result.alreadySubmitted) {
       return err("DTR for this period has already been submitted.", 409);
     }
-    return ok({ id: result.submission.id, status: result.submission.status }, 201);
+    return ok({ id: result.submission.id, status: result.submission.status }, undefined, 201);
   } catch (e) {
     console.error("[ess/dtr POST]", e);
-    return serverError();
+    return serverError(e);
   }
 }

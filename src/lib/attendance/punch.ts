@@ -27,7 +27,7 @@ export interface PunchInput {
   source:     PunchSource;
   kioskId?:   string | null;
   selfieKey?:  string | null;
-  selfieData?: Buffer | null;
+  selfieData?: Uint8Array<ArrayBuffer> | null;
   latitude?:  number | null;
   longitude?: number | null;
   ipAddress?: string | null;

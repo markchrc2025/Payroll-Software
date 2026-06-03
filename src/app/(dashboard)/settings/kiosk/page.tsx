@@ -419,7 +419,7 @@ export default function KiosksPage() {
               <Label htmlFor="kiosk-branch">Branch</Label>
               <Select
                 value={form.branchId}
-                onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, branchId: v ?? f.branchId }))}
               >
                 <SelectTrigger id="kiosk-branch">
                   <SelectValue placeholder="No branch assigned" />

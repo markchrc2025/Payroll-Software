@@ -164,7 +164,7 @@ export async function POST(
         tenantId: auth.tenantId,
         employeeId,
         effectiveFrom: { lte: periodEndDate },
-        OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: periodStartDate } }],
       },
       orderBy: { effectiveFrom: "desc" },
       include: {

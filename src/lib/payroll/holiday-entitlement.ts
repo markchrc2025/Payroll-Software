@@ -39,7 +39,7 @@ export async function isEntitledToHolidayPay(
       tenantId,
       employeeId,
       effectiveFrom: { lte: holidayDate },
-      OR: [{ endDate: null }, { endDate: { gte: holidayDate } }],
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: holidayDate } }],
     },
     orderBy: { effectiveFrom: "desc" },
     include: { shiftSchedule: { select: { workDays: true } } },

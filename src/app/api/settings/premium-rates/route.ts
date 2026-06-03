@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest) {
 
   const parsed = putSchema.safeParse(body);
   if (!parsed.success) {
-    return err(parsed.error.flatten().fieldErrors, 422);
+    return err("Validation failed", 422, parsed.error.flatten().fieldErrors);
   }
 
   // Validate each rate >= DOLE floor
@@ -97,7 +97,7 @@ export async function PUT(req: NextRequest) {
     }
   }
   if (violations.length > 0) {
-    return err({ message: "Rate below DOLE minimum", violations }, 422);
+    return err("Rate below DOLE minimum", 422, { violations });
   }
 
   await withTenant(auth.tenantId, async (tx) => {

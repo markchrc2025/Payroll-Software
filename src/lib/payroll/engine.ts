@@ -124,7 +124,7 @@ function resolveMultipliers(config?: ComputeMultiplierConfig): ResolvedMultiplie
     DOUBLE_HOLIDAY_REST_DAY_OT:  config.DOUBLE_HOLIDAY_REST_DAY_OT  ?? DOLE_DEFAULTS.DOUBLE_HOLIDAY_REST_DAY_OT,
     HAZARD:                      config.HAZARD                      ?? DOLE_DEFAULTS.HAZARD,
     NO_WORK_REGULAR_HOLIDAY:     config.NO_WORK_REGULAR_HOLIDAY     ?? DOLE_DEFAULTS.NO_WORK_REGULAR_HOLIDAY,
-  };
+  } as ResolvedMultipliers;
 }
 
 // ---------------------------------------------------------------------------

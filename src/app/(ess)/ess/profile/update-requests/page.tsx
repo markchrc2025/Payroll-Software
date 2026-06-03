@@ -285,7 +285,7 @@ export default function EssProfileUpdateRequestsPage() {
               <Select
                 value={form.field || "none"}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, field: v === "none" ? "" : v }))
+                  setForm((f) => ({ ...f, field: !v || v === "none" ? "" : v }))
                 }
               >
                 <SelectTrigger>

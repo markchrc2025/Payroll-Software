@@ -52,7 +52,7 @@ export function EssPinCard({ employeeId, hasPin: initialHasPin }: EssPinCardProp
   }
 
   async function handleClear() {
-    if (!confirm(`Are you sure you want to clear this employee's ESS PIN? They will only be able to log in with their date of birth.`)) return;
+    if (!window.confirm(`Are you sure you want to clear this employee's ESS PIN? They will only be able to log in with their date of birth.`)) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/employees/${employeeId}/ess-pin`, {

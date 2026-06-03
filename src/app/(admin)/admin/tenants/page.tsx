@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -22,14 +21,6 @@ import {
   SheetTitle,
   SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type SubscriptionTier = "STARTER" | "GROWTH" | "PRO";
@@ -44,19 +35,20 @@ interface Tenant {
   subscriptionTier: SubscriptionTier;
   subscriptionStatus: SubscriptionStatus;
   createdAt: string;
+  _count?: { employees: number };
 }
 
-const TIER_BADGE: Record<SubscriptionTier, string> = {
-  STARTER: "secondary",
-  GROWTH: "default",
-  PRO: "outline",
+const TIER_COLOR: Record<SubscriptionTier, { bg: string; text: string }> = {
+  STARTER: { bg: "bg-gray-100",   text: "text-gray-700" },
+  GROWTH:  { bg: "bg-blue-100",   text: "text-blue-700" },
+  PRO:     { bg: "bg-violet-100", text: "text-violet-700" },
 };
 
-const STATUS_BADGE: Record<SubscriptionStatus, string> = {
-  ACTIVE: "outline",
-  TRIALING: "default",
-  PAST_DUE: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  CANCELLED: "destructive",
+const STATUS_COLOR: Record<SubscriptionStatus, { bg: string; text: string; label: string }> = {
+  ACTIVE:    { bg: "bg-green-50",  text: "text-green-700",  label: "Active" },
+  TRIALING:  { bg: "bg-amber-50",  text: "text-amber-800",  label: "Trial" },
+  PAST_DUE:  { bg: "bg-amber-50",  text: "text-amber-800",  label: "Overdue" },
+  CANCELLED: { bg: "bg-red-50",    text: "text-red-700",    label: "Cancelled" },
 };
 
 const KNOWN_FLAGS = [
@@ -80,6 +72,8 @@ export default function TenantsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tierFilter, setTierFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const [form, setForm] = useState({
     name: "",
@@ -169,87 +163,126 @@ export default function TenantsPage() {
     }
   }
 
+  const visibleTenants = tenants.filter((t) => {
+    if (tierFilter !== "ALL" && t.subscriptionTier !== tierFilter) return false;
+    if (statusFilter !== "ALL" && t.subscriptionStatus !== statusFilter) return false;
+    return true;
+  });
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage all organizations on the platform</p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>+ New Tenant</Button>
+    <div className="p-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3.5">
+        <p className="text-sm font-medium text-gray-900">
+          Tenants <span className="text-xs text-gray-400 font-normal ml-1">{loading ? "" : `${tenants.length} total`}</span>
+        </p>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center gap-1.5 bg-[#1E3A5F] text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-[#16304f] transition-colors"
+        >
+          <span className="text-sm leading-none">+</span> Add tenant
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4 max-w-sm">
+      {/* Filters */}
+      <div className="flex gap-2 mb-3">
         <Input
-          placeholder="Search by name or subdomain…"
+          placeholder="Search tenants..."
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
+          className="flex-1 text-xs h-8 border-gray-200"
         />
+        <select
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+          className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-600 bg-white outline-none cursor-pointer"
+        >
+          <option value="ALL">All plans</option>
+          {TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-600 bg-white outline-none cursor-pointer"
+        >
+          <option value="ALL">All status</option>
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
       {/* Table */}
-      <div className="rounded-md border bg-white overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Subdomain</TableHead>
-              <TableHead>Industry</TableHead>
-              <TableHead>Tier</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+        <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left py-2.5 px-3 text-[10px] text-gray-500 font-medium w-[28%]">Company</th>
+              <th className="text-left py-2.5 px-2 text-[10px] text-gray-500 font-medium w-[14%]">Plan</th>
+              <th className="text-left py-2.5 px-2 text-[10px] text-gray-500 font-medium w-[10%]">Emp.</th>
+              <th className="text-left py-2.5 px-2 text-[10px] text-gray-500 font-medium w-[13%]">Status</th>
+              <th className="text-left py-2.5 px-2 text-[10px] text-gray-500 font-medium w-[16%]">Industry</th>
+              <th className="text-left py-2.5 px-2 text-[10px] text-gray-500 font-medium w-[19%]">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
+                <tr key={i} className="border-b border-gray-50">
                   {Array.from({ length: 6 }).map((__, j) => (
-                    <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
+                    <td key={j} className="py-2.5 px-3">
+                      <Skeleton className="h-3.5 w-20" />
+                    </td>
                   ))}
-                </TableRow>
+                </tr>
               ))
-            ) : tenants.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-400 py-10">
+            ) : visibleTenants.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center text-gray-400 text-xs py-10">
                   No tenants found.
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : (
-              tenants.map((t) => (
-                <TableRow
-                  key={t.id}
-                  className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => router.push(`/admin/tenants/${t.id}`)}
-                >
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-gray-500">{t.subdomain ?? "—"}</TableCell>
-                  <TableCell className="text-gray-500">{t.industry ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant={TIER_BADGE[t.subscriptionTier] as "default" | "secondary" | "outline" | "destructive"}>
-                      {t.subscriptionTier}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {STATUS_BADGE[t.subscriptionStatus].startsWith("bg-") ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE[t.subscriptionStatus]}`}>
-                        {t.subscriptionStatus}
+              visibleTenants.map((t) => {
+                const tier = TIER_COLOR[t.subscriptionTier];
+                const status = STATUS_COLOR[t.subscriptionStatus];
+                return (
+                  <tr
+                    key={t.id}
+                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="py-2.5 px-3">
+                      <p className="text-xs font-medium text-gray-900 truncate">{t.name}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{t.subdomain ?? t.id.slice(0, 12)}</p>
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <span className={`text-[10px] rounded-full px-2 py-0.5 ${tier.bg} ${tier.text}`}>
+                        {t.subscriptionTier}
                       </span>
-                    ) : (
-                      <Badge variant={STATUS_BADGE[t.subscriptionStatus] as "default" | "secondary" | "outline" | "destructive"}>
-                        {t.subscriptionStatus}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-gray-500">
-                    {new Date(t.createdAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))
+                    </td>
+                    <td className="py-2.5 px-2 text-xs text-gray-600">
+                      {t._count?.employees ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <span className={`text-[10px] rounded-full px-2 py-0.5 ${status.bg} ${status.text}`}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2 text-[11px] text-gray-500 truncate">
+                      {t.industry ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <button
+                        onClick={() => router.push(`/admin/tenants/${t.id}`)}
+                        className="text-[10px] border border-gray-200 rounded-md px-2.5 py-1 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
 
       {/* Pagination */}
@@ -258,7 +291,7 @@ export default function TenantsPage() {
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Previous
           </Button>
-          <span className="text-sm text-gray-500 self-center">Page {page} of {totalPages}</span>
+          <span className="text-xs text-gray-500 self-center">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
             Next
           </Button>

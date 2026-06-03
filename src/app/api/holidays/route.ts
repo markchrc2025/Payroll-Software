@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/require-permission";
 import { withTenant } from "@/lib/with-tenant";
 import { ok, err, serverError } from "@/lib/api-response";
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
       }
 
       return tx.holiday.findMany({
-        where: where as Parameters<typeof tx.holiday.findMany>[0]["where"],
+        where: where as Prisma.HolidayWhereInput,
         orderBy: { date: "asc" },
       });
     });

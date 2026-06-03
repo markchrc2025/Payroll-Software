@@ -1,44 +1,34 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getSuperAdminContext } from "@/lib/super-admin-auth";
-
-const navItems = [
-  { href: "/admin/tenants", label: "Tenants" },
-  { href: "/admin/statutory", label: "Statutory Rules" },
-  { href: "/admin/audit-log", label: "Audit Log" },
-];
+import { AdminSidebarNav } from "@/components/admin/AdminSidebarNav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getSuperAdminContext();
   if (!ctx) {
-    redirect("/login?callbackUrl=/admin/tenants");
+    redirect("/login?callbackUrl=/admin/dashboard");
   }
 
+  const initials = "SA";
+
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="px-4 py-5 border-b border-gray-200">
-          <p className="font-bold text-gray-900 text-sm">Sentire Payroll</p>
-          <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 uppercase tracking-wider">
-            SUPER_ADMIN
-          </span>
+    <div className="min-h-screen flex bg-[#F8FAFC]">
+      {/* Icon sidebar */}
+      <aside className="w-14 bg-[#1E3A5F] flex flex-col items-center py-3 gap-1 shrink-0">
+        {/* Logo */}
+        <div className="w-9 h-9 rounded-[9px] bg-white/10 flex items-center justify-center mb-3">
+          <span className="text-white text-sm font-semibold">S</span>
         </div>
-        <nav className="flex-1 py-4">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 rounded mx-2 mb-0.5 transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+
+        <AdminSidebarNav />
+
+        {/* Bottom: user avatar */}
+        <div className="mt-auto w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+          <span className="text-white text-xs font-medium">{initials}</span>
+        </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-8">{children}</main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }

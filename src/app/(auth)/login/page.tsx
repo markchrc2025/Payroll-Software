@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -18,9 +19,10 @@ import {
 } from "@/components/ui/card";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  // Guard against open-redirect: only allow relative paths
+  const rawCallback = searchParams.get("callbackUrl") ?? "/";
+  const callbackUrl = rawCallback.startsWith("/") ? rawCallback : "/";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,8 +45,10 @@ function LoginForm() {
       }
 
       toast.success("Signed in. Redirecting…");
-      router.replace(callbackUrl);
-      router.refresh();
+      // Full browser navigation so the session cookie is included in the
+      // very first request (client-side router.replace can race against the
+      // Set-Cookie header being committed in App Router server components).
+      window.location.href = callbackUrl;
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
@@ -79,7 +83,15 @@ function LoginForm() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <Input
               id="password"
               name="password"

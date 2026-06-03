@@ -346,6 +346,7 @@ export function EmployeeProfileClient({
   }
 
   return (
+    <>
     <div
       className="grid gap-[18px]"
       style={{ gridTemplateColumns: "1fr 2fr" }}
@@ -441,5 +442,6 @@ export function EmployeeProfileClient({
           </form>
         </DialogContent>
       </Dialog>
+    </>
   );
 }

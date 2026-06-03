@@ -446,7 +446,7 @@ export default function HolidayCalendarPage() {
                 return (
                   <div
                     key={cell.dateStr}
-                    onClick={() => openAdd(cell.dateStr)}
+                    onClick={() => openAdd(cell.dateStr ?? "")}
                     className={`min-h-[84px] p-1.5 border-b border-r border-[#F0F2F7] cursor-pointer transition-colors hover:bg-[#F5F9FF] flex flex-col gap-0.5 ${isToday ? "bg-blue-50 border-blue-200" : ""}`}
                   >
                     <span className={`text-[12px] font-semibold self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? "bg-blue-500 text-white" : "text-[#374151]"}`}>
@@ -487,7 +487,7 @@ export default function HolidayCalendarPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 flex-wrap">
                           <span className="text-[12px] font-medium text-[#374151] truncate">{h.isTentative ? "* " : ""}{h.name}</span>
-                          {h.isTentative && <Info className="h-3 w-3 text-[#9AA5B4] flex-shrink-0" title="Exact date subject to proclamation" />}
+                          {h.isTentative && <Info className="h-3 w-3 text-[#9AA5B4] flex-shrink-0" aria-label="Exact date subject to proclamation" />}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-[11px] text-[#6B7A8D]">{dateLabel}</span>
@@ -566,7 +566,7 @@ export default function HolidayCalendarPage() {
               <>
                 <div className="space-y-1.5">
                   <Label>Region <span className="text-red-500">*</span></Label>
-                  <Select value={form.region} onValueChange={(v) => setForm(f => ({ ...f, region: v }))}>
+                  <Select value={form.region} onValueChange={(v) => setForm(f => ({ ...f, region: v ?? "" }))}>
                     <SelectTrigger><SelectValue placeholder="Select region…" /></SelectTrigger>
                     <SelectContent>
                       {PH_REGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}

@@ -310,7 +310,7 @@ export default function EssExpenseClaimsPage() {
               <Select
                 value={form.category}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, category: v }))
+                  setForm((f) => ({ ...f, category: v ?? f.category }))
                 }
               >
                 <SelectTrigger>
