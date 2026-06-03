@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Exclude build caches and tmp dirs so Tailwind never scans compiled artefacts.
+   Paths are relative to this file (src/app/globals.css): ../../ = project root */
+@source not "../../tmp";
+@source not "../../.next";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

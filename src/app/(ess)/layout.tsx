@@ -41,7 +41,7 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
 
   if (isLogin) {
     return (
-      <div className="min-h-screen bg-[#F0F4F8] font-[family-name:var(--font-plus-jakarta-sans)]">
+      <div className="min-h-screen bg-[#F0F4F8]" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
         {children}
       </div>
     );
@@ -57,7 +57,7 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
   )?.label ?? "Home";
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] font-[family-name:var(--font-plus-jakarta-sans)] lg:flex">
+    <div className="min-h-screen bg-[#F0F4F8] lg:flex" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
 
       {/* ── Desktop Sidebar ─────────────────────────────────────────────── */}
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-60 bg-[#1E3A5F] z-40">

@@ -36,7 +36,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     "/tmp/payroll-next-dev/types/**/*.ts",
-    "/tmp/payroll-next-dev/dev/types/**/*.ts"
+    "/tmp/payroll-next-dev/dev/types/**/*.ts",
+    "tmp/payroll-next-dev/types/**/*.ts",
+    "tmp/payroll-next-dev/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
