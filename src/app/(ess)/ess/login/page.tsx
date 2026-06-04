@@ -1,9 +1,9 @@
 "use client";
 
 
-export const dynamic = "force-dynamic";
 
-import { useState, useEffect, useRef } from "react";
+
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Building2, IdCard, CalendarDays, Delete } from "lucide-react";
@@ -89,7 +89,7 @@ const INPUT_CLS =
   "w-full pl-9 pr-3 py-2.5 text-[13px] text-gray-900 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] transition";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function EssLoginPage() {
+function EssLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -338,5 +338,20 @@ export default function EssLoginPage() {
 
       </div>
     </div>
+  );
+}
+
+
+export default function EssLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <div className="text-gray-400 text-sm">Loading…</div>
+        </div>
+      }
+    >
+      <EssLoginContent />
+    </Suspense>
   );
 }
