@@ -10,6 +10,7 @@ interface Tenant {
   id: string;
   name: string;
   tradeName: string | null;
+  companyCode: string | null;
   subdomain: string | null;
   industry: string | null;
   billingEmail: string | null;
@@ -73,8 +74,11 @@ export default function TenantOverviewPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     fetch(`/api/admin/tenants/${id}`)
-      .then((r) => r.json())
-      .then((j) => setTenant(j.data))
+      .then(async (r) => {
+        if (!r.ok) return;
+        const j = await r.json();
+        setTenant(j.data);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -130,6 +134,11 @@ export default function TenantOverviewPage({ params }: { params: Promise<{ id: s
                 <InfoRow label="Billing email" value={
                   tenant.billingEmail
                     ? <a href={`mailto:${tenant.billingEmail}`} className="hover:underline" style={{ color: "#1E3A5F" }}>{tenant.billingEmail}</a>
+                    : <span style={{ color: "#9CA3AF" }}>—</span>
+                } />
+                <InfoRow label="Company Code" value={
+                  tenant.companyCode
+                    ? <span className="font-mono font-medium tracking-widest" style={{ color: "#1E3A5F" }}>{tenant.companyCode}</span>
                     : <span style={{ color: "#9CA3AF" }}>—</span>
                 } />
                 <InfoRow label="Subdomain" value={

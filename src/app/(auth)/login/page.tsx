@@ -26,6 +26,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -36,6 +37,7 @@ function LoginForm() {
       const res = await signIn("credentials", {
         email,
         password,
+        companyCode: companyCode.trim().toUpperCase(),
         redirect: false,
       });
 
@@ -68,6 +70,23 @@ function LoginForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="companyCode">Company Code</Label>
+            <Input
+              id="companyCode"
+              name="companyCode"
+              type="text"
+              autoComplete="organization"
+              placeholder="e.g. DEMOCORP"
+              value={companyCode}
+              onChange={(e) => setCompanyCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              disabled={submitting}
+              className="font-mono tracking-widest"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Leave blank if you are a Sentire Super Admin.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -118,10 +137,11 @@ function LoginForm() {
 
           <p className="text-center text-xs text-muted-foreground pt-2">
             Demo:{" "}
-            <span className="font-mono text-foreground/70">
-              admin@democorp.ph
-            </span>{" "}
-            / <span className="font-mono text-foreground/70">Admin1234!</span>
+            <span className="font-mono text-foreground/70">DEMOCORP</span>
+            {" · "}
+            <span className="font-mono text-foreground/70">imarksky@gmail.com</span>
+            {" / "}
+            <span className="font-mono text-foreground/70">Admin1234!</span>
           </p>
         </form>
       </CardContent>

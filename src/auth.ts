@@ -21,6 +21,7 @@ import type { SystemRole } from "@prisma/client";
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  companyCode: z.string().optional(),
 });
 
 declare module "next-auth" {
@@ -54,30 +55,60 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        companyCode: { label: "Company Code", type: "text" },
       },
       authorize: async (raw) => {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
+        const { email, password, companyCode } = parsed.data;
 
-        const user = await prismaAdmin.user.findFirst({
-          where: {
-            email: email.toLowerCase(),
-            isActive: true,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-            email: true,
-            passwordHash: true,
-            firstName: true,
-            lastName: true,
-            tenantId: true,
-            systemRole: true,
-            roleId: true,
-          },
-        });
+        let user: {
+          id: string;
+          email: string;
+          passwordHash: string;
+          firstName: string;
+          lastName: string;
+          tenantId: string | null;
+          systemRole: SystemRole;
+          roleId: string | null;
+        } | null = null;
+
+        if (companyCode && companyCode.trim()) {
+          // Tenant user login — verify company code and scope the user lookup
+          const tenant = await prismaAdmin.tenant.findFirst({
+            where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
+            select: { id: true },
+          });
+          if (!tenant) return null;
+
+          user = await prismaAdmin.user.findFirst({
+            where: {
+              email: email.toLowerCase(),
+              tenantId: tenant.id,
+              isActive: true,
+              deletedAt: null,
+            },
+            select: {
+              id: true, email: true, passwordHash: true, firstName: true,
+              lastName: true, tenantId: true, systemRole: true, roleId: true,
+            },
+          });
+        } else {
+          // Super admin login — no company code, only allow SUPER_ADMIN accounts
+          user = await prismaAdmin.user.findFirst({
+            where: {
+              email: email.toLowerCase(),
+              systemRole: "SUPER_ADMIN",
+              isActive: true,
+              deletedAt: null,
+            },
+            select: {
+              id: true, email: true, passwordHash: true, firstName: true,
+              lastName: true, tenantId: true, systemRole: true, roleId: true,
+            },
+          });
+        }
 
         if (!user) return null;
 

@@ -91,7 +91,7 @@ export default function EssLoginPage() {
   const searchParams = useSearchParams();
 
   const [mode, setMode] = useState<"dob" | "pin">("dob");
-  const [tenantId, setTenantId] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [pin, setPin] = useState("");
@@ -100,9 +100,9 @@ export default function EssLoginPage() {
   const tenantFromQuery = searchParams.get("tenant");
 
   useEffect(() => {
-    if (tenantFromQuery) { setTenantId(tenantFromQuery); return; }
+    if (tenantFromQuery) { setCompanyCode(tenantFromQuery.toUpperCase().replace(/[^A-Z0-9]/g, "")); return; }
     const parts = window.location.hostname.split(".");
-    if (parts.length >= 3) setTenantId(parts[0]);
+    if (parts.length >= 3) setCompanyCode(parts[0].toUpperCase().replace(/[^A-Z0-9]/g, ""));
   }, [tenantFromQuery]);
 
   // Reset PIN when switching mode
@@ -113,8 +113,8 @@ export default function EssLoginPage() {
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (!tenantId.trim()) {
-      toast.error("Company ID is required.");
+    if (!companyCode.trim()) {
+      toast.error("Company Code is required.");
       return;
     }
     if (!employeeNumber.trim()) {
@@ -122,7 +122,7 @@ export default function EssLoginPage() {
       return;
     }
     setLoading(true);
-    const body: Record<string, string> = { tenantId: tenantId.trim(), employeeNumber: employeeNumber.trim() };
+    const body: Record<string, string> = { companyCode: companyCode.trim().toUpperCase(), employeeNumber: employeeNumber.trim() };
     if (mode === "dob") body.birthDate = birthDate;
     else body.pin = pin;
 
@@ -173,14 +173,14 @@ export default function EssLoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3.5">
-        {/* Company ID */}
+        {/* Company Code */}
         {!tenantFromQuery && (
-          <Field label="Company ID" icon={Building2}>
+          <Field label="Company Code" icon={Building2}>
             <input
-              className={INPUT_CLS}
-              placeholder="e.g. acme"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
+              className={INPUT_CLS + " font-mono tracking-widest"}
+              placeholder="e.g. DEMOCORP"
+              value={companyCode}
+              onChange={(e) => setCompanyCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
               autoCapitalize="none"
               autoCorrect="off"
               required

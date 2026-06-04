@@ -31,6 +31,7 @@ interface WizardState {
   adminEmail: string;
   adminPhone: string;
   adminPassword: string;
+  companyCode: string;
   subdomain: string;
 }
 
@@ -39,7 +40,7 @@ const INITIAL: WizardState = {
   province: "", city: "", zipCode: "",
   plan: "GROWTH", accountStatus: "TRIALING", trialEndsAt: "", billingEmail: "",
   adminFirstName: "", adminLastName: "", adminEmail: "", adminPhone: "",
-  adminPassword: "", subdomain: "",
+  adminPassword: "", companyCode: "", subdomain: "",
 };
 
 const PLANS: { key: Plan; label: string; limit: string; price: string }[] = [
@@ -70,6 +71,9 @@ const REGIONS = [
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+function toCompanyCode(s: string) {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -145,7 +149,11 @@ function Step1({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
       <div className="grid grid-cols-2 gap-3 mb-3">
         <FieldGroup label="Legal company name" required>
           <FInput value={w.name} placeholder="Acme Corp Inc."
-            onChange={(v) => { set({ name: v }); if (!w.subdomain || w.subdomain === slugify(w.name)) set({ subdomain: slugify(v) }); }} />
+            onChange={(v) => {
+              set({ name: v });
+              if (!w.subdomain || w.subdomain === slugify(w.name)) set({ subdomain: slugify(v) });
+              if (!w.companyCode || w.companyCode === toCompanyCode(w.name)) set({ companyCode: toCompanyCode(v) });
+            }} />
         </FieldGroup>
         <FieldGroup label="Trade / DBA name">
           <FInput value={w.tradeName} placeholder="Acme Corp" onChange={(v) => set({ tradeName: v })} />
@@ -274,6 +282,19 @@ function Step3({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
       </div>
 
       <SectionTitle>Portal access</SectionTitle>
+      <FieldGroup label="Company Code" required hint="Used by employees and admins to identify your company at login. Uppercase letters and numbers only, max 20 characters.">
+        <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #D1D5DB" }}>
+          <input
+            type="text"
+            value={w.companyCode}
+            onChange={(e) => set({ companyCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) })}
+            placeholder="ACMECORP"
+            className="flex-1 px-2.5 py-[7px] text-[13px] outline-none font-mono tracking-widest"
+            style={{ background: "white", color: "#111827" }}
+          />
+        </div>
+      </FieldGroup>
+      <div className="mt-3" />
       <FieldGroup label="App subdomain" hint="Auto-generated from company name. Only lowercase letters, numbers, and hyphens.">
         <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #D1D5DB" }}>
           <span className="px-2.5 py-[7px] text-[12px] shrink-0" style={{ background: "#F9FAFB", borderRight: "0.5px solid #D1D5DB", color: "#6B7280" }}>
@@ -306,6 +327,7 @@ function Step4({ w }: { w: WizardState; set: (p: Partial<WizardState>) => void }
           ["Status", w.accountStatus === "ACTIVE" ? "Active" : "Trial"],
           ["Admin", w.adminEmail ? `${w.adminFirstName} ${w.adminLastName} · ${w.adminEmail}` : "—"],
           ["Billing email", w.billingEmail || "—"],
+          ["Company Code", w.companyCode || "—"],
           ["Subdomain", w.subdomain ? `app.sentire.ph/${w.subdomain}` : "—"],
         ].map(([k, v]) => (
           <div key={k} className="flex justify-between py-[7px]" style={{ borderBottom: "0.5px solid #F3F4F6" }}>
@@ -353,6 +375,7 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
       if (!w.adminLastName.trim()) return "Admin last name is required";
       if (!w.adminEmail.trim()) return "Admin email is required";
       if (!w.adminPassword || w.adminPassword.length < 8) return "Password must be at least 8 characters";
+      if (!w.companyCode.trim()) return "Company Code is required";
     }
     return null;
   }
@@ -373,6 +396,7 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
         address: w.address.trim() || null,
         province: w.province || null,
         city: w.city.trim() || null,
+        companyCode: w.companyCode.trim() || null,
         subdomain: w.subdomain.trim() || null,
         subscriptionTier: w.plan,
         subscriptionStatus: w.accountStatus,

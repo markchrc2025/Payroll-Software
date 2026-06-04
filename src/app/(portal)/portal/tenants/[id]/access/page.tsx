@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, ShieldCheck, Clock } from "lucide-react";
+import { UserPlus, ShieldCheck, Clock, KeyRound, X } from "lucide-react";
 
 interface TenantUser {
   id: string;
@@ -30,6 +30,51 @@ export default function AccessRolesPage({ params }: { params: Promise<{ id: stri
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Reset password modal state
+  const [resetTarget, setResetTarget] = useState<TenantUser | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const pwInputRef = useRef<HTMLInputElement>(null);
+
+  function openReset(u: TenantUser) {
+    setResetTarget(u);
+    setNewPassword("");
+    setResetError("");
+    setResetSuccess(false);
+    setTimeout(() => pwInputRef.current?.focus(), 50);
+  }
+
+  function closeReset() {
+    setResetTarget(null);
+    setNewPassword("");
+    setResetError("");
+    setResetSuccess(false);
+  }
+
+  async function submitReset() {
+    if (!resetTarget) return;
+    if (newPassword.length < 8) { setResetError("Password must be at least 8 characters."); return; }
+    setResetLoading(true);
+    setResetError("");
+    try {
+      const r = await fetch(`/api/admin/tenants/${id}/users/${resetTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      const j = await r.json();
+      if (!r.ok) { setResetError(j.message ?? "Failed to reset password."); return; }
+      setResetSuccess(true);
+      setTimeout(closeReset, 1500);
+    } catch {
+      setResetError("Network error — please try again.");
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   useEffect(() => {
     fetch(`/api/admin/tenants/${id}/users`)
       .then((r) => r.json())
@@ -39,6 +84,76 @@ export default function AccessRolesPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
+
+      {/* Reset password modal */}
+      {resetTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.35)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeReset(); }}
+        >
+          <div
+            className="rounded-[12px] p-6 w-[340px] shadow-xl"
+            style={{ background: "white", border: "0.5px solid #E5E7EB" }}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-[13px] font-semibold" style={{ color: "#111827" }}>Reset password</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "#6B7280" }}>
+                  {resetTarget.firstName} {resetTarget.lastName} &middot; {resetTarget.email}
+                </p>
+              </div>
+              <button onClick={closeReset} className="p-1 rounded hover:bg-gray-100">
+                <X size={14} style={{ color: "#9CA3AF" }} />
+              </button>
+            </div>
+
+            {resetSuccess ? (
+              <div className="text-center py-4">
+                <p className="text-[12px] font-medium" style={{ color: "#065F46" }}>Password updated successfully.</p>
+              </div>
+            ) : (
+              <>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#374151" }}>
+                  New password
+                </label>
+                <input
+                  ref={pwInputRef}
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => { setNewPassword(e.target.value); setResetError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitReset(); }}
+                  placeholder="Min 8 characters"
+                  className="w-full rounded-[7px] px-3 py-2 text-[12px] outline-none"
+                  style={{ border: "1px solid #D1D5DB", color: "#111827" }}
+                  autoComplete="new-password"
+                />
+                {resetError && (
+                  <p className="text-[11px] mt-1.5" style={{ color: "#DC2626" }}>{resetError}</p>
+                )}
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={closeReset}
+                    className="text-[11px] px-3 py-1.5 rounded-[7px]"
+                    style={{ border: "1px solid #E5E7EB", color: "#6B7280" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitReset}
+                    disabled={resetLoading}
+                    className="text-[11px] px-3 py-1.5 rounded-[7px] text-white disabled:opacity-60"
+                    style={{ background: "#1E3A5F" }}
+                  >
+                    {resetLoading ? "Saving…" : "Set password"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Users table */}
       <div className="rounded-[10px] overflow-hidden mb-4" style={{ background: "white", border: "0.5px solid #E5E7EB" }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "0.5px solid #F3F4F6" }}>
@@ -56,24 +171,25 @@ export default function AccessRolesPage({ params }: { params: Promise<{ id: stri
           <thead>
             <tr style={{ background: "#F9FAFB", borderBottom: "0.5px solid #E5E7EB" }}>
               <th className="text-left px-4 py-2.5 text-[10px] font-medium w-[34%]" style={{ color: "#6B7280" }}>User</th>
-              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[28%]" style={{ color: "#6B7280" }}>Email</th>
-              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[14%]" style={{ color: "#6B7280" }}>Role</th>
-              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[12%]" style={{ color: "#6B7280" }}>Status</th>
-              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[12%]" style={{ color: "#6B7280" }}>Last login</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[25%]" style={{ color: "#6B7280" }}>Email</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[13%]" style={{ color: "#6B7280" }}>Role</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[11%]" style={{ color: "#6B7280" }}>Status</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[11%]" style={{ color: "#6B7280" }}>Last login</th>
+              <th className="px-2 py-2.5 text-[10px] font-medium w-[6%]" style={{ color: "#6B7280" }}></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i} style={{ borderBottom: "0.5px solid #F3F4F6" }}>
-                  {[1, 2, 3, 4, 5].map((c) => (
+                  {[1, 2, 3, 4, 5, 6].map((c) => (
                     <td key={c} className="px-4 py-3"><Skeleton className="h-4 w-full rounded" /></td>
                   ))}
                 </tr>
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-8 text-[12px]" style={{ color: "#9CA3AF" }}>
+                <td colSpan={6} className="text-center py-8 text-[12px]" style={{ color: "#9CA3AF" }}>
                   No users found for this tenant.
                 </td>
               </tr>
@@ -116,6 +232,15 @@ export default function AccessRolesPage({ params }: { params: Promise<{ id: stri
                 </td>
                 <td className="px-2 py-2.5 text-[11px]" style={{ color: "#6B7280" }}>
                   {fmtDate(u.lastLoginAt)}
+                </td>
+                <td className="px-2 py-2.5 text-right">
+                  <button
+                    title="Reset password"
+                    onClick={() => openReset(u)}
+                    className="p-1 rounded hover:bg-gray-100"
+                  >
+                    <KeyRound size={13} style={{ color: "#6B7280" }} />
+                  </button>
                 </td>
               </tr>
             ))}

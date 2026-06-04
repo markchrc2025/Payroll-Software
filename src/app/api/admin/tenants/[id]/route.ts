@@ -15,6 +15,7 @@ import { z } from "zod";
 const patchTenantSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   tradeName: z.string().max(200).nullable().optional(),
+  companyCode: z.string().min(2).max(20).regex(/^[A-Z0-9]+$/, "Company Code must be uppercase letters and numbers only").nullable().optional(),
   subdomain: z.string().min(2).max(60).regex(/^[a-z0-9-]+$/).nullable().optional(),
   industry: z.string().max(100).nullable().optional(),
   subscriptionTier: z.enum(["STARTER", "GROWTH", "PRO"]).optional(),
@@ -51,6 +52,7 @@ export async function GET(
       id: true,
       name: true,
       tradeName: true,
+      companyCode: true,
       subdomain: true,
       industry: true,
       subscriptionTier: true,
@@ -148,7 +150,7 @@ export async function PATCH(
       "code" in e &&
       (e as { code: string }).code === "P2002"
     ) {
-      return err("Subdomain already in use", 409);
+      return err("Subdomain or Company Code already in use", 409);
     }
     return serverError(e);
   }

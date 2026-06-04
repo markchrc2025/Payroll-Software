@@ -30,6 +30,13 @@ export async function registerWorkers(): Promise<void> {
     console.error("[pg-boss] error:", err);
   });
 
+  // Ensure all queues exist before registering workers
+  await Promise.all(
+    Object.values(JOB_NAMES).map((name) =>
+      boss.createQueue(name).catch(() => {/* already exists — ignore */})
+    )
+  );
+
   // Payroll gross-to-net computation
   await boss.work<PayrollRunJobData>(
     JOB_NAMES.PAYROLL_RUN,

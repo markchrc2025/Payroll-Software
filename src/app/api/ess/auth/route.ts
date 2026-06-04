@@ -9,10 +9,10 @@
  * The client must include `Authorization: Bearer <token>` on subsequent ESS
  * requests.
  *
- * Body: { employeeNumber: string, tenantId: string, birthDate?: string (YYYY-MM-DD), pin?: string }
+ * Body: { companyCode: string, employeeNumber: string, birthDate?: string (YYYY-MM-DD), pin?: string }
  *
- * Note: `tenantId` is required because ESS is multi-tenant — the login page
- * must know which company the employee belongs to (e.g. from subdomain).
+ * Note: `companyCode` is required — employees use their company's short code
+ * (e.g. "DEMOCORP") to identify their tenant. Resolved to the internal tenantId.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -22,7 +22,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 
 const LoginSchema = z
   .object({
-    tenantId: z.string().min(1),
+    companyCode: z.string().min(1),
     employeeNumber: z.string().min(1),
     birthDate: z.string().optional(), // "YYYY-MM-DD"
     pin: z.string().min(4).max(8).optional(),
@@ -44,11 +44,20 @@ export async function POST(req: NextRequest) {
     return err("Validation failed", 400, parsed.error.flatten());
   }
 
-  const { tenantId, employeeNumber, birthDate, pin } = parsed.data;
+  const { companyCode, employeeNumber, birthDate, pin } = parsed.data;
 
   try {
-    // Lookup employee using the admin client (BYPASSRLS) — we scope by tenantId
-    // explicitly in the WHERE clause, so tenant isolation is preserved.
+    // Resolve companyCode → tenantId
+    const tenant = await prismaAdmin.tenant.findFirst({
+      where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
+      select: { id: true },
+    });
+    if (!tenant) {
+      return err("Invalid credentials", 401);
+    }
+    const tenantId = tenant.id;
+
+    // Lookup employee using the admin client (BYPASSRLS) — scoped by tenantId
     const employee = await prismaAdmin.$queryRaw<
       Array<{
         id: string;

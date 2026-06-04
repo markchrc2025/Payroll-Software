@@ -470,11 +470,12 @@ enum PremiumMultiplierKey {
 // =============================================================================
 
 model Tenant {
-  id        String  @id @default(cuid())
-  name      String
-  tradeName String?
-  subdomain String? @unique
-  industry  String?
+  id          String  @id @default(cuid())
+  name        String
+  tradeName   String?
+  companyCode String? @unique
+  subdomain   String? @unique
+  industry    String?
 
   // Encrypted at app layer
   tinNumber        String? @unique

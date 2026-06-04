@@ -16,6 +16,7 @@ import { z } from "zod";
 const createTenantSchema = z.object({
   name: z.string().min(1).max(200),
   tradeName: z.string().max(200).optional().nullable(),
+  companyCode: z.string().min(2).max(20).regex(/^[A-Z0-9]+$/, "Company Code must be uppercase letters and numbers only").optional().nullable(),
   subdomain: z.string().min(2).max(60).regex(/^[a-z0-9-]+$/).optional().nullable(),
   industry: z.string().max(100).optional().nullable(),
   subscriptionTier: z.enum(["STARTER", "GROWTH", "PRO"]).default("STARTER"),
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     const {
       adminFirstName, adminLastName, adminEmail, adminPassword, adminPhone,
       tinNumber, address, city, province, zipCode, contactEmail, contactPhone,
-      trialEndsAt, payrollCycle,
+      trialEndsAt, payrollCycle, companyCode,
       ...tenantData
     } = parsed.data;
 
@@ -107,6 +108,7 @@ export async function POST(req: NextRequest) {
       data: {
         name: tenantData.name,
         tradeName: tenantData.tradeName ?? null,
+        companyCode: companyCode ?? null,
         subdomain: tenantData.subdomain ?? null,
         industry: tenantData.industry ?? null,
         subscriptionTier: tenantData.subscriptionTier,
@@ -172,7 +174,7 @@ export async function POST(req: NextRequest) {
       "code" in e &&
       (e as { code: string }).code === "P2002"
     ) {
-      return err("Subdomain already in use", 409);
+      return err("Subdomain or Company Code already in use", 409);
     }
     return serverError(e);
   }
