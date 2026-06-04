@@ -11,15 +11,23 @@
 
 import { Resend } from "resend";
 
-if (!process.env.RESEND_API_KEY) {
-  console.warn("[email] RESEND_API_KEY is not set — emails will not be sent.");
-}
-
-const resend = new Resend(process.env.RESEND_API_KEY ?? "");
-
 const FROM = process.env.EMAIL_FROM ?? "Sentire Payroll <no-reply@sentire.app>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const APP_NAME = "Sentire Payroll";
+
+/**
+ * Lazy Resend factory — avoids throwing at module-init time when
+ * RESEND_API_KEY is not set (e.g. during `next build` on Render before
+ * env vars are wired up). The error surfaces only when an email is
+ * actually attempted.
+ */
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error("[email] RESEND_API_KEY is not set — cannot send email.");
+  }
+  return new Resend(key);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -96,7 +104,7 @@ export async function sendPasswordResetEmail({
     </p>
   `);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `Reset your ${APP_NAME} password`,
@@ -140,7 +148,7 @@ export async function sendWelcomeEmail({
     </a>
   `);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `Welcome to ${APP_NAME}`,
@@ -174,7 +182,7 @@ export async function sendPayslipReadyEmail({
     </a>
   `);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `Your payslip for ${period} is ready`,
@@ -211,7 +219,7 @@ export async function sendOtApprovedEmail({
     </a>
   `);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `Your overtime on ${date} has been approved`,
@@ -251,7 +259,7 @@ export async function sendDtrSubmittedEmail({
     </a>
   `);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `DTR review needed: ${employeeName} (${periodStart} – ${periodEnd})`,
