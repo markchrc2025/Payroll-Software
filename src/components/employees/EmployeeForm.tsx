@@ -17,7 +17,7 @@
  */
 
 import { useForm } from "react-hook-form";
-import type { Path } from "react-hook-form";
+import type { Path, Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -98,6 +98,90 @@ const SALARY_TYPE_OPTIONS = [
 type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 
+// ---------------------------------------------------------------------------
+// Field helpers — defined OUTSIDE EmployeeForm so their type identity is
+// stable across renders (prevents React from unmounting/remounting inputs).
+// ---------------------------------------------------------------------------
+
+function TextField({
+  control,
+  name,
+  label,
+  placeholder,
+  type = "text",
+}: {
+  control: Control<CreateEmployeeInput>;
+  name: Path<CreateEmployeeInput>;
+  label: string;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              type={type}
+              placeholder={placeholder}
+              {...field}
+              value={(field.value as string) ?? ""}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+function SelectField({
+  control,
+  name,
+  label,
+  options,
+  placeholder,
+}: {
+  control: Control<CreateEmployeeInput>;
+  name: Path<CreateEmployeeInput>;
+  label: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <Select
+            value={(field.value as string) ?? ""}
+            onValueChange={field.onChange}
+          >
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder={placeholder ?? `Select ${label}`} />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 type Props = {
   mode: "create" | "edit";
   employeeId?: string;
@@ -145,8 +229,7 @@ export function EmployeeForm({
 
   const isSubmitting = form.formState.isSubmitting;
 
-  async function onSubmit(values: CreateEmployeeInput): Promise<void> {
-    const url =
+  async function onSubmit(values: CreateEmployeeInput): Promise<void> {    const url =
       mode === "create" ? "/api/employees" : `/api/employees/${employeeId}`;
     const method = mode === "create" ? "POST" : "PUT";
 
@@ -178,86 +261,7 @@ export function EmployeeForm({
     router.refresh();
   }
 
-  // ---------------------------------------------------------------------------
-  // Helper to render a text input FormField
-  // ---------------------------------------------------------------------------
-  function TextField({
-    name,
-    label,
-    placeholder,
-    type = "text",
-  }: {
-    name: Path<CreateEmployeeInput>;
-    label: string;
-    placeholder?: string;
-    type?: string;
-  }) {
-    return (
-      <FormField
-        control={form.control}
-        name={name}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-              <Input
-                type={type}
-                placeholder={placeholder}
-                {...field}
-                value={(field.value as string) ?? ""}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Helper: Select FormField
-  // ---------------------------------------------------------------------------
-  function SelectField({
-    name,
-    label,
-    options,
-    placeholder,
-  }: {
-    name: Path<CreateEmployeeInput>;
-    label: string;
-    options: { value: string; label: string }[];
-    placeholder?: string;
-  }) {
-    return (
-      <FormField
-        control={form.control}
-        name={name}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <Select
-              value={(field.value as string) ?? ""}
-              onValueChange={field.onChange}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder={placeholder ?? `Select ${label}`} />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {options.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    );
-  }
+  const ctrl = form.control;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -272,18 +276,20 @@ export function EmployeeForm({
             <Separator className="mt-2" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <TextField name="firstName" label="First Name *" placeholder="Juan" />
-            <TextField name="middleName" label="Middle Name" placeholder="Santos" />
-            <TextField name="lastName" label="Last Name *" placeholder="Dela Cruz" />
+            <TextField control={ctrl} name="firstName" label="First Name *" placeholder="Juan" />
+            <TextField control={ctrl} name="middleName" label="Middle Name" placeholder="Santos" />
+            <TextField control={ctrl} name="lastName" label="Last Name *" placeholder="Dela Cruz" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <TextField name="suffix" label="Suffix" placeholder="Jr., III…" />
+            <TextField control={ctrl} name="suffix" label="Suffix" placeholder="Jr., III…" />
             <TextField
+              control={ctrl}
               name="birthDate"
               label="Date of Birth"
               type="date"
             />
             <SelectField
+              control={ctrl}
               name="gender"
               label="Gender"
               options={GENDER_OPTIONS}
@@ -291,11 +297,12 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SelectField
+              control={ctrl}
               name="civilStatus"
               label="Civil Status"
               options={CIVIL_STATUS_OPTIONS}
             />
-            <TextField name="nationality" label="Nationality" placeholder="Filipino" />
+            <TextField control={ctrl} name="nationality" label="Nationality" placeholder="Filipino" />
           </div>
         </section>
 
@@ -307,11 +314,13 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TextField
+              control={ctrl}
               name="mobileNumber"
               label="Mobile Number"
               placeholder="09171234567"
             />
             <TextField
+              control={ctrl}
               name="workEmail"
               label="Work Email"
               type="email"
@@ -320,32 +329,36 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TextField
+              control={ctrl}
               name="personalEmail"
               label="Personal Email"
               type="email"
               placeholder="juan@gmail.com"
             />
             <TextField
+              control={ctrl}
               name="phoneNumber"
               label="Landline / Alt Phone"
               placeholder="(02) 8000-0000"
             />
           </div>
           <TextField
+            control={ctrl}
             name="addressLine1"
             label="Address Line 1"
             placeholder="Unit / House No., Street"
           />
           <TextField
+            control={ctrl}
             name="addressLine2"
             label="Address Line 2"
             placeholder="Barangay, Subdivision"
           />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <TextField name="city" label="City / Municipality" placeholder="Quezon City" />
-            <TextField name="province" label="Province" placeholder="Metro Manila" />
-            <TextField name="zipCode" label="ZIP Code" placeholder="1100" />
-            <TextField name="region" label="Region" placeholder="NCR" />
+            <TextField control={ctrl} name="city" label="City / Municipality" placeholder="Quezon City" />
+            <TextField control={ctrl} name="province" label="Province" placeholder="Metro Manila" />
+            <TextField control={ctrl} name="zipCode" label="ZIP Code" placeholder="1100" />
+            <TextField control={ctrl} name="region" label="Region" placeholder="NCR" />
           </div>
         </section>
 
@@ -418,24 +431,27 @@ export function EmployeeForm({
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextField name="jobTitle" label="Job Title" placeholder="Software Engineer" />
-            <TextField name="jobLevel" label="Job Level / Grade" placeholder="L3, Senior…" />
+            <TextField control={ctrl} name="jobTitle" label="Job Title" placeholder="Software Engineer" />
+            <TextField control={ctrl} name="jobLevel" label="Job Level / Grade" placeholder="L3, Senior…" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SelectField
+              control={ctrl}
               name="employmentType"
               label="Employment Type *"
               options={EMPLOYMENT_TYPE_OPTIONS}
             />
             <SelectField
+              control={ctrl}
               name="employmentStatus"
               label="Employment Status *"
               options={EMPLOYMENT_STATUS_OPTIONS}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextField name="hireDate" label="Hire Date *" type="date" />
+            <TextField control={ctrl} name="hireDate" label="Hire Date *" type="date" />
             <TextField
+              control={ctrl}
               name="regularizationDate"
               label="Regularization Date"
               type="date"
@@ -451,17 +467,20 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <SelectField
+              control={ctrl}
               name="payFrequency"
               label="Pay Frequency *"
               options={PAY_FREQUENCY_OPTIONS}
             />
             <SelectField
+              control={ctrl}
               name="salaryType"
               label="Salary Type *"
               options={SALARY_TYPE_OPTIONS}
             />
             {mode === "create" && (
               <TextField
+                control={ctrl}
                 name="basicSalary"
                 label="Basic Salary (₱) *"
                 type="number"
@@ -471,12 +490,14 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TextField
+              control={ctrl}
               name="standardWorkHours"
               label="Standard Work Hours / Day"
               type="number"
               placeholder="8"
             />
             <TextField
+              control={ctrl}
               name="standardWorkDays"
               label="Standard Work Days / Month"
               type="number"
@@ -497,13 +518,15 @@ export function EmployeeForm({
             <Separator className="mt-2" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <TextField name="bankName" label="Bank Name" placeholder="BDO, BPI, Metrobank…" />
+            <TextField control={ctrl} name="bankName" label="Bank Name" placeholder="BDO, BPI, Metrobank…" />
             <TextField
+              control={ctrl}
               name="bankAccountNumber"
               label="Account Number"
               placeholder="1234567890"
             />
             <TextField
+              control={ctrl}
               name="bankAccountName"
               label="Account Name"
               placeholder="JUAN S DELA CRUZ"
@@ -522,26 +545,31 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TextField
+              control={ctrl}
               name="statutoryIds.tinNumber"
               label="TIN (Tax Identification Number)"
               placeholder="123-456-789-000"
             />
             <TextField
+              control={ctrl}
               name="statutoryIds.sssNumber"
               label="SSS Number"
               placeholder="01-2345678-9"
             />
             <TextField
+              control={ctrl}
               name="statutoryIds.philhealthNumber"
               label="PhilHealth Number"
               placeholder="12-345678901-2"
             />
             <TextField
+              control={ctrl}
               name="statutoryIds.pagibigNumber"
               label="Pag-IBIG MID Number"
               placeholder="1234-5678-9012"
             />
             <TextField
+              control={ctrl}
               name="statutoryIds.gsisMembershipId"
               label="GSIS Membership ID (gov't employees)"
               placeholder="Optional"
