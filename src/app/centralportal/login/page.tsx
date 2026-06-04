@@ -34,7 +34,7 @@ export default function CentralPortalLoginPage() {
       // very first request to the portal (server components read cookies
       // from the HTTP request; a client-side navigate can race against
       // the Set-Cookie header being committed).
-      window.location.href = "/portal/dashboard";
+      window.location.href = "/centralportal/dashboard";
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
