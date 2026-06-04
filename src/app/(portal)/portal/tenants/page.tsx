@@ -1,9 +1,9 @@
 "use client";
 
 
-export const dynamic = "force-dynamic";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { RefreshCw, Search, Plus } from "lucide-react";
@@ -49,7 +49,7 @@ const STATUS_PILL: Record<SubscriptionStatus, { cls: string; label: string }> = 
 const TIERS: SubscriptionTier[] = ["STARTER", "GROWTH", "PRO"];
 const STATUSES: SubscriptionStatus[] = ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED"];
 
-export default function PortalTenantsPage() {
+function PortalTenantsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -276,5 +276,20 @@ export default function PortalTenantsPage() {
         onCreated={handleTenantCreated}
       />
     </div>
+  );
+}
+
+
+export default function PortalTenantsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-gray-500 text-sm">Loading…</div>
+        </div>
+      }
+    >
+      <PortalTenantsContent />
+    </Suspense>
   );
 }
