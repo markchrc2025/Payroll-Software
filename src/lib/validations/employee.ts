@@ -4,15 +4,64 @@
  */
 
 import { z } from "zod";
-import {
-  CivilStatus,
-  EmploymentStatus,
-  EmploymentType,
-  Gender,
-  PayFrequency,
-  SalaryType,
-  TaxClassification,
-} from "@prisma/client";
+
+// ---------------------------------------------------------------------------
+// Enum mirrors — defined here instead of importing from @prisma/client so that
+// this file is safe to use in Client Components. Next.js restricts
+// @prisma/client to server-only bundles; importing it in a shared validation
+// file pulled into EmployeeForm.tsx (a "use client" component) causes a
+// build-time "module-not-found" error on the browser bundle.
+//
+// These values MUST stay in sync with prisma/schema.prisma.
+// ---------------------------------------------------------------------------
+
+const CivilStatus = {
+  SINGLE: "SINGLE",
+  MARRIED: "MARRIED",
+  WIDOWED: "WIDOWED",
+  LEGALLY_SEPARATED: "LEGALLY_SEPARATED",
+} as const;
+
+const EmploymentStatus = {
+  PROBATIONARY: "PROBATIONARY",
+  REGULAR: "REGULAR",
+  CONTRACTUAL: "CONTRACTUAL",
+  PROJECT_BASED: "PROJECT_BASED",
+  RESIGNED: "RESIGNED",
+  TERMINATED: "TERMINATED",
+  RETIRED: "RETIRED",
+} as const;
+
+const EmploymentType = {
+  FULL_TIME: "FULL_TIME",
+  PART_TIME: "PART_TIME",
+  CASUAL: "CASUAL",
+} as const;
+
+const Gender = {
+  MALE: "MALE",
+  FEMALE: "FEMALE",
+  OTHER: "OTHER",
+} as const;
+
+const PayFrequency = {
+  DAILY: "DAILY",
+  WEEKLY: "WEEKLY",
+  BI_WEEKLY: "BI_WEEKLY",
+  SEMI_MONTHLY: "SEMI_MONTHLY",
+  MONTHLY: "MONTHLY",
+} as const;
+
+const SalaryType = {
+  DAILY: "DAILY",
+  WEEKLY: "WEEKLY",
+  MONTHLY: "MONTHLY",
+} as const;
+
+const TaxClassification = {
+  REGULAR: "REGULAR",
+  MWE: "MWE",
+} as const;
 
 // ---------------------------------------------------------------------------
 // Reusable field schemas
