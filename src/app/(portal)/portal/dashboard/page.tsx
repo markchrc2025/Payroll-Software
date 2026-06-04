@@ -121,7 +121,7 @@ export default function PortalDashboardPage() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div>
       {/* Page header */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -138,7 +138,7 @@ export default function PortalDashboardPage() {
             Refresh
           </button>
           <Link
-            href="/portal/tenants/new"
+            href="/portal/tenants?new=1"
             className="flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium text-white"
             style={{ background: "#1E3A5F" }}
           >

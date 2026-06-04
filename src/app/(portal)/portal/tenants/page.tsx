@@ -1,19 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { RefreshCw, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from "@/components/ui/sheet";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -22,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { AddTenantWizard } from "./_wizard";
 
 type SubscriptionTier = "STARTER" | "GROWTH" | "PRO";
 type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED";
@@ -54,6 +47,9 @@ const TIERS: SubscriptionTier[] = ["STARTER", "GROWTH", "PRO"];
 const STATUSES: SubscriptionStatus[] = ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED"];
 
 export default function PortalTenantsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -64,15 +60,12 @@ export default function PortalTenantsPage() {
   const [total, setTotal] = useState(0);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Add sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: "", tradeName: "", subdomain: "", industry: "",
-    subscriptionTier: "STARTER" as SubscriptionTier,
-    subscriptionStatus: "TRIALING" as SubscriptionStatus,
-    billingEmail: "",
-  });
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  // Auto-open wizard when ?new=1
+  useEffect(() => {
+    if (searchParams.get("new") === "1") setWizardOpen(true);
+  }, [searchParams]);
 
   const fetchTenants = useCallback(async (s: string, p: number, tier: string, status: string) => {
     setLoading(true);
@@ -106,32 +99,15 @@ export default function PortalTenantsPage() {
     debounceRef.current = setTimeout(() => fetchTenants(v, 1, tierFilter, statusFilter), 350);
   }
 
-  async function handleCreate() {
-    if (!form.name.trim()) { toast.error("Company name is required"); return; }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/tenants", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          tradeName: form.tradeName.trim() || null,
-          subdomain: form.subdomain.trim() || null,
-          industry: form.industry.trim() || null,
-          subscriptionTier: form.subscriptionTier,
-          subscriptionStatus: form.subscriptionStatus,
-          billingEmail: form.billingEmail.trim() || null,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.error ?? "Failed to create tenant"); return; }
-      toast.success("Tenant created");
-      setSheetOpen(false);
-      setForm({ name: "", tradeName: "", subdomain: "", industry: "", subscriptionTier: "STARTER", subscriptionStatus: "TRIALING", billingEmail: "" });
-      fetchTenants(search, 1, tierFilter, statusFilter);
-    } finally {
-      setSaving(false);
-    }
+  function handleWizardClose() {
+    setWizardOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("new");
+    router.replace(url.pathname);
+  }
+
+  function handleTenantCreated(_newId: string) {
+    fetchTenants(search, 1, tierFilter, statusFilter);
   }
 
   function fmtDate(iso: string) {
@@ -139,7 +115,7 @@ export default function PortalTenantsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -157,7 +133,7 @@ export default function PortalTenantsPage() {
             <RefreshCw size={12} /> Refresh
           </button>
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setWizardOpen(true)}
             className="flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium text-white"
             style={{ background: "#1E3A5F" }}
           >
@@ -290,70 +266,12 @@ export default function PortalTenantsPage() {
         </div>
       )}
 
-      {/* Create sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-[420px]">
-          <SheetHeader>
-            <SheetTitle>Add tenant</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 px-1 py-4">
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Company name *</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Acme Corp Philippines" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Trade name</Label>
-              <Input value={form.tradeName} onChange={(e) => setForm((f) => ({ ...f, tradeName: e.target.value }))} placeholder="Optional doing-business-as name" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Subdomain</Label>
-              <div className="flex items-center border rounded-md overflow-hidden" style={{ borderColor: "#E5E7EB" }}>
-                <span className="px-2.5 py-2 text-[12px] bg-gray-50 border-r" style={{ color: "#6B7280", borderColor: "#E5E7EB" }}>app.sentire.ph/</span>
-                <input
-                  value={form.subdomain}
-                  onChange={(e) => setForm((f) => ({ ...f, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
-                  placeholder="acme-corp"
-                  className="flex-1 px-2.5 py-2 text-[12px] outline-none"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Industry</Label>
-              <Input value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))} placeholder="e.g. Retail / E-Commerce" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-[12px]">Plan</Label>
-                <Select value={form.subscriptionTier} onValueChange={(v) => setForm((f) => ({ ...f, subscriptionTier: v as SubscriptionTier }))}>
-                  <SelectTrigger className="text-[12px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TIERS.map((t) => <SelectItem key={t} value={t} className="text-[12px]">{t.charAt(0) + t.slice(1).toLowerCase()}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[12px]">Status</Label>
-                <Select value={form.subscriptionStatus} onValueChange={(v) => setForm((f) => ({ ...f, subscriptionStatus: v as SubscriptionStatus }))}>
-                  <SelectTrigger className="text-[12px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((s) => <SelectItem key={s} value={s} className="text-[12px]">{STATUS_PILL[s].label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Billing email</Label>
-              <Input type="email" value={form.billingEmail} onChange={(e) => setForm((f) => ({ ...f, billingEmail: e.target.value }))} placeholder="billing@company.com" />
-            </div>
-          </div>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={saving} style={{ background: "#1E3A5F" }}>
-              {saving ? "Creating…" : "Create tenant"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      {/* 4-step Add Tenant Wizard */}
+      <AddTenantWizard
+        open={wizardOpen}
+        onClose={handleWizardClose}
+        onCreated={handleTenantCreated}
+      />
     </div>
   );
 }

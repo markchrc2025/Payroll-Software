@@ -1,0 +1,444 @@
+
+<style>
+  .portal-shell{display:flex;min-height:620px;background:var(--color-background-secondary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
+  .sidebar{width:52px;background:#0f1e36;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:20px;flex-shrink:0}
+  .s-logo{width:32px;height:32px;background:#1E3A5F;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:500}
+  .s-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#4a6fa0;border-radius:6px;cursor:pointer;font-size:18px}
+  .s-icon.active{background:#1E3A5F;color:#fff}
+  .main-area{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
+  .backdrop{position:absolute;inset:0;background:rgba(15,30,54,0.45)}
+  .modal{position:relative;background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-secondary);width:100%;max-width:560px;overflow:hidden;z-index:2}
+  .modal-header{padding:20px 24px 16px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:flex-start}
+  .modal-title{font-size:16px;font-weight:500;color:var(--color-text-primary);margin:0}
+  .modal-sub{font-size:12px;color:var(--color-text-secondary);margin:3px 0 0}
+  .close-btn{background:none;border:none;color:var(--color-text-secondary);cursor:pointer;padding:0;font-size:20px;line-height:1}
+  .steps{display:flex;padding:16px 24px;gap:0;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .step-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+  .step-item:not(:last-child)::after{content:'';position:absolute;top:14px;left:calc(50% + 16px);right:calc(-50% + 16px);height:0.5px;background:var(--color-border-secondary)}
+  .step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);transition:all 0.2s;position:relative;z-index:1}
+  .step-dot.done{background:#1E3A5F;border-color:#1E3A5F;color:#fff}
+  .step-dot.active{background:#1E3A5F;border-color:#1E3A5F;color:#fff;box-shadow:0 0 0 3px rgba(30,58,95,0.15)}
+  .step-label{font-size:10px;color:var(--color-text-tertiary);text-align:center;line-height:1.3}
+  .step-label.active{color:var(--color-text-primary);font-weight:500}
+  .modal-body{padding:20px 24px;max-height:360px;overflow-y:auto}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .field-row.full{grid-template-columns:1fr}
+  .field-group{display:flex;flex-direction:column;gap:5px}
+  .field-label{font-size:12px;color:var(--color-text-secondary);font-weight:500}
+  .field-label span{color:#c0392b;margin-left:2px}
+  .field-input{border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 10px;font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);width:100%;box-sizing:border-box;outline:none}
+  .field-input:focus{border-color:#1E3A5F;box-shadow:0 0 0 2px rgba(30,58,95,0.1)}
+  .field-input.prefix-wrap{display:flex;align-items:center;gap:0;padding:0;overflow:hidden}
+  .prefix-tag{padding:7px 8px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-secondary);font-size:12px;color:var(--color-text-secondary);white-space:nowrap}
+  .prefix-tag+input{border:none;padding:7px 10px;background:transparent;color:var(--color-text-primary);font-size:13px;width:100%;outline:none}
+  .select-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+  .plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .plan-card{border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:12px;cursor:pointer;transition:all 0.15s;text-align:center}
+  .plan-card:hover{border-color:#1E3A5F}
+  .plan-card.selected{border:1.5px solid #1E3A5F;background:rgba(30,58,95,0.05)}
+  .plan-name{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px}
+  .plan-limit{font-size:11px;color:var(--color-text-secondary)}
+  .plan-price{font-size:12px;color:#1E3A5F;font-weight:500;margin-top:4px}
+  .status-row{display:flex;gap:8px;margin-bottom:14px}
+  .status-pill{flex:1;padding:8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);text-align:center;cursor:pointer;font-size:12px;color:var(--color-text-secondary);transition:all 0.15s}
+  .status-pill.selected-active{border-color:#0b7a3e;background:rgba(11,122,62,0.06);color:#0b7a3e;font-weight:500}
+  .status-pill.selected-trial{border-color:#b35c00;background:rgba(179,92,0,0.06);color:#b35c00;font-weight:500}
+  .hint{font-size:11px;color:var(--color-text-tertiary);margin-top:3px}
+  .section-title{font-size:11px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 12px;padding-bottom:8px;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .modal-footer{padding:14px 24px;border-top:0.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:center}
+  .btn{padding:8px 18px;border-radius:var(--border-radius-md);font-size:13px;cursor:pointer;font-weight:500;transition:all 0.15s}
+  .btn-ghost{background:none;border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary)}
+  .btn-ghost:hover{background:var(--color-background-secondary)}
+  .btn-primary{background:#1E3A5F;border:none;color:#fff}
+  .btn-primary:hover{background:#16304f}
+  .btn-primary:active{transform:scale(0.98)}
+  .step-panel{display:none}
+  .step-panel.active{display:block}
+  .progress-text{font-size:12px;color:var(--color-text-secondary)}
+  .badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500}
+  .badge-info{background:rgba(30,58,95,0.1);color:#1E3A5F}
+  .review-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .review-row:last-child{border-bottom:none}
+  .review-key{font-size:12px;color:var(--color-text-secondary)}
+  .review-val{font-size:12px;color:var(--color-text-primary);font-weight:500;text-align:right}
+</style>
+
+<h2 class="sr-only">Tenant onboarding wizard modal — 4 steps: company info, subscription, admin account, configuration</h2>
+
+<div class="portal-shell">
+  <div class="sidebar">
+    <div class="s-logo">S</div>
+    <div class="s-icon active" aria-hidden="true"><i class="ti ti-building"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-users"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-chart-bar"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-settings"></i></div>
+  </div>
+
+  <div class="main-area">
+    <div class="backdrop"></div>
+
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <div>
+          <p class="modal-title">Add new tenant</p>
+          <p class="modal-sub">Complete all steps to provision a new company account</p>
+        </div>
+        <button class="close-btn" onclick="closeModal()" aria-label="Close"><i class="ti ti-x"></i></button>
+      </div>
+
+      <div class="steps">
+        <div class="step-item">
+          <div class="step-dot active" id="dot-1"><i class="ti ti-building" style="font-size:13px"></i></div>
+          <div class="step-label active" id="lbl-1">Company</div>
+        </div>
+        <div class="step-item">
+          <div class="step-dot" id="dot-2">2</div>
+          <div class="step-label" id="lbl-2">Subscription</div>
+        </div>
+        <div class="step-item">
+          <div class="step-dot" id="dot-3">3</div>
+          <div class="step-label" id="lbl-3">Admin account</div>
+        </div>
+        <div class="step-item">
+          <div class="step-dot" id="dot-4">4</div>
+          <div class="step-label" id="lbl-4">Config & review</div>
+        </div>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="step-panel active" id="step-1">
+          <p class="section-title">Company information</p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Legal company name<span>*</span></label>
+              <input class="field-input" id="company-name" type="text" placeholder="Acme Corp Inc." oninput="syncSubdomain(this.value)">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Trade / DBA name</label>
+              <input class="field-input" id="trade-name" type="text" placeholder="Acme Corp">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">TIN (tax identification no.)<span>*</span></label>
+              <input class="field-input" id="tin" type="text" placeholder="000-000-000-000">
+              <span class="hint">BIR-issued TIN, required for statutory reports</span>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Industry<span>*</span></label>
+              <select class="field-input select-input" id="industry">
+                <option value="">Select industry</option>
+                <option>Retail / Trading</option>
+                <option>Manufacturing</option>
+                <option>BPO / Outsourcing</option>
+                <option>Food & Beverage</option>
+                <option>Healthcare</option>
+                <option>Construction</option>
+                <option>Professional services</option>
+                <option>Technology</option>
+                <option>Education</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row full">
+            <div class="field-group">
+              <label class="field-label">Registered address<span>*</span></label>
+              <input class="field-input" id="address" type="text" placeholder="Unit 4B, 123 EDSA, Mandaluyong City, Metro Manila">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">DOLE region</label>
+              <select class="field-input select-input" id="region">
+                <option value="">Select region</option>
+                <option>NCR</option>
+                <option>CAR</option>
+                <option>Region I</option>
+                <option>Region II</option>
+                <option>Region III</option>
+                <option>Region IV-A (CALABARZON)</option>
+                <option>Region IV-B (MIMAROPA)</option>
+                <option>Region V</option>
+                <option>Region VI</option>
+                <option>Region VII</option>
+                <option>Region VIII</option>
+                <option>Region IX</option>
+                <option>Region X</option>
+                <option>Region XI</option>
+                <option>Region XII</option>
+                <option>Region XIII (Caraga)</option>
+                <option>BARMM</option>
+              </select>
+              <span class="hint">Sets minimum wage table for payroll computation</span>
+            </div>
+            <div class="field-group">
+              <label class="field-label">No. of branches</label>
+              <input class="field-input" type="number" min="1" placeholder="1">
+            </div>
+          </div>
+        </div>
+
+        <div class="step-panel" id="step-2">
+          <p class="section-title">Subscription plan</p>
+          <div class="plan-grid">
+            <div class="plan-card" id="plan-starter" onclick="selectPlan('starter')">
+              <div class="plan-name">Starter</div>
+              <div class="plan-limit">Up to 50 employees</div>
+              <div class="plan-price">₱700 / mo</div>
+            </div>
+            <div class="plan-card selected" id="plan-growth" onclick="selectPlan('growth')">
+              <div class="plan-name">Growth</div>
+              <div class="plan-limit">Up to 200 employees</div>
+              <div class="plan-price">₱950 / mo</div>
+            </div>
+            <div class="plan-card" id="plan-enterprise" onclick="selectPlan('enterprise')">
+              <div class="plan-name">Enterprise</div>
+              <div class="plan-limit">Unlimited employees</div>
+              <div class="plan-price">Custom</div>
+            </div>
+          </div>
+
+          <p class="section-title" style="margin-top:16px">Account status</p>
+          <div class="status-row">
+            <div class="status-pill" id="pill-active" onclick="selectStatus('active')"><i class="ti ti-check" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Active</div>
+            <div class="status-pill selected-trial" id="pill-trial" onclick="selectStatus('trial')"><i class="ti ti-clock" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Trial</div>
+          </div>
+
+          <div class="field-row" id="trial-row">
+            <div class="field-group">
+              <label class="field-label">Trial end date</label>
+              <input class="field-input" type="date" id="trial-end">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Max employees (override)</label>
+              <input class="field-input" type="number" placeholder="200" id="max-emp">
+            </div>
+          </div>
+
+          <p class="section-title" style="margin-top:16px">Billing</p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Billing email<span>*</span></label>
+              <input class="field-input" id="billing-email" type="email" placeholder="billing@company.com">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Billing cycle start</label>
+              <select class="field-input select-input">
+                <option>1st of the month</option>
+                <option>15th of the month</option>
+                <option>On activation date</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-panel" id="step-3">
+          <p class="section-title">Primary admin account</p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">First name<span>*</span></label>
+              <input class="field-input" id="admin-first" type="text" placeholder="Juan">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Last name<span>*</span></label>
+              <input class="field-input" id="admin-last" type="text" placeholder="Dela Cruz">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Work email<span>*</span></label>
+              <input class="field-input" id="admin-email" type="email" placeholder="admin@company.com">
+              <span class="hint">Activation link will be sent here</span>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Mobile number</label>
+              <input class="field-input" id="admin-phone" type="tel" placeholder="+63 9XX XXX XXXX">
+              <span class="hint">For ESS activation SMS</span>
+            </div>
+          </div>
+          <div class="field-row full">
+            <div class="field-group">
+              <label class="field-label">Admin role</label>
+              <select class="field-input select-input">
+                <option>Company admin (full access)</option>
+                <option>HR manager</option>
+                <option>Payroll manager</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="section-title" style="margin-top:16px">Portal access</p>
+          <div class="field-row full">
+            <div class="field-group">
+              <label class="field-label">Subdomain<span>*</span></label>
+              <div class="field-input prefix-wrap">
+                <span class="prefix-tag">app.sentire.ph/</span>
+                <input type="text" id="subdomain" placeholder="acme-corp">
+              </div>
+              <span class="hint">Auto-generated from company name — edit if needed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-panel" id="step-4">
+          <p class="section-title">Initial payroll configuration</p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Payroll frequency<span>*</span></label>
+              <select class="field-input select-input">
+                <option>Semi-monthly (1st–15th / 16th–30th)</option>
+                <option>Monthly</option>
+                <option>Weekly</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Standard hours / day</label>
+              <input class="field-input" type="number" value="8" min="1" max="24">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Work week</label>
+              <select class="field-input select-input">
+                <option>Monday – Friday (5 days)</option>
+                <option>Monday – Saturday (6 days)</option>
+                <option>Flexible</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">13th month method</label>
+              <select class="field-input select-input">
+                <option>Strict DOLE (basic pay only)</option>
+                <option>Company policy (regular pay)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">Expected go-live date</label>
+              <input class="field-input" type="date" id="golive">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Timezone</label>
+              <select class="field-input select-input">
+                <option selected>Asia/Manila (PHT, UTC+8)</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="section-title" style="margin-top:16px">Review summary</p>
+          <div id="review-block">
+            <div class="review-row"><span class="review-key">Company</span><span class="review-val" id="r-company">—</span></div>
+            <div class="review-row"><span class="review-key">TIN</span><span class="review-val" id="r-tin">—</span></div>
+            <div class="review-row"><span class="review-key">Plan</span><span class="review-val" id="r-plan">Growth · ₱950/mo</span></div>
+            <div class="review-row"><span class="review-key">Status</span><span class="review-val" id="r-status">Trial</span></div>
+            <div class="review-row"><span class="review-key">Admin</span><span class="review-val" id="r-admin">—</span></div>
+            <div class="review-row"><span class="review-key">Billing email</span><span class="review-val" id="r-billing">—</span></div>
+            <div class="review-row"><span class="review-key">Subdomain</span><span class="review-val" id="r-subdomain">—</span></div>
+          </div>
+
+          <div class="field-row full" style="margin-top:14px">
+            <div class="field-group">
+              <label class="field-label">Internal notes</label>
+              <textarea class="field-input" rows="2" placeholder="Referred by partner, needs custom bank file for Metrobank..."></textarea>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <span class="progress-text" id="progress-text">Step 1 of 4</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" id="btn-back" onclick="back()" style="display:none">Back</button>
+          <button class="btn btn-primary" id="btn-next" onclick="next()">Continue <i class="ti ti-arrow-right" style="font-size:12px;vertical-align:-1px"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentStep = 1;
+  let selectedPlan = 'growth';
+  let selectedStatus = 'trial';
+
+  function updateSteps() {
+    for (let i = 1; i <= 4; i++) {
+      const dot = document.getElementById('dot-' + i);
+      const lbl = document.getElementById('lbl-' + i);
+      const panel = document.getElementById('step-' + i);
+      dot.className = 'step-dot' + (i < currentStep ? ' done' : i === currentStep ? ' active' : '');
+      if (i < currentStep) dot.innerHTML = '<i class="ti ti-check" style="font-size:12px"></i>';
+      else if (i === currentStep) dot.innerHTML = '<i class="ti ti-building" style="font-size:13px"></i>';
+      else dot.textContent = i;
+      if (i === 1) dot.innerHTML = i < currentStep ? '<i class="ti ti-check" style="font-size:12px"></i>' : '<i class="ti ti-building" style="font-size:13px"></i>';
+      lbl.className = 'step-label' + (i === currentStep ? ' active' : '');
+      panel.className = 'step-panel' + (i === currentStep ? ' active' : '');
+    }
+    document.getElementById('progress-text').textContent = 'Step ' + currentStep + ' of 4';
+    document.getElementById('btn-back').style.display = currentStep > 1 ? '' : 'none';
+    const nextBtn = document.getElementById('btn-next');
+    if (currentStep === 4) {
+      nextBtn.innerHTML = '<i class="ti ti-check" style="font-size:12px;vertical-align:-1px"></i> Create tenant';
+    } else {
+      nextBtn.innerHTML = 'Continue <i class="ti ti-arrow-right" style="font-size:12px;vertical-align:-1px"></i>';
+    }
+  }
+
+  function next() {
+    if (currentStep === 4) {
+      sendPrompt('The tenant onboarding form is complete. What happens after clicking Create tenant — what does the system provision in the background?');
+      return;
+    }
+    if (currentStep === 3) buildReview();
+    currentStep = Math.min(4, currentStep + 1);
+    updateSteps();
+  }
+
+  function back() {
+    currentStep = Math.max(1, currentStep - 1);
+    updateSteps();
+  }
+
+  function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+  }
+
+  function selectPlan(p) {
+    selectedPlan = p;
+    ['starter','growth','enterprise'].forEach(x => {
+      document.getElementById('plan-' + x).className = 'plan-card' + (x === p ? ' selected' : '');
+    });
+    const labels = { starter: 'Starter · ₱700/mo', growth: 'Growth · ₱950/mo', enterprise: 'Enterprise · Custom' };
+    document.getElementById('r-plan').textContent = labels[p];
+  }
+
+  function selectStatus(s) {
+    selectedStatus = s;
+    document.getElementById('pill-active').className = 'status-pill' + (s === 'active' ? ' selected-active' : '');
+    document.getElementById('pill-trial').className = 'status-pill' + (s === 'trial' ? ' selected-trial' : '');
+    document.getElementById('trial-row').style.display = s === 'trial' ? '' : 'none';
+    document.getElementById('r-status').textContent = s === 'active' ? 'Active' : 'Trial';
+  }
+
+  function syncSubdomain(val) {
+    const slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    document.getElementById('subdomain').value = slug;
+  }
+
+  function buildReview() {
+    const v = (id) => (document.getElementById(id) || {}).value || '—';
+    document.getElementById('r-company').textContent = v('company-name');
+    document.getElementById('r-tin').textContent = v('tin') || '—';
+    const first = v('admin-first'), last = v('admin-last'), email = v('admin-email');
+    document.getElementById('r-admin').textContent = (first !== '—' || last !== '—') ? `${first} ${last} · ${email}` : '—';
+    document.getElementById('r-billing').textContent = v('billing-email');
+    document.getElementById('r-subdomain').textContent = 'app.sentire.ph/' + (v('subdomain') || '—');
+  }
+
+  selectStatus('trial');
+  updateSteps();
+</script>

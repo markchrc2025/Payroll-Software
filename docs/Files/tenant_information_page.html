@@ -1,0 +1,483 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.shell{display:flex;min-height:720px;background:var(--color-background-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary);font-size:13px}
+.sidebar{width:52px;background:#0f1e36;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:18px;flex-shrink:0}
+.s-logo{width:30px;height:30px;background:#1E3A5F;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:500}
+.s-icon{width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#4a6fa0;border-radius:6px;cursor:pointer;font-size:17px}
+.s-icon.active{background:#1E3A5F;color:#fff}
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{padding:12px 20px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:8px}
+.breadcrumb{font-size:12px;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px}
+.breadcrumb a{color:var(--color-text-secondary);text-decoration:none}
+.breadcrumb a:hover{color:var(--color-text-primary)}
+.tenant-header{background:var(--color-background-primary);padding:16px 20px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.tenant-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tenant-avatar{width:40px;height:40px;background:#1E3A5F;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:500;flex-shrink:0}
+.tenant-name{font-size:16px;font-weight:500;color:var(--color-text-primary)}
+.tenant-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 8px;border-radius:20px;font-weight:500}
+.badge-active{background:rgba(11,122,62,0.1);color:#0b7a3e}
+.badge-trial{background:rgba(179,92,0,0.1);color:#b35c00}
+.badge-plan{background:rgba(30,58,95,0.1);color:#1E3A5F}
+.header-actions{margin-left:auto;display:flex;gap:8px}
+.btn{padding:6px 14px;border-radius:var(--border-radius-md);font-size:12px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:5px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary)}
+.btn:hover{background:var(--color-background-secondary)}
+.btn-primary{background:#1E3A5F;border-color:#1E3A5F;color:#fff}
+.btn-primary:hover{background:#16304f}
+.btn-danger{border-color:rgba(163,45,45,0.4);color:#a32d2d}
+.btn-danger:hover{background:rgba(163,45,45,0.06)}
+.tab-nav{display:flex;gap:0;padding:0 20px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);overflow-x:auto}
+.tab{padding:11px 14px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.tab:hover{color:var(--color-text-primary)}
+.tab.active{color:#1E3A5F;border-bottom-color:#1E3A5F;font-weight:500}
+.page-body{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.tab-panel{display:none}
+.tab-panel.active{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+.card-header{padding:12px 16px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:center}
+.card-title{font-size:12px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:6px}
+.card-title i{font-size:15px;color:var(--color-text-secondary)}
+.card-body{padding:14px 16px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.info-row{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:12px;color:var(--color-text-secondary)}
+.info-val{font-size:12px;color:var(--color-text-primary);font-weight:500;text-align:right}
+.stat-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px}
+.stat-label{font-size:10px;color:var(--color-text-secondary);margin-bottom:4px}
+.stat-val{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.stat-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px}
+.module-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.module-card{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px;display:flex;align-items:flex-start;gap:10px}
+.module-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.module-icon.on{background:rgba(30,58,95,0.1);color:#1E3A5F}
+.module-icon.off{background:var(--color-background-secondary);color:var(--color-text-tertiary)}
+.module-info{flex:1;min-width:0}
+.module-name{font-size:12px;font-weight:500;color:var(--color-text-primary)}
+.module-desc{font-size:11px;color:var(--color-text-secondary);margin-top:2px;line-height:1.4}
+.toggle{width:34px;height:18px;border-radius:9px;cursor:pointer;position:relative;flex-shrink:0;transition:background 0.2s;border:none}
+.toggle.on{background:#1E3A5F}
+.toggle.off{background:var(--color-border-secondary)}
+.toggle::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:2px;transition:left 0.2s}
+.toggle.on::after{left:18px}
+.toggle.off::after{left:2px}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:12px;color:var(--color-text-primary)}
+.setting-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.setting-ctrl{display:flex;align-items:center;gap:8px}
+.field-input{border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:5px 8px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none}
+.field-input:focus{border-color:#1E3A5F}
+.select-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:22px}
+.statutory-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.statutory-row:last-child{border-bottom:none}
+.statutory-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;background:rgba(30,58,95,0.08);color:#1E3A5F;flex-shrink:0}
+.statutory-name{font-size:12px;font-weight:500;color:var(--color-text-primary);min-width:90px}
+.statutory-detail{font-size:11px;color:var(--color-text-secondary);flex:1}
+.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:500}
+.tag-auto{background:rgba(11,122,62,0.1);color:#0b7a3e}
+.tag-manual{background:rgba(179,92,0,0.1);color:#b35c00}
+.bank-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bank-card{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px;display:flex;align-items:center;gap:8px}
+.bank-card.enabled{border-color:rgba(30,58,95,0.4);background:rgba(30,58,95,0.03)}
+.bank-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bank-dot.on{background:#0b7a3e}
+.bank-dot.off{background:var(--color-border-secondary)}
+.bank-name{font-size:12px;color:var(--color-text-primary);font-weight:500;flex:1}
+.bank-format{font-size:10px;color:var(--color-text-secondary)}
+.user-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.user-row:last-child{border-bottom:none}
+.user-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;background:rgba(30,58,95,0.1);color:#1E3A5F;flex-shrink:0}
+.user-name{font-size:12px;font-weight:500;color:var(--color-text-primary)}
+.user-email{font-size:11px;color:var(--color-text-secondary)}
+.user-role{font-size:10px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary);border-radius:4px;padding:2px 6px}
+.notif-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.notif-row:last-child{border-bottom:none}
+.notif-label{font-size:12px;color:var(--color-text-primary)}
+.notif-ch{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.activity-row{display:flex;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--color-border-tertiary);align-items:flex-start}
+.activity-row:last-child{border-bottom:none}
+.activity-dot{width:6px;height:6px;border-radius:50%;background:var(--color-border-secondary);margin-top:4px;flex-shrink:0}
+.activity-dot.green{background:#0b7a3e}
+.activity-text{font-size:12px;color:var(--color-text-primary);line-height:1.4}
+.activity-time{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+</style>
+
+<h2 class="sr-only">Tenant information and configuration page for Acme Retail Corporation in Sentire Central Portal</h2>
+
+<div class="shell">
+  <div class="sidebar">
+    <div class="s-logo">S</div>
+    <div class="s-icon active" aria-hidden="true"><i class="ti ti-building"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-users"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-chart-bar"></i></div>
+    <div class="s-icon" aria-hidden="true"><i class="ti ti-settings"></i></div>
+  </div>
+
+  <div class="content">
+    <div class="topbar">
+      <div class="breadcrumb">
+        <a href="#">Tenants</a>
+        <i class="ti ti-chevron-right" style="font-size:11px" aria-hidden="true"></i>
+        <span style="color:var(--color-text-primary)">Acme Retail Corporation</span>
+      </div>
+    </div>
+
+    <div class="tenant-header">
+      <div class="tenant-meta">
+        <div class="tenant-avatar">AR</div>
+        <div>
+          <div class="tenant-name">Acme Retail Corporation</div>
+          <div class="tenant-sub">TIN 123-456-789-000 &nbsp;·&nbsp; NCR &nbsp;·&nbsp; app.sentire.ph/acme-retail</div>
+        </div>
+        <span class="badge badge-active"><i class="ti ti-circle-check" style="font-size:11px"></i>Active</span>
+        <span class="badge badge-plan"><i class="ti ti-star" style="font-size:11px"></i>Growth plan</span>
+        <div class="header-actions">
+          <button class="btn"><i class="ti ti-mail" style="font-size:13px"></i>Email admin</button>
+          <button class="btn btn-primary" onclick="sendPrompt('What happens when I click Impersonate on a tenant — how does session switching work in the Central Portal?')"><i class="ti ti-login" style="font-size:13px"></i>Impersonate</button>
+          <button class="btn btn-danger"><i class="ti ti-lock" style="font-size:13px"></i>Suspend</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-nav">
+      <div class="tab active" onclick="switchTab('overview',this)"><i class="ti ti-layout-dashboard" style="font-size:13px"></i>Overview</div>
+      <div class="tab" onclick="switchTab('payroll',this)"><i class="ti ti-calculator" style="font-size:13px"></i>Payroll setup</div>
+      <div class="tab" onclick="switchTab('modules',this)"><i class="ti ti-components" style="font-size:13px"></i>HR modules</div>
+      <div class="tab" onclick="switchTab('compliance',this)"><i class="ti ti-file-certificate" style="font-size:13px"></i>Compliance</div>
+      <div class="tab" onclick="switchTab('notifications',this)"><i class="ti ti-bell" style="font-size:13px"></i>Notifications</div>
+      <div class="tab" onclick="switchTab('access',this)"><i class="ti ti-shield-lock" style="font-size:13px"></i>Access & roles</div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- OVERVIEW -->
+      <div class="tab-panel active" id="tab-overview">
+        <div class="three-col">
+          <div class="stat-card"><div class="stat-label">Active employees</div><div class="stat-val">84</div><div class="stat-sub">of 200 slots used</div></div>
+          <div class="stat-card"><div class="stat-label">Last payroll run</div><div class="stat-val">May 30</div><div class="stat-sub">Semi-monthly · ₱1.24M</div></div>
+          <div class="stat-card"><div class="stat-label">Open support tickets</div><div class="stat-val">2</div><div class="stat-sub">1 P2 · 1 P3</div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="ti ti-building"></i>Company details</span>
+              <button class="btn" style="font-size:11px;padding:4px 10px"><i class="ti ti-edit" style="font-size:12px"></i>Edit</button>
+            </div>
+            <div class="card-body">
+              <div class="info-row"><span class="info-key">Legal name</span><span class="info-val">Acme Retail Corporation</span></div>
+              <div class="info-row"><span class="info-key">Trade name</span><span class="info-val">Acme Retail</span></div>
+              <div class="info-row"><span class="info-key">TIN</span><span class="info-val">123-456-789-000</span></div>
+              <div class="info-row"><span class="info-key">Industry</span><span class="info-val">Retail / Trading</span></div>
+              <div class="info-row"><span class="info-key">DOLE region</span><span class="info-val">NCR</span></div>
+              <div class="info-row"><span class="info-key">Branches</span><span class="info-val">5</span></div>
+              <div class="info-row"><span class="info-key">Registered address</span><span class="info-val" style="max-width:180px;text-align:right">Unit 4B, 123 EDSA, Mandaluyong City</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title"><i class="ti ti-credit-card"></i>Subscription & billing</span>
+                <button class="btn" style="font-size:11px;padding:4px 10px"><i class="ti ti-edit" style="font-size:12px"></i>Edit</button>
+              </div>
+              <div class="card-body">
+                <div class="info-row"><span class="info-key">Plan</span><span class="info-val"><span class="badge badge-plan">Growth</span></span></div>
+                <div class="info-row"><span class="info-key">Status</span><span class="info-val"><span class="badge badge-active">Active</span></span></div>
+                <div class="info-row"><span class="info-key">Max employees</span><span class="info-val">200</span></div>
+                <div class="info-row"><span class="info-key">Billing email</span><span class="info-val">billing@acme.com</span></div>
+                <div class="info-row"><span class="info-key">Billing cycle</span><span class="info-val">1st of the month</span></div>
+                <div class="info-row"><span class="info-key">Customer since</span><span class="info-val">Jan 15, 2026</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="ti ti-activity"></i>Recent activity</span></div>
+              <div class="card-body" style="padding:10px 16px">
+                <div class="activity-row"><div class="activity-dot green"></div><div><div class="activity-text">Payroll run finalized — May 16–31</div><div class="activity-time">Today, 9:12 AM</div></div></div>
+                <div class="activity-row"><div class="activity-dot green"></div><div><div class="activity-text">3 new employees added</div><div class="activity-time">Jun 1, 3:40 PM</div></div></div>
+                <div class="activity-row"><div class="activity-dot"></div><div><div class="activity-text">Geofence updated — Makati branch</div><div class="activity-time">May 28, 11:05 AM</div></div></div>
+                <div class="activity-row"><div class="activity-dot"></div><div><div class="activity-text">Support ticket opened — P2</div><div class="activity-time">May 27, 2:30 PM</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAYROLL SETUP -->
+      <div class="tab-panel" id="tab-payroll">
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><span class="card-title"><i class="ti ti-calendar"></i>Payroll schedule</span></div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div><div class="setting-label">Payroll frequency</div></div>
+                <div class="setting-ctrl"><select class="field-input select-input"><option selected>Semi-monthly (1st–15th / 16th–30th)</option><option>Monthly</option><option>Weekly</option></select></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Statutory deduction cutoff</div><div class="setting-sub">Which cutoff collects SSS, PhilHealth, Pag-IBIG</div></div>
+                <div class="setting-ctrl"><select class="field-input select-input"><option>2nd cutoff (16th–30th)</option><option>1st cutoff (1st–15th)</option></select></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Working days denominator</div><div class="setting-sub">Used for daily rate computation</div></div>
+                <div class="setting-ctrl"><select class="field-input select-input"><option>261 days (excl. weekends)</option><option>313 days (incl. Sat)</option><option>365 days (all days)</option></select></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Standard hours per day</div></div>
+                <div class="setting-ctrl"><input class="field-input" type="number" value="8" style="width:60px"></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Tardiness grace period</div></div>
+                <div class="setting-ctrl"><input class="field-input" type="number" value="5" style="width:60px"><span style="font-size:11px;color:var(--color-text-secondary)">min</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title"><i class="ti ti-receipt"></i>13th month & computation</span></div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div><div class="setting-label">13th month method</div><div class="setting-sub">Basis for annual computation</div></div>
+                <div class="setting-ctrl"><select class="field-input select-input"><option>Strict DOLE (basic pay)</option><option>Company policy (regular pay)</option></select></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Default salary type</div></div>
+                <div class="setting-ctrl"><select class="field-input select-input"><option>Monthly paid</option><option>Daily paid</option></select></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Minimum wage employees (MWE)</div><div class="setting-sub">MWE are exempt from withholding tax</div></div>
+                <div class="setting-ctrl"><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle MWE"></button></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Night shift differential</div><div class="setting-sub">+10% for work between 10PM–6AM</div></div>
+                <div class="setting-ctrl"><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle NSD"></button></div>
+              </div>
+              <div class="setting-row">
+                <div><div class="setting-label">Off-cycle bonus runs</div><div class="setting-sub">Allow skip-statutory flag on bonus payrolls</div></div>
+                <div class="setting-ctrl"><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle bonus runs"></button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="ti ti-building-bank"></i>Bank file generation</span><button class="btn" style="font-size:11px;padding:4px 10px"><i class="ti ti-plus" style="font-size:12px"></i>Add bank</button></div>
+          <div class="card-body">
+            <div class="bank-grid">
+              <div class="bank-card enabled"><div class="bank-dot on"></div><div><div class="bank-name">BDO Unibank</div><div class="bank-format">CSV · PESONET format</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle BDO"></button></div>
+              <div class="bank-card enabled"><div class="bank-dot on"></div><div><div class="bank-name">BPI</div><div class="bank-format">TXT · BPI payroll format</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle BPI"></button></div>
+              <div class="bank-card"><div class="bank-dot off"></div><div><div class="bank-name">UnionBank</div><div class="bank-format">XLSX · EON payroll format</div></div><button class="toggle off" onclick="toggleBtn(this)" aria-label="Toggle UnionBank"></button></div>
+              <div class="bank-card"><div class="bank-dot off"></div><div><div class="bank-name">Metrobank</div><div class="bank-format">CSV · Metrobank batch format</div></div><button class="toggle off" onclick="toggleBtn(this)" aria-label="Toggle Metrobank"></button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HR MODULES -->
+      <div class="tab-panel" id="tab-modules">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="card" style="border:0.5px solid rgba(30,58,95,0.3)">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon on"><i class="ti ti-users" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name">HRIS — Human resource information system</div>
+                  <div class="module-desc">Employee profiles, 201 files, organizational structure, asset tracking, incident management & movement forms</div>
+                </div>
+                <button class="toggle on" onclick="toggleModule(this,'hris')" aria-label="Toggle HRIS"></button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border:0.5px solid rgba(30,58,95,0.3)">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon on"><i class="ti ti-topology-star" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name">ATS — Applicant tracking system</div>
+                  <div class="module-desc">Kanban recruitment pipeline, applicant stages, 1-click convert to employee</div>
+                </div>
+                <button class="toggle on" onclick="toggleModule(this,'ats')" aria-label="Toggle ATS"></button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border:0.5px solid rgba(30,58,95,0.3)">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon on"><i class="ti ti-clock" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name">Time & attendance</div>
+                  <div class="module-desc">GPS geofencing clock-in with selfie capture, kiosk mode, shift scheduling, leave management, DTR approval chain, OT management</div>
+                </div>
+                <button class="toggle on" onclick="toggleModule(this,'ta')" aria-label="Toggle Time and Attendance"></button>
+              </div>
+              <div style="border-top:0.5px solid var(--color-border-tertiary);margin-top:10px;padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="setting-row" style="padding:4px 0"><div><div class="setting-label" style="font-size:11px">GPS geofencing</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle GPS" style="width:28px;height:15px"></button></div>
+                <div class="setting-row" style="padding:4px 0"><div><div class="setting-label" style="font-size:11px">Kiosk mode</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle Kiosk" style="width:28px;height:15px"></button></div>
+                <div class="setting-row" style="padding:4px 0"><div><div class="setting-label" style="font-size:11px">Selfie capture</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle Selfie" style="width:28px;height:15px"></button></div>
+                <div class="setting-row" style="padding:4px 0"><div><div class="setting-label" style="font-size:11px">DTR approval chain</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle DTR" style="width:28px;height:15px"></button></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border:0.5px solid rgba(30,58,95,0.3)">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon on"><i class="ti ti-calculator" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name">Payroll</div>
+                  <div class="module-desc">Gross-to-net computation engine, payroll book & sheet, expense claims, custom pay components, bank file generation</div>
+                </div>
+                <button class="toggle on" onclick="toggleModule(this,'payroll')" aria-label="Toggle Payroll"></button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border:0.5px solid rgba(30,58,95,0.3)">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon on"><i class="ti ti-file-check" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name">Compliance & statutory reports</div>
+                  <div class="module-desc">SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C, Form 2316, Alphalist — auto-generated each payroll run</div>
+                </div>
+                <button class="toggle on" onclick="toggleModule(this,'compliance')" aria-label="Toggle Compliance"></button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="module-icon off"><i class="ti ti-device-mobile" aria-hidden="true"></i></div>
+                <div class="module-info">
+                  <div class="module-name" style="color:var(--color-text-secondary)">ESS — Employee self-service mobile PWA</div>
+                  <div class="module-desc">Clock-in, payslip viewing (PIN-protected), leave & OT filing, expense claims, profile management</div>
+                </div>
+                <button class="toggle off" onclick="toggleModule(this,'ess')" aria-label="Toggle ESS"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPLIANCE -->
+      <div class="tab-panel" id="tab-compliance">
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="ti ti-file-certificate"></i>Statutory deduction tables</span><span class="tag tag-auto">Auto-updated by Sentire</span></div>
+          <div class="card-body">
+            <div class="statutory-row"><div class="statutory-icon"><i class="ti ti-shield" aria-hidden="true"></i></div><div class="statutory-name">SSS</div><div class="statutory-detail">Social Security System · MSC table 2024 · Employer 9.5% / Employee 4.5%</div><span class="tag tag-auto">Current</span></div>
+            <div class="statutory-row"><div class="statutory-icon"><i class="ti ti-heart-rate-monitor" aria-hidden="true"></i></div><div class="statutory-name">PhilHealth</div><div class="statutory-detail">Philippine Health Insurance · 5% of basic salary (employer 2.5% / employee 2.5%) · AO 2023-0016</div><span class="tag tag-auto">Current</span></div>
+            <div class="statutory-row"><div class="statutory-icon"><i class="ti ti-home" aria-hidden="true"></i></div><div class="statutory-name">Pag-IBIG (HDMF)</div><div class="statutory-detail">Home Development Mutual Fund · 2% employee / 2% employer · capped at ₱100/mo employee</div><span class="tag tag-auto">Current</span></div>
+            <div class="statutory-row"><div class="statutory-icon"><i class="ti ti-tax" aria-hidden="true"></i></div><div class="statutory-name">BIR TRAIN</div><div class="statutory-detail">Withholding tax on compensation · TRAIN Law (RA 10963) · 2023 annual tables</div><span class="tag tag-auto">Current</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="ti ti-coin"></i>De minimis benefits ceilings</span><span style="font-size:11px;color:var(--color-text-secondary)">RR 29-2025 · non-taxable thresholds</span></div>
+          <div class="card-body">
+            <div class="two-col" style="gap:8px">
+              <div class="info-row"><span class="info-key">Rice subsidy</span><span class="info-val">₱3,000 / mo</span></div>
+              <div class="info-row"><span class="info-key">Medical cash allowance</span><span class="info-val">₱1,500 / semester</span></div>
+              <div class="info-row"><span class="info-key">Uniform & clothing</span><span class="info-val">₱6,000 / yr</span></div>
+              <div class="info-row"><span class="info-key">Laundry allowance</span><span class="info-val">₱300 / mo</span></div>
+              <div class="info-row"><span class="info-key">Employee achievement awards</span><span class="info-val">₱10,000 / yr</span></div>
+              <div class="info-row"><span class="info-key">13th month & other benefits</span><span class="info-val">₱90,000 / yr</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="ti ti-report"></i>Statutory report generation</span></div>
+          <div class="card-body">
+            <div class="setting-row"><div><div class="setting-label">Auto-generate after each payroll run</div><div class="setting-sub">SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle auto-generate"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Annual reports (BIR Form 2316 & Alphalist)</div><div class="setting-sub">Generated in January for the preceding tax year</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle annual reports"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Final pay documents (Quitclaim & Form 2316)</div><div class="setting-sub">Auto-generated on employee offboarding</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle final pay docs"></button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="tab-panel" id="tab-notifications">
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><span class="card-title"><i class="ti ti-mail"></i>Email notifications (Resend)</span></div>
+            <div class="card-body">
+              <div class="notif-row"><div><div class="notif-label">Payslip published</div><div class="notif-ch">Sent to each employee</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle payslip email"></button></div>
+              <div class="notif-row"><div><div class="notif-label">Leave approved / rejected</div><div class="notif-ch">Sent to employee</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle leave email"></button></div>
+              <div class="notif-row"><div><div class="notif-label">OT approved / rejected</div><div class="notif-ch">Sent to employee</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle OT email"></button></div>
+              <div class="notif-row"><div><div class="notif-label">DTR submission reminder</div><div class="notif-ch">Sent at cutoff end</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle DTR reminder email"></button></div>
+              <div class="notif-row"><div><div class="notif-label">Expense claim update</div><div class="notif-ch">Sent to employee</div></div><button class="toggle off" onclick="toggleBtn(this)" aria-label="Toggle expense email"></button></div>
+              <div class="notif-row"><div><div class="notif-label">Statutory rate update</div><div class="notif-ch">Sent to company admin</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle statutory email"></button></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="ti ti-device-mobile-message"></i>SMS notifications (Semaphore PH)</span></div>
+              <div class="card-body">
+                <div class="notif-row"><div><div class="notif-label">ESS activation link</div><div class="notif-ch">Sent on employee creation</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle activation SMS"></button></div>
+                <div class="notif-row"><div><div class="notif-label">OT approved / rejected</div><div class="notif-ch">For employees without email</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle OT SMS"></button></div>
+                <div class="notif-row"><div><div class="notif-label">Clock-in geofence alert</div><div class="notif-ch">Optional · configurable per branch</div></div><button class="toggle off" onclick="toggleBtn(this)" aria-label="Toggle geofence SMS"></button></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="ti ti-bell-ringing"></i>Web push (ESS PWA)</span></div>
+              <div class="card-body">
+                <div class="notif-row"><div><div class="notif-label">Payslip released</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle payslip push"></button></div>
+                <div class="notif-row"><div><div class="notif-label">Leave approved / rejected</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle leave push"></button></div>
+                <div class="notif-row"><div><div class="notif-label">DTR submission reminder</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle DTR push"></button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCESS -->
+      <div class="tab-panel" id="tab-access">
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="ti ti-users"></i>Admin users</span><button class="btn btn-primary" style="font-size:11px;padding:4px 10px"><i class="ti ti-plus" style="font-size:12px"></i>Add admin</button></div>
+          <div class="card-body">
+            <div class="user-row"><div class="user-avatar">JD</div><div style="flex:1"><div class="user-name">Juan Dela Cruz</div><div class="user-email">juan@acme.com</div></div><span class="user-role">Company admin</span><span class="badge badge-active" style="margin-left:8px">Active</span></div>
+            <div class="user-row"><div class="user-avatar">MA</div><div style="flex:1"><div class="user-name">Maria Aquino</div><div class="user-email">maria.hr@acme.com</div></div><span class="user-role">HR manager</span><span class="badge badge-active">Active</span></div>
+            <div class="user-row"><div class="user-avatar">RL</div><div style="flex:1"><div class="user-name">Ricardo Luna</div><div class="user-email">payroll@acme.com</div></div><span class="user-role">Payroll manager</span><span class="badge badge-active">Active</span></div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><span class="card-title"><i class="ti ti-hierarchy"></i>Role permissions</span></div>
+            <div class="card-body">
+              <div class="info-row"><span class="info-key">Company admin</span><span class="info-val" style="font-size:11px">Full access</span></div>
+              <div class="info-row"><span class="info-key">HR manager</span><span class="info-val" style="font-size:11px">All HR modules · payroll read</span></div>
+              <div class="info-row"><span class="info-key">Payroll manager</span><span class="info-val" style="font-size:11px">Payroll run · statutory reports</span></div>
+              <div class="info-row"><span class="info-key">Supervisor</span><span class="info-val" style="font-size:11px">DTR edit · leave/OT approval</span></div>
+              <div class="info-row"><span class="info-key">Manager</span><span class="info-val" style="font-size:11px">DTR final approval · audit log</span></div>
+              <div class="info-row"><span class="info-key">Employee</span><span class="info-val" style="font-size:11px">ESS only (own records)</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title"><i class="ti ti-lock"></i>Security settings</span></div>
+            <div class="card-body">
+              <div class="setting-row"><div><div class="setting-label">Enforce SSL on all connections</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle SSL"></button></div>
+              <div class="setting-row"><div><div class="setting-label">Payslip PIN protection</div><div class="setting-sub">Employees must enter PIN to view payslip</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle PIN"></button></div>
+              <div class="setting-row"><div><div class="setting-label">Bank account change approval</div><div class="setting-sub">Profile update requests require HR approval</div></div><button class="toggle on" onclick="toggleBtn(this)" aria-label="Toggle bank approval"></button></div>
+              <div class="setting-row"><div><div class="setting-label">ESS session timeout</div></div><div class="setting-ctrl"><input class="field-input" type="number" value="8" style="width:55px"><span style="font-size:11px;color:var(--color-text-secondary)">hrs</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(id, el) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.className = 'tab-panel');
+  document.querySelectorAll('.tab').forEach(t => t.className = 'tab');
+  document.getElementById('tab-' + id).className = 'tab-panel active';
+  el.className = 'tab active';
+}
+function toggleBtn(btn) {
+  const isOn = btn.classList.contains('on');
+  btn.className = btn.className.replace(isOn ? 'on' : 'off', isOn ? 'off' : 'on');
+}
+function toggleModule(btn, name) {
+  const isOn = btn.classList.contains('on');
+  btn.className = btn.className.replace(isOn ? 'on' : 'off', isOn ? 'off' : 'on');
+  const card = btn.closest('.card');
+  const icon = card.querySelector('.module-icon');
+  if (icon) icon.className = 'module-icon ' + (isOn ? 'off' : 'on');
+}
+</script>

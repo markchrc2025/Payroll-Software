@@ -85,6 +85,7 @@ enum EmploymentType {
 enum PayFrequency {
   DAILY
   WEEKLY
+  BI_WEEKLY
   SEMI_MONTHLY
   MONTHLY
 }
@@ -501,6 +502,10 @@ model Tenant {
 
   // Payroll defaults (§9 of blueprint)
   payrollCycle           PayFrequency         @default(SEMI_MONTHLY)
+  /// For Semi-Monthly/Monthly: day of month (1–28). For Weekly/Bi-Weekly: ISO weekday (1=Mon … 7=Sun).
+  payDay1                Int?
+  /// Second pay day — only used for Semi-Monthly (e.g. 1 & 15 → payDay1=1, payDay2=15).
+  payDay2                Int?
   workingDaysDenominator Int                  @default(261)
   statutoryCutoffRule    StatutoryCutoffRule  @default(SECOND_CUTOFF)
   thirteenthMonthBasis   ThirteenthMonthBasis @default(STRICT_DOLE)

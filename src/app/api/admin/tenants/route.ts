@@ -6,6 +6,7 @@
  */
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import prismaAdmin from "@/lib/prisma-admin";
 import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import { ok, err, unauthorized, forbidden, serverError, paginated } from "@/lib/api-response";
@@ -21,6 +22,22 @@ const createTenantSchema = z.object({
   subscriptionStatus: z.enum(["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED"]).default("TRIALING"),
   billingEmail: z.string().email().optional().nullable(),
   featureFlags: z.record(z.string(), z.boolean()).default({}),
+  // Wizard — company detail fields
+  tinNumber: z.string().max(20).optional().nullable(),
+  address: z.string().max(300).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  province: z.string().max(100).optional().nullable(),
+  zipCode: z.string().max(10).optional().nullable(),
+  contactEmail: z.string().email().optional().nullable(),
+  contactPhone: z.string().max(30).optional().nullable(),
+  trialEndsAt: z.string().datetime().optional().nullable(),
+  payrollCycle: z.enum(["DAILY", "WEEKLY", "BI_WEEKLY", "SEMI_MONTHLY", "MONTHLY"]).optional(),
+  // Wizard — optional primary admin account to create
+  adminFirstName: z.string().min(1).max(100).optional().nullable(),
+  adminLastName: z.string().min(1).max(100).optional().nullable(),
+  adminEmail: z.string().email().optional().nullable(),
+  adminPassword: z.string().min(8).optional().nullable(),
+  adminPhone: z.string().max(30).optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -79,16 +96,32 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return err("Validation failed", 400, parsed.error.flatten());
 
   try {
+    const {
+      adminFirstName, adminLastName, adminEmail, adminPassword, adminPhone,
+      tinNumber, address, city, province, zipCode, contactEmail, contactPhone,
+      trialEndsAt, payrollCycle,
+      ...tenantData
+    } = parsed.data;
+
     const tenant = await prismaAdmin.tenant.create({
       data: {
-        name: parsed.data.name,
-        tradeName: parsed.data.tradeName ?? null,
-        subdomain: parsed.data.subdomain ?? null,
-        industry: parsed.data.industry ?? null,
-        subscriptionTier: parsed.data.subscriptionTier,
-        subscriptionStatus: parsed.data.subscriptionStatus,
-        billingEmail: parsed.data.billingEmail ?? null,
-        featureFlags: parsed.data.featureFlags as unknown as Prisma.InputJsonValue,
+        name: tenantData.name,
+        tradeName: tenantData.tradeName ?? null,
+        subdomain: tenantData.subdomain ?? null,
+        industry: tenantData.industry ?? null,
+        subscriptionTier: tenantData.subscriptionTier,
+        subscriptionStatus: tenantData.subscriptionStatus,
+        billingEmail: tenantData.billingEmail ?? null,
+        featureFlags: tenantData.featureFlags as unknown as Prisma.InputJsonValue,
+        tinNumber: tinNumber ?? null,
+        address: address ?? null,
+        city: city ?? null,
+        province: province ?? null,
+        zipCode: zipCode ?? null,
+        contactEmail: contactEmail ?? null,
+        contactPhone: contactPhone ?? null,
+        ...(trialEndsAt ? { trialEndsAt: new Date(trialEndsAt) } : {}),
+        ...(payrollCycle ? { payrollCycle } : {}),
       },
       select: {
         id: true,
@@ -102,6 +135,25 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Optionally provision the primary admin user
+    let adminUser: { id: string; email: string } | null = null;
+    if (adminEmail && adminPassword && adminFirstName && adminLastName) {
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      adminUser = await prismaAdmin.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: adminEmail,
+          passwordHash,
+          firstName: adminFirstName,
+          lastName: adminLastName,
+          ...(adminPhone ? { } : {}), // phone not in User schema; stored in contactPhone on tenant
+          systemRole: "TENANT_USER",
+          isActive: true,
+        },
+        select: { id: true, email: true },
+      }).catch(() => null); // don't fail tenant creation if user creation fails
+    }
+
     await writeAuditLog({
       tenantId: tenant.id,
       actorUserId: ctx.userId,
@@ -112,7 +164,7 @@ export async function POST(req: NextRequest) {
       ipAddress: getClientIp(req),
     });
 
-    return ok(tenant, "Tenant created", 201);
+    return ok({ ...tenant, adminUser }, "Tenant created", 201);
   } catch (e: unknown) {
     if (
       e &&

@@ -25,6 +25,14 @@ const patchTenantSchema = z.object({
   featureFlagsPatch: z.record(z.string(), z.boolean()).optional(),
   contactEmail: z.string().email().nullable().optional(),
   contactPhone: z.string().max(30).nullable().optional(),
+  tinNumber: z.string().max(20).nullable().optional(),
+  address: z.string().max(300).nullable().optional(),
+  city: z.string().max(100).nullable().optional(),
+  province: z.string().max(100).nullable().optional(),
+  zipCode: z.string().max(10).nullable().optional(),
+  payrollCycle: z.enum(["DAILY", "WEEKLY", "BI_WEEKLY", "SEMI_MONTHLY", "MONTHLY"]).optional(),
+  payDay1: z.number().int().min(0).max(28).nullable().optional(),
+  payDay2: z.number().int().min(0).max(28).nullable().optional(),
 });
 
 export async function GET(
@@ -36,6 +44,7 @@ export async function GET(
 
   const { id } = await params;
 
+  try {
   const tenant = await prismaAdmin.tenant.findFirst({
     where: { id, deletedAt: null },
     select: {
@@ -50,8 +59,18 @@ export async function GET(
       billingEmail: true,
       featureFlags: true,
       payrollCycle: true,
+      payDay1: true,
+      payDay2: true,
+      thirteenthMonthBasis: true,
+      statutoryCutoffRule: true,
+      workingDaysDenominator: true,
       contactEmail: true,
       contactPhone: true,
+      tinNumber: true,
+      address: true,
+      city: true,
+      province: true,
+      zipCode: true,
       createdAt: true,
       updatedAt: true,
       _count: { select: { employees: true, users: true, payrollBooks: true } },
@@ -60,6 +79,10 @@ export async function GET(
 
   if (!tenant) return notFound("Tenant");
   return ok(tenant);
+  } catch (e) {
+    console.error("[GET /api/admin/tenants/[id]] Prisma error:", e);
+    return serverError(e);
+  }
 }
 
 export async function PATCH(
