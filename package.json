@@ -12,6 +12,7 @@
     "dev:stop": "bash scripts/dev-keepalive.sh stop",
     "dev:logs": "bash scripts/dev-keepalive.sh logs",
     "build": "next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
