@@ -1,8 +1,6 @@
 "use client";
 
-
-export const dynamic = "force-dynamic";
-
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -10,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function KioskSetupPage() {
+function KioskSetupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [deviceToken, setDeviceToken] = useState("");
@@ -111,5 +109,19 @@ export default function KioskSetupPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function KioskSetupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center px-6">
+          <div className="text-gray-500 text-sm">Loading…</div>
+        </div>
+      }
+    >
+      <KioskSetupContent />
+    </Suspense>
   );
 }
