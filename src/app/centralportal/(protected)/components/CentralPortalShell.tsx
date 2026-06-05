@@ -33,28 +33,32 @@ export default function CentralPortalShell({ children, user }: Props) {
   return (
     <div
       className="flex h-screen overflow-hidden"
-      style={{ background: "#0A1929" }}
+      style={{ background: "#F9FAFB", fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}
     >
       <aside
         className="w-60 flex-shrink-0 flex flex-col"
-        style={{ background: "#0F2340", borderRight: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: "#FFFFFF", borderRight: "1px solid #E5E7EB" }}
       >
+        {/* Brand */}
         <div
           className="flex items-center gap-3 px-5 py-5 border-b"
-          style={{ borderColor: "rgba(255,255,255,0.07)" }}
+          style={{ borderColor: "#F3F4F6" }}
         >
           <div
             className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
-            style={{ background: "#2D6BE4" }}
+            style={{ background: "#1E3A5F" }}
           >
             <Shield className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white leading-none">Sentire Central</p>
-            <p className="text-[10px] text-white/40 mt-0.5">Super Admin Portal</p>
+            <p className="text-sm font-semibold leading-none" style={{ color: "#111827" }}>
+              Sentire Central
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: "#9CA3AF" }}>Super Admin Portal</p>
           </div>
         </div>
 
+        {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {NAV.map(({ label, href, icon: Icon }) => {
             const active = path.startsWith(href);
@@ -64,9 +68,9 @@ export default function CentralPortalShell({ children, user }: Props) {
                 href={href}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                  active ? "text-blue-400" : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                  active ? "" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                 )}
-                style={active ? { background: "rgba(45,107,228,0.15)" } : {}}
+                style={active ? { background: "rgba(30,58,95,0.08)", color: "#1E3A5F" } : {}}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 <span className="flex-1">{label}</span>
@@ -76,26 +80,29 @@ export default function CentralPortalShell({ children, user }: Props) {
           })}
         </nav>
 
-        <div className="p-3 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+        {/* User footer */}
+        <div className="p-3 border-t" style={{ borderColor: "#F3F4F6" }}>
           <div
             className="flex items-center gap-3 px-2 py-2 rounded-lg mb-1"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "#F9FAFB" }}
           >
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-              style={{ background: "#2D6BE4" }}
+              style={{ background: "#1E3A5F" }}
             >
               {user.name?.charAt(0)?.toUpperCase() ?? "A"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{user.name ?? "Admin"}</p>
-              <p className="text-[10px] text-white/40 truncate">{user.email}</p>
+              <p className="text-xs font-medium truncate" style={{ color: "#111827" }}>
+                {user.name ?? "Admin"}
+              </p>
+              <p className="text-[10px] truncate" style={{ color: "#9CA3AF" }}>{user.email}</p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-white/40 hover:text-white hover:bg-white/5 text-xs gap-2"
+            className="w-full justify-start text-gray-500 hover:text-gray-800 hover:bg-gray-50 text-xs gap-2"
             onClick={() => signOut({ callbackUrl: "/centralportal/login" })}
           >
             <LogOut className="w-3.5 h-3.5" />
