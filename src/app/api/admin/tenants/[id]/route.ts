@@ -1,5 +1,5 @@
 /**
- * GET   /api/admin/tenants/[id] — get tenant details
+ * GET /api/admin/tenants/[id] — get tenant details
  * PATCH /api/admin/tenants/[id] — update subscriptionTier, subscriptionStatus, featureFlags, etc.
  *
  * Requires SUPER_ADMIN system role. Uses prismaAdmin (BYPASSRLS).
@@ -34,6 +34,9 @@ const patchTenantSchema = z.object({
   payrollCycle: z.enum(["DAILY", "WEEKLY", "BI_WEEKLY", "SEMI_MONTHLY", "MONTHLY"]).optional(),
   payDay1: z.number().int().min(0).max(28).nullable().optional(),
   payDay2: z.number().int().min(0).max(28).nullable().optional(),
+  thirteenthMonthBasis: z.enum(["STRICT_DOLE", "INCLUDE_ALLOWANCES"]).optional(),
+  statutoryCutoffRule: z.enum(["FIRST_CUTOFF", "SECOND_CUTOFF"]).optional(),
+  workingDaysDenominator: z.number().int().min(1).max(366).optional(),
 });
 
 export async function GET(
@@ -46,41 +49,41 @@ export async function GET(
   const { id } = await params;
 
   try {
-  const tenant = await prismaAdmin.tenant.findFirst({
-    where: { id, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      tradeName: true,
-      companyCode: true,
-      subdomain: true,
-      industry: true,
-      subscriptionTier: true,
-      subscriptionStatus: true,
-      trialEndsAt: true,
-      billingEmail: true,
-      featureFlags: true,
-      payrollCycle: true,
-      payDay1: true,
-      payDay2: true,
-      thirteenthMonthBasis: true,
-      statutoryCutoffRule: true,
-      workingDaysDenominator: true,
-      contactEmail: true,
-      contactPhone: true,
-      tinNumber: true,
-      address: true,
-      city: true,
-      province: true,
-      zipCode: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: { select: { employees: true, users: true, payrollBooks: true } },
-    },
-  });
+    const tenant = await prismaAdmin.tenant.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        tradeName: true,
+        companyCode: true,
+        subdomain: true,
+        industry: true,
+        subscriptionTier: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        billingEmail: true,
+        featureFlags: true,
+        payrollCycle: true,
+        payDay1: true,
+        payDay2: true,
+        thirteenthMonthBasis: true,
+        statutoryCutoffRule: true,
+        workingDaysDenominator: true,
+        contactEmail: true,
+        contactPhone: true,
+        tinNumber: true,
+        address: true,
+        city: true,
+        province: true,
+        zipCode: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { employees: true, users: true, payrollBooks: true } },
+      },
+    });
 
-  if (!tenant) return notFound("Tenant");
-  return ok(tenant);
+    if (!tenant) return notFound("Tenant");
+    return ok(tenant);
   } catch (e) {
     console.error("[GET /api/admin/tenants/[id]] Prisma error:", e);
     return serverError(e);
@@ -128,6 +131,12 @@ export async function PATCH(
         subscriptionStatus: true,
         trialEndsAt: true,
         featureFlags: true,
+        payrollCycle: true,
+        payDay1: true,
+        payDay2: true,
+        thirteenthMonthBasis: true,
+        statutoryCutoffRule: true,
+        workingDaysDenominator: true,
         updatedAt: true,
       },
     });
