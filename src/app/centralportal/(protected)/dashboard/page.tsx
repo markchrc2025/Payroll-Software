@@ -3,7 +3,6 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Building2, Users, TrendingUp, AlertCircle, Plus, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 const TIER_COLOR: Record<string, string> = {
   PRO: "#10B981",
@@ -59,16 +58,14 @@ export default async function DashboardPage() {
             Overview of all tenants and subscriptions
           </p>
         </div>
-        <Button
-          asChild
-          className="text-white hover:opacity-90"
+        <Link
+          href="/centralportal/tenants/new"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           style={{ background: "#2D6BE4" }}
         >
-          <Link href="/centralportal/tenants/new">
-            <Plus className="w-4 h-4 mr-2" />
-            Onboard Tenant
-          </Link>
-        </Button>
+          <Plus className="w-4 h-4" />
+          Onboard Tenant
+        </Link>
       </div>
 
       {/* Stats */}
