@@ -37,6 +37,7 @@ type Tenant = {
   subscriptionStatus: string; trialEndsAt: string | null; billingEmail: string | null;
   featureFlags: Record<string, boolean>;
   payrollCycle: string | null; payDay1: number | null; payDay2: number | null;
+  statutoryCutoffRule: string | null; thirteenthMonthBasis: string | null; workingDaysDenominator: number | null;
   contactEmail: string | null; contactPhone: string | null; tinNumber: string | null;
   address: string | null; city: string | null; province: string | null; zipCode: string | null;
   createdAt: string; updatedAt: string;
@@ -80,12 +81,6 @@ const DE_MINIMIS: [string, string][] = [
   ["Achievement awards", "PHP 10,000 / yr"],
   ["13th month & other", "PHP 90,000 / yr"],
 ];
-const BANKS: { name: string; format: string }[] = [
-  { name: "BDO Unibank", format: "CSV · PESONET format" },
-  { name: "BPI", format: "TXT · BPI payroll format" },
-  { name: "UnionBank", format: "XLSX · EON payroll format" },
-  { name: "Metrobank", format: "CSV · Metrobank batch format" },
-];
 const ROLE_PERMS: [string, string][] = [
   ["Company admin", "Full access"],
   ["HR manager", "All HR modules · payroll read"],
@@ -94,39 +89,49 @@ const ROLE_PERMS: [string, string][] = [
   ["Manager", "DTR final approval · audit log"],
   ["Employee", "ESS only (own records)"],
 ];
-const EMAIL_NOTIFS: [string, string, boolean][] = [
-  ["Payslip published", "Sent to each employee", true],
-  ["Leave approved / rejected", "Sent to employee", true],
-  ["OT approved / rejected", "Sent to employee", true],
-  ["DTR submission reminder", "Sent at cutoff end", true],
-  ["Expense claim update", "Sent to employee", false],
-  ["Statutory rate update", "Sent to company admin", true],
+// featureFlags-backed toggles: [key, label, sublabel, default]
+const PAYROLL_TOGGLES: [string, string, string, boolean][] = [
+  ["pay_mwe", "Minimum wage employees (MWE)", "MWE are exempt from withholding tax", true],
+  ["pay_nsd", "Night shift differential", "+10% for work between 10PM-6AM", true],
+  ["pay_bonus", "Off-cycle bonus runs", "Allow skip-statutory flag on bonus payrolls", true],
 ];
-const SMS_NOTIFS: [string, string, boolean][] = [
-  ["ESS activation link", "Sent on employee creation", true],
-  ["OT approved / rejected", "For employees without email", true],
-  ["Clock-in geofence alert", "Optional · per branch", false],
+const REPORT_TOGGLES: [string, string, string, boolean][] = [
+  ["rep_autogen", "Auto-generate after each payroll run", "SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C", true],
+  ["rep_annual", "Annual reports (BIR 2316 & Alphalist)", "Generated each January for the preceding tax year", true],
+  ["rep_finalpay", "Final pay documents (Quitclaim & 2316)", "Auto-generated on employee offboarding", true],
+];
+const EMAIL_NOTIFS: [string, string, string, boolean][] = [
+  ["notif_email_payslip", "Payslip published", "Sent to each employee", true],
+  ["notif_email_leave", "Leave approved / rejected", "Sent to employee", true],
+  ["notif_email_ot", "OT approved / rejected", "Sent to employee", true],
+  ["notif_email_dtr", "DTR submission reminder", "Sent at cutoff end", true],
+  ["notif_email_expense", "Expense claim update", "Sent to employee", false],
+  ["notif_email_statutory", "Statutory rate update", "Sent to company admin", true],
+];
+const SMS_NOTIFS: [string, string, string, boolean][] = [
+  ["notif_sms_activation", "ESS activation link", "Sent on employee creation", true],
+  ["notif_sms_ot", "OT approved / rejected", "For employees without email", true],
+  ["notif_sms_geofence", "Clock-in geofence alert", "Optional - per branch", false],
 ];
 const PUSH_NOTIFS: [string, string, boolean][] = [
-  ["Payslip released", "", true],
-  ["Leave approved / rejected", "", true],
-  ["DTR submission reminder", "", true],
+  ["notif_push_payslip", "Payslip released", true],
+  ["notif_push_leave", "Leave approved / rejected", true],
+  ["notif_push_dtr", "DTR submission reminder", true],
 ];
-const SECURITY: [string, string, boolean][] = [
-  ["Enforce SSL on all connections", "", true],
-  ["Payslip PIN protection", "Employees must enter PIN to view payslip", true],
-  ["Bank account change approval", "Profile update requests require HR approval", true],
+const SECURITY: [string, string, string, boolean][] = [
+  ["sec_ssl", "Enforce SSL on all connections", "", true],
+  ["sec_pin", "Payslip PIN protection", "Employees must enter PIN to view payslip", true],
+  ["sec_bankapproval", "Bank account change approval", "Profile update requests require HR approval", true],
 ];
-const TA_SUB = ["GPS geofencing", "Kiosk mode", "Selfie capture", "DTR approval chain"];
-const PAYROLL_TOGGLES: [string, string, string][] = [
-  ["payroll:mwe", "Minimum wage employees (MWE)", "MWE are exempt from withholding tax"],
-  ["payroll:nsd", "Night shift differential", "+10% for work between 10PM–6AM"],
-  ["payroll:bonus", "Off-cycle bonus runs", "Allow skip-statutory flag on bonus payrolls"],
+const BANKS: [string, string, string, boolean][] = [
+  ["bank_bdo", "BDO Unibank", "CSV - PESONET format", true],
+  ["bank_bpi", "BPI", "TXT - BPI payroll format", true],
+  ["bank_unionbank", "UnionBank", "XLSX - EON payroll format", false],
+  ["bank_metrobank", "Metrobank", "CSV - Metrobank batch format", false],
 ];
-const REPORT_TOGGLES: [string, string, string][] = [
-  ["payroll:autogen", "Auto-generate after each payroll run", "SSS R-1A/R-3, PhilHealth ER2/RF1, Pag-IBIG MCRF, BIR 1601-C"],
-  ["payroll:annual", "Annual reports (BIR 2316 & Alphalist)", "Generated each January for the preceding tax year"],
-  ["payroll:finalpay", "Final pay documents (Quitclaim & 2316)", "Auto-generated on employee offboarding"],
+const TA_SUB: [string, string][] = [
+  ["ta_gps", "GPS geofencing"], ["ta_kiosk", "Kiosk mode"],
+  ["ta_selfie", "Selfie capture"], ["ta_dtr", "DTR approval chain"],
 ];
 function Toggle({ on, onClick, disabled, small }: { on: boolean; onClick?: () => void; disabled?: boolean; small?: boolean }) {
   const w = small ? 28 : 34; const h = small ? 15 : 18; const knob = small ? 11 : 14;
@@ -195,22 +200,10 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
   const [editStatus, setEditStatus] = useState(tenant.subscriptionStatus);
   const [editBilling, setEditBilling] = useState(tenant.billingEmail ?? "");
   const [editTrial, setEditTrial] = useState(tenant.trialEndsAt?.slice(0, 10) ?? "");
-  const [local, setLocal] = useState<Record<string, boolean>>(() => {
-    const i: Record<string, boolean> = {};
-    EMAIL_NOTIFS.forEach(([l, , on]) => { i["email:" + l] = on; });
-    SMS_NOTIFS.forEach(([l, , on]) => { i["sms:" + l] = on; });
-    PUSH_NOTIFS.forEach(([l, , on]) => { i["push:" + l] = on; });
-    SECURITY.forEach(([l, , on]) => { i["sec:" + l] = on; });
-    BANKS.forEach((b, idx) => { i["bank:" + b.name] = idx < 2; });
-    TA_SUB.forEach((l) => { i["ta:" + l] = true; });
-    PAYROLL_TOGGLES.forEach(([k]) => { i[k] = true; });
-    REPORT_TOGGLES.forEach(([k]) => { i[k] = true; });
-    return i;
-  });
-  const flip = (k: string) => setLocal((s) => ({ ...s, [k]: !s[k] }));
 
-  async function patchTenant(patch: Record<string, unknown>) {
+  async function patchTenant(patch: Record<string, unknown>, optimistic?: Partial<Tenant>) {
     setSaving(true);
+    if (optimistic) setTenant((t) => ({ ...t, ...optimistic }));
     try {
       const res = await fetch(`/api/admin/tenants/${tenant.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
       const json = await res.json();
@@ -222,10 +215,11 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally { setSaving(false); }
   }
-  async function toggleModule(key: string) {
-    const cur = tenant.featureFlags[key] ?? false;
-    setTenant((t) => ({ ...t, featureFlags: { ...t.featureFlags, [key]: !cur } }));
-    await patchTenant({ featureFlagsPatch: { [key]: !cur } });
+  const flag = (key: string, def: boolean) => tenant.featureFlags[key] ?? def;
+  async function toggleFlag(key: string, def: boolean) {
+    const next = !(tenant.featureFlags[key] ?? def);
+    setTenant((t) => ({ ...t, featureFlags: { ...t.featureFlags, [key]: next } }));
+    await patchTenant({ featureFlagsPatch: { [key]: next } });
   }
   async function saveSub() {
     await patchTenant({ subscriptionTier: editTier, subscriptionStatus: editStatus, billingEmail: editBilling || null, trialEndsAt: editTrial ? new Date(editTrial).toISOString() : null });
@@ -326,50 +320,50 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
         <div className="flex flex-col gap-3.5">
           <div className="grid grid-cols-2 gap-3.5">
             <Card title="Payroll schedule" icon={Calendar}>
-              <SettingRow label="Payroll frequency" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} defaultValue={tenant.payrollCycle ?? "SEMI_MONTHLY"}><option value="SEMI_MONTHLY">Semi-monthly</option><option value="MONTHLY">Monthly</option><option value="WEEKLY">Weekly</option><option value="BI_WEEKLY">Bi-weekly</option><option value="DAILY">Daily</option></select>} />
-              <SettingRow label="Pay day 1" ctrl={<input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 64 }} type="number" defaultValue={tenant.payDay1 ?? 15} />} />
-              <SettingRow label="Pay day 2" ctrl={<input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 64 }} type="number" defaultValue={tenant.payDay2 ?? 30} />} />
-              <SettingRow label="Statutory deduction cutoff" sub="Which cutoff collects SSS, PhilHealth, Pag-IBIG" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} defaultValue="2"><option value="2">2nd cutoff (16th–30th)</option><option value="1">1st cutoff (1st–15th)</option></select>} />
-              <SettingRow label="Working days denominator" sub="Used for daily rate computation" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} defaultValue="261"><option value="261">261 days</option><option value="313">313 days</option><option value="365">365 days</option></select>} />
+              <SettingRow label="Payroll frequency" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} value={tenant.payrollCycle ?? "SEMI_MONTHLY"} onChange={(e) => patchTenant({ payrollCycle: e.target.value }, { payrollCycle: e.target.value })}><option value="SEMI_MONTHLY">Semi-monthly</option><option value="MONTHLY">Monthly</option><option value="WEEKLY">Weekly</option><option value="BI_WEEKLY">Bi-weekly</option><option value="DAILY">Daily</option></select>} />
+              <SettingRow label="Pay day 1" sub="Day of month for first cutoff" ctrl={<input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 64 }} type="number" value={tenant.payDay1 ?? ""} onChange={(e) => setTenant((t) => ({ ...t, payDay1: e.target.value === "" ? null : Number(e.target.value) }))} onBlur={(e) => patchTenant({ payDay1: e.target.value === "" ? null : Number(e.target.value) })} />} />
+              <SettingRow label="Pay day 2" sub="Day of month for second cutoff" ctrl={<input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 64 }} type="number" value={tenant.payDay2 ?? ""} onChange={(e) => setTenant((t) => ({ ...t, payDay2: e.target.value === "" ? null : Number(e.target.value) }))} onBlur={(e) => patchTenant({ payDay2: e.target.value === "" ? null : Number(e.target.value) })} />} />
+              <SettingRow label="Statutory deduction cutoff" sub="Which cutoff collects SSS, PhilHealth, Pag-IBIG" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} value={tenant.statutoryCutoffRule ?? "SECOND_CUTOFF"} onChange={(e) => patchTenant({ statutoryCutoffRule: e.target.value }, { statutoryCutoffRule: e.target.value })}><option value="SECOND_CUTOFF">2nd cutoff (16th-30th)</option><option value="FIRST_CUTOFF">1st cutoff (1st-15th)</option></select>} />
+              <SettingRow label="Working days denominator" sub="Used for daily rate computation" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} value={String(tenant.workingDaysDenominator ?? 261)} onChange={(e) => patchTenant({ workingDaysDenominator: Number(e.target.value) }, { workingDaysDenominator: Number(e.target.value) })}><option value="261">261 days</option><option value="313">313 days</option><option value="365">365 days</option></select>} />
             </Card>
             <Card title="13th month & computation" icon={Receipt}>
-              <SettingRow label="13th month method" sub="Basis for annual computation" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} defaultValue="dole"><option value="dole">Strict DOLE (basic pay)</option><option value="company">Company policy</option></select>} />
-              {PAYROLL_TOGGLES.map(([k, l, s]) => <SettingRow key={k} label={l} sub={s} ctrl={<Toggle on={local[k]} onClick={() => flip(k)} />} />)}
+              <SettingRow label="13th month method" sub="Basis for annual computation" ctrl={<select className={SELECT_CLS} style={SELECT_STYLE} value={tenant.thirteenthMonthBasis ?? "STRICT_DOLE"} onChange={(e) => patchTenant({ thirteenthMonthBasis: e.target.value }, { thirteenthMonthBasis: e.target.value })}><option value="STRICT_DOLE">Strict DOLE (basic pay)</option><option value="INCLUDE_ALLOWANCES">Include allowances</option></select>} />
+              {PAYROLL_TOGGLES.map(([key, label, sub, def]) => <SettingRow key={key} label={label} sub={sub} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
             </Card>
           </div>
           <Card title="Bank file generation" icon={Landmark} action={<button onClick={() => toast.info("Add bank coming soon")} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}><Plus className="w-3 h-3" />Add bank</button>}>
             <div className="grid grid-cols-2 gap-2">
-              {BANKS.map((b) => { const on = local["bank:" + b.name]; return (
-                <div key={b.name} className="flex items-center gap-2 rounded-md px-3 py-2.5" style={{ border: "1px solid " + (on ? "rgba(30,58,95,0.4)" : BORDER), background: on ? "rgba(30,58,95,0.03)" : "white" }}>
+              {BANKS.map(([key, name, format, def]) => { const on = flag(key, def); return (
+                <div key={key} className="flex items-center gap-2 rounded-md px-3 py-2.5" style={{ border: "1px solid " + (on ? "rgba(30,58,95,0.4)" : BORDER), background: on ? "rgba(30,58,95,0.03)" : "white" }}>
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: on ? "#0b7a3e" : "#D1D5DB" }} />
-                  <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: TXT }}>{b.name}</div><div className="text-[10px]" style={{ color: SUB }}>{b.format}</div></div>
-                  <Toggle on={on} onClick={() => flip("bank:" + b.name)} />
+                  <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: TXT }}>{name}</div><div className="text-[10px]" style={{ color: SUB }}>{format}</div></div>
+                  <Toggle on={on} disabled={saving} onClick={() => toggleFlag(key, def)} />
                 </div>
               ); })}
             </div>
           </Card>
-          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>Frequency and pay-day values reflect live tenant settings. Other controls are display-only until the payroll-config schema is extended.</p>
+          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>All controls on this tab persist live — schedule fields save to the tenant record; toggles save to featureFlags.</p>
         </div>
       )}
 
       {/* HR MODULES */}
       {tab === "modules" && (
         <div className="flex flex-col gap-2.5">
-          {MODULES.map((m) => { const on = tenant.featureFlags[m.key] ?? false; const Icon = m.icon; return (
+          {MODULES.map((m) => { const on = flag(m.key, false); const Icon = m.icon; return (
             <div key={m.key} className="rounded-xl bg-white" style={{ border: "1px solid " + (on ? "rgba(30,58,95,0.3)" : BORDER) }}>
               <div className="flex items-start gap-2.5 p-3.5">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={on ? { background: "rgba(30,58,95,0.1)", color: NAVY } : { background: "#F3F4F6", color: MUTE }}><Icon className="w-4 h-4" /></div>
                 <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: on ? TXT : SUB }}>{m.name}</div><div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: SUB }}>{m.desc}</div></div>
-                <Toggle on={on} disabled={saving} onClick={() => toggleModule(m.key)} />
+                <Toggle on={on} disabled={saving} onClick={() => toggleFlag(m.key, false)} />
               </div>
               {m.key === "timeAttendance" && on && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3.5 pb-3.5 pt-3" style={{ borderTop: "1px solid " + BORDER2 }}>
-                  {TA_SUB.map((l) => <div key={l} className="flex items-center justify-between"><span className="text-[11px]" style={{ color: TXT }}>{l}</span><Toggle small on={local["ta:" + l]} onClick={() => flip("ta:" + l)} /></div>)}
+                  {TA_SUB.map(([key, label]) => <div key={key} className="flex items-center justify-between"><span className="text-[11px]" style={{ color: TXT }}>{label}</span><Toggle small on={flag(key, true)} disabled={saving} onClick={() => toggleFlag(key, true)} /></div>)}
                 </div>
               )}
             </div>
           ); })}
-          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>Module switches write to the tenant featureFlags and persist immediately. Sub-toggles are display-only.</p>
+          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>All module switches and sub-toggles write to the tenant featureFlags and persist immediately.</p>
         </div>
       )}
 
@@ -392,7 +386,7 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
             </div>
           </Card>
           <Card title="Statutory report generation" icon={FileText}>
-            {REPORT_TOGGLES.map(([k, l, s]) => <SettingRow key={k} label={l} sub={s} ctrl={<Toggle on={local[k]} onClick={() => flip(k)} />} />)}
+            {REPORT_TOGGLES.map(([key, label, sub, def]) => <SettingRow key={key} label={label} sub={sub} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
           </Card>
         </div>
       )}
@@ -402,18 +396,18 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
         <div className="flex flex-col gap-3.5">
           <div className="grid grid-cols-2 gap-3.5">
             <Card title="Email notifications (Resend)" icon={Mail}>
-              {EMAIL_NOTIFS.map(([l, ch]) => <SettingRow key={l} label={l} sub={ch} ctrl={<Toggle on={local["email:" + l]} onClick={() => flip("email:" + l)} />} />)}
+              {EMAIL_NOTIFS.map(([key, label, sub, def]) => <SettingRow key={key} label={label} sub={sub} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
             </Card>
             <div className="flex flex-col gap-3.5">
               <Card title="SMS (Semaphore PH)" icon={MessageSquare}>
-                {SMS_NOTIFS.map(([l, ch]) => <SettingRow key={l} label={l} sub={ch} ctrl={<Toggle on={local["sms:" + l]} onClick={() => flip("sms:" + l)} />} />)}
+                {SMS_NOTIFS.map(([key, label, sub, def]) => <SettingRow key={key} label={label} sub={sub} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
               </Card>
               <Card title="Web push (ESS PWA)" icon={BellRing}>
-                {PUSH_NOTIFS.map(([l]) => <SettingRow key={l} label={l} ctrl={<Toggle on={local["push:" + l]} onClick={() => flip("push:" + l)} />} />)}
+                {PUSH_NOTIFS.map(([key, label, def]) => <SettingRow key={key} label={label} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
               </Card>
             </div>
           </div>
-          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>Notification preferences are display-only and will persist once the notifications schema is added.</p>
+          <p className="text-[11px] px-3 py-2 rounded-md" style={{ color: SUB, background: "#F9FAFB", border: "1px solid " + BORDER }}>Notification preferences persist to the tenant featureFlags. Channel delivery (Resend / Semaphore) is wired separately.</p>
         </div>
       )}
 
@@ -435,8 +429,8 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
               {ROLE_PERMS.map(([r, a]) => <InfoRow key={r} k={r} v={<span className="text-[11px]">{a}</span>} />)}
             </Card>
             <Card title="Security settings" icon={Lock}>
-              {SECURITY.map(([l, s]) => <SettingRow key={l} label={l} sub={s} ctrl={<Toggle on={local["sec:" + l]} onClick={() => flip("sec:" + l)} />} />)}
-              <SettingRow label="ESS session timeout" ctrl={<><input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 55 }} type="number" defaultValue={8} /><span className="text-[11px]" style={{ color: SUB }}>hrs</span></>} />
+              {SECURITY.map(([key, label, sub, def]) => <SettingRow key={key} label={label} sub={sub} ctrl={<Toggle on={flag(key, def)} disabled={saving} onClick={() => toggleFlag(key, def)} />} />)}
+              <SettingRow label="ESS session timeout" sub="Display-only (numeric setting, not yet stored)" ctrl={<><input className={SELECT_CLS} style={{ ...SELECT_STYLE, width: 55 }} type="number" defaultValue={8} /><span className="text-[11px]" style={{ color: SUB }}>hrs</span></>} />
             </Card>
           </div>
         </div>
