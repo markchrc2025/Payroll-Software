@@ -23,6 +23,7 @@ export default async function TenantDetailPage({ params }: Props) {
         subdomain: true, industry: true, subscriptionTier: true,
         subscriptionStatus: true, trialEndsAt: true, billingEmail: true,
         featureFlags: true, payrollCycle: true, payDay1: true, payDay2: true,
+        thirteenthMonthBasis: true, statutoryCutoffRule: true, workingDaysDenominator: true,
         contactEmail: true, contactPhone: true, tinNumber: true,
         address: true, city: true, province: true, zipCode: true,
         createdAt: true, updatedAt: true,
@@ -60,7 +61,8 @@ export default async function TenantDetailPage({ params }: Props) {
     <div className="p-8">
       <Link
         href="/centralportal/tenants"
-        className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white mb-6"
+        className="inline-flex items-center gap-1.5 text-xs mb-6 hover:underline"
+        style={{ color: "#6B7280" }}
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Tenants
       </Link>
