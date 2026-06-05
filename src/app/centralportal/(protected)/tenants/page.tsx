@@ -1,257 +1,290 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+
+
+
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, Plus, Building2, RefreshCw } from "lucide-react";
+import { RefreshCw, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { AddTenantWizard } from "./_wizard";
 
-const TIER_COLOR: Record<string, string> = {
-  PRO: "#10B981", GROWTH: "#3B82F6", STARTER: "#6B7280",
-};
-const STATUS_COLOR: Record<string, string> = {
-  ACTIVE: "#10B981", TRIALING: "#F59E0B", PAST_DUE: "#EF4444", CANCELLED: "#6B7280",
-};
+type SubscriptionTier = "STARTER" | "GROWTH" | "PRO";
+type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED";
 
-type Tenant = {
+interface Tenant {
   id: string;
   name: string;
   tradeName: string | null;
   subdomain: string | null;
-  subscriptionTier: string;
-  subscriptionStatus: string;
-  trialEndsAt: string | null;
+  subscriptionTier: SubscriptionTier;
+  subscriptionStatus: SubscriptionStatus;
   createdAt: string;
-  _count: { employees: number; users: number };
-};
-
-function useDebounce<T>(value: T, delay: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
+  _count?: { employees: number };
 }
 
-export default function TenantsPage() {
-  const [search, setSearch]   = useState("");
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [total, setTotal]     = useState(0);
-  const [page, setPage]       = useState(1);
-  const [loading, setLoading] = useState(true);
-  const debouncedSearch       = useDebounce(search, 300);
+const TIER_PILL: Record<SubscriptionTier, string> = {
+  STARTER: "bg-gray-100 text-gray-700",
+  GROWTH:  "bg-blue-50 text-blue-700",
+  PRO:     "bg-violet-100 text-violet-700",
+};
 
-  const fetchTenants = useCallback(async () => {
+const STATUS_PILL: Record<SubscriptionStatus, { cls: string; label: string }> = {
+  ACTIVE:    { cls: "bg-green-50 text-green-700",  label: "Active" },
+  TRIALING:  { cls: "bg-amber-50 text-amber-800",  label: "Trial" },
+  PAST_DUE:  { cls: "bg-amber-50 text-amber-800",  label: "Overdue" },
+  CANCELLED: { cls: "bg-red-50 text-red-700",      label: "Cancelled" },
+};
+
+const TIERS: SubscriptionTier[] = ["STARTER", "GROWTH", "PRO"];
+const STATUSES: SubscriptionStatus[] = ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED"];
+
+function PortalTenantsContent() {
+  const router = useRouter();
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  
+  const fetchTenants = useCallback(async (s: string, p: number, tier: string, status: string) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: "20",
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      });
-      const res  = await fetch(`/api/admin/tenants?${params}`);
+      const params = new URLSearchParams({ page: String(p), limit: "20" });
+      if (s) params.set("search", s);
+      const res = await fetch(`/api/admin/tenants?${params}`);
+      if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      setTenants(data.data ?? []);
-      setTotal(data.total ?? 0);
+      let rows: Tenant[] = data.data ?? [];
+      if (tier !== "ALL") rows = rows.filter((t) => t.subscriptionTier === tier);
+      if (status !== "ALL") rows = rows.filter((t) => t.subscriptionStatus === status);
+      setTenants(rows);
+      setTotalPages(data.totalPages ?? 1);
+      setTotal(data.total ?? rows.length);
+    } catch {
+      toast.error("Failed to load tenants");
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch]);
+  }, []);
 
-  useEffect(() => { fetchTenants(); }, [fetchTenants]);
-  useEffect(() => { setPage(1); }, [debouncedSearch]);
+  useEffect(() => {
+    fetchTenants(search, page, tierFilter, statusFilter);
+  }, [page, tierFilter, statusFilter, fetchTenants, search]);
 
-  const totalPages = Math.ceil(total / 20);
+  function handleSearchChange(v: string) {
+    setSearch(v);
+    setPage(1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchTenants(v, 1, tierFilter, statusFilter), 350);
+  }
+
+  function handleWizardClose() {
+    setWizardOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("new");
+    router.replace(url.pathname);
+  }
+
+  function handleTenantCreated(_newId: string) {
+    fetchTenants(search, 1, tierFilter, statusFilter);
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  }
 
   return (
-    <div className="p-8">
+    <div className="max-w-5xl mx-auto" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Tenants</h1>
-          <p className="text-sm text-white/40 mt-0.5">{total} registered organisations</p>
+          <p className="text-[15px] font-semibold" style={{ color: "#111827" }}>
+            Tenants{" "}
+            {!loading && <span className="text-[12px] font-normal" style={{ color: "#6B7280" }}>{total} total</span>}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={fetchTenants}
-            className="text-white/40 hover:text-white"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchTenants(search, page, tierFilter, statusFilter)}
+            className="flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[11px] border transition-colors hover:bg-gray-50"
+            style={{ borderColor: "#E5E7EB", color: "#6B7280" }}
           >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-          <Button
-            asChild
-            className="text-white hover:opacity-90"
-            style={{ background: "#2D6BE4" }}
+            <RefreshCw size={12} /> Refresh
+          </button>
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium text-white"
+            style={{ background: "#1E3A5F" }}
           >
-            <Link href="/centralportal/tenants/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Onboard Tenant
-            </Link>
-          </Button>
+            <Plus size={13} /> Add tenant
+          </button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-6 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-        <Input
-          placeholder="Search tenants…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/25 focus-visible:ring-blue-500/50"
-        />
+      {/* Filters */}
+      <div className="flex gap-2 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search tenants..."
+            className="pl-8 h-8 text-[12px]"
+          />
+        </div>
+        <Select value={tierFilter} onValueChange={(v) => { setTierFilter(v ?? "ALL"); setPage(1); }}>
+          <SelectTrigger className="w-[130px] h-8 text-[12px]">
+            <SelectValue placeholder="All plans" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL" className="text-[12px]">All plans</SelectItem>
+            {TIERS.map((t) => <SelectItem key={t} value={t} className="text-[12px]">{t.charAt(0) + t.slice(1).toLowerCase()}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? "ALL"); setPage(1); }}>
+          <SelectTrigger className="w-[130px] h-8 text-[12px]">
+            <SelectValue placeholder="All status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL" className="text-[12px]">All status</SelectItem>
+            {STATUSES.map((s) => <SelectItem key={s} value={s} className="text-[12px]">{STATUS_PILL[s].label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ background: "#0F2340", border: "1px solid rgba(255,255,255,0.07)" }}
-      >
-        <table className="w-full">
+      <div className="rounded-[10px] overflow-hidden" style={{ background: "white", border: "0.5px solid #E5E7EB" }}>
+        <table className="w-full border-collapse table-fixed">
           <thead>
-            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-              {["Company", "Plan", "Status", "Employees", "Users", "Trial Ends", "Created", ""].map((h) => (
-                <th
-                  key={h}
-                  className="text-left px-5 py-3 text-xs text-white/30 uppercase tracking-wider font-medium"
-                >
-                  {h}
-                </th>
-              ))}
+            <tr style={{ background: "#F9FAFB", borderBottom: "0.5px solid #E5E7EB" }}>
+              <th className="text-left px-4 py-2.5 text-[10px] font-medium w-[30%]" style={{ color: "#6B7280" }}>Company</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[14%]" style={{ color: "#6B7280" }}>Plan</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[10%]" style={{ color: "#6B7280" }}>Emp.</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[13%]" style={{ color: "#6B7280" }}>Status</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[17%]" style={{ color: "#6B7280" }}>Since</th>
+              <th className="text-left px-2 py-2.5 text-[10px] font-medium w-[16%]" style={{ color: "#6B7280" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {loading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} className="px-5 py-4">
-                        <div
-                          className="h-3 rounded animate-pulse"
-                          style={{ background: "rgba(255,255,255,0.06)", width: "60%" }}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              : tenants.length === 0
-              ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
-                    <Building2 className="w-10 h-10 text-white/10 mx-auto mb-3" />
-                    <p className="text-sm text-white/30">No tenants found</p>
-                  </td>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: "0.5px solid #F3F4F6" }}>
+                  {[1, 2, 3, 4, 5, 6].map((c) => (
+                    <td key={c} className="px-4 py-3"><Skeleton className="h-4 w-full rounded" /></td>
+                  ))}
                 </tr>
-              )
-              : tenants.map((t, i) => (
-                  <tr
-                    key={t.id}
-                    className="hover:bg-white/[0.02] transition-colors"
-                    style={{
-                      borderBottom:
-                        i < tenants.length - 1
-                          ? "1px solid rgba(255,255,255,0.04)"
-                          : "none",
-                    }}
+              ))
+            ) : tenants.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center py-10 text-[12px]" style={{ color: "#9CA3AF" }}>
+                  No tenants found.
+                </td>
+              </tr>
+            ) : tenants.map((t, idx) => (
+              <tr
+                key={t.id}
+                style={{ borderBottom: idx < tenants.length - 1 ? "0.5px solid #F3F4F6" : "none" }}
+              >
+                <td className="px-4 py-2.5">
+                  <p className="text-[12px] font-medium truncate" style={{ color: "#111827" }}>{t.name}</p>
+                  {t.subdomain && <p className="text-[10px] truncate" style={{ color: "#9CA3AF" }}>{t.subdomain}</p>}
+                </td>
+                <td className="px-2 py-2.5">
+                  <span className={`text-[10px] rounded-full px-2 py-0.5 ${TIER_PILL[t.subscriptionTier]}`}>
+                    {t.subscriptionTier.charAt(0) + t.subscriptionTier.slice(1).toLowerCase()}
+                  </span>
+                </td>
+                <td className="px-2 py-2.5 text-[12px]" style={{ color: "#374151" }}>
+                  {t._count?.employees ?? "—"}
+                </td>
+                <td className="px-2 py-2.5">
+                  <span className={`text-[10px] rounded-full px-2 py-0.5 ${STATUS_PILL[t.subscriptionStatus].cls}`}>
+                    {STATUS_PILL[t.subscriptionStatus].label}
+                  </span>
+                </td>
+                <td className="px-2 py-2.5 text-[11px]" style={{ color: "#374151" }}>
+                  {fmtDate(t.createdAt)}
+                </td>
+                <td className="px-2 py-2.5">
+                  <Link
+                    href={`/centralportal/tenants/${t.id}`}
+                    className="text-[10px] rounded-[6px] px-2.5 py-1 border transition-colors hover:bg-gray-50"
+                    style={{ borderColor: "#E5E7EB", color: "#374151" }}
                   >
-                    <td className="px-5 py-3.5">
-                      <Link
-                        href={`/centralportal/tenants/${t.id}`}
-                        className="font-medium text-white hover:text-blue-400 text-sm"
-                      >
-                        {t.name}
-                      </Link>
-                      {t.subdomain && (
-                        <p className="text-xs text-white/30 mt-0.5">{t.subdomain}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded"
-                        style={{
-                          background: `${TIER_COLOR[t.subscriptionTier] ?? "#6B7280"}25`,
-                          color: TIER_COLOR[t.subscriptionTier] ?? "#6B7280",
-                        }}
-                      >
-                        {t.subscriptionTier}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span
-                        className="text-xs px-2 py-0.5 rounded"
-                        style={{
-                          background: `${STATUS_COLOR[t.subscriptionStatus] ?? "#6B7280"}25`,
-                          color: STATUS_COLOR[t.subscriptionStatus] ?? "#6B7280",
-                        }}
-                      >
-                        {t.subscriptionStatus}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-white/60">{t._count.employees}</td>
-                    <td className="px-5 py-3.5 text-sm text-white/60">{t._count.users}</td>
-                    <td className="px-5 py-3.5 text-sm text-white/40">
-                      {t.trialEndsAt
-                        ? new Date(t.trialEndsAt).toLocaleDateString("en-PH", {
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-white/40">
-                      {new Date(t.createdAt).toLocaleDateString("en-PH", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Link
-                        href={`/centralportal/tenants/${t.id}`}
-                        className="text-xs text-blue-400 hover:text-blue-300"
-                      >
-                        View →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                    View
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div
-            className="flex items-center justify-between px-5 py-3 border-t"
-            style={{ borderColor: "rgba(255,255,255,0.07)" }}
-          >
-            <p className="text-xs text-white/30">
-              Page {page} of {totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white/50 hover:text-white text-xs"
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white/50 hover:text-white text-xs"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-[11px]" style={{ color: "#6B7280" }}>Page {page} of {totalPages}</p>
+          <div className="flex gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="text-[11px] px-3 py-1.5 rounded-[7px] border disabled:opacity-40"
+              style={{ borderColor: "#E5E7EB", color: "#374151" }}
+            >
+              Previous
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-[11px] px-3 py-1.5 rounded-[7px] border disabled:opacity-40"
+              style={{ borderColor: "#E5E7EB", color: "#374151" }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4-step Add Tenant Wizard */}
+      <AddTenantWizard
+        open={wizardOpen}
+        onClose={handleWizardClose}
+        onCreated={handleTenantCreated}
+      />
     </div>
+  );
+}
+
+
+export default function PortalTenantsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-gray-500 text-sm">Loading…</div>
+        </div>
+      }
+    >
+      <PortalTenantsContent />
+    </Suspense>
   );
 }
