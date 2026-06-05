@@ -42,6 +42,20 @@ export default async function TenantDetailPage({ params }: Props) {
 
   if (!tenant) notFound();
 
+  // Serialize Dates to strings and narrow JSON for the client component
+  const tenantData = {
+    ...tenant,
+    trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.toISOString() : null,
+    createdAt: tenant.createdAt.toISOString(),
+    updatedAt: tenant.updatedAt.toISOString(),
+    featureFlags: (tenant.featureFlags ?? {}) as unknown as Record<string, boolean>,
+  };
+  const usersData = users.map((u) => ({
+    ...u,
+    lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+    createdAt: u.createdAt.toISOString(),
+  }));
+
   return (
     <div className="p-8">
       <Link
@@ -50,7 +64,7 @@ export default async function TenantDetailPage({ params }: Props) {
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Tenants
       </Link>
-      <TenantDetailClient tenant={tenant as any} users={users as any} />
+      <TenantDetailClient tenant={tenantData} users={usersData} />
     </div>
   );
 }
