@@ -1,14 +1,14 @@
 import type { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
 import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import { ok, err, unauthorized, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
+// amount is centavos (integer).
 const createSchema = z.object({
   invoiceId: z.string().min(1),
-  amount: z.number().positive(),
+  amount: z.number().int().positive(),
   method: z.enum(["MANUAL", "BANK_TRANSFER", "CASH", "CHECK"]).default("MANUAL"),
   reference: z.string().optional(),
   paidAt: z.string().datetime().optional(),
@@ -16,8 +16,8 @@ const createSchema = z.object({
 });
 
 // POST /api/admin/billing/payments
-// Records a manual payment against an invoice. When the invoice is fully
-// covered, its status flips to PAID. Gateway fields stay null for now.
+// Records a manual payment (centavos) against an invoice. When the invoice is
+// fully covered, its status flips to PAID. Gateway fields stay null for now.
 export async function POST(req: NextRequest) {
   const ctx = await getSuperAdminContext();
   if (!ctx) return unauthorized();
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return err("Invalid request", 400, parsed.error.flatten());
 
     const d = parsed.data;
+    const amount = BigInt(d.amount);
 
     const invoice = await prismaAdmin.invoice.findUnique({
       where: { id: d.invoiceId },
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
         data: {
           tenantId: invoice.tenantId,
           invoiceId: invoice.id,
-          amount: new Prisma.Decimal(d.amount),
+          amount,
           currency: invoice.currency,
           method: d.method,
           reference: d.reference,
@@ -52,8 +53,8 @@ export async function POST(req: NextRequest) {
       });
 
       const paidSoFar =
-        invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0) + d.amount;
-      const fullyPaid = paidSoFar + 1e-9 >= Number(invoice.total);
+        invoice.payments.reduce((sum, p) => sum + p.amount, 0n) + amount;
+      const fullyPaid = paidSoFar >= invoice.total;
 
       const updatedInvoice = await tx.invoice.update({
         where: { id: invoice.id },
@@ -73,7 +74,21 @@ export async function POST(req: NextRequest) {
       ipAddress: getClientIp(req),
     });
 
-    return ok(result, "Payment recorded", 201);
+    // Serialize BigInt money to Number for the JSON response.
+    return ok(
+      {
+        fullyPaid: result.fullyPaid,
+        payment: { ...result.payment, amount: Number(result.payment.amount) },
+        invoice: {
+          ...result.invoice,
+          subtotal: Number(result.invoice.subtotal),
+          taxAmount: Number(result.invoice.taxAmount),
+          total: Number(result.invoice.total),
+        },
+      },
+      "Payment recorded",
+      201,
+    );
   } catch (e) {
     console.error("[billing/payments] POST", e);
     return serverError();
