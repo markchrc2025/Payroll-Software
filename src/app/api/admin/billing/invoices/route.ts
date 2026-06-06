@@ -6,6 +6,20 @@ import { ok, err, unauthorized, serverError, paginated } from "@/lib/api-respons
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
+// Money is centavos (BigInt). Serialize invoice + nested payment amounts to Number.
+function serializeInvoice(inv: {
+  subtotal: bigint; taxAmount: bigint; total: bigint;
+  payments?: ({ amount: bigint } & Record<string, unknown>)[];
+} & Record<string, unknown>) {
+  return {
+    ...inv,
+    subtotal: Number(inv.subtotal),
+    taxAmount: Number(inv.taxAmount),
+    total: Number(inv.total),
+    ...(inv.payments ? { payments: inv.payments.map((p) => ({ ...p, amount: Number(p.amount) })) } : {}),
+  };
+}
+
 // GET /api/admin/billing/invoices?page=&limit=&tenantId=&status=
 export async function GET(req: NextRequest) {
   const ctx = await getSuperAdminContext();
@@ -36,20 +50,20 @@ export async function GET(req: NextRequest) {
       prismaAdmin.invoice.count({ where }),
     ]);
 
-    return paginated(invoices, total, page, limit);
+    return paginated(invoices.map(serializeInvoice), total, page, limit);
   } catch (e) {
     console.error("[billing/invoices] GET", e);
     return serverError();
   }
 }
 
+// subtotal (if provided) is centavos.
 const createSchema = z.object({
   tenantId: z.string().min(1),
   periodStart: z.string().datetime(),
   periodEnd: z.string().datetime(),
   dueAt: z.string().datetime().optional(),
-  // If omitted, subtotal is derived from the tenant's current package + cycle.
-  subtotal: z.number().nonnegative().optional(),
+  subtotal: z.number().int().nonnegative().optional(),
   issue: z.boolean().default(true), // false => leave as DRAFT
 });
 
@@ -62,7 +76,7 @@ function genInvoiceNumber() {
 
 // POST /api/admin/billing/invoices
 // Issues an invoice for a tenant's current subscription period.
-// Tax is snapshotted from the package's taxRate at issue time.
+// All money is integer centavos; tax = round(subtotal * bps / 10000).
 export async function POST(req: NextRequest) {
   const ctx = await getSuperAdminContext();
   if (!ctx) return unauthorized();
@@ -81,18 +95,18 @@ export async function POST(req: NextRequest) {
     if (!sub) return err("Tenant has no subscription to invoice", 400);
 
     const pkg = sub.package;
-    const cyclePrice =
-      sub.billingCycle === "ANNUAL" ? Number(pkg.annualPrice) : Number(pkg.monthlyPrice);
-    const subtotalNum = d.subtotal ?? cyclePrice;
-    const taxNum = +(subtotalNum * Number(pkg.taxRate)).toFixed(2);
-    const totalNum = +(subtotalNum + taxNum).toFixed(2);
+    const cyclePrice = sub.billingCycle === "ANNUAL" ? pkg.annualPrice : pkg.monthlyPrice; // BigInt
+    const subtotal = d.subtotal !== undefined ? BigInt(d.subtotal) : cyclePrice;
+    // Integer-centavo tax from basis points; rounded half-up.
+    const taxAmount = (subtotal * BigInt(pkg.taxRateBps) + 5000n) / 10000n;
+    const total = subtotal + taxAmount;
 
     const lineItems = [
       {
         description: `${pkg.name} (${sub.billingCycle.toLowerCase()})`,
         quantity: 1,
-        unitPrice: subtotalNum,
-        amount: subtotalNum,
+        unitPrice: Number(subtotal),
+        amount: Number(subtotal),
       },
     ];
 
@@ -103,9 +117,9 @@ export async function POST(req: NextRequest) {
         invoiceNumber: genInvoiceNumber(),
         periodStart: new Date(d.periodStart),
         periodEnd: new Date(d.periodEnd),
-        subtotal: new Prisma.Decimal(subtotalNum),
-        taxAmount: new Prisma.Decimal(taxNum),
-        total: new Prisma.Decimal(totalNum),
+        subtotal,
+        taxAmount,
+        total,
         currency: pkg.currency,
         status: d.issue ? "OPEN" : "DRAFT",
         issuedAt: d.issue ? new Date() : null,
@@ -120,11 +134,11 @@ export async function POST(req: NextRequest) {
       action: "CREATE",
       entity: "Invoice",
       entityId: invoice.id,
-      changes: { total: totalNum, status: invoice.status },
+      changes: { total: Number(total), status: invoice.status },
       ipAddress: getClientIp(req),
     });
 
-    return ok(invoice, "Invoice created", 201);
+    return ok(serializeInvoice(invoice), "Invoice created", 201);
   } catch (e) {
     console.error("[billing/invoices] POST", e);
     return serverError();
