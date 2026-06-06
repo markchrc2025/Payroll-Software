@@ -3,7 +3,7 @@ import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 
 // GET /api/admin/billing/overview
-// KPI snapshot for the Billing Overview tab.
+// KPI snapshot for the Billing Overview tab. All money is centavos (Number out).
 export async function GET() {
   const ctx = await getSuperAdminContext();
   if (!ctx) return unauthorized();
@@ -33,22 +33,27 @@ export async function GET() {
       }),
     ]);
 
-    // MRR = sum of monthly-equivalent price across active subscriptions.
+    // MRR = sum of monthly-equivalent centavos across active subscriptions.
     const mrr = activeSubs.reduce((sum, s) => {
       const monthly =
         s.billingCycle === "ANNUAL"
-          ? Number(s.package.annualPrice) / 12
-          : Number(s.package.monthlyPrice);
+          ? s.package.annualPrice / 12n
+          : s.package.monthlyPrice;
       return sum + monthly;
-    }, 0);
+    }, 0n);
 
     return ok({
-      mrr: +mrr.toFixed(2),
+      mrr: Number(mrr),
       activeSubscriptions: activeSubs.length,
-      outstandingTotal: Number(outstandingAgg._sum.total ?? 0),
+      outstandingTotal: Number(outstandingAgg._sum.total ?? 0n),
       outstandingCount: outstandingAgg._count,
-      collectedThisMonth: Number(collectedAgg._sum.amount ?? 0),
-      recentInvoices,
+      collectedThisMonth: Number(collectedAgg._sum.amount ?? 0n),
+      recentInvoices: recentInvoices.map((inv) => ({
+        ...inv,
+        subtotal: Number(inv.subtotal),
+        taxAmount: Number(inv.taxAmount),
+        total: Number(inv.total),
+      })),
     });
   } catch (e) {
     console.error("[billing/overview] GET", e);
