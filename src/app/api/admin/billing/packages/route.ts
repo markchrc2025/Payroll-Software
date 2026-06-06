@@ -6,6 +6,11 @@ import { ok, err, unauthorized, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
+// Money is stored as BigInt centavos; serialize to Number for JSON responses.
+function serialize(p: { monthlyPrice: bigint; annualPrice: bigint } & Record<string, unknown>) {
+  return { ...p, monthlyPrice: Number(p.monthlyPrice), annualPrice: Number(p.annualPrice) };
+}
+
 // GET /api/admin/billing/packages
 // Returns all billing packages (the catalog of tier pricing).
 export async function GET() {
@@ -31,20 +36,21 @@ export async function GET() {
       packages = await prismaAdmin.billingPackage.findMany({ orderBy: { monthlyPrice: "asc" } });
     }
 
-    return ok(packages);
+    return ok(packages.map(serialize));
   } catch (e) {
     console.error("[billing/packages] GET", e);
     return serverError();
   }
 }
 
+// Prices are sent from the client in centavos; taxRateBps is basis points.
 const updateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  monthlyPrice: z.number().nonnegative().optional(),
-  annualPrice: z.number().nonnegative().optional(),
-  taxRate: z.number().min(0).max(1).optional(),
+  monthlyPrice: z.number().int().nonnegative().optional(),
+  annualPrice: z.number().int().nonnegative().optional(),
+  taxRateBps: z.number().int().min(0).max(10000).optional(),
   currency: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
   features: z.array(z.string()).optional(),
@@ -66,9 +72,9 @@ export async function PATCH(req: NextRequest) {
     const data: Prisma.BillingPackageUpdateInput = {};
     if (rest.name !== undefined) data.name = rest.name;
     if (rest.description !== undefined) data.description = rest.description;
-    if (rest.monthlyPrice !== undefined) data.monthlyPrice = new Prisma.Decimal(rest.monthlyPrice);
-    if (rest.annualPrice !== undefined) data.annualPrice = new Prisma.Decimal(rest.annualPrice);
-    if (rest.taxRate !== undefined) data.taxRate = new Prisma.Decimal(rest.taxRate);
+    if (rest.monthlyPrice !== undefined) data.monthlyPrice = BigInt(rest.monthlyPrice);
+    if (rest.annualPrice !== undefined) data.annualPrice = BigInt(rest.annualPrice);
+    if (rest.taxRateBps !== undefined) data.taxRateBps = rest.taxRateBps;
     if (rest.currency !== undefined) data.currency = rest.currency;
     if (rest.isActive !== undefined) data.isActive = rest.isActive;
     if (rest.features !== undefined) data.features = rest.features;
@@ -84,7 +90,7 @@ export async function PATCH(req: NextRequest) {
       ipAddress: getClientIp(req),
     });
 
-    return ok(updated, "Package updated");
+    return ok(serialize(updated));
   } catch (e) {
     console.error("[billing/packages] PATCH", e);
     return serverError();
