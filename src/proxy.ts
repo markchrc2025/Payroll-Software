@@ -13,6 +13,7 @@ export default auth((req) => {
 
   const isPublic =
     path === "/login" ||
+    path === "/centralportal" ||
     path === "/centralportal/login" ||
     path === "/centralportal/accept-invite" ||
     path === "/centralportal/reset-password" ||
