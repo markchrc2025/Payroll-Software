@@ -561,6 +561,11 @@ model Tenant {
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
 
+  // Billing
+  subscription TenantSubscription?
+  invoices     Invoice[]
+  payments     Payment[]
+
   jobPostings    JobPosting[]
   applicants     Applicant[]
   applicantNotes ApplicantNote[]
@@ -2539,4 +2544,145 @@ model PremiumRateConfig {
 
   @@unique([tenantId, multiplierKey])
   @@index([tenantId])
+}
+
+
+// ============================================================
+// BILLING
+// Central Portal billing: packages, per-tenant subscriptions,
+// invoices, and payments. Manual record-keeping for now;
+// nullable gateway* fields make payment-gateway integration
+// a drop-in later (no schema rewrite needed).
+// Money is stored as BigInt centavos (PHP); never use floats.
+// Tax rate is stored as Int basis points (1200 = 12.00%).
+// ============================================================
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentMethod {
+  MANUAL
+  BANK_TRANSFER
+  CASH
+  CHECK
+  // Gateway-backed methods added later: CARD, GCASH, MAYA, etc.
+}
+
+/// Catalog of offered packages (one per tier). Flat price per cycle.
+/// monthlyPrice / annualPrice are centavos. taxRateBps is basis points.
+model BillingPackage {
+  id              String           @id @default(cuid())
+  tier            SubscriptionTier @unique
+  name            String
+  description     String?
+  monthlyPrice    BigInt           @default(0)
+  annualPrice     BigInt           @default(0)
+  /// Tax rate in basis points applied to invoices for this package (1200 = 12%).
+  taxRateBps      Int              @default(0)
+  currency        String           @default("PHP")
+  isActive        Boolean          @default(true)
+  /// Marketing/feature list shown alongside the package.
+  features        Json             @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions TenantSubscription[]
+}
+
+/// The live billing state for a tenant. At most one per tenant.
+model TenantSubscription {
+  id                 String             @id @default(cuid())
+  tenantId           String             @unique
+  packageId          String
+  billingCycle       BillingCycle       @default(MONTHLY)
+  status             SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  nextBillingDate    DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  /// Gateway subscription id (e.g. Stripe sub_...) once integrated.
+  externalId         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  package  BillingPackage @relation(fields: [packageId], references: [id])
+  invoices Invoice[]
+
+  @@index([packageId])
+  @@index([status])
+}
+
+/// An issued bill for a tenant. Amounts are centavos, snapshotted at issue
+/// time so later package price/tax changes never rewrite invoice history.
+model Invoice {
+  id             String        @id @default(cuid())
+  tenantId       String
+  subscriptionId String?
+  invoiceNumber  String        @unique
+  periodStart    DateTime
+  periodEnd      DateTime
+  subtotal       BigInt        @default(0)
+  taxAmount      BigInt        @default(0)
+  total          BigInt        @default(0)
+  currency       String        @default("PHP")
+  status         InvoiceStatus @default(DRAFT)
+  issuedAt       DateTime?
+  dueAt          DateTime?
+  paidAt         DateTime?
+  /// Gateway invoice id once integrated.
+  externalId     String?
+  /// Snapshot of line items: [{ description, quantity, unitPrice, amount }] (centavos)
+  lineItems      Json          @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription TenantSubscription? @relation(fields: [subscriptionId], references: [id])
+  payments     Payment[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([subscriptionId])
+}
+
+/// A payment recorded against an invoice. amount is centavos. Manual entry
+/// now; gateway* fields stay null until a webhook fills them in.
+model Payment {
+  id           String        @id @default(cuid())
+  tenantId     String
+  invoiceId    String
+  amount       BigInt        @default(0)
+  currency     String        @default("PHP")
+  method       PaymentMethod @default(MANUAL)
+  reference    String?
+  paidAt       DateTime      @default(now())
+  recordedById String?
+  notes        String?
+  /// Gateway fields, populated only when a payment gateway is integrated.
+  gatewayProvider  String?
+  gatewayReference String?
+  gatewayPayload   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([invoiceId])
 }
