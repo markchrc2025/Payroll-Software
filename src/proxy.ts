@@ -14,6 +14,8 @@ export default auth((req) => {
   const isPublic =
     path === "/login" ||
     path === "/centralportal/login" ||
+    path === "/centralportal/accept-invite" ||
+    path === "/centralportal/reset-password" ||
     path.startsWith("/api/auth/") ||
     path.startsWith("/api/kiosk/") ||
     path.startsWith("/api/ess/") ||
