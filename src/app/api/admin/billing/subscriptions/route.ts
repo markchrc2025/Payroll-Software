@@ -5,6 +5,21 @@ import { ok, err, unauthorized, serverError, paginated } from "@/lib/api-respons
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
+// Convert BigInt centavos in a tenant row's nested package to Number for JSON.
+function serializeRow(t: {
+  subscription: { package: { monthlyPrice: bigint; annualPrice: bigint } & Record<string, unknown> } & Record<string, unknown> | null;
+} & Record<string, unknown>) {
+  if (!t.subscription) return t;
+  const pkg = t.subscription.package;
+  return {
+    ...t,
+    subscription: {
+      ...t.subscription,
+      package: { ...pkg, monthlyPrice: Number(pkg.monthlyPrice), annualPrice: Number(pkg.annualPrice) },
+    },
+  };
+}
+
 // GET /api/admin/billing/subscriptions?page=&limit=&search=&status=
 // Lists every tenant with its subscription (if any) — the core Subscriptions table.
 export async function GET(req: NextRequest) {
@@ -51,7 +66,7 @@ export async function GET(req: NextRequest) {
       prismaAdmin.tenant.count({ where }),
     ]);
 
-    return paginated(tenants, total, page, limit);
+    return paginated(tenants.map(serializeRow), total, page, limit);
   } catch (e) {
     console.error("[billing/subscriptions] GET", e);
     return serverError();
@@ -105,7 +120,6 @@ export async function POST(req: NextRequest) {
       where: { tenantId: d.tenantId },
       create: { tenantId: d.tenantId, ...common },
       update: common,
-      include: { package: true },
     });
 
     // Keep the denormalized tier/status on Tenant in sync with the subscription.
