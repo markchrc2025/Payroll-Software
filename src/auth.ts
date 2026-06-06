@@ -150,9 +150,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.roleId = token.roleId;
       return session;
     },
-    authorized({ auth: a }) {
-      // Used by the middleware/proxy below to gate access
-      return !!a?.user;
+    authorized({ auth: a, request }) {
+        const { pathname } = request.nextUrl;
+        const PUBLIC_CENTRAL_PATHS = [
+              "/centralportal/accept-invite",
+              "/centralportal/reset-password",
+            ];
+        if (PUBLIC_CENTRAL_PATHS.some((p) => pathname.startsWith(p))) return true;
+        // Used by the middleware/proxy below to gate access
+        return !!a?.user;
     },
   },
 });
