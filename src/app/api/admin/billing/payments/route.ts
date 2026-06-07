@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     });
     if (!invoice) return err("Invoice not found", 404);
     if (invoice.status === "VOID") return err("Cannot pay a voided invoice", 400);
+    if (invoice.status === "PAID") return err("Invoice is already paid", 400);
 
     const result = await prismaAdmin.$transaction(async (tx) => {
       const payment = await tx.payment.create({
