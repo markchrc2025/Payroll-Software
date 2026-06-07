@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     return paginated(invoices.map(serializeInvoice), total, page, limit);
   } catch (e) {
     console.error("[billing/invoices] GET", e);
-    return serverError();
+    return serverError(e);
   }
 }
 
@@ -141,6 +141,6 @@ export async function POST(req: NextRequest) {
     return ok(serializeInvoice(invoice), "Invoice created", 201);
   } catch (e) {
     console.error("[billing/invoices] POST", e);
-    return serverError();
+    return serverError(e);
   }
 }
