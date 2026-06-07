@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     return paginated(tenants.map(serializeRow), total, page, limit);
   } catch (e) {
     console.error("[billing/subscriptions] GET", e);
-    return serverError();
+    return serverError(e);
   }
 }
 
@@ -144,6 +144,6 @@ export async function POST(req: NextRequest) {
     return ok(subscription, "Subscription saved");
   } catch (e) {
     console.error("[billing/subscriptions] POST", e);
-    return serverError();
+    return serverError(e);
   }
 }
