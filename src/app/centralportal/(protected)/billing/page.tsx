@@ -49,7 +49,7 @@ interface SubRow {
 interface InvoiceRow {
   id: string;
   invoiceNumber: string;
-  total: string;
+  total: number;
   currency: string;
   status: InvStatus;
   issuedAt: string | null;
