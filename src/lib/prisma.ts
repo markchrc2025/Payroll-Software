@@ -51,7 +51,7 @@ function decryptResult(model: string, result: unknown): unknown {
 }
 
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL!;
+  const connectionString = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!;
   const adapter = new PrismaPg({ connectionString });
   const base = new PrismaClient({
     adapter,
