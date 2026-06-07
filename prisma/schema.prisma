@@ -53,6 +53,22 @@ enum PermissionAction {
   EXPORT
 }
 
+// Central Portal (SUPER_ADMIN) RBAC — separate from the tenant-scoped
+// PermissionModule/PermissionAction catalog above. Central admins have
+// tenantId = NULL, so their roles live in their own catalog.
+enum CentralModule {
+  TENANTS
+  BILLING
+  SUPPORT
+  USERS
+  ROLES
+}
+
+enum CentralAction {
+  READ
+  MANAGE
+}
+
 enum SubscriptionTier {
   STARTER
   GROWTH
@@ -590,6 +606,9 @@ model User {
   systemRole SystemRole @default(TENANT_USER)
   roleId     String?
 
+  // Central Portal role (only meaningful when tenantId IS NULL / systemRole = SUPER_ADMIN)
+  centralRoleId String?
+
   essPinHash String?
 
   isActive    Boolean   @default(true)
@@ -602,8 +621,9 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
-  assignedRole Role?     @relation(fields: [roleId], references: [id])
+  tenant       Tenant?      @relation(fields: [tenantId], references: [id])
+  assignedRole Role?        @relation(fields: [roleId], references: [id])
+  centralRole  CentralRole? @relation(fields: [centralRoleId], references: [id])
   employee     Employee?
   approvedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimApprover")
 
@@ -615,6 +635,7 @@ model User {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([roleId])
+  @@index([centralRoleId])
   @@index([deletedAt])
 }
 
@@ -672,6 +693,50 @@ model RolePermission {
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
+}
+
+// =============================================================================
+// CENTRAL PORTAL RBAC (SUPER_ADMIN, tenantId = NULL)
+// Mirrors the tenant Role/Permission/RolePermission trio but is global rather
+// than tenant-scoped. The built-in "Super Admin" role (isSystem = true) is
+// seeded with every permission and cannot be deleted.
+// =============================================================================
+
+model CentralRole {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  permissions CentralRolePermission[]
+  users       User[]
+
+  @@index([deletedAt])
+}
+
+model CentralPermission {
+  id     String        @id @default(cuid())
+  module CentralModule
+  action CentralAction
+  label  String
+
+  roles CentralRolePermission[]
+
+  @@unique([module, action])
+}
+
+model CentralRolePermission {
+  centralRoleId       String
+  centralPermissionId String
+
+  role       CentralRole       @relation(fields: [centralRoleId], references: [id], onDelete: Cascade)
+  permission CentralPermission @relation(fields: [centralPermissionId], references: [id], onDelete: Cascade)
+
+  @@id([centralRoleId, centralPermissionId])
 }
 
 // =============================================================================

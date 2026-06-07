@@ -27,10 +27,17 @@ const NAV = [
 type Props = {
   children: React.ReactNode;
   user: { name?: string | null; email?: string | null };
+  /** Nav hrefs the current admin's role permits. Others are hidden. */
+  allowedHrefs?: string[];
+  /** Display name of the admin's central role (e.g. "Super Admin"). */
+  roleName?: string | null;
 };
 
-export default function CentralPortalShell({ children, user }: Props) {
+export default function CentralPortalShell({ children, user, allowedHrefs, roleName }: Props) {
   const path = usePathname();
+  const visibleNav = allowedHrefs
+    ? NAV.filter((item) => allowedHrefs.includes(item.href))
+    : NAV;
 
   return (
     <div
@@ -62,7 +69,7 @@ export default function CentralPortalShell({ children, user }: Props) {
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {NAV.map(({ label, href, icon: Icon }) => {
+          {visibleNav.map(({ label, href, icon: Icon }) => {
             const active = path.startsWith(href);
             return (
               <Link
@@ -99,6 +106,9 @@ export default function CentralPortalShell({ children, user }: Props) {
                 {user.name ?? "Admin"}
               </p>
               <p className="text-[10px] truncate" style={{ color: "#9CA3AF" }}>{user.email}</p>
+              {roleName && (
+                <p className="text-[10px] truncate font-medium" style={{ color: "#1E3A5F" }}>{roleName}</p>
+              )}
             </div>
           </div>
           <Button

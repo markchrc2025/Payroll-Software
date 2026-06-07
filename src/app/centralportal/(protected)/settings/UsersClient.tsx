@@ -14,7 +14,11 @@ type Admin = {
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  centralRoleId: string | null;
+  centralRoleName: string | null;
 };
+
+type RoleOption = { id: string; name: string };
 
 const NAVY = "#1E3A5F";
 const GRAY = "#6B7280";
@@ -28,15 +32,20 @@ function fmtDate(iso: string | null) {
 export default function UsersClient({
   initialAdmins,
   currentUserId,
+  roleOptions,
+  canManage,
 }: {
   initialAdmins: Admin[];
   currentUserId: string;
+  roleOptions: RoleOption[];
+  canManage: boolean;
 }) {
   const [admins, setAdmins] = useState<Admin[]>(initialAdmins);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [inviteRoleId, setInviteRoleId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editFirst, setEditFirst] = useState("");
@@ -74,6 +83,27 @@ export default function UsersClient({
     }
   }
 
+  async function handleAssignRole(admin: Admin, roleId: string) {
+    const value = roleId === "" ? null : roleId;
+    setBusy(admin.id + ":role");
+    try {
+      const res = await fetch(`/api/admin/central-users/${admin.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centralRoleId: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Failed to assign role");
+      const newName = roleOptions.find((r) => r.id === value)?.name ?? null;
+      setAdmins((prev) => prev.map((a) => (a.id === admin.id ? { ...a, centralRoleId: value, centralRoleName: newName } : a)));
+      toast.success(value ? "Role assigned" : "Role cleared");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to assign role");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleDelete(admin: Admin) {
     if (!confirm(`Delete ${admin.firstName} ${admin.lastName}? This removes their Central Portal access.`)) return;
     setBusy(admin.id + ":delete");
@@ -100,20 +130,22 @@ export default function UsersClient({
       const res = await fetch("/api/admin/central-users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, firstName, lastName }),
+        body: JSON.stringify({ email, firstName, lastName, centralRoleId: inviteRoleId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Invite failed");
       toast.success(`Invite sent to ${email}`);
+      const roleName = roleOptions.find((r) => r.id === inviteRoleId)?.name ?? null;
       setAdmins((prev) => [
         ...prev,
         {
           id: data.id, email, firstName, lastName,
           systemRole: "SUPER_ADMIN", isActive: false,
           lastLoginAt: null, createdAt: new Date().toISOString(),
+          centralRoleId: inviteRoleId || null, centralRoleName: roleName,
         },
       ]);
-      setEmail(""); setFirstName(""); setLastName(""); setInviteOpen(false);
+      setEmail(""); setFirstName(""); setLastName(""); setInviteRoleId(""); setInviteOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Invite failed");
     } finally {
@@ -174,24 +206,33 @@ export default function UsersClient({
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ShieldCheck size={18} color={NAVY} />
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>Users &amp; Roles</div>
-            <div style={{ fontSize: 13, color: GRAY }}>Central Portal administrators</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>Administrators</div>
+            <div style={{ fontSize: 13, color: GRAY }}>Central Portal users and their assigned roles</div>
           </div>
         </div>
-        <Button
-          onClick={() => setInviteOpen((v) => !v)}
-          style={{ background: NAVY, color: "#fff", display: "flex", alignItems: "center", gap: 6 }}
-        >
-          <UserPlus size={16} /> Invite admin
-        </Button>
+        {canManage && (
+          <Button
+            onClick={() => setInviteOpen((v) => !v)}
+            style={{ background: NAVY, color: "#fff", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <UserPlus size={16} /> Invite admin
+          </Button>
+        )}
       </div>
 
-      {inviteOpen && (
+      {inviteOpen && canManage && (
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #E5E7EB", background: "#F9FAFB" }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <Field label="First name" value={firstName} onChange={setFirstName} />
             <Field label="Last name" value={lastName} onChange={setLastName} />
             <Field label="Email" value={email} onChange={setEmail} type="email" wide />
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "0 1 170px" }}>
+              <span style={{ fontSize: 12, color: GRAY }}>Role</span>
+              <select value={inviteRoleId} onChange={(e) => setInviteRoleId(e.target.value)} style={selectStyle}>
+                <option value="">No role</option>
+                {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </label>
             <Button
               onClick={handleInvite}
               disabled={busy === "invite"}
@@ -244,7 +285,19 @@ export default function UsersClient({
                 ) : a.email}
               </td>
               <td style={td}>
-                <span style={pill("#EEF2FF", NAVY)}>{a.systemRole === "SUPER_ADMIN" ? "Super Admin" : "Admin"}</span>
+                {canManage ? (
+                  <select
+                    value={a.centralRoleId ?? ""}
+                    disabled={busy === a.id + ":role"}
+                    onChange={(e) => handleAssignRole(a, e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value="">No role</option>
+                    {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                ) : (
+                  <span style={pill("#EEF2FF", NAVY)}>{a.centralRoleName ?? "No role"}</span>
+                )}
               </td>
               <td style={td}>
                 {a.isActive
@@ -253,6 +306,9 @@ export default function UsersClient({
               </td>
               <td style={{ ...td, color: GRAY }}>{fmtDate(a.lastLoginAt)}</td>
               <td style={{ ...td, textAlign: "right" }}>
+                {!canManage ? (
+                  <span style={{ color: "#9CA3AF", fontSize: 13 }}>—</span>
+                ) : (
                 <div style={{ display: "inline-flex", gap: 8 }}>
                   {editing ? (
                     <>
@@ -301,6 +357,7 @@ export default function UsersClient({
                     </>
                   )}
                 </div>
+                )}
               </td>
             </tr>
             );
@@ -342,6 +399,10 @@ const ghostBtn: React.CSSProperties = {
 const inlineInput: React.CSSProperties = {
   border: "1px solid #E5E7EB", borderRadius: 6, padding: "5px 8px",
   fontSize: 13, color: "#111827", outline: "none", fontFamily: "inherit", width: 90,
+};
+const selectStyle: React.CSSProperties = {
+  border: "1px solid #E5E7EB", borderRadius: 8, padding: "7px 9px",
+  fontSize: 13, color: INK, outline: "none", fontFamily: "inherit", background: "#fff",
 };
 function pill(bg: string, color: string): React.CSSProperties {
   return { background: bg, color, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999 };

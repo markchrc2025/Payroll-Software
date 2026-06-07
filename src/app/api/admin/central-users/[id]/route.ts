@@ -1,5 +1,5 @@
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { randomBytes, createHash } from "crypto";
@@ -11,12 +11,14 @@ const patchSchema = z
     firstName: z.string().min(1).max(100).optional(),
     lastName: z.string().min(1).max(100).optional(),
     email: z.string().email().optional(),
+    // null clears the role; a string assigns it. Omit to leave unchanged.
+    centralRoleId: z.string().min(1).nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("USERS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);
@@ -33,11 +35,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
   if (!target) return err("Central admin not found", 404);
 
+  // Validate role assignment against the live catalog when provided.
+  if (parsed.data.centralRoleId) {
+    const role = await prismaAdmin.centralRole.findFirst({
+      where: { id: parsed.data.centralRoleId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!role) return err("Selected role no longer exists", 422);
+  }
+
   try {
     const updated = await prismaAdmin.user.update({
       where: { id },
       data: parsed.data,
-      select: { id: true, email: true, firstName: true, lastName: true, isActive: true },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, isActive: true,
+        centralRoleId: true,
+        centralRole: { select: { id: true, name: true } },
+      },
     });
     return ok(updated);
   } catch (e: unknown) {
@@ -49,8 +64,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("USERS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
   const { id } = await params;
 
   if (id === ctx.userId) {
@@ -72,9 +87,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   return ok({ id, deleted: true });
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireCentralPermission("USERS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
   const { id } = await params;
 
   const target = await prismaAdmin.user.findFirst({

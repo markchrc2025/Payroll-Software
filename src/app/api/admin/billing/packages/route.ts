@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, serverError } from "@/lib/api-response";
 import { z } from "zod";
 
 // Money is stored as BigInt centavos; serialize to Number for JSON responses.
@@ -13,8 +13,8 @@ function serialize(p: { monthlyPrice: bigint; annualPrice: bigint } & Record<str
 // GET /api/admin/billing/packages
 // Returns all billing packages (the catalog of tier pricing).
 export async function GET() {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "READ");
+  if (ctx instanceof Response) return ctx;
 
   try {
     let packages = await prismaAdmin.billingPackage.findMany({
@@ -58,8 +58,8 @@ const updateSchema = z.object({
 // PATCH /api/admin/billing/packages
 // Update pricing / tax / status for a package.
 export async function PATCH(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const body = await req.json();
