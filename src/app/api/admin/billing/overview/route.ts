@@ -57,6 +57,6 @@ export async function GET() {
     });
   } catch (e) {
     console.error("[billing/overview] GET", e);
-    return serverError();
+    return serverError(e);
   }
 }
