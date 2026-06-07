@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Building2,
+  Receipt,
   LifeBuoy,
   LogOut,
   Shield,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { label: "Dashboard", href: "/centralportal/dashboard", icon: LayoutDashboard },
   { label: "Tenants",   href: "/centralportal/tenants",   icon: Building2 },
+  { label: "Billing",   href: "/centralportal/billing",   icon: Receipt },
   { label: "Support",   href: "/centralportal/support",   icon: LifeBuoy },
   { label: "Settings",  href: "/centralportal/settings",  icon: Settings },
 ];
