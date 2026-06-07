@@ -39,7 +39,7 @@ export async function GET() {
     return ok(packages.map(serialize));
   } catch (e) {
     console.error("[billing/packages] GET", e);
-    return serverError();
+    return serverError(e);
   }
 }
 
@@ -93,6 +93,6 @@ export async function PATCH(req: NextRequest) {
     return ok(serialize(updated));
   } catch (e) {
     console.error("[billing/packages] PATCH", e);
-    return serverError();
+    return serverError(e);
   }
 }
