@@ -91,6 +91,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (e) {
     console.error("[billing/payments] POST", e);
-    return serverError();
+    return serverError(e);
   }
 }
