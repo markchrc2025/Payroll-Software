@@ -34,16 +34,19 @@ export async function GET() {
     ]);
 
     // MRR = sum of monthly-equivalent centavos across active subscriptions.
-    const mrr = activeSubs.reduce((sum, s) => {
-      const monthly =
-        s.billingCycle === "ANNUAL"
-          ? s.package.annualPrice / 12n
-          : s.package.monthlyPrice;
-      return sum + monthly;
-    }, 0n);
+    // Use Number arithmetic for the annual÷12 division to avoid BigInt truncation.
+    const mrr = Math.round(
+      activeSubs.reduce((sum, s) => {
+        const monthly =
+          s.billingCycle === "ANNUAL"
+            ? Number(s.package.annualPrice) / 12
+            : Number(s.package.monthlyPrice);
+        return sum + monthly;
+      }, 0),
+    );
 
     return ok({
-      mrr: Number(mrr),
+      mrr,
       activeSubscriptions: activeSubs.length,
       outstandingTotal: Number(outstandingAgg._sum.total ?? 0n),
       outstandingCount: outstandingAgg._count,
