@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus, KeyRound, ShieldCheck, Mail, Loader2 } from "lucide-react";
+import { UserPlus, KeyRound, ShieldCheck, Mail, Loader2, Pencil, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 
 type Admin = {
@@ -38,6 +38,57 @@ export default function UsersClient({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editFirst, setEditFirst] = useState("");
+  const [editLast, setEditLast] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+
+  function startEdit(a: Admin) {
+    setEditId(a.id);
+    setEditFirst(a.firstName);
+    setEditLast(a.lastName);
+    setEditEmail(a.email);
+  }
+
+  async function handleSaveEdit(admin: Admin) {
+    if (!editFirst.trim() || !editLast.trim() || !editEmail.trim()) {
+      toast.error("Fill in all fields");
+      return;
+    }
+    setBusy(admin.id + ":edit");
+    try {
+      const res = await fetch(`/api/admin/central-users/${admin.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName: editFirst.trim(), lastName: editLast.trim(), email: editEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Update failed");
+      setAdmins((prev) => prev.map((a) => (a.id === admin.id ? { ...a, firstName: editFirst.trim(), lastName: editLast.trim(), email: editEmail.trim() } : a)));
+      toast.success("Admin updated");
+      setEditId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDelete(admin: Admin) {
+    if (!confirm(`Delete ${admin.firstName} ${admin.lastName}? This removes their Central Portal access.`)) return;
+    setBusy(admin.id + ":delete");
+    try {
+      const res = await fetch(`/api/admin/central-users/${admin.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Delete failed");
+      setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
+      toast.success("Admin deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function handleInvite() {
     if (!email || !firstName || !lastName) {
@@ -168,15 +219,30 @@ export default function UsersClient({
           </tr>
         </thead>
         <tbody>
-          {admins.map((a) => (
+          {admins.map((a) => {
+            const editing = editId === a.id;
+            return (
             <tr key={a.id} style={{ borderTop: "1px solid #F3F4F6", fontSize: 14, color: INK }}>
               <td style={td}>
-                {a.firstName} {a.lastName}
-                {a.id === currentUserId && (
-                  <span style={{ fontSize: 11, color: NAVY, marginLeft: 6 }}>(you)</span>
+                {editing ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input value={editFirst} onChange={(e) => setEditFirst(e.target.value)} placeholder="First" style={inlineInput} />
+                    <input value={editLast} onChange={(e) => setEditLast(e.target.value)} placeholder="Last" style={inlineInput} />
+                  </div>
+                ) : (
+                  <>
+                    {a.firstName} {a.lastName}
+                    {a.id === currentUserId && (
+                      <span style={{ fontSize: 11, color: NAVY, marginLeft: 6 }}>(you)</span>
+                    )}
+                  </>
                 )}
               </td>
-              <td style={{ ...td, color: GRAY }}>{a.email}</td>
+              <td style={{ ...td, color: GRAY }}>
+                {editing ? (
+                  <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" style={{ ...inlineInput, width: 220 }} />
+                ) : a.email}
+              </td>
               <td style={td}>
                 <span style={pill("#EEF2FF", NAVY)}>{a.systemRole === "SUPER_ADMIN" ? "Super Admin" : "Admin"}</span>
               </td>
@@ -188,28 +254,57 @@ export default function UsersClient({
               <td style={{ ...td, color: GRAY }}>{fmtDate(a.lastLoginAt)}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "inline-flex", gap: 8 }}>
-                  <button
-                    onClick={() => handleReset(a)}
-                    disabled={busy === a.id + ":reset"}
-                    style={ghostBtn}
-                    title="Send password reset link"
-                  >
-                    {busy === a.id + ":reset" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-                    Reset
-                  </button>
-                  {a.id !== currentUserId && (
-                    <button
-                      onClick={() => handleToggleActive(a)}
-                      disabled={busy === a.id + ":active"}
-                      style={{ ...ghostBtn, color: a.isActive ? "#c0392b" : "#0b7a3e" }}
-                    >
-                      {a.isActive ? "Deactivate" : "Reactivate"}
-                    </button>
+                  {editing ? (
+                    <>
+                      <button onClick={() => handleSaveEdit(a)} disabled={busy === a.id + ":edit"} style={{ ...ghostBtn, color: "#0b7a3e" }} title="Save changes">
+                        {busy === a.id + ":edit" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Save
+                      </button>
+                      <button onClick={() => setEditId(null)} style={ghostBtn} title="Cancel">
+                        <X size={14} />Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(a)} style={ghostBtn} title="Edit name & email">
+                        <Pencil size={14} />Edit
+                      </button>
+                      <button
+                        onClick={() => handleReset(a)}
+                        disabled={busy === a.id + ":reset"}
+                        style={ghostBtn}
+                        title="Send password reset link"
+                      >
+                        {busy === a.id + ":reset" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                        Reset
+                      </button>
+                      {a.id !== currentUserId && (
+                        <>
+                          <button
+                            onClick={() => handleToggleActive(a)}
+                            disabled={busy === a.id + ":active"}
+                            style={{ ...ghostBtn, color: a.isActive ? "#c0392b" : "#0b7a3e" }}
+                          >
+                            {a.isActive ? "Deactivate" : "Reactivate"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(a)}
+                            disabled={busy === a.id + ":delete"}
+                            style={{ ...ghostBtn, color: "#c0392b" }}
+                            title="Delete admin"
+                          >
+                            {busy === a.id + ":delete" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -243,6 +338,10 @@ const ghostBtn: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13,
   border: "1px solid #E5E7EB", borderRadius: 8, padding: "6px 10px",
   background: "#fff", color: "#111827", cursor: "pointer", fontFamily: "inherit",
+};
+const inlineInput: React.CSSProperties = {
+  border: "1px solid #E5E7EB", borderRadius: 6, padding: "5px 8px",
+  fontSize: 13, color: "#111827", outline: "none", fontFamily: "inherit", width: 90,
 };
 function pill(bg: string, color: string): React.CSSProperties {
   return { background: bg, color, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999 };

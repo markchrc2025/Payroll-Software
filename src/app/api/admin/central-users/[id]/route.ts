@@ -5,7 +5,14 @@ import { sendPasswordResetEmail } from "@/lib/email";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 
-const patchSchema = z.object({ isActive: z.boolean() });
+const patchSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    firstName: z.string().min(1).max(100).optional(),
+    lastName: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getSuperAdminContext();
@@ -26,12 +33,43 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
   if (!target) return err("Central admin not found", 404);
 
-  const updated = await prismaAdmin.user.update({
-    where: { id },
-    data: { isActive: parsed.data.isActive },
-    select: { id: true, isActive: true },
+  try {
+    const updated = await prismaAdmin.user.update({
+      where: { id },
+      data: parsed.data,
+      select: { id: true, email: true, firstName: true, lastName: true, isActive: true },
+    });
+    return ok(updated);
+  } catch (e: unknown) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
+      return err("A user with that email already exists", 409);
+    }
+    throw e;
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await getSuperAdminContext();
+  if (!ctx) return unauthorized();
+  const { id } = await params;
+
+  if (id === ctx.userId) {
+    return err("You cannot delete your own account", 400);
+  }
+
+  const target = await prismaAdmin.user.findFirst({
+    where: { id, tenantId: null, deletedAt: null },
+    select: { id: true },
   });
-  return ok(updated);
+  if (!target) return err("Central admin not found", 404);
+
+  // Soft-delete (matches the deletedAt convention used across admin tables) and
+  // revoke access. Freeing the email for re-invite later.
+  await prismaAdmin.user.update({
+    where: { id },
+    data: { deletedAt: new Date(), isActive: false },
+  });
+  return ok({ id, deleted: true });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

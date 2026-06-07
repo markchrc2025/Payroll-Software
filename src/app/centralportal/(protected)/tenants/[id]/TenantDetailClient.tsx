@@ -200,6 +200,14 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
   const [editStatus, setEditStatus] = useState(tenant.subscriptionStatus);
   const [editBilling, setEditBilling] = useState(tenant.billingEmail ?? "");
   const [editTrial, setEditTrial] = useState(tenant.trialEndsAt?.slice(0, 10) ?? "");
+  const [editCompany, setEditCompany] = useState(false);
+  const [coName, setCoName] = useState(tenant.name);
+  const [coTrade, setCoTrade] = useState(tenant.tradeName ?? "");
+  const [coTin, setCoTin] = useState(tenant.tinNumber ?? "");
+  const [coIndustry, setCoIndustry] = useState(tenant.industry ?? "");
+  const [coProvince, setCoProvince] = useState(tenant.province ?? "");
+  const [coCode, setCoCode] = useState(tenant.companyCode ?? "");
+  const [coAddress, setCoAddress] = useState(tenant.address ?? "");
 
   async function patchTenant(patch: Record<string, unknown>, optimistic?: Partial<Tenant>) {
     setSaving(true);
@@ -224,6 +232,20 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
   async function saveSub() {
     await patchTenant({ subscriptionTier: editTier, subscriptionStatus: editStatus, billingEmail: editBilling || null, trialEndsAt: editTrial ? new Date(editTrial).toISOString() : null });
     setEditSub(false);
+  }
+  async function saveCompany() {
+    const patch = {
+      name: coName.trim(),
+      tradeName: coTrade.trim() || null,
+      tinNumber: coTin.trim() || null,
+      industry: coIndustry.trim() || null,
+      province: coProvince.trim() || null,
+      companyCode: coCode.trim() ? coCode.trim().toUpperCase() : null,
+      address: coAddress.trim() || null,
+    };
+    // PATCH response doesn't echo these fields, so update local state optimistically.
+    await patchTenant(patch, patch);
+    setEditCompany(false);
   }
 
   const initials = tenant.name.split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
@@ -272,14 +294,32 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
             <StatCard label="Portal users" value={tenant._count.users} sub="admins & staff" />
           </div>
           <div className="grid grid-cols-2 gap-3.5">
-            <Card title="Company details" icon={Building2} action={<button onClick={() => toast.info("Company editing coming soon")} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}><Pencil className="w-3 h-3" />Edit</button>}>
-              <InfoRow k="Legal name" v={tenant.name} />
-              <InfoRow k="Trade name" v={tenant.tradeName} />
-              <InfoRow k="TIN" v={tenant.tinNumber} />
-              <InfoRow k="Industry" v={tenant.industry} />
-              <InfoRow k="DOLE region" v={tenant.province} />
-              <InfoRow k="Company code" v={tenant.companyCode} />
-              <InfoRow k="Registered address" v={tenant.address} />
+            <Card title="Company details" icon={Building2} action={!editCompany ? <button onClick={() => { setCoName(tenant.name); setCoTrade(tenant.tradeName ?? ""); setCoTin(tenant.tinNumber ?? ""); setCoIndustry(tenant.industry ?? ""); setCoProvince(tenant.province ?? ""); setCoCode(tenant.companyCode ?? ""); setCoAddress(tenant.address ?? ""); setEditCompany(true); }} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}><Pencil className="w-3 h-3" />Edit</button> : undefined}>
+              {editCompany ? (
+                <div className="space-y-2.5">
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>Legal name</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coName} onChange={(e) => setCoName(e.target.value)} /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>Trade name</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coTrade} onChange={(e) => setCoTrade(e.target.value)} /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>TIN</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coTin} onChange={(e) => setCoTin(e.target.value)} /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>Industry</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coIndustry} onChange={(e) => setCoIndustry(e.target.value)} /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>DOLE region</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coProvince} onChange={(e) => setCoProvince(e.target.value)} /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>Company code</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coCode} onChange={(e) => setCoCode(e.target.value.toUpperCase())} placeholder="UPPERCASE + digits" /></div>
+                  <div className="space-y-1"><label className="text-[11px]" style={{ color: SUB }}>Registered address</label><input className={SELECT_CLS + " w-full"} style={SELECT_STYLE} value={coAddress} onChange={(e) => setCoAddress(e.target.value)} /></div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveCompany} disabled={saving || !coName.trim()} className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-md text-white disabled:opacity-60" style={{ background: NAVY }}>{saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Save</button>
+                    <button onClick={() => setEditCompany(false)} className="px-3 text-xs py-1.5 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <InfoRow k="Legal name" v={tenant.name} />
+                  <InfoRow k="Trade name" v={tenant.tradeName} />
+                  <InfoRow k="TIN" v={tenant.tinNumber} />
+                  <InfoRow k="Industry" v={tenant.industry} />
+                  <InfoRow k="DOLE region" v={tenant.province} />
+                  <InfoRow k="Company code" v={tenant.companyCode} />
+                  <InfoRow k="Registered address" v={tenant.address} />
+                </>
+              )}
             </Card>
             <div className="flex flex-col gap-3.5">
               <Card title="Subscription & billing" icon={CreditCard} action={!editSub ? <button onClick={() => setEditSub(true)} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}><Pencil className="w-3 h-3" />Edit</button> : undefined}>
