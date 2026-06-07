@@ -3,7 +3,6 @@ import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
 import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import { ok, err, unauthorized, serverError } from "@/lib/api-response";
-import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
 // Money is stored as BigInt centavos; serialize to Number for JSON responses.
@@ -80,15 +79,6 @@ export async function PATCH(req: NextRequest) {
     if (rest.features !== undefined) data.features = rest.features;
 
     const updated = await prismaAdmin.billingPackage.update({ where: { id }, data });
-
-    await writeAuditLog({
-      actorUserId: ctx.userId,
-      action: "UPDATE",
-      entity: "BillingPackage",
-      entityId: id,
-      changes: rest,
-      ipAddress: getClientIp(req),
-    });
 
     return ok(serialize(updated));
   } catch (e) {
