@@ -24,9 +24,9 @@ interface Package {
   tier: Tier;
   name: string;
   description: string | null;
-  monthlyPrice: string;
-  annualPrice: string;
-  taxRate: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  taxRateBps: number;
   currency: string;
   isActive: boolean;
   features: string[];
@@ -42,7 +42,7 @@ interface SubRow {
     billingCycle: Cycle;
     status: SubStatus;
     nextBillingDate: string | null;
-    package: { id: string; tier: Tier; name: string; monthlyPrice: string; annualPrice: string; currency: string };
+    package: { id: string; tier: Tier; name: string; monthlyPrice: number; annualPrice: number; currency: string };
   } | null;
 }
 
@@ -85,9 +85,10 @@ const INV_PILL: Record<InvStatus, { cls: string; label: string }> = {
 const TABS = ["Overview", "Subscriptions", "Packages", "Payment history"] as const;
 type Tab = (typeof TABS)[number];
 
-function peso(n: number | string, currency = "PHP") {
-  const v = typeof n === "string" ? Number(n) : n;
-  return new Intl.NumberFormat("en-PH", { style: "currency", currency }).format(isNaN(v) ? 0 : v);
+// Amounts are centavos (integer). Divide by 100 to display pesos.
+function peso(centavos: number, currency = "PHP") {
+  const v = (Number.isFinite(centavos) ? centavos : 0) / 100;
+  return new Intl.NumberFormat("en-PH", { style: "currency", currency }).format(v);
 }
 
 function fmtDate(iso: string | null) {
@@ -378,31 +379,60 @@ function PackagesTab() {
           <p className="text-[11px] uppercase tracking-wide mb-4" style={{ color: "#9CA3AF" }}>{p.tier}</p>
 
           <label className="block text-[11px] font-medium mb-1" style={{ color: "#6B7280" }}>Monthly price ({p.currency})</label>
-          <PriceInput value={p.monthlyPrice} disabled={saving === p.id} onCommit={(v) => savePackage(p, { monthlyPrice: v })} />
+          <PesoInput centavos={p.monthlyPrice} disabled={saving === p.id} onCommit={(c) => savePackage(p, { monthlyPrice: c })} />
 
           <label className="block text-[11px] font-medium mb-1 mt-3" style={{ color: "#6B7280" }}>Annual price ({p.currency})</label>
-          <PriceInput value={p.annualPrice} disabled={saving === p.id} onCommit={(v) => savePackage(p, { annualPrice: v })} />
+          <PesoInput centavos={p.annualPrice} disabled={saving === p.id} onCommit={(c) => savePackage(p, { annualPrice: c })} />
 
-          <label className="block text-[11px] font-medium mb-1 mt-3" style={{ color: "#6B7280" }}>Tax rate (e.g. 0.12 = 12%)</label>
-          <PriceInput value={p.taxRate} disabled={saving === p.id} step="0.01" onCommit={(v) => savePackage(p, { taxRate: v })} />
+          <label className="block text-[11px] font-medium mb-1 mt-3" style={{ color: "#6B7280" }}>Tax rate (%)</label>
+          <PercentInput bps={p.taxRateBps} disabled={saving === p.id} onCommit={(b) => savePackage(p, { taxRateBps: b })} />
         </div>
       ))}
     </div>
   );
 }
 
-function PriceInput({ value, onCommit, disabled, step = "0.01" }: { value: string; onCommit: (v: number) => void; disabled?: boolean; step?: string }) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
+// Edits in pesos, commits centavos (integer).
+function PesoInput({ centavos, onCommit, disabled }: { centavos: number; onCommit: (c: number) => void; disabled?: boolean }) {
+  const toPeso = (c: number) => (c / 100).toFixed(2);
+  const [local, setLocal] = useState(toPeso(centavos));
+  useEffect(() => setLocal(toPeso(centavos)), [centavos]);
   return (
     <input
       type="number"
-      step={step}
+      step="0.01"
       min="0"
       value={local}
       disabled={disabled}
       onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => { if (local !== value) onCommit(Number(local)); }}
+      onBlur={() => {
+        const c = Math.round(Number(local) * 100);
+        if (!Number.isNaN(c) && c !== centavos) onCommit(c);
+      }}
+      className="w-full h-9 px-3 text-[13px] rounded-[8px] border outline-none focus:ring-1"
+      style={{ borderColor: "#E5E7EB", color: "#111827" }}
+    />
+  );
+}
+
+// Edits in percent, commits basis points (integer; 12 -> 1200).
+function PercentInput({ bps, onCommit, disabled }: { bps: number; onCommit: (b: number) => void; disabled?: boolean }) {
+  const toPct = (b: number) => (b / 100).toString();
+  const [local, setLocal] = useState(toPct(bps));
+  useEffect(() => setLocal(toPct(bps)), [bps]);
+  return (
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      max="100"
+      value={local}
+      disabled={disabled}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        const b = Math.round(Number(local) * 100);
+        if (!Number.isNaN(b) && b !== bps) onCommit(b);
+      }}
       className="w-full h-9 px-3 text-[13px] rounded-[8px] border outline-none focus:ring-1"
       style={{ borderColor: "#E5E7EB", color: "#111827" }}
     />
