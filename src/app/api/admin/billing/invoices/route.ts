@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, serverError, paginated } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
@@ -22,8 +22,8 @@ function serializeInvoice(inv: {
 
 // GET /api/admin/billing/invoices?page=&limit=&tenantId=&status=
 export async function GET(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "READ");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -78,8 +78,8 @@ function genInvoiceNumber() {
 // Issues an invoice for a tenant's current subscription period.
 // All money is integer centavos; tax = round(subtotal * bps / 10000).
 export async function POST(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const body = await req.json();

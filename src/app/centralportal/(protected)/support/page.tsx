@@ -1,6 +1,5 @@
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
+import { requireCentralPage } from "@/lib/central-permission";
 import prismaAdmin from "@/lib/prisma-admin";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, Clock, Building2, CheckCircle2 } from "lucide-react";
 
@@ -19,8 +18,7 @@ const STATUS_PILL: Record<string, string> = {
 };
 
 export default async function SupportPage() {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) redirect("/centralportal/login");
+  await requireCentralPage("SUPPORT", "READ");
 
   const now = new Date();
   const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);

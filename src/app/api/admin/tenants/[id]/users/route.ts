@@ -7,8 +7,8 @@
 import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, notFound, serverError } from "@/lib/api-response";
 import { z } from "zod";
 
 const createUserSchema = z.object({
@@ -22,8 +22,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "READ");
+  if (ctx instanceof Response) return ctx;
 
   const { id } = await params;
 
@@ -56,8 +56,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   const { id } = await params;
 

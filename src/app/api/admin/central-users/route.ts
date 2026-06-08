@@ -1,19 +1,21 @@
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, forbidden } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendWelcomeEmail } from "@/lib/email";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 
 export async function GET() {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("USERS", "READ");
+  if (ctx instanceof Response) return ctx;
 
   const admins = await prismaAdmin.user.findMany({
     where: { tenantId: null, deletedAt: null },
     select: {
       id: true, email: true, firstName: true, lastName: true,
       systemRole: true, isActive: true, lastLoginAt: true, createdAt: true,
+      centralRoleId: true,
+      centralRole: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -24,20 +26,29 @@ const inviteSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
+  centralRoleId: z.string().min(1).optional(),
 });
 
 export async function POST(req: Request) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
-  void forbidden;
+  const ctx = await requireCentralPermission("USERS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) return err("Invalid invite payload", 422);
-  const { email, firstName, lastName } = parsed.data;
+  const { email, firstName, lastName, centralRoleId } = parsed.data;
 
   const existing = await prismaAdmin.user.findFirst({ where: { email } });
   if (existing) return err("A user with that email already exists", 409);
+
+  // If a role was supplied, ensure it is a live central role.
+  if (centralRoleId) {
+    const role = await prismaAdmin.centralRole.findFirst({
+      where: { id: centralRoleId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!role) return err("Selected role no longer exists", 422);
+  }
 
   const user = await prismaAdmin.user.create({
     data: {
@@ -46,6 +57,7 @@ export async function POST(req: Request) {
       systemRole: "SUPER_ADMIN",
       isActive: false,
       passwordHash: "",
+      centralRoleId: centralRoleId ?? null,
     },
     select: { id: true, email: true, firstName: true },
   });

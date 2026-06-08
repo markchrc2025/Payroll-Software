@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
@@ -19,8 +19,8 @@ const createSchema = z.object({
 // Records a manual payment (centavos) against an invoice. When the invoice is
 // fully covered, its status flips to PAID. Gateway fields stay null for now.
 export async function POST(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const body = await req.json();

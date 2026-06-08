@@ -7,8 +7,8 @@
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, notFound, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
@@ -43,8 +43,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "READ");
+  if (ctx instanceof Response) return ctx;
 
   const { id } = await params;
 
@@ -94,8 +94,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   const { id } = await params;
 

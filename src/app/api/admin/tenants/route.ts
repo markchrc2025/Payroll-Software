@@ -8,8 +8,8 @@ import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, forbidden, serverError, paginated } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
@@ -42,8 +42,8 @@ const createTenantSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "READ");
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
@@ -89,8 +89,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("TENANTS", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
   const parsed = createTenantSchema.safeParse(body);

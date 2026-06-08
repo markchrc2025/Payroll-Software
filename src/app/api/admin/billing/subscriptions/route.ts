@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, err, unauthorized, serverError, paginated } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
@@ -23,8 +23,8 @@ function serializeRow(t: {
 // GET /api/admin/billing/subscriptions?page=&limit=&search=&status=
 // Lists every tenant with its subscription (if any) — the core Subscriptions table.
 export async function GET(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "READ");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -88,8 +88,8 @@ const assignSchema = z.object({
 // Assign or change a tenant's package/cycle. Upserts the single subscription row.
 // Does NOT create an invoice — invoicing is a separate manual action.
 export async function POST(req: NextRequest) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "MANAGE");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const body = await req.json();

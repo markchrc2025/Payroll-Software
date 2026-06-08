@@ -8,6 +8,7 @@
  * (Phase C adds Postgres RLS as a defense-in-depth layer on top).
  */
 import { auth } from "@/auth";
+import prismaAdmin from "@/lib/prisma-admin";
 import type { SystemRole } from "@prisma/client";
 
 export type AuthContext = {
@@ -25,6 +26,15 @@ export async function getAuthContext(
 
   const { id, tenantId, systemRole, roleId } = session.user;
   if (!tenantId) return null; // SUPER_ADMIN tenant guard
+
+  // Re-validate against the live account: an 8h JWT must not outlive a user
+  // being deactivated or removed from their tenant. Keyed by primary id, so
+  // this is a single indexed lookup.
+  const user = await prismaAdmin.user.findFirst({
+    where: { id, tenantId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!user) return null;
 
   return {
     userId: id,

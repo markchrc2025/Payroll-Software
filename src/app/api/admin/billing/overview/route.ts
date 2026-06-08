@@ -1,12 +1,12 @@
 import prismaAdmin from "@/lib/prisma-admin";
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
-import { ok, unauthorized, serverError } from "@/lib/api-response";
+import { requireCentralPermission } from "@/lib/central-permission";
+import { ok, serverError } from "@/lib/api-response";
 
 // GET /api/admin/billing/overview
 // KPI snapshot for the Billing Overview tab. All money is centavos (Number out).
 export async function GET() {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) return unauthorized();
+  const ctx = await requireCentralPermission("BILLING", "READ");
+  if (ctx instanceof Response) return ctx;
 
   try {
     const now = new Date();

@@ -1,6 +1,6 @@
-import { getSuperAdminContext } from "@/lib/super-admin-auth";
+import { requireCentralPage } from "@/lib/central-permission";
 import prismaAdmin from "@/lib/prisma-admin";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import TenantDetailClient from "./TenantDetailClient";
@@ -10,8 +10,7 @@ export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ id: string }> };
 
 export default async function TenantDetailPage({ params }: Props) {
-  const ctx = await getSuperAdminContext();
-  if (!ctx) redirect("/centralportal/login");
+  await requireCentralPage("TENANTS", "READ");
 
   const { id } = await params;
 
