@@ -33,6 +33,29 @@ function getResend(): Resend {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Send through Resend and SURFACE failures.
+ *
+ * The Resend SDK does NOT reject/throw on API errors (unverified from-domain,
+ * invalid_from_address, missing/restricted API key, rate limits, …). It
+ * resolves with the failure tucked into the `error` field. Checking it here
+ * turns a rejected send into a real exception instead of a silent no-op, so
+ * callers (and the UI) learn the truth instead of seeing a false "sent".
+ */
+async function dispatch(opts: { to: string; subject: string; html: string }): Promise<void> {
+  const { error } = await getResend().emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  });
+  if (error) {
+    throw new Error(
+      `Resend rejected "${opts.subject}" to ${opts.to} [${error.name}]: ${error.message}`,
+    );
+  }
+}
+
 function baseTemplate(body: string): string {
   return `
 <!DOCTYPE html>
@@ -104,12 +127,7 @@ export async function sendPasswordResetEmail({
     </p>
   `);
 
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: `Reset your ${APP_NAME} password`,
-    html,
-  });
+  await dispatch({ to, subject: `Reset your ${APP_NAME} password`, html });
 }
 
 // ---------------------------------------------------------------------------
@@ -148,12 +166,7 @@ export async function sendWelcomeEmail({
     </a>
   `);
 
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: `Welcome to ${APP_NAME}`,
-    html,
-  });
+  await dispatch({ to, subject: `Welcome to ${APP_NAME}`, html });
 }
 
 // ---------------------------------------------------------------------------
@@ -182,12 +195,7 @@ export async function sendPayslipReadyEmail({
     </a>
   `);
 
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: `Your payslip for ${period} is ready`,
-    html,
-  });
+  await dispatch({ to, subject: `Your payslip for ${period} is ready`, html });
 }
 
 // ---------------------------------------------------------------------------
@@ -219,12 +227,7 @@ export async function sendOtApprovedEmail({
     </a>
   `);
 
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: `Your overtime on ${date} has been approved`,
-    html,
-  });
+  await dispatch({ to, subject: `Your overtime on ${date} has been approved`, html });
 }
 
 // ---------------------------------------------------------------------------
@@ -259,12 +262,7 @@ export async function sendDtrSubmittedEmail({
     </a>
   `);
 
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: `DTR review needed: ${employeeName} (${periodStart} – ${periodEnd})`,
-    html,
-  });
+  await dispatch({ to, subject: `DTR review needed: ${employeeName} (${periodStart} – ${periodEnd})`, html });
 }
 
 // ---------------------------------------------------------------------------

@@ -106,7 +106,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sentire-payroll.onrender.com";
   const link = `${base}/centralportal/reset-password?token=${raw}`;
-  await sendPasswordResetEmail({ to: target.email, name: target.firstName, resetUrl: link }).catch(() => {});
+
+  try {
+    await sendPasswordResetEmail({ to: target.email, name: target.firstName, resetUrl: link });
+  } catch (e) {
+    // The token exists, but delivery failed. Tell the admin the truth instead
+    // of a misleading "link sent" toast. (This is an authenticated USERS:MANAGE
+    // action, so there's no account-enumeration concern in being specific.)
+    console.error("[central-users] password reset email failed:", e);
+    return err(
+      "Reset link was generated but the email could not be sent. Check the email (Resend) configuration — most likely the sending domain isn't verified.",
+      502,
+    );
+  }
 
   return ok({ reset: true });
 }
