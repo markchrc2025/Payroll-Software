@@ -19,6 +19,7 @@ import {
   AlertIcon,
   ShieldIcon,
   CheckMark,
+  BuildingIcon,
 } from "./glyphs";
 import "./sentire-login.css";
 
@@ -35,15 +36,20 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const callbackUrl = rawCallback.startsWith("/") ? rawCallback : "/";
   const redirectTo = mode === "admin" ? "/centralportal/dashboard" : callbackUrl;
 
+  const [companyCode, setCompanyCode] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(mode === "tenant");
-  const [touched, setTouched] = useState<{ email?: boolean; pw?: boolean }>({});
+  const [touched, setTouched] = useState<{ companyCode?: boolean; email?: boolean; pw?: boolean }>({});
   const [status, setStatus] = useState<Status>("idle");
   const [formErr, setFormErr] = useState("");
   const shakeRef = useRef<HTMLFormElement>(null);
 
+  const companyCodeErr =
+    mode === "tenant" && touched.companyCode && !companyCode.trim()
+      ? "Company code is required."
+      : "";
   const emailErr =
     touched.email && !EMAIL_RE.test(email)
       ? email
@@ -78,9 +84,10 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setTouched({ email: true, pw: true });
+    setTouched({ companyCode: true, email: true, pw: true });
     setFormErr("");
-    if (!EMAIL_RE.test(email) || pw.length < 8) {
+    const tenantCodeMissing = mode === "tenant" && !companyCode.trim();
+    if (tenantCodeMissing || !EMAIL_RE.test(email) || pw.length < 8) {
       setStatus("error");
       shake();
       return;
@@ -90,6 +97,7 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
       const res = await signIn("credentials", {
         email,
         password: pw,
+        ...(mode === "tenant" ? { companyCode: companyCode.trim().toUpperCase() } : {}),
         scope: mode,
         redirect: false,
       });
@@ -98,7 +106,7 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
         setFormErr(
           mode === "admin"
             ? "Those staff credentials weren't recognised. Access is restricted to authorized Sentire personnel."
-            : "We couldn't verify those credentials. Check your email and password and try again.",
+            : "We couldn't verify those credentials. Check your company code, email and password.",
         );
         shake();
         return;
@@ -269,6 +277,27 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
             )}
 
             <form ref={shakeRef} className="sn-form" onSubmit={submit} noValidate>
+              {mode === "tenant" && (
+                <label className="sn-field">
+                  <span className="sn-label">Company code</span>
+                  <div className={"sn-input" + (companyCodeErr ? " is-err" : "")}>
+                    <BuildingIcon />
+                    <input
+                      type="text"
+                      autoComplete="organization"
+                      placeholder="e.g. ACMEFOODS"
+                      value={companyCode}
+                      disabled={busy}
+                      onChange={(e) => setCompanyCode(e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, companyCode: true }))}
+                      aria-label="Company code"
+                      aria-invalid={!!companyCodeErr}
+                    />
+                  </div>
+                  {companyCodeErr && <span className="sn-err-txt">{companyCodeErr}</span>}
+                </label>
+              )}
+
               <label className="sn-field">
                 <span className="sn-label">{mode === "tenant" ? "Work email" : "Staff email"}</span>
                 <div className={"sn-input" + (emailErr ? " is-err" : "")}>

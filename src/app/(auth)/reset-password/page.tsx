@@ -162,8 +162,12 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense>
-      <ResetPasswordForm />
-    </Suspense>
+    <div className="min-h-screen flex items-center justify-center bg-white p-6">
+      <div className="w-full max-w-sm">
+        <Suspense>
+          <ResetPasswordForm />
+        </Suspense>
+      </div>
+    </div>
   );
 }

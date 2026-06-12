@@ -192,3 +192,11 @@ export const CheckMark = () => (
     <path d="M2.5 7.5l3 3 6-6.5" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+
+export const BuildingIcon = () => (
+  <svg className="sn-input-ic" viewBox="0 0 20 20" width={17} height={17} aria-hidden="true">
+    <rect x="3" y="4" width="14" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M7 17V4M13 17V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M3 9h14M3 13h14" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
