@@ -38,6 +38,9 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   const isLogin = pathname === "/ess/login";
+  // The redesigned ESS app is a single full-bleed shell that owns its own
+  // top bar + bottom nav (see /ess). Legacy sub-routes keep the sidebar chrome.
+  const isShell = pathname === "/ess";
 
   if (isLogin) {
     return (
@@ -45,6 +48,10 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
         {children}
       </div>
     );
+  }
+
+  if (isShell) {
+    return <>{children}</>;
   }
 
   function handleLogout() {
