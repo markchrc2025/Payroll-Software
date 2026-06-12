@@ -105,6 +105,7 @@ Centered 360px column:
 3. **Divider:** centered label between hairlines — "or sign in with email" (tenant) / "or use admin credentials" (admin).
 4. **Error alert** (conditional): red soft box `#FBECEB` / text `#B23B34` / border `#F0C9C6`, circle-i icon, 13px Hanken.
 5. **Form fields** (gap 15px):
+   - **Company code** *(tenant only — first field)* — label "Company code"; leading building/card icon; placeholder `e.g. ACMEFOODS`; `type=text`, `autocomplete=organization`, `autocapitalize=characters`, `spellcheck=false`; value force-uppercased via `text-transform: uppercase` + `letter-spacing: 0.04em`. Below the field, a muted hint (`#978C80`, 12px Hanken): "The workspace ID your admin gave you." — replaced by the red error text when invalid. This scopes which tenant workspace the user signs into; the **admin** portal has no company code (staff sign in to one console).
    - **Email** — label "Work email" (tenant) / "Staff email" (admin); leading envelope icon; placeholder `you@company.com` / `name@sentire.io`; `type=email`, `autocomplete=username`.
    - **Password** — leading lock icon; trailing eye toggle (show/hide); placeholder "Enter your password"; `autocomplete=current-password`.
    - Inputs: 46px tall, field bg `#FCFAF7`, 1px `#D8CFC2`, radius 10, icon color `#9A9085` (→ accent on focus).
@@ -120,12 +121,13 @@ Centered 360px column:
 
 ## Interactions & behavior
 - **Inline validation** (on blur + on submit):
+  - Company code *(tenant only)*: required; message "Company code is required."
   - Email: required; regex `^[^\s@]+@[^\s@]+\.[^\s@]+$`; messages "Email is required." / "Enter a valid email address."
   - Password: required; min 8 chars; "Password is required." / "Password must be at least 8 characters."
   - Invalid field → red border + ring + helper text below.
 - **Submit:** if client-validation fails → set error state + **shake** the form (`translateX` keyframes, .4s). Otherwise → loading (1.5s simulated) → success or error.
-  - Demo success pairs (replace with real auth): tenant `maria@acmefoods.com` / `Acme2026!`; admin `a.okafor@sentire.io` / `Sentire2026`.
-  - Failure error copy: tenant generic; **admin** adds lockout warning "Admin accounts lock after 5 failed attempts."
+  - Demo success values (replace with real auth): tenant company `ACMEFOODS` + `maria@acmefoods.com` / `Acme2026!`; admin `a.okafor@sentire.io` / `Sentire2026`. For tenant, the company code is part of the credential check (case-insensitive).
+  - Failure error copy: tenant "We couldn't verify those details. Check your company code, email and password and try again."; **admin** adds lockout warning "Admin accounts lock after 5 failed attempts."
 - **Success state** replaces the form with a centered animated check (SVG stroke draw, ~0.85s) + heading + redirect progress bar (1.6s):
   - Tenant: "Welcome back" / "Opening the Acme Foods workspace…"
   - Admin: "Identity verified" / "Approval sent to your device — confirm to continue." (i.e. hand off to a **2FA push** step — implement the real second factor here).
@@ -134,7 +136,7 @@ Centered 360px column:
 - Transitions: inputs/buttons .15s; button active `translateY(1px)`; respect `prefers-reduced-motion` (disable shake/draw).
 
 ## State (per form)
-`email`, `password`, `showPassword`, `remember`, `touched{email,password}`,
+`company` *(tenant only)*, `email`, `password`, `showPassword`, `remember`, `touched{company,email,password}`,
 `status: idle|loading|error|success`, `formError` (string).
 Wire `status`/`formError` to your real auth mutation; keep field values on error.
 

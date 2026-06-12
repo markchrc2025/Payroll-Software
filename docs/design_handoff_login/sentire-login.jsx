@@ -4,7 +4,7 @@
 // Depends on: NexusMark, NexusWord (nexus-refined.jsx), ProductGlyph (sentire-logos.jsx)
 
 const SN_DEMO = {
-  tenant: { email: "maria@acmefoods.com", password: "Acme2026!" },
+  tenant: { company: "acmefoods", email: "maria@acmefoods.com", password: "Acme2026!" },
   admin: { email: "a.okafor@sentire.io", password: "Sentire2026" },
 };
 const SN_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -105,6 +105,7 @@ function SnBrandPanel({ mode, texture }) {
 // ---- form ------------------------------------------------------------------
 function SnLoginForm({ mode }) {
   const demo = SN_DEMO[mode];
+  const [company, setCompany] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [pw, setPw] = React.useState("");
   const [show, setShow] = React.useState(false);
@@ -116,6 +117,8 @@ function SnLoginForm({ mode }) {
 
   const emailErr = touched.email && !SN_EMAIL_RE.test(email)
     ? (email ? "Enter a valid email address." : "Email is required.") : "";
+  const companyErr = mode === "tenant" && touched.company && company.trim() === ""
+    ? "Company code is required." : "";
   const pwErr = touched.pw && pw.length < 8
     ? (pw ? "Password must be at least 8 characters." : "Password is required.") : "";
   const busy = status === "loading";
@@ -129,24 +132,27 @@ function SnLoginForm({ mode }) {
 
   function submit(e) {
     e.preventDefault();
-    setTouched({ email: true, pw: true });
+    setTouched({ email: true, pw: true, company: true });
     setFormErr("");
-    if (!SN_EMAIL_RE.test(email) || pw.length < 8) { setStatus("error"); shake(); return; }
+    const companyMissing = mode === "tenant" && company.trim() === "";
+    if (companyMissing || !SN_EMAIL_RE.test(email) || pw.length < 8) { setStatus("error"); shake(); return; }
     setStatus("loading");
     setTimeout(() => {
-      if (email.trim().toLowerCase() === demo.email && pw === demo.password) {
+      const companyOk = mode !== "tenant" || company.trim().toLowerCase() === demo.company;
+      if (companyOk && email.trim().toLowerCase() === demo.email && pw === demo.password) {
         setStatus("success");
       } else {
         setStatus("error");
         setFormErr(mode === "admin"
           ? "Credentials not recognised. Admin accounts lock after 5 failed attempts."
-          : "We couldn't verify those credentials. Check your email and password and try again.");
+          : "We couldn't verify those details. Check your company code, email and password and try again.");
         shake();
       }
     }, 1500);
   }
 
   function fillDemo() {
+    if (mode === "tenant") setCompany(demo.company.toUpperCase());
     setEmail(demo.email); setPw(demo.password);
     setTouched({}); setStatus("idle"); setFormErr("");
   }
@@ -205,6 +211,25 @@ function SnLoginForm({ mode }) {
       )}
 
       <form ref={shakeRef} className="sn-form" onSubmit={submit} noValidate>
+        {mode === "tenant" && (
+          <label className="sn-field">
+            <span className="sn-label">Company code</span>
+            <div className={"sn-input" + (companyErr ? " is-err" : "")}>
+              <svg className="sn-input-ic" viewBox="0 0 20 20" width="17" height="17" aria-hidden="true">
+                <rect x="3" y="3.5" width="9" height="13" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M12 8h4.5a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H12M5.5 7h3M5.5 10h3M5.5 13h2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <input type="text" autoComplete="organization" autoCapitalize="characters" spellCheck="false"
+                     placeholder="e.g. ACMEFOODS" value={company} disabled={busy}
+                     style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+                     onChange={(e) => setCompany(e.target.value)}
+                     onBlur={() => setTouched((t) => ({ ...t, company: true }))} />
+            </div>
+            {companyErr
+              ? <span className="sn-err-txt">{companyErr}</span>
+              : <span className="sn-hint">The workspace ID your admin gave you.</span>}
+          </label>
+        )}
         <label className="sn-field">
           <span className="sn-label">{mode === "tenant" ? "Work email" : "Staff email"}</span>
           <div className={"sn-input" + (emailErr ? " is-err" : "")}>
