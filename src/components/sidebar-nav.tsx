@@ -33,6 +33,7 @@ import {
   ChevronRight,
   Monitor,
   Percent,
+  Megaphone,
 } from "lucide-react";
 
 type NavItem = {
@@ -73,6 +74,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/movements", label: "Movements", icon: ArrowRightLeft },
       { href: "/profile-update-requests", label: "Profile Requests", icon: UserCheck },
       { href: "/expense-claims", label: "Claims", icon: Receipt },
+      { href: "/announcements", label: "Announcements", icon: Megaphone },
     ],
   },
   {

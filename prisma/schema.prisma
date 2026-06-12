@@ -569,6 +569,7 @@ model Tenant {
   attendanceLogs        AttendanceLog[]
   expenseClaims         ExpenseClaim[]
   essSessions           EssSession[]
+  essWebAuthnCredentials EssWebAuthnCredential[]
   otApplications        OTApplication[]
   undertimeRequests     UndertimeRequest[]
   profileUpdateRequests ProfileUpdateRequest[]
@@ -587,7 +588,32 @@ model Tenant {
   applicantNotes ApplicantNote[]
   holidays       Holiday[]
   premiumRateConfigs PremiumRateConfig[]
+  announcements  Announcement[]
 
+  @@index([deletedAt])
+}
+
+/// Company-wide announcement surfaced in the ESS app (Home feed + detail).
+/// Authored by tenant HR/admins; read-only for employees.
+model Announcement {
+  id        String  @id @default(cuid())
+  tenantId  String
+  title     String
+  body      String  @db.Text
+  /// Free-text tag shown as a chip, e.g. "Payroll", "Benefits", "General".
+  category  String?
+
+  isPublished     Boolean   @default(true)
+  publishedAt     DateTime  @default(now())
+  createdByUserId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isPublished, publishedAt])
   @@index([deletedAt])
 }
 
@@ -900,9 +926,10 @@ model Employee {
   nontaxableBasicAmountCents BigInt            @default(0)
 
   // ESS
-  essPin       String? // hashed at app layer
-  kioskPinHash String?
-  qrBadgeCode  String?
+  essPin          String? // hashed at app layer
+  essPasswordHash String? // optional ESS password (bcrypt), set by the employee
+  kioskPinHash    String?
+  qrBadgeCode     String?
 
   // Bank (encrypted at app layer)
   bankName          String?
@@ -943,6 +970,7 @@ model Employee {
   dtrRecords              DTRRecord[]
   expenseClaims           ExpenseClaim[]
   essSessions             EssSession[]
+  essWebAuthnCredentials  EssWebAuthnCredential[]
   otApplications          OTApplication[]
   undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
@@ -2527,6 +2555,37 @@ model EssSession {
   @@index([tenantId])
   @@index([employeeId])
   @@index([expiresAt])
+}
+
+/// WebAuthn / passkey credential registered by an ESS employee for biometric login.
+/// One employee can have multiple credentials (phone + laptop etc.).
+model EssWebAuthnCredential {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Base64url-encoded credential ID returned by the authenticator.
+  credentialId String @unique
+
+  /// CBOR-encoded public key (base64url), used for assertion verification.
+  publicKey String @db.Text
+
+  /// Incremented on every successful assertion; protects against replay attacks.
+  counter BigInt @default(0)
+
+  /// Authenticator AAGUID (UUID string) — identifies device model.
+  aaguid String?
+
+  /// Human-readable label set by the user (e.g. "iPhone 15 Face ID").
+  label String?
+
+  createdAt DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId, employeeId])
 }
 
 // =============================================================================
