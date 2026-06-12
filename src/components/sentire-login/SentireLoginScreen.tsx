@@ -26,8 +26,27 @@ import "./sentire-login.css";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CORE = "#E8693A";
 
+// Which Central Portal SSO provider is live (set at build time). Empty until an
+// OAuth app is configured — the button then falls back to an "unavailable" toast.
+const CENTRAL_SSO = process.env.NEXT_PUBLIC_CENTRAL_SSO ?? "";
+const CENTRAL_SSO_LABEL =
+  CENTRAL_SSO === "google"
+    ? "Continue with Google"
+    : CENTRAL_SSO === "microsoft-entra-id"
+      ? "Continue with Microsoft"
+      : "Continue with company SSO";
+
 type Mode = "tenant" | "admin";
 type Status = "idle" | "loading" | "error" | "success";
+
+/** Friendly message for a NextAuth ?error= bounce after a failed SSO attempt. */
+function ssoErrorMessage(code: string | null, mode: Mode): string {
+  if (!code) return "";
+  if (mode === "admin") {
+    return "That account isn't authorized for the Central Portal. Single sign-on is limited to provisioned Sentire administrators.";
+  }
+  return "We couldn't complete single sign-on. Please try again, or sign in with your email and password.";
+}
 
 export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const searchParams = useSearchParams();
@@ -43,7 +62,9 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const [remember, setRemember] = useState(mode === "tenant");
   const [touched, setTouched] = useState<{ companyCode?: boolean; email?: boolean; pw?: boolean }>({});
   const [status, setStatus] = useState<Status>("idle");
-  const [formErr, setFormErr] = useState("");
+  const [formErr, setFormErr] = useState(() =>
+    ssoErrorMessage(searchParams.get("error"), mode),
+  );
   const shakeRef = useRef<HTMLFormElement>(null);
 
   const companyCodeErr =
@@ -259,8 +280,19 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
               </div>
             ) : (
               <div className="sn-sso">
-                <button type="button" className="sn-sso-btn sn-sso-wide" disabled={busy} onClick={ssoUnavailable}>
-                  <KeyIcon /> Continue with company SSO
+                <button
+                  type="button"
+                  className="sn-sso-btn sn-sso-wide"
+                  disabled={busy}
+                  onClick={() => {
+                    if (CENTRAL_SSO) {
+                      void signIn(CENTRAL_SSO, { callbackUrl: "/centralportal/dashboard" });
+                    } else {
+                      ssoUnavailable();
+                    }
+                  }}
+                >
+                  <KeyIcon /> {CENTRAL_SSO_LABEL}
                 </button>
               </div>
             )}
