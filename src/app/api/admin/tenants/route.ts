@@ -137,10 +137,27 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Optionally provision the primary admin user
+    // Optionally provision the primary admin user + an Administrator role
     let adminUser: { id: string; email: string } | null = null;
     if (adminEmail && adminPassword && adminFirstName && adminLastName) {
       const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+      // 1. Create an "Administrator" role with all permissions for this tenant.
+      const allPermissions = await prismaAdmin.permission.findMany({ select: { id: true } });
+      const adminRole = await prismaAdmin.role.create({
+        data: {
+          tenantId: tenant.id,
+          name: "Administrator",
+          description: "Full access to all modules",
+          isSystem: true,
+          permissions: {
+            create: allPermissions.map((p) => ({ permissionId: p.id })),
+          },
+        },
+        select: { id: true },
+      });
+
+      // 2. Create the admin user and assign the role immediately.
       adminUser = await prismaAdmin.user.create({
         data: {
           tenantId: tenant.id,
@@ -148,9 +165,9 @@ export async function POST(req: NextRequest) {
           passwordHash,
           firstName: adminFirstName,
           lastName: adminLastName,
-          ...(adminPhone ? { } : {}), // phone not in User schema; stored in contactPhone on tenant
           systemRole: "TENANT_USER",
           isActive: true,
+          roleId: adminRole.id,
         },
         select: { id: true, email: true },
       }).catch(() => null); // don't fail tenant creation if user creation fails
