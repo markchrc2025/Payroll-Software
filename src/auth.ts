@@ -11,8 +11,10 @@
  *  - src/lib/auth.ts                           → getAuthContext()
  */
 
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
@@ -40,6 +42,26 @@ const USER_SELECT = {
   roleId: true,
 } as const;
 
+/**
+ * Resolve a Central Portal administrator (SUPER_ADMIN, no tenant) by email.
+ * Used by both the password flow and OAuth SSO. SSO never creates accounts —
+ * a person must already be provisioned as a Central admin to sign in, which is
+ * also what keeps a Sentire admin account distinct from any tenant-employee
+ * account that happens to share the same email.
+ */
+async function findCentralAdminByEmail(email: string) {
+  return prismaAdmin.user.findFirst({
+    where: {
+      email: email.toLowerCase(),
+      systemRole: "SUPER_ADMIN",
+      tenantId: null,
+      isActive: true,
+      deletedAt: null,
+    },
+    select: USER_SELECT,
+  });
+}
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -58,6 +80,44 @@ declare module "@auth/core/jwt" {
     systemRole: SystemRole;
     roleId: string | null;
   }
+}
+
+/**
+ * Central Portal SSO providers. Each is added only when its credentials are
+ * present in the environment, so nothing changes in production until the OAuth
+ * app is registered and the env vars are set. These back the "Continue with
+ * company SSO" button on /centralportal/login (admin scope only for now).
+ */
+const oauthProviders: NonNullable<NextAuthConfig["providers"]> = [];
+
+if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+  oauthProviders.push(
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      authorization: {
+        params: {
+          prompt: "select_account",
+          // Restrict the Google account chooser to the company's Workspace
+          // domain when CENTRAL_SSO_ALLOWED_DOMAIN is set (e.g. sentire.solutions).
+          ...(process.env.CENTRAL_SSO_ALLOWED_DOMAIN
+            ? { hd: process.env.CENTRAL_SSO_ALLOWED_DOMAIN }
+            : {}),
+        },
+      },
+    }),
+  );
+}
+
+if (process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
+  oauthProviders.push(
+    MicrosoftEntraID({
+      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+      // Single-tenant issuer, e.g. https://login.microsoftonline.com/<tenant-id>/v2.0
+      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+    }),
+  );
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -153,15 +213,57 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    ...oauthProviders,
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
+    async signIn({ user, account, profile }) {
+      // Password sign-ins are already verified in authorize().
+      if (!account || account.provider === "credentials") return true;
+
+      // OAuth = Central Portal staff SSO (verify-then-match). The IdP proves the
+      // person owns the email; we then require that it belongs to an existing
+      // Central admin. We never auto-provision accounts.
+      const email = (profile?.email ?? user?.email ?? "").toLowerCase();
+      if (!email) return false;
+
+      // Only trust an email the IdP marks verified (Google sets this; Entra work
+      // accounts are org-managed and treated as verified).
+      if (
+        account.provider === "google" &&
+        (profile as { email_verified?: boolean })?.email_verified !== true
+      ) {
+        return false;
+      }
+
+      // Optionally fence SSO to the company domain.
+      const domain = process.env.CENTRAL_SSO_ALLOWED_DOMAIN?.toLowerCase();
+      if (domain && !email.endsWith(`@${domain}`)) return false;
+
+      const admin = await findCentralAdminByEmail(email);
+      return !!admin;
+    },
+    async jwt({ token, user, account }) {
+      if (user && (!account || account.provider === "credentials")) {
         // user is the object returned from authorize() — only on initial sign-in
         token.userId = user.id as string;
         token.tenantId = (user as { tenantId: string | null }).tenantId;
         token.systemRole = (user as { systemRole: SystemRole }).systemRole;
         token.roleId = (user as { roleId: string | null }).roleId;
+      } else if (account && account.provider !== "credentials") {
+        // OAuth sign-in: load the Central admin we validated in signIn() and
+        // hydrate the token with the same claims the credentials flow sets.
+        const email = (token.email ?? user?.email ?? "").toLowerCase();
+        const admin = email ? await findCentralAdminByEmail(email) : null;
+        if (admin) {
+          token.userId = admin.id;
+          token.tenantId = admin.tenantId;
+          token.systemRole = admin.systemRole;
+          token.roleId = admin.roleId;
+          await prismaAdmin.user.update({
+            where: { id: admin.id },
+            data: { lastLoginAt: new Date() },
+          });
+        }
       }
       return token;
     },
