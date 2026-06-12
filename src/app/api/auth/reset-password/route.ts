@@ -10,6 +10,7 @@ import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
+import { sendPasswordChangedEmail } from "@/lib/email";
 import { ok, err } from "@/lib/api-response";
 
 const schema = z.object({
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const user = await prismaAdmin.user.findUnique({
     where: { id: record.userId },
-    select: { id: true, isActive: true, deletedAt: true },
+    select: { id: true, isActive: true, deletedAt: true, email: true, firstName: true },
   });
 
   if (!user || !user.isActive || user.deletedAt !== null) {
@@ -65,6 +66,15 @@ export async function POST(req: NextRequest) {
       data: { usedAt: new Date() },
     }),
   ]);
+
+  // Security notice. The password IS changed at this point, so a delivery
+  // failure must not fail the request (the user would retry with a now-used
+  // token) — log it instead.
+  try {
+    await sendPasswordChangedEmail({ to: user.email, name: user.firstName });
+  } catch (e) {
+    console.error("[reset-password] password-changed email failed:", e);
+  }
 
   return ok(null, "Password updated successfully.");
 }

@@ -131,6 +131,45 @@ export async function sendPasswordResetEmail({
 }
 
 // ---------------------------------------------------------------------------
+// Password Changed (security notice)
+// ---------------------------------------------------------------------------
+
+export async function sendPasswordChangedEmail({
+  to,
+  name,
+  changedAt = new Date(),
+}: {
+  to: string;
+  name: string;
+  changedAt?: Date;
+}): Promise<void> {
+  const when = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(changedAt);
+
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">Your password was changed</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(name)}, this is a confirmation that the password for your
+      ${APP_NAME} account (<strong>${escapeHtml(to)}</strong>) was successfully changed on
+      <strong>${escapeHtml(when)}</strong> (Philippine time).
+    </p>
+    <p style="margin:0 0 8px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      If you made this change, no further action is needed.
+    </p>
+    <p style="margin:0;font-size:13px;color:#B4471F;line-height:1.6;">
+      <strong>If you did NOT make this change</strong>, your account may be compromised.
+      Reset your password immediately using "Forgot password" on the login page, or
+      contact your administrator.
+    </p>
+  `);
+
+  await dispatch({ to, subject: `Your ${APP_NAME} password was changed`, html });
+}
+
+// ---------------------------------------------------------------------------
 // Welcome / Invitation
 // ---------------------------------------------------------------------------
 
