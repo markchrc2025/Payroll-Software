@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import SentireLoginScreen from "@/components/sentire-login/SentireLoginScreen";
 
-export default function CentralPortalLoginPage() {
+export default function LoginPage() {
   return (
     <Suspense fallback={null}>
-      <SentireLoginScreen mode="admin" />
+      <SentireLoginScreen mode="tenant" />
     </Suspense>
   );
 }

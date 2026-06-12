@@ -21,8 +21,24 @@ import type { SystemRole } from "@prisma/client";
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  // Legacy/explicit tenant scoping; the redesigned tenant login omits it.
   companyCode: z.string().optional(),
+  // Which login screen the request came from: "admin" (Central Portal) is
+  // restricted to SUPER_ADMIN accounts; "tenant" (or unset) resolves the
+  // account by email across tenants.
+  scope: z.enum(["tenant", "admin"]).optional(),
 });
+
+const USER_SELECT = {
+  id: true,
+  email: true,
+  passwordHash: true,
+  firstName: true,
+  lastName: true,
+  tenantId: true,
+  systemRole: true,
+  roleId: true,
+} as const;
 
 declare module "next-auth" {
   interface Session {
@@ -61,9 +77,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
-        const { email, password, companyCode } = parsed.data;
+        const { email, password, companyCode, scope } = parsed.data;
+        const emailLc = email.toLowerCase();
 
-        let user: {
+        // Build the set of accounts this sign-in is allowed to match against.
+        // The actual account is then chosen by which one's password verifies —
+        // this disambiguates an email that exists in more than one tenant.
+        let candidates: Array<{
           id: string;
           email: string;
           passwordHash: string;
@@ -72,48 +92,50 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           tenantId: string | null;
           systemRole: SystemRole;
           roleId: string | null;
-        } | null = null;
+        }> = [];
 
-        if (companyCode && companyCode.trim()) {
-          // Tenant user login — verify company code and scope the user lookup
+        if (scope === "admin") {
+          // Central Portal: SUPER_ADMIN accounts only.
+          candidates = await prismaAdmin.user.findMany({
+            where: {
+              email: emailLc,
+              systemRole: "SUPER_ADMIN",
+              tenantId: null,
+              isActive: true,
+              deletedAt: null,
+            },
+            select: USER_SELECT,
+          });
+        } else if (companyCode && companyCode.trim()) {
+          // Legacy/explicit tenant login — verify company code, scope the lookup.
           const tenant = await prismaAdmin.tenant.findFirst({
             where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
             select: { id: true },
           });
-          if (!tenant) return null;
-
-          user = await prismaAdmin.user.findFirst({
-            where: {
-              email: email.toLowerCase(),
-              tenantId: tenant.id,
-              isActive: true,
-              deletedAt: null,
-            },
-            select: {
-              id: true, email: true, passwordHash: true, firstName: true,
-              lastName: true, tenantId: true, systemRole: true, roleId: true,
-            },
-          });
+          if (tenant) {
+            candidates = await prismaAdmin.user.findMany({
+              where: { email: emailLc, tenantId: tenant.id, isActive: true, deletedAt: null },
+              select: USER_SELECT,
+            });
+          }
         } else {
-          // Super admin login — no company code, only allow SUPER_ADMIN accounts
-          user = await prismaAdmin.user.findFirst({
-            where: {
-              email: email.toLowerCase(),
-              systemRole: "SUPER_ADMIN",
-              isActive: true,
-              deletedAt: null,
-            },
-            select: {
-              id: true, email: true, passwordHash: true, firstName: true,
-              lastName: true, tenantId: true, systemRole: true, roleId: true,
-            },
+          // Tenant workspace login by email alone. An email may belong to more
+          // than one account (multiple tenants, or a super admin); the password
+          // check below selects the right one.
+          candidates = await prismaAdmin.user.findMany({
+            where: { email: emailLc, isActive: true, deletedAt: null },
+            select: USER_SELECT,
           });
         }
 
+        let user: (typeof candidates)[number] | null = null;
+        for (const c of candidates) {
+          if (await bcrypt.compare(password, c.passwordHash)) {
+            user = c;
+            break;
+          }
+        }
         if (!user) return null;
-
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
 
         // Update lastLoginAt (fire-and-forget acceptable; await for correctness)
         await prismaAdmin.user.update({
