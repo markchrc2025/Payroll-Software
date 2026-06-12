@@ -197,6 +197,14 @@ export interface ClockPunch {
   distanceMeters: number | null;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  category: string | null;
+  publishedAt: string;
+}
+
 export interface EssProfile {
   id: string;
   employeeNumber: string;

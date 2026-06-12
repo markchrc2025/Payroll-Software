@@ -22,7 +22,6 @@
 import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
 import prismaAdmin from "@/lib/prisma-admin";
 import { withTenant } from "@/lib/with-tenant";
 
@@ -55,6 +54,16 @@ export async function hashEssPin(pin: string): Promise<string> {
 /** Verify a plain-text PIN against a bcrypt hash. */
 export async function verifyEssPin(pin: string, hash: string): Promise<boolean> {
   return bcrypt.compare(pin, hash);
+}
+
+/** bcrypt-hash an ESS password. */
+export async function hashEssPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
+}
+
+/** Verify a plain-text ESS password against a bcrypt hash. */
+export async function verifyEssPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
 }
 
 // ---------------------------------------------------------------------------

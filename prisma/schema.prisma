@@ -587,7 +587,32 @@ model Tenant {
   applicantNotes ApplicantNote[]
   holidays       Holiday[]
   premiumRateConfigs PremiumRateConfig[]
+  announcements  Announcement[]
 
+  @@index([deletedAt])
+}
+
+/// Company-wide announcement surfaced in the ESS app (Home feed + detail).
+/// Authored by tenant HR/admins; read-only for employees.
+model Announcement {
+  id        String  @id @default(cuid())
+  tenantId  String
+  title     String
+  body      String  @db.Text
+  /// Free-text tag shown as a chip, e.g. "Payroll", "Benefits", "General".
+  category  String?
+
+  isPublished     Boolean   @default(true)
+  publishedAt     DateTime  @default(now())
+  createdByUserId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isPublished, publishedAt])
   @@index([deletedAt])
 }
 
@@ -900,9 +925,10 @@ model Employee {
   nontaxableBasicAmountCents BigInt            @default(0)
 
   // ESS
-  essPin       String? // hashed at app layer
-  kioskPinHash String?
-  qrBadgeCode  String?
+  essPin          String? // hashed at app layer
+  essPasswordHash String? // optional ESS password (bcrypt), set by the employee
+  kioskPinHash    String?
+  qrBadgeCode     String?
 
   // Bank (encrypted at app layer)
   bankName          String?

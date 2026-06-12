@@ -17,7 +17,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { err, ok, serverError } from "@/lib/api-response";
-import { createEssSession, verifyEssPin } from "@/lib/ess-auth";
+import { createEssSession, verifyEssPin, verifyEssPassword } from "@/lib/ess-auth";
 import prismaAdmin from "@/lib/prisma-admin";
 
 const LoginSchema = z
@@ -26,9 +26,10 @@ const LoginSchema = z
     employeeNumber: z.string().min(1),
     birthDate: z.string().optional(), // "YYYY-MM-DD"
     pin: z.string().min(4).max(8).optional(),
+    password: z.string().min(1).optional(),
   })
-  .refine((d) => d.birthDate !== undefined || d.pin !== undefined, {
-    message: "Provide either birthDate or pin",
+  .refine((d) => d.birthDate !== undefined || d.pin !== undefined || d.password !== undefined, {
+    message: "Provide a birthDate, pin or password",
   });
 
 export async function POST(req: NextRequest) {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     return err("Validation failed", 400, parsed.error.flatten());
   }
 
-  const { companyCode, employeeNumber, birthDate, pin } = parsed.data;
+  const { companyCode, employeeNumber, birthDate, pin, password } = parsed.data;
 
   try {
     // Resolve companyCode → tenantId
@@ -90,7 +91,24 @@ export async function POST(req: NextRequest) {
 
     let authenticated = false;
 
-    if (pin !== undefined) {
+    if (password !== undefined) {
+      // Password-based auth. essPasswordHash may not exist yet (column added by
+      // the ESS password migration) — query it defensively so PIN/DOB login keep
+      // working before the migration is applied.
+      let hash: string | null = null;
+      try {
+        const rows = await prismaAdmin.$queryRaw<Array<{ essPasswordHash: string | null }>>`
+          SELECT "essPasswordHash" FROM "Employee" WHERE id = ${emp.id} LIMIT 1
+        `;
+        hash = rows[0]?.essPasswordHash ?? null;
+      } catch {
+        return err("Password sign-in isn't available yet — use your PIN or date of birth.", 400);
+      }
+      if (!hash) {
+        return err("No ESS password set — sign in with your PIN or date of birth, then set one in Settings.", 400);
+      }
+      authenticated = await verifyEssPassword(password, hash);
+    } else if (pin !== undefined) {
       // PIN-based auth
       if (!emp.essPin) {
         return err("No ESS PIN set — use birthdate login", 400);

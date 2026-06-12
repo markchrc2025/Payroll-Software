@@ -40,6 +40,7 @@ import {
   type DtrPeriod,
   type ClockPunch,
   type EssProfile,
+  type Announcement,
 } from "./api";
 
 // ---- shared helpers ----
@@ -97,6 +98,7 @@ export function HomeScreen() {
   const payslips = useEssData<ApiList<PayslipSummary>>("/api/ess/payslips?limit=3");
   const balances = useEssData<ApiList<LeaveBalanceRow>>("/api/ess/leave-balances");
   const punches = useEssData<ApiList<ClockPunch>>(`/api/ess/clock?date=${today}`);
+  const announcements = useEssData<ApiList<Announcement>>("/api/ess/announcements");
 
   // Reflect today's last punch into the shared clocked-in state.
   const lastPunch = punches.data?.data?.[punches.data.data.length - 1];
@@ -196,6 +198,28 @@ export function HomeScreen() {
               </div>
             ))}
           </ECard>
+        </>
+      )}
+
+      {/* announcements */}
+      {announcements.data && announcements.data.data.length > 0 && (
+        <>
+          <ESection>Announcements</ESection>
+          {announcements.data.data.slice(0, 3).map((a) => (
+            <ECard key={a.id} className="e-ann" onClick={() => nav.go("announcement", a.id)}>
+              <span className="e-ann-ic">
+                <EIcon name="megaphone" size={18} />
+              </span>
+              <div className="e-ann-body">
+                <div className="e-ann-top">
+                  {a.category && <EChip tone="sage">{a.category}</EChip>}
+                  <span>{fmtDay(a.publishedAt)}</span>
+                </div>
+                <b>{a.title}</b>
+              </div>
+              <EIcon name="chevR" size={17} />
+            </ECard>
+          ))}
         </>
       )}
 
@@ -853,6 +877,69 @@ export function ProfileScreen() {
   );
 }
 
+function ChangePassword() {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (busy) return;
+    if (pw.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await essFetch("/api/ess/password", {
+        method: "POST",
+        body: JSON.stringify({ newPassword: pw }),
+      });
+      toast.success("Password updated. Use it next time you sign in.");
+      setPw("");
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update your password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="e-srow">
+        <span className="e-prow-ic">
+          <EIcon name="shield" size={17} />
+        </span>
+        <div className="e-srow-t">
+          <b>Change password</b>
+          <i>Set a password to sign in without your PIN</i>
+        </div>
+        <button className="e-seclink" onClick={() => setOpen((v) => !v)}>
+          {open ? "Cancel" : "Set"}
+        </button>
+      </div>
+      {open && (
+        <div style={{ padding: "0 0 12px" }}>
+          <div className="e-finput">
+            <EIcon name="lock" size={17} />
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="New password (min 8 characters)"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+            />
+          </div>
+          <div style={{ height: 8 }} />
+          <EBtn kind="primary" full onClick={save} disabled={busy}>
+            {busy ? "Saving…" : "Save password"}
+          </EBtn>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function SettingsScreen() {
   const Toggle = ({ on }: { on: boolean }) => {
     const [v, setV] = useState(on);
@@ -889,8 +976,8 @@ export function SettingsScreen() {
       </ECard>
       <ESection>Security</ESection>
       <ECard className="e-pcard">
-        {trow("fingerprint", "Biometric unlock", "Use Face ID to open the app", <Toggle on={false} />)}
-        {trow("shield", "Change password", null, <EIcon name="chevR" size={16} />)}
+        {trow("fingerprint", "Biometric unlock", "Coming soon", <Toggle on={false} />)}
+        <ChangePassword />
       </ECard>
       <ESection>Appearance</ESection>
       <ECard className="e-pcard">{trow("moon", "Dark mode", "Match system setting", <Toggle on={false} />)}</ECard>
@@ -899,12 +986,36 @@ export function SettingsScreen() {
 }
 
 // ============================ ANNOUNCEMENT ============================
-export function AnnouncementScreen() {
-  // Announcements get a real model + feed in a later phase; for now this is a
-  // graceful empty detail rather than fabricated content.
+export function AnnouncementScreen({ param }: { param?: string | null }) {
+  const { data, loading } = useEssData<ApiOne<Announcement>>(
+    param ? `/api/ess/announcements/${param}` : null,
+  );
+  const profile = useEssData<ApiOne<EssProfile>>("/api/ess/profile");
+
+  if (loading) return <Loading />;
+  if (!data) return <p className="e-empty">This announcement is no longer available.</p>;
+  const a = data.data;
+  const company = profile.data?.data.company ?? "";
+
   return (
     <div className="e-stack">
-      <p className="e-empty">This announcement is no longer available.</p>
+      <div className="e-anndetail">
+        <div className="e-ann-top">
+          {a.category && <EChip tone="sage">{a.category}</EChip>}
+          <span>{fmtDayYear(a.publishedAt)}</span>
+        </div>
+        <h2>{a.title}</h2>
+        {a.body.split(/\n{2,}/).map((para, i) => (
+          <p key={i}>{para}</p>
+        ))}
+        <div className="e-annfrom">
+          <EAvatar initials="HR" size={36} color="#6b6259" />
+          <div>
+            <b>People &amp; Culture</b>
+            <i>{company}</i>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
