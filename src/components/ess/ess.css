@@ -1817,6 +1817,64 @@
   margin: 0;
 }
 
+/* ---- biometric credential rows ---- */
+.e-srow-col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.e-srow-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.e-btn-sm {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.e-btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--e-acc);
+  color: var(--e-acc);
+}
+.e-btn-outline:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.e-credrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 0 30px;
+  font-size: 13px;
+  color: var(--e-ink);
+}
+.e-credrow-label {
+  flex: 1;
+  font-weight: 500;
+}
+.e-credrow-date {
+  font-size: 11px;
+  color: var(--e-muted2);
+}
+.e-credrow-del {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--e-muted2);
+  display: flex;
+  align-items: center;
+}
+.e-credrow-del:hover {
+  color: #c0392b;
+}
+
 /* respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .e-screen,

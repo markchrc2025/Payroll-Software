@@ -569,6 +569,7 @@ model Tenant {
   attendanceLogs        AttendanceLog[]
   expenseClaims         ExpenseClaim[]
   essSessions           EssSession[]
+  essWebAuthnCredentials EssWebAuthnCredential[]
   otApplications        OTApplication[]
   undertimeRequests     UndertimeRequest[]
   profileUpdateRequests ProfileUpdateRequest[]
@@ -969,6 +970,7 @@ model Employee {
   dtrRecords              DTRRecord[]
   expenseClaims           ExpenseClaim[]
   essSessions             EssSession[]
+  essWebAuthnCredentials  EssWebAuthnCredential[]
   otApplications          OTApplication[]
   undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
@@ -2553,6 +2555,37 @@ model EssSession {
   @@index([tenantId])
   @@index([employeeId])
   @@index([expiresAt])
+}
+
+/// WebAuthn / passkey credential registered by an ESS employee for biometric login.
+/// One employee can have multiple credentials (phone + laptop etc.).
+model EssWebAuthnCredential {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeId String
+
+  /// Base64url-encoded credential ID returned by the authenticator.
+  credentialId String @unique
+
+  /// CBOR-encoded public key (base64url), used for assertion verification.
+  publicKey String @db.Text
+
+  /// Incremented on every successful assertion; protects against replay attacks.
+  counter BigInt @default(0)
+
+  /// Authenticator AAGUID (UUID string) — identifies device model.
+  aaguid String?
+
+  /// Human-readable label set by the user (e.g. "iPhone 15 Face ID").
+  label String?
+
+  createdAt DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId, employeeId])
 }
 
 // =============================================================================

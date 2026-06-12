@@ -7,12 +7,13 @@
  * identity (company code + employee number + display name) after a first
  * successful sign-in so the unlock screen can greet them by name.
  *
- * Biometric (Face ID) lands in a later phase; its key shows a "coming soon" hint.
+ * Phase 5: WebAuthn biometric — Face ID / fingerprint via @simplewebauthn/browser.
  */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { NexusMark } from "@/components/sentire-login/glyphs";
 import { EIcon } from "@/components/ess/icons";
 import { EAvatar } from "@/components/ess/primitives";
@@ -143,9 +144,64 @@ function EssLoginContent() {
     if (status === "error") setStatus("idle");
     setPin((p) => p.slice(0, -1));
   }
-  function faceId() {
-    toast.info("Biometric unlock is coming soon. Use your PIN or password for now.");
-  }
+  const faceId = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setErrMsg("");
+    try {
+      // Start: fetch options from server.
+      const startRes = await fetch("/api/ess/webauthn/authenticate/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyCode: companyCode.trim().toUpperCase(),
+          employeeNumber: employeeNumber.trim(),
+        }),
+      });
+      if (!startRes.ok) {
+        const d = await startRes.json().catch(() => null);
+        if (startRes.status === 404) {
+          toast.info("No biometric key registered on this account. Use PIN or password.");
+          setBusy(false);
+          return;
+        }
+        throw new Error(d?.error ?? "Failed to start biometric authentication");
+      }
+      const { data } = await startRes.json();
+      const { options, challengeToken } = data as { options: unknown; challengeToken: string };
+
+      // Call the browser WebAuthn API.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const credential = await startAuthentication(options as any);
+
+      // Finish: send assertion to server.
+      const finishRes = await fetch("/api/ess/webauthn/authenticate/finish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken, response: credential }),
+      });
+      const fd = await finishRes.json().catch(() => null);
+      const token = fd?.data?.token;
+      if (!finishRes.ok || !token) {
+        throw new Error(fd?.error ?? "Biometric verification failed. Please try again.");
+      }
+
+      localStorage.setItem(TOKEN_KEY, token);
+      setStatus("success");
+      setTimeout(() => router.replace("/ess"), 900);
+    } catch (e) {
+      if (e instanceof Error && e.name === "NotAllowedError") {
+        // User cancelled the biometric prompt — don't show error.
+        setBusy(false);
+        return;
+      }
+      setStatus("error");
+      setErrMsg(e instanceof Error ? e.message : "Biometric sign-in failed. Try again.");
+      setTimeout(() => setStatus("idle"), 700);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, companyCode, employeeNumber, router]);
   function switchAccount() {
     localStorage.removeItem(IDENTITY_KEY);
     setIdentity(null);

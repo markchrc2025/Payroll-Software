@@ -6,7 +6,7 @@
  * design handoff (ess-screens-*.jsx); every value is wired to /api/ess/*.
  */
 
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { EIcon, type EIconName } from "./icons";
 import {
@@ -877,6 +877,129 @@ export function ProfileScreen() {
   );
 }
 
+// ============================ BIOMETRIC SECTION ============================
+
+type WebAuthnCred = {
+  id: string;
+  label: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+function BiometricSection() {
+  const [creds, setCreds] = useState<WebAuthnCred[]>([]);
+  const [supported, setSupported] = useState(false);
+  const [registering, setRegistering] = useState(false);
+
+  useEffect(() => {
+    setSupported(
+      typeof window !== "undefined" &&
+        !!window.PublicKeyCredential,
+    );
+  }, []);
+
+  const loadCreds = useCallback(async () => {
+    try {
+      const { essFetch: ef } = await import("./api");
+      type CredResp = { data: WebAuthnCred[] };
+      const r = await ef<CredResp>("/api/ess/webauthn/credentials");
+      setCreds(r.data ?? []);
+    } catch {
+      /* silently ignore */
+    }
+  }, []);
+
+  useEffect(() => { loadCreds(); }, [loadCreds]);
+
+  async function registerNew() {
+    if (registering) return;
+    setRegistering(true);
+    try {
+      const { startRegistration } = await import("@simplewebauthn/browser");
+      const { essFetch: ef } = await import("./api");
+
+      type StartResp = { data: { options: unknown; challengeToken: string } };
+      const start = await ef<StartResp>("/api/ess/webauthn/register", { method: "POST" });
+      const { options, challengeToken } = start.data;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const credential = await startRegistration(options as any);
+
+      await ef("/api/ess/webauthn/register/finish", {
+        method: "POST",
+        body: JSON.stringify({
+          challengeToken,
+          response: credential,
+          label: "This device",
+        }),
+      });
+
+      toast.success("Biometric key added! You can now use Face ID / fingerprint to sign in.");
+      await loadCreds();
+    } catch (e) {
+      if (e instanceof Error && e.name === "NotAllowedError") return;
+      toast.error(e instanceof Error ? e.message : "Registration failed. Please try again.");
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  async function removeCred(id: string) {
+    try {
+      const { essFetch: ef } = await import("./api");
+      await ef(`/api/ess/webauthn/credentials/${id}`, { method: "DELETE" });
+      setCreds((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Biometric key removed.");
+    } catch {
+      toast.error("Couldn't remove credential. Try again.");
+    }
+  }
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
+  };
+
+  return (
+    <div className="e-srow e-srow-col">
+      <div className="e-srow-head">
+        <span className="e-prow-ic">
+          <EIcon name="fingerprint" size={17} />
+        </span>
+        <div className="e-srow-t">
+          <b>Biometric unlock</b>
+          {!supported && <i>Not supported on this browser</i>}
+          {supported && creds.length === 0 && <i>No biometric keys registered</i>}
+          {supported && creds.length > 0 && <i>{creds.length} key{creds.length > 1 ? "s" : ""} registered</i>}
+        </div>
+        {supported && (
+          <button
+            className="e-btn e-btn-sm e-btn-outline"
+            onClick={registerNew}
+            disabled={registering}
+          >
+            {registering ? "…" : "+ Add key"}
+          </button>
+        )}
+      </div>
+      {creds.map((c) => (
+        <div key={c.id} className="e-credrow">
+          <EIcon name="faceid" size={15} />
+          <span className="e-credrow-label">{c.label ?? "Device key"}</span>
+          <span className="e-credrow-date">Added {fmtDate(c.createdAt)}</span>
+          <button
+            className="e-credrow-del"
+            onClick={() => removeCred(c.id)}
+            aria-label="Remove biometric key"
+          >
+            <EIcon name="x" size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ChangePassword() {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
@@ -976,7 +1099,7 @@ export function SettingsScreen() {
       </ECard>
       <ESection>Security</ESection>
       <ECard className="e-pcard">
-        {trow("fingerprint", "Biometric unlock", "Coming soon", <Toggle on={false} />)}
+        <BiometricSection />
         <ChangePassword />
       </ECard>
       <ESection>Appearance</ESection>
