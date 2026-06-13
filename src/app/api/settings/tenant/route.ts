@@ -45,6 +45,7 @@ const patchSchema = z.object({
   province:        z.string().max(120).nullish(),
   zipCode:         z.string().max(20).nullish(),
   logoUrl:         z.string().url().max(1000).nullish(),
+  logoKey:         z.string().max(500).nullish(),
   // Payroll defaults
   payrollCycle: z
     .enum(["DAILY", "WEEKLY", "SEMI_MONTHLY", "MONTHLY"])
@@ -78,6 +79,7 @@ export async function GET(req: NextRequest) {
         zipCode: true,
         country: true,
         logoUrl: true,
+        logoKey: true,
         payrollCycle: true,
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
@@ -118,6 +120,7 @@ export async function PATCH(req: NextRequest) {
         zipCode: true,
         country: true,
         logoUrl: true,
+        logoKey: true,
         payrollCycle: true,
         workingDaysDenominator: true,
         statutoryCutoffRule: true,

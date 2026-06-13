@@ -78,3 +78,55 @@ export function buildSelfieKey(opts: {
   const uuid = crypto.randomUUID();
   return `tenants/${opts.tenantId}/selfies/${opts.employeeId}/${uuid}.${ext}`;
 }
+
+function imageExt(fileName: string): string {
+  return fileName.includes(".")
+    ? fileName.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "png";
+}
+
+/** Build a storage key for an uploaded company logo. */
+export function buildTenantLogoKey(opts: {
+  tenantId: string;
+  fileName: string;
+}): string {
+  const uuid = crypto.randomUUID();
+  return `tenants/${opts.tenantId}/branding/logo-${uuid}.${imageExt(opts.fileName)}`;
+}
+
+/**
+ * Build a storage key for an uploaded employee profile photo.
+ *
+ * Photos are uploaded from the "Add employee" wizard before the Employee row
+ * exists, so the key is namespaced by tenant rather than by employee id.
+ */
+export function buildEmployeePhotoKey(opts: {
+  tenantId: string;
+  fileName: string;
+}): string {
+  const uuid = crypto.randomUUID();
+  return `tenants/${opts.tenantId}/employee-photos/${uuid}.${imageExt(opts.fileName)}`;
+}
+
+/**
+ * Resolve a stored object key to a browser-loadable URL. When a public R2
+ * domain is configured we return the stable public URL; otherwise we mint a
+ * short-lived presigned GET URL. Returns null when R2 is not configured.
+ */
+export async function resolveObjectUrl(
+  storageKey: string,
+  opts: { expiresIn?: number; contentType?: string } = {},
+): Promise<string | null> {
+  if (!isR2Configured()) return null;
+  if (R2_PUBLIC_URL) {
+    return `${R2_PUBLIC_URL.replace(/\/$/, "")}/${storageKey}`;
+  }
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: storageKey,
+    ...(opts.contentType ? { ResponseContentType: opts.contentType } : {}),
+  });
+  return getSignedUrl(r2(), command, { expiresIn: opts.expiresIn ?? 300 });
+}
