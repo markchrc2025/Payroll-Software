@@ -87,7 +87,7 @@ type NavSection = {
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: "dashboard" }],
+    items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }],
   },
   {
     label: "Workforce",
@@ -169,7 +169,6 @@ export function SidebarNav({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   function isActive(href: string): boolean {
-    if (href === "/") return pathname === "/";
     if (href === "/settings") return pathname === "/settings";
     return pathname === href || pathname.startsWith(href + "/");
   }
