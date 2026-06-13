@@ -293,10 +293,10 @@ function LeftPanel({
             {leaveBalances.map((lb) => (
               <span
                 key={lb.leaveTypeName}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#EAF1FD] text-[#2D6BE4] text-[12px] font-semibold"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#fdeee6] text-[#E8693A] text-[12px] font-semibold"
               >
                 {lb.leaveTypeName}
-                <span className="bg-[#2D6BE4] text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                <span className="bg-[#E8693A] text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
                   {lb.balance}
                 </span>
               </span>
@@ -367,7 +367,7 @@ export function EmployeeProfileClient({
                 flex-shrink-0 px-[15px] py-[14px] text-[13px] font-semibold border-b-2 transition-colors
                 ${
                   activeTab === tab
-                    ? "text-[#2D6BE4] border-[#2D6BE4]"
+                    ? "text-[#E8693A] border-[#E8693A]"
                     : "text-[#8E9AAC] border-transparent hover:text-[#4A586B]"
                 }
               `}
@@ -435,7 +435,7 @@ export function EmployeeProfileClient({
               <Button type="button" variant="outline" onClick={() => setKioskPinOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={savingKioskPin} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button type="submit" disabled={savingKioskPin} className="bg-[#E8693A] hover:bg-[#C2552F] text-white">
                 {savingKioskPin ? "Saving…" : "Save PIN"}
               </Button>
             </div>

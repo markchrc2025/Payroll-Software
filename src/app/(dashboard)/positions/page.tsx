@@ -37,7 +37,7 @@ import {
 
 const POSITION_LEVELS = [
   { value: "ENTRY",     label: "Entry",     bg: "#F5F6FA",  color: "#4A586B" },
-  { value: "MID",       label: "Mid",       bg: "#EAF1FD",  color: "#2D6BE4" },
+  { value: "MID",       label: "Mid",       bg: "#fdeee6",  color: "#E8693A" },
   { value: "SENIOR",    label: "Senior",    bg: "#EEF0FD",  color: "#4F46E5" },
   { value: "MANAGER",   label: "Manager",   bg: "#F3EDFD",  color: "#7C3AED" },
   { value: "DIRECTOR",  label: "Director",  bg: "#FBF0DD",  color: "#DB8A28" },
@@ -134,7 +134,7 @@ export default function PositionsPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Position
           </Button>
         </div>

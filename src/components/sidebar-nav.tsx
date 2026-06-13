@@ -217,7 +217,7 @@ export function SidebarNav({
 
   return (
     <aside
-      className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-hidden transition-[width] duration-200 ease-in-out relative"
+      className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-visible transition-[width] duration-200 ease-in-out relative z-30"
       style={{
         width: isCollapsed ? "76px" : "266px",
         background: "linear-gradient(168deg, #2E241C, #1f1813)",

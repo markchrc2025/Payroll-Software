@@ -202,7 +202,7 @@ export default function PayComponentsPage() {
           <Button
             size="sm"
             onClick={openCreate}
-            className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+            className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Component
           </Button>

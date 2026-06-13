@@ -203,7 +203,7 @@ function PunchRow({ punch }: { punch: DayPunch }) {
           ) : (
             <LogOut className="h-4 w-4 text-slate-400" />
           )}
-          {punch.hasSelfie && <Camera className="h-3.5 w-3.5 text-blue-500" />}
+          {punch.hasSelfie && <Camera className="h-3.5 w-3.5 text-[#E8693A]" />}
           {punch.latitude != null && <MapPin className="h-3.5 w-3.5 text-amber-500" />}
         </div>
 
@@ -289,7 +289,7 @@ function PunchRow({ punch }: { punch: DayPunch }) {
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-1 text-[#E8693A] hover:underline"
                 >
                   Open in OpenStreetMap
                   <ExternalLink className="h-3 w-3" />
@@ -551,7 +551,7 @@ export function AttendanceLogDetailSheet({
                 <InfoRow label="Overtime / Undertime (Hour)">
                   {dtr ? (
                     dtr.otMinutes > 0 ? (
-                      <span className="font-mono text-blue-600">+{minsToHHmm(dtr.otMinutes)}</span>
+                      <span className="font-mono text-[#E8693A]">+{minsToHHmm(dtr.otMinutes)}</span>
                     ) : dtr.undertimeMinutes > 0 ? (
                       <span className="font-mono text-amber-600">-{minsToHHmm(dtr.undertimeMinutes)}</span>
                     ) : (

@@ -579,7 +579,7 @@ function CreateSubmissionDialog({
           <Button
             onClick={handleCreate}
             disabled={saving}
-            className="bg-[#2D6BE4] hover:bg-[#2561CC] text-white"
+            className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
           >
             {saving ? "Creating…" : "Create Submission"}
           </Button>
@@ -611,7 +611,7 @@ function ManualCell({
         <button
           type="button"
           onClick={onEdit}
-          className="ml-1.5 inline-flex text-[#2D6BE4] hover:text-[#2561CC] opacity-50 hover:opacity-100 transition-opacity"
+          className="ml-1.5 inline-flex text-[#E8693A] hover:text-[#C2552F] opacity-50 hover:opacity-100 transition-opacity"
           title="Edit manual time"
         >
           <Pencil className="h-3 w-3" />
@@ -819,7 +819,7 @@ function SubmissionDetailSheet({
                         <TableHead className="text-xs text-destructive">
                           Late
                         </TableHead>
-                        <TableHead className="text-xs text-blue-600">OT</TableHead>
+                        <TableHead className="text-xs text-[#E8693A]">OT</TableHead>
                         <TableHead className="text-xs text-amber-600">UT</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -894,7 +894,7 @@ function SubmissionDetailSheet({
                             <TableCell className="text-xs text-destructive">
                               {fmtMinutes(r.lateMinutes)}
                             </TableCell>
-                            <TableCell className="text-xs text-blue-600">
+                            <TableCell className="text-xs text-[#E8693A]">
                               {r.otMinutes > 0 ? fmtMinutes(r.otMinutes) : "—"}
                             </TableCell>
                             <TableCell className="text-xs text-amber-600">
@@ -912,7 +912,7 @@ function SubmissionDetailSheet({
                   <div>
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 text-sm font-semibold text-[#111827] hover:text-[#2D6BE4] transition-colors"
+                      className="flex items-center gap-1.5 text-sm font-semibold text-[#111827] hover:text-[#E8693A] transition-colors"
                       onClick={() => setAuditOpen((v) => !v)}
                     >
                       <History className="h-4 w-4" />
@@ -1016,7 +1016,7 @@ function SubmissionDetailSheet({
                       <Button
                         onClick={() => handleAction("approve-manager")}
                         disabled={actionLoading === "approve-manager"}
-                        className="bg-[#2D6BE4] hover:bg-[#2561CC] text-white"
+                        className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
                       >
                         <ShieldCheck className="h-4 w-4 mr-1.5" />
                         {actionLoading === "approve-manager"
@@ -1176,7 +1176,7 @@ export function DtrRecordsTab() {
 
         <Button
           size="sm"
-          className="ml-auto bg-[#2D6BE4] hover:bg-[#2561CC] text-white"
+          className="ml-auto bg-[#E8693A] hover:bg-[#C2552F] text-white"
           onClick={() => setCreateOpen(true)}
         >
           <Plus className="h-4 w-4 mr-1" />

@@ -171,7 +171,7 @@ export function EmployeeTable({
                       onClick={() => onPageChange(p)}
                       className={`w-[30px] h-[30px] rounded-[8px] border text-[12.5px] font-semibold transition-colors ${
                         p === page
-                          ? "bg-[#2D6BE4] border-[#2D6BE4] text-white"
+                          ? "bg-[#E8693A] border-[#E8693A] text-white"
                           : "bg-white border-[#E8EBF1] text-[#4A586B] hover:bg-[#F4F6F9]"
                       }`}
                     >

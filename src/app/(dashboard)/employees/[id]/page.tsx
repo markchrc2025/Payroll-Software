@@ -75,7 +75,7 @@ export default async function EmployeeProfilePage({
     <div className="space-y-5">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#8E9AAC]">
-        <Link href="/employees" className="text-[#2D6BE4] font-semibold hover:underline">
+        <Link href="/employees" className="text-[#E8693A] font-semibold hover:underline">
           Employees
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />

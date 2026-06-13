@@ -89,7 +89,7 @@ type ReportDef = {
 
 const AGENCY_COLORS: Record<string, { bg: string; color: string }> = {
   BIR:       { bg: "#FCE9E7", color: "#E0463B" },
-  SSS:       { bg: "#EAF1FD", color: "#2D6BE4" },
+  SSS:       { bg: "#fdeee6", color: "#E8693A" },
   PhilHealth:{ bg: "#E5F6EE", color: "#0FA36B" },
   "Pag-IBIG":{ bg: "#FBF0DD", color: "#DB8A28" },
 };
@@ -200,7 +200,7 @@ function ReportCard({ report }: { report: ReportDef }) {
           onClick={handleGenerate}
           disabled={loading}
           className="flex-1 h-9 flex items-center justify-center gap-1.5 text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-60"
-          style={{ background: "#2D6BE4", color: "#fff" }}
+          style={{ background: "#E8693A", color: "#fff" }}
         >
           {loading ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
@@ -213,7 +213,7 @@ function ReportCard({ report }: { report: ReportDef }) {
           <>
             <button
               onClick={handleDownloadJson}
-              className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#2D6BE4] hover:bg-[#EAF1FD] transition-colors"
+              className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#E8693A] hover:bg-[#fdeee6] transition-colors"
             >
               <Download className="h-3.5 w-3.5" /> JSON
             </button>
@@ -221,7 +221,7 @@ function ReportCard({ report }: { report: ReportDef }) {
               <button
                 onClick={handleDownloadFile}
                 title={`Download ${report.fileLabel ?? report.fileExt?.toUpperCase()}`}
-                className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#2D6BE4] hover:bg-[#EAF1FD] transition-colors"
+                className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#E8693A] hover:bg-[#fdeee6] transition-colors"
               >
                 <Download className="h-3.5 w-3.5" /> {report.fileLabel ?? report.fileExt?.toUpperCase()}
               </button>
@@ -337,7 +337,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Info banner ── */}
-      <div className="flex items-start gap-3 rounded-xl border border-[#EAF1FD] bg-[#F5F9FF] p-4 text-[13px] text-[#2D6BE4]">
+      <div className="flex items-start gap-3 rounded-xl border border-[#fdeee6] bg-[#fdeee6] p-4 text-[13px] text-[#E8693A]">
         <span className="shrink-0 text-[16px]">ℹ</span>
         <span>Reports are computed from <strong>finalized</strong> payroll runs only. Draft or cancelled runs are excluded.</span>
       </div>
