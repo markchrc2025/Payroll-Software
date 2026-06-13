@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import type { Control, FieldErrors, Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -464,6 +464,15 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
 
   const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset, setValue } = form;
 
+  // Read-only Employee ID preview (non-locking, actual ID assigned atomically on save).
+  const [nextIdPreview, setNextIdPreview] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/employees/next-id")
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => j?.data?.previewId && setNextIdPreview(j.data.previewId))
+      .catch(() => null);
+  }, []);
+
   // Profile photo upload (R2, tenant-namespaced) — wired to the "Change photo" control.
   const photoRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -573,6 +582,23 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
               >
                 {uploadingPhoto ? "Uploading…" : photoPreview ? "Change photo" : "Upload photo"}
               </button>
+            </div>
+            {/* Employee ID — read-only preview; actual value assigned atomically on save */}
+            <div className="col-span-2">
+              <label className="mb-1.5 block text-[12.5px] font-semibold" style={{ color: "#2A2420" }}>
+                Employee ID
+              </label>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="flex h-10 items-center rounded-md border px-3 font-mono text-[13.5px] font-semibold min-w-[140px]"
+                  style={{ borderColor: "#ECE6DD", background: "#F6F2EC", color: "#E8693A" }}
+                >
+                  {nextIdPreview ?? "—"}
+                </div>
+                <span className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                  Auto-assigned on save
+                </span>
+              </div>
             </div>
             <TF control={c} name="firstName"     label="First Name"   placeholder="Juan"       req   errors={e} />
             <TF control={c} name="middleName"    label="Middle Name"  placeholder="Ponce"            errors={e} />

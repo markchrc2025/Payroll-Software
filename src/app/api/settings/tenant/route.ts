@@ -57,6 +57,12 @@ const patchSchema = z.object({
   thirteenthMonthBasis: z
     .enum(["STRICT_DOLE", "INCLUDE_ALLOWANCES"])
     .optional(),
+  // Employee ID format
+  empIdPrefix:      z.string().max(20).optional(),
+  empIdIncludeYear: z.boolean().optional(),
+  empIdPadding:     z.number().int().min(1).max(10).optional(),
+  empIdSuffix:      z.string().max(20).optional(),
+  empIdNextSeq:     z.number().int().positive().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -84,6 +90,12 @@ export async function GET(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        empIdPrefix: true,
+        empIdIncludeYear: true,
+        empIdPadding: true,
+        empIdSuffix: true,
+        empIdNextSeq: true,
+        empIdSeqYear: true,
         updatedAt: true,
       },
     }),
@@ -102,6 +114,22 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
 
   const data = parsed.data;
+
+  // Guard: empIdNextSeq can only advance, never go back.
+  if (data.empIdNextSeq !== undefined) {
+    const current = await withTenant(auth.tenantId, (tx) =>
+      tx.tenant.findFirst({
+        where: { id: auth.tenantId },
+        select: { empIdNextSeq: true },
+      }),
+    );
+    if (current && data.empIdNextSeq < current.empIdNextSeq) {
+      return err(
+        `Cannot set Next Sequence below current value (${current.empIdNextSeq})`,
+        422,
+      );
+    }
+  }
 
   const updated = await withTenant(auth.tenantId, (tx) =>
     tx.tenant.update({
@@ -125,6 +153,12 @@ export async function PATCH(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        empIdPrefix: true,
+        empIdIncludeYear: true,
+        empIdPadding: true,
+        empIdSuffix: true,
+        empIdNextSeq: true,
+        empIdSeqYear: true,
         updatedAt: true,
       },
     }),
