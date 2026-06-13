@@ -17,6 +17,30 @@ export type AuditEvent = {
 const TYPES = ["All event types", "Security", "Billing", "Tenant", "System"];
 const RANGES = ["Last 7 days", "Last 30 days", "All time"];
 
+/** RFC-4180 CSV field escaping: wrap in quotes and double embedded quotes. */
+function csvCell(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+/** Build a CSV string from the (already filtered) events and trigger a download. */
+function exportCsv(rows: AuditEvent[]) {
+  const header = ["Timestamp", "Type", "Admin", "Action", "Target", "IP address"];
+  const lines = rows.map((e) =>
+    [e.time, e.kind, e.who, e.action, e.target, e.ip].map((v) => csvCell(String(v))).join(","),
+  );
+  // Prepend a BOM so Excel opens UTF-8 (₱, accents) correctly.
+  const csv = "﻿" + [header.map(csvCell).join(","), ...lines].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function AuditFeed({ events, nowMs }: { events: AuditEvent[]; nowMs: number }) {
   const [q, setQ] = useState("");
   const [type, setType] = useState("All event types");
@@ -46,6 +70,15 @@ export function AuditFeed({ events, nowMs }: { events: AuditEvent[]; nowMs: numb
         <select value={range} onChange={(e) => setRange(e.target.value)}>
           {RANGES.map((r) => <option key={r}>{r}</option>)}
         </select>
+        <button
+          className="cp-btn cp-btn-ghost"
+          style={{ marginLeft: "auto" }}
+          disabled={filtered.length === 0}
+          onClick={() => exportCsv(filtered)}
+          title="Export the currently filtered events as a CSV file"
+        >
+          <CpIcon name="chevR" size={15} /> Export CSV{filtered.length ? ` (${filtered.length})` : ""}
+        </button>
       </div>
 
       {filtered.length === 0 ? (

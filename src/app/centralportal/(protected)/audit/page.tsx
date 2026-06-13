@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import prismaAdmin from "@/lib/prisma-admin";
-import { PageHead, CpIcon } from "../components/cp";
+import { PageHead } from "../components/cp";
 import { AuditFeed, type AuditEvent } from "./AuditFeed";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,6 @@ export default async function AuditPage() {
       <PageHead
         title="Audit log"
         sub="Every privileged action on the platform — exportable for compliance"
-        actions={<button className="cp-btn cp-btn-ghost"><CpIcon name="chevR" size={15} /> Export CSV</button>}
       />
       {events.length === 0 ? (
         <section className="cp-card"><div className="cp-empty">No privileged actions recorded yet.</div></section>

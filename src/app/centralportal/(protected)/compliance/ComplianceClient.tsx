@@ -294,6 +294,60 @@ function SssUploadForm({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ── Fill-from-Excel (PhilHealth / Pag-IBIG) ─────────────────────────────────────
+//
+// Unlike SSS (a 61-row lookup table that fully replaces the form), PhilHealth and
+// Pag-IBIG are formula/bracket based. Here Excel upload is a convenience: it parses
+// a file and *populates* the existing form, which stays the source of truth — the
+// admin reviews the filled values before publishing.
+
+/** Read the first worksheet of an uploaded file as a row-major array. */
+function readSheetRows(buffer: ArrayBuffer): unknown[][] | null {
+  try {
+    const wb = XLSX.read(buffer, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0] ?? ""];
+    if (!ws) return null;
+    return XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  } catch {
+    return null;
+  }
+}
+
+/** Tolerant numeric reader — strips ₱, %, commas and whitespace. */
+function cellNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[,₱%\s]/g, ""));
+  return isNaN(n) ? null : n;
+}
+
+function FillFromExcel({ hint, onParsed }: { hint: string; onParsed: (rows: unknown[][]) => string | null }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  function handle(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const buf = e.target?.result;
+      if (!(buf instanceof ArrayBuffer)) return;
+      const rows = readSheetRows(buf);
+      if (!rows) { setMsg({ text: "Could not read that file — use a valid .xlsx/.xls.", ok: false }); return; }
+      const error = onParsed(rows);
+      setMsg(error ? { text: error, ok: false } : { text: "Form filled from file — review the values, then publish.", ok: true });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, background: "var(--bg-2, #faf7f2)", border: "1px solid var(--line)" }}>
+      <input ref={ref} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handle(f); if (ref.current) ref.current.value = ""; }} />
+      <button type="button" className="cp-btn cp-btn-ghost" onClick={() => ref.current?.click()}>Fill from Excel</button>
+      <span className="cp-muted" style={{ fontSize: 11.5, flex: 1, minWidth: 200 }}>{hint}</span>
+      {msg && <span style={{ fontSize: 11.5, fontWeight: 600, color: msg.ok ? "#1f7a4d" : "#b23b34" }}>{msg.text}</span>}
+    </div>
+  );
+}
+
 // ── PhilHealth ─────────────────────────────────────────────────────────────────
 function PhilHealthForm({ current, onDone }: { current?: RuleRow; onDone: () => void }) {
   const p = current?.payload;
@@ -319,8 +373,31 @@ function PhilHealthForm({ current, onDone }: { current?: RuleRow; onDone: () => 
     if (ok) onDone();
   }
 
+  // Parse a 2-column [parameter, value] sheet; rates as %, amounts in ₱.
+  function fillFromRows(rows: unknown[][]): string | null {
+    let matched = 0;
+    for (const r of rows) {
+      const label = String(r?.[0] ?? "").toLowerCase().trim();
+      const v = cellNum(r?.[1]);
+      if (!label || v === null) continue;
+      if (label.includes("employee") || label.includes("personal")) { setEe(String(v)); matched++; }
+      else if (label.includes("employer")) { setEr(String(v)); matched++; }
+      else if (label.includes("rate")) { setRate(String(v)); matched++; }
+      else if (label.includes("floor")) { setFloor(String(v)); matched++; }
+      else if (label.includes("ceiling")) { setCeiling(String(v)); matched++; }
+      else if (label.includes("min")) { setPmin(String(v)); matched++; }
+      else if (label.includes("max")) { setPmax(String(v)); matched++; }
+    }
+    if (matched === 0) return "No PhilHealth parameters recognized. Use a 2-column sheet: parameter name, value.";
+    return null;
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      <FillFromExcel
+        hint="Optional — upload a 2-column sheet (Parameter · Value): Premium Rate, MSC Floor, MSC Ceiling, Premium Min, Premium Max, Employee Share, Employer Share. Rates in %, amounts in ₱."
+        onParsed={fillFromRows}
+      />
       <div style={grid3}>
         <NumField label="Premium rate" suffix="%" value={rate} onChange={setRate} />
         <NumField label="Employee split" suffix="%" value={ee} onChange={setEe} />
@@ -373,13 +450,41 @@ function PagibigForm({ current, onDone }: { current?: RuleRow; onDone: () => voi
     if (ok) onDone();
   }
 
+  // Parse a bracket table: columns Up To (₱) · EE % · ER %. A labelled
+  // "MFS cap" / "Fund salary cap" row sets the cap; blank/"over" Up To = open-ended.
+  function fillFromRows(rows: unknown[][]): string | null {
+    const parsed: Bracket[] = [];
+    for (const r of rows) {
+      const c0 = String(r?.[0] ?? "").trim();
+      const c0l = c0.toLowerCase();
+      if (c0l.includes("cap") || c0l.includes("fund salary")) {
+        const v = cellNum(r?.[1]);
+        if (v !== null) setMfsCap(String(v));
+        continue;
+      }
+      const ee = cellNum(r?.[1]);
+      const er = cellNum(r?.[2]);
+      if (ee === null || er === null) continue; // header / blank / non-bracket row
+      const upToNum = cellNum(c0);
+      const open = c0 === "" || /over|above|open|up\b/i.test(c0l);
+      parsed.push({ upTo: open || upToNum === null ? "" : String(upToNum), eeRate: String(ee), erRate: String(er) });
+    }
+    if (parsed.length === 0) return "No Pag-IBIG bracket rows found. Use columns: Up To (₱), EE %, ER %.";
+    setBrackets(parsed);
+    return null;
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      <FillFromExcel
+        hint="Optional — upload a bracket table with columns: Up To (₱) · EE % · ER %. Leave Up To blank (or 'over …') for the open-ended top bracket. A row labelled 'MFS cap' sets the cap."
+        onParsed={fillFromRows}
+      />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
         <NumField label="Monthly Fund Salary cap" suffix="₱" value={mfsCap} onChange={setMfsCap} />
       </div>
       <div>
-        <span className="cp-muted" style={{ fontSize: 11.5, display: "block", marginBottom: 6 }}>Brackets (last row = open-ended; leave "Up to" blank)</span>
+        <span className="cp-muted" style={{ fontSize: 11.5, display: "block", marginBottom: 6 }}>Brackets (last row = open-ended; leave &apos;Up to&apos; blank)</span>
         <div style={{ display: "grid", gap: 8 }}>
           {brackets.map((b, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, alignItems: "center" }}>
