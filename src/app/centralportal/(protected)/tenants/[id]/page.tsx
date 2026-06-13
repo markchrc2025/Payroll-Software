@@ -2,7 +2,7 @@ import { requireCentralPage } from "@/lib/central-permission";
 import prismaAdmin from "@/lib/prisma-admin";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { CpIcon } from "../../components/cp";
 import TenantDetailClient from "./TenantDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -57,15 +57,13 @@ export default async function TenantDetailPage({ params }: Props) {
   }));
 
   return (
-    <div className="p-8">
-      <Link
-        href="/centralportal/tenants"
-        className="inline-flex items-center gap-1.5 text-xs mb-6 hover:underline"
-        style={{ color: "#6B7280" }}
-      >
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to Tenants
-      </Link>
+    <>
+      <div className="cp-crumb">
+        <Link href="/centralportal/tenants">Tenants</Link>
+        <CpIcon name="chevR" size={14} />
+        <span>{tenant.name}</span>
+      </div>
       <TenantDetailClient tenant={tenantData} users={usersData} />
-    </div>
+    </>
   );
 }
