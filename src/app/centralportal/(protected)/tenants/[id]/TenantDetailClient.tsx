@@ -50,12 +50,27 @@ type User = {
 
 const TABS = [
   { id: "overview", label: "Overview", icon: Building2 },
+  { id: "subhistory", label: "Subscription history", icon: CreditCard },
+  { id: "support", label: "Support", icon: MessageSquare },
+  { id: "activity", label: "Activity", icon: Activity },
   { id: "payroll", label: "Payroll setup", icon: Calculator },
   { id: "modules", label: "HR modules", icon: Boxes },
   { id: "compliance", label: "Compliance", icon: FileCheck },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "access", label: "Access & roles", icon: ShieldCheck },
 ] as const;
+
+type SubRow = { id: string; label: string; detail: string; when: string; tone: string };
+type TicketRow = { id: string; ticketNumber: string; subject: string; priority: string; status: string; when: string; agent: string | null };
+type ActivityRow = { id: string; who: string; action: string; target: string; when: string; tone: string };
+const PRIORITY_LABEL: Record<string, string> = { URGENT: "Urgent", HIGH: "High", NORMAL: "Normal", LOW: "Low" };
+function priorityStyle(p: string): React.CSSProperties {
+  const m: Record<string, [string, string]> = {
+    URGENT: ["#b23b34", "#fbe9e7"], HIGH: ["#c2552f", "#fdeee6"], NORMAL: ["#3e63a0", "#e9eff7"], LOW: ["#6b6259", "#efeae3"],
+  };
+  const [color, background] = m[p] ?? m.NORMAL;
+  return { color, background };
+}
 type TabId = typeof TABS[number]["id"];
 
 const MODULES: { key: string; name: string; desc: string; icon: LucideIcon }[] = [
@@ -190,7 +205,11 @@ function StatCard({ label, value, sub }: { label: string; value: React.ReactNode
 
 const SELECT_CLS = "rounded-md px-2 py-1.5 text-xs outline-none";
 const SELECT_STYLE = { border: "1px solid #D1D5DB", background: "white", color: TXT } as const;
-export default function TenantDetailClient({ tenant: initial, users }: { tenant: Tenant; users: User[] }) {
+export default function TenantDetailClient({
+  tenant: initial, users, subHistory, tickets, activity,
+}: {
+  tenant: Tenant; users: User[]; subHistory: SubRow[]; tickets: TicketRow[]; activity: ActivityRow[];
+}) {
   const router = useRouter();
   const [tenant, setTenant] = useState(initial);
   const [tab, setTab] = useState<TabId>("overview");
@@ -353,6 +372,73 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
             </div>
           </div>
         </div>
+      )}
+
+      {/* SUBSCRIPTION HISTORY */}
+      {tab === "subhistory" && (
+        <section className="cp-card">
+          {subHistory.length === 0 ? (
+            <div className="cp-empty">No subscription events yet.</div>
+          ) : (
+            <ul className="cp-feed">
+              {subHistory.map((s) => (
+                <li key={s.id}>
+                  <span className="cp-feed-dot" data-t={s.tone} />
+                  <div className="cp-feed-body">
+                    <p><b>{s.label}</b>{s.detail ? ` — ${s.detail}` : ""}</p>
+                    <i>{s.when}</i>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* SUPPORT */}
+      {tab === "support" && (
+        <section className="cp-card" style={{ padding: 0 }}>
+          {tickets.length === 0 ? (
+            <div className="cp-empty">No support tickets — this account is running smoothly.</div>
+          ) : (
+            <table className="cp-table">
+              <thead><tr><th>ID</th><th>Subject</th><th>Priority</th><th>Agent</th><th>Status</th><th>Opened</th></tr></thead>
+              <tbody>
+                {tickets.map((t) => (
+                  <tr key={t.id} className="cp-row">
+                    <td><b className="cp-mono">{t.ticketNumber}</b></td>
+                    <td className="cp-subj">{t.subject}</td>
+                    <td><span className="cp-badge" style={priorityStyle(t.priority)}>{PRIORITY_LABEL[t.priority] ?? t.priority}</span></td>
+                    <td>{t.agent ?? <span className="cp-unassigned">Unassigned</span>}</td>
+                    <td>{t.status.charAt(0) + t.status.slice(1).toLowerCase()}</td>
+                    <td className="cp-muted">{t.when}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {/* ACTIVITY */}
+      {tab === "activity" && (
+        <section className="cp-card">
+          {activity.length === 0 ? (
+            <div className="cp-empty">No recent account activity.</div>
+          ) : (
+            <ul className="cp-feed">
+              {activity.map((a) => (
+                <li key={a.id}>
+                  <span className="cp-feed-dot" data-t={a.tone} />
+                  <div className="cp-feed-body">
+                    <p><b>{a.who}</b> {a.action} <b>{a.target}</b></p>
+                    <i>{a.when}</i>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {/* PAYROLL SETUP */}
