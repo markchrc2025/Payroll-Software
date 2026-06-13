@@ -74,10 +74,13 @@ export function computeSSS(
     payload.rows.find((r) => compensationCentavos <= BigInt(r.compensationTo)) ??
     payload.rows[payload.rows.length - 1]!;
 
+  // `employer` is regular + MPF ER share ONLY; EC is returned separately in `ec`
+  // (the official table's "Total Contribution - Employer" column bundles EC, but
+  // this contract keeps EC distinct so callers can post it to its own GL line).
   return {
     msc: BigInt(row.msc),
-    employee: BigInt(row.totalEmployee),
-    employer: BigInt(row.totalEmployer),
+    employee: BigInt(row.regularSSEmployee) + BigInt(row.mpfEmployee),
+    employer: BigInt(row.regularSSEmployer) + BigInt(row.mpfEmployer),
     ec: BigInt(row.ecEmployer),
     breakdown: {
       eeRegular: BigInt(row.regularSSEmployee),
