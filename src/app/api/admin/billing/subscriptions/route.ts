@@ -101,10 +101,11 @@ export async function POST(req: NextRequest) {
     // Validate referenced rows exist.
     const [tenant, pkg] = await Promise.all([
       prismaAdmin.tenant.findUnique({ where: { id: d.tenantId }, select: { id: true } }),
-      prismaAdmin.billingPackage.findUnique({ where: { id: d.packageId }, select: { id: true, tier: true } }),
+      prismaAdmin.billingPackage.findUnique({ where: { id: d.packageId }, select: { id: true, tier: true, isPublished: true } }),
     ]);
     if (!tenant) return err("Tenant not found", 404);
     if (!pkg) return err("Package not found", 404);
+    if (!pkg.isPublished) return err("That package is unpublished — publish it before assigning.", 400);
 
     const common = {
       packageId: d.packageId,
@@ -122,11 +123,12 @@ export async function POST(req: NextRequest) {
       update: common,
     });
 
-    // Keep the denormalized tier/status on Tenant in sync with the subscription.
+    // Keep the denormalized tier/status on Tenant in sync. tier is now an
+    // optional tag — only overwrite it when the package actually carries one.
     await prismaAdmin.tenant.update({
       where: { id: d.tenantId },
       data: {
-        subscriptionTier: pkg.tier,
+        ...(pkg.tier ? { subscriptionTier: pkg.tier } : {}),
         ...(d.status ? { subscriptionStatus: d.status } : {}),
       },
     });

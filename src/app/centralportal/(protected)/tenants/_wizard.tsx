@@ -7,8 +7,8 @@ import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Plan = "STARTER" | "GROWTH" | "PRO";
 type AccountStatus = "ACTIVE" | "TRIALING";
+type PackageOption = { id: string; name: string; monthlyPrice: number; description: string | null };
 
 interface WizardState {
   // Step 1 — Company
@@ -21,7 +21,8 @@ interface WizardState {
   city: string;
   zipCode: string;
   // Step 2 — Subscription
-  plan: Plan;
+  packageId: string;
+  packageName: string;
   accountStatus: AccountStatus;
   trialEndsAt: string;
   billingEmail: string;
@@ -38,16 +39,12 @@ interface WizardState {
 const INITIAL: WizardState = {
   name: "", tradeName: "", tinNumber: "", industry: "", address: "",
   province: "", city: "", zipCode: "",
-  plan: "GROWTH", accountStatus: "TRIALING", trialEndsAt: "", billingEmail: "",
+  packageId: "", packageName: "", accountStatus: "TRIALING", trialEndsAt: "", billingEmail: "",
   adminFirstName: "", adminLastName: "", adminEmail: "", adminPhone: "",
   adminPassword: "", companyCode: "", subdomain: "",
 };
 
-const PLANS: { key: Plan; label: string; limit: string; price: string }[] = [
-  { key: "STARTER",  label: "Starter",    limit: "Up to 50 employees",     price: "₱700 / mo" },
-  { key: "GROWTH",   label: "Growth",     limit: "Up to 200 employees",    price: "₱950 / mo" },
-  { key: "PRO",      label: "Enterprise", limit: "Unlimited employees",    price: "Custom" },
-];
+const pesoFromCentavos = (c: number) => "₱" + (c / 100).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 const INDUSTRIES = [
   "Retail / E-Commerce", "Manufacturing", "BPO / IT Services", "Food & Beverage",
@@ -191,26 +188,46 @@ function Step1({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
 }
 
 function Step2({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => void }) {
+  const [packages, setPackages] = useState<PackageOption[]>([]);
+  useEffect(() => {
+    fetch("/api/admin/billing/packages")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const pubs: PackageOption[] = (d?.data ?? []).filter((p: { isPublished: boolean }) => p.isPublished);
+        setPackages(pubs);
+        // Default to the first published package if none chosen yet.
+        if (!w.packageId && pubs[0]) set({ packageId: pubs[0].id, packageName: pubs[0].name });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div>
       <SectionTitle>Subscription plan</SectionTitle>
-      <div className="grid grid-cols-3 gap-[10px] mb-4">
-        {PLANS.map((p) => (
-          <div
-            key={p.key}
-            onClick={() => set({ plan: p.key })}
-            className="rounded-[6px] p-3 cursor-pointer text-center transition-all"
-            style={{
-              border: w.plan === p.key ? "1.5px solid #1E3A5F" : "0.5px solid #E5E7EB",
-              background: w.plan === p.key ? "rgba(30,58,95,0.05)" : "white",
-            }}
-          >
-            <div className="text-[13px] font-medium mb-0.5" style={{ color: "#111827" }}>{p.label}</div>
-            <div className="text-[11px]" style={{ color: "#6B7280" }}>{p.limit}</div>
-            <div className="text-[12px] font-medium mt-1" style={{ color: "#1E3A5F" }}>{p.price}</div>
-          </div>
-        ))}
-      </div>
+      {packages.length === 0 ? (
+        <p className="text-[12px] mb-4" style={{ color: "#6B7280" }}>
+          No published packages yet. Create one under Billing → Packages first.
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-[10px] mb-4">
+          {packages.map((p) => (
+            <div
+              key={p.id}
+              onClick={() => set({ packageId: p.id, packageName: p.name })}
+              className="rounded-[6px] p-3 cursor-pointer text-center transition-all"
+              style={{
+                border: w.packageId === p.id ? "1.5px solid #1E3A5F" : "0.5px solid #E5E7EB",
+                background: w.packageId === p.id ? "rgba(30,58,95,0.05)" : "white",
+              }}
+            >
+              <div className="text-[13px] font-medium mb-0.5" style={{ color: "#111827" }}>{p.name}</div>
+              <div className="text-[11px]" style={{ color: "#6B7280" }}>{p.description || "—"}</div>
+              <div className="text-[12px] font-medium mt-1" style={{ color: "#1E3A5F" }}>{pesoFromCentavos(p.monthlyPrice)} / mo</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <SectionTitle>Account status</SectionTitle>
       <div className="flex gap-2 mb-4">
@@ -315,7 +332,6 @@ function Step3({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
 }
 
 function Step4({ w }: { w: WizardState; set: (p: Partial<WizardState>) => void }) {
-  const planLabel = PLANS.find((p) => p.key === w.plan);
   return (
     <div>
       <SectionTitle>Review summary</SectionTitle>
@@ -323,7 +339,7 @@ function Step4({ w }: { w: WizardState; set: (p: Partial<WizardState>) => void }
         {[
           ["Company", w.name || "—"],
           ["TIN", w.tinNumber || "—"],
-          ["Plan", planLabel ? `${planLabel.label} · ${planLabel.price}` : "—"],
+          ["Plan", w.packageName || "—"],
           ["Status", w.accountStatus === "ACTIVE" ? "Active" : "Trial"],
           ["Admin", w.adminEmail ? `${w.adminFirstName} ${w.adminLastName} · ${w.adminEmail}` : "—"],
           ["Billing email", w.billingEmail || "—"],
@@ -398,7 +414,7 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
         city: w.city.trim() || null,
         companyCode: w.companyCode.trim() || null,
         subdomain: w.subdomain.trim() || null,
-        subscriptionTier: w.plan,
+        packageId: w.packageId || null,
         subscriptionStatus: w.accountStatus,
         billingEmail: w.billingEmail.trim() || null,
         trialEndsAt: w.trialEndsAt ? new Date(w.trialEndsAt).toISOString() : null,

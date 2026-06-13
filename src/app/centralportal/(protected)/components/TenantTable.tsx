@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Badge, PlanBadge, HealthBar, CpIcon, STATUS_LABEL } from "./cp";
+import { Badge, PlanPill, HealthBar, CpIcon, STATUS_LABEL } from "./cp";
 import { peso } from "@/lib/central/metrics";
 
 export type TenantRow = {
@@ -9,6 +9,7 @@ export type TenantRow = {
   name: string;
   slug: string | null;
   tier: string;
+  planName: string;
   status: string;
   employees: number;
   mrr: number;
@@ -55,7 +56,7 @@ export function TenantTable({ rows, compact = false }: { rows: TenantRow[]; comp
                 </div>
               </div>
             </td>
-            <td><PlanBadge tier={t.tier} /></td>
+            <td><PlanPill label={t.planName} tier={t.tier} /></td>
             <td className="cp-num">{t.employees.toLocaleString("en-PH")}</td>
             <td><Badge tone={STATUS_LABEL[t.status]}>{STATUS_LABEL[t.status] ?? t.status}</Badge></td>
             <td className="cp-num">{t.mrr ? peso(t.mrr) : "—"}</td>

@@ -23,6 +23,8 @@ const createTenantSchema = z.object({
   industry: z.string().max(100).optional().nullable(),
   subscriptionTier: z.enum(["STARTER", "GROWTH", "PRO"]).default("STARTER"),
   subscriptionStatus: z.enum(["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED"]).default("TRIALING"),
+  /// Optional package to assign on creation (creates the subscription).
+  packageId: z.string().optional().nullable(),
   billingEmail: z.string().email().optional().nullable(),
   featureFlags: z.record(z.string(), z.boolean()).default({}),
   // Wizard — company detail fields
@@ -89,18 +91,20 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             billingCycle: true,
-            package: { select: { monthlyPrice: true, annualPrice: true } },
+            package: { select: { name: true, monthlyPrice: true, annualPrice: true } },
           },
         },
       },
     }),
   ]);
 
-  // Enrich each tenant with derived MRR (whole pesos) and account-health score.
+  // Enrich each tenant with derived MRR, account-health, and the plan name
+  // (the subscribed package, falling back to the legacy tier tag).
   const enriched = tenants.map((t) => ({
     ...t,
     mrr: tenantMrrPesos(t.subscription),
     health: computeHealthScore({ subscriptionStatus: t.subscriptionStatus, healthScore: t.healthScore }),
+    planName: t.subscription?.package?.name ?? (t.subscriptionTier.charAt(0) + t.subscriptionTier.slice(1).toLowerCase()),
   }));
 
   return paginated(enriched, total, page, limit);
@@ -118,7 +122,7 @@ export async function POST(req: NextRequest) {
     const {
       adminFirstName, adminLastName, adminEmail, adminPassword, adminPhone,
       tinNumber, address, city, province, zipCode, contactEmail, contactPhone,
-      trialEndsAt, payrollCycle, companyCode,
+      trialEndsAt, payrollCycle, companyCode, packageId,
       ...tenantData
     } = parsed.data;
 
@@ -189,6 +193,22 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true, email: true },
       }).catch(() => null); // don't fail tenant creation if user creation fails
+    }
+
+    // Assign the chosen package (creates the subscription + syncs the tier tag).
+    if (packageId) {
+      const pkg = await prismaAdmin.billingPackage.findUnique({
+        where: { id: packageId },
+        select: { id: true, tier: true, isPublished: true },
+      });
+      if (pkg?.isPublished) {
+        await prismaAdmin.tenantSubscription.create({
+          data: { tenantId: tenant.id, packageId: pkg.id, status: tenant.subscriptionStatus },
+        });
+        if (pkg.tier) {
+          await prismaAdmin.tenant.update({ where: { id: tenant.id }, data: { subscriptionTier: pkg.tier } });
+        }
+      }
     }
 
     await writeAuditLog({

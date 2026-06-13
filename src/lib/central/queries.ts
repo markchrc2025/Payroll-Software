@@ -26,7 +26,7 @@ const ROW_SELECT = {
     select: {
       status: true,
       billingCycle: true,
-      package: { select: { monthlyPrice: true, annualPrice: true } },
+      package: { select: { name: true, monthlyPrice: true, annualPrice: true } },
     },
   },
 } as const;
@@ -43,9 +43,13 @@ type RawTenant = {
   subscription: {
     status: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED";
     billingCycle: "MONTHLY" | "ANNUAL";
-    package: { monthlyPrice: bigint; annualPrice: bigint } | null;
+    package: { name: string; monthlyPrice: bigint; annualPrice: bigint } | null;
   } | null;
 };
+
+function titleCase(s: string): string {
+  return s.charAt(0) + s.slice(1).toLowerCase();
+}
 
 export function toTenantRow(t: RawTenant): CentralTenantRow {
   return {
@@ -53,6 +57,7 @@ export function toTenantRow(t: RawTenant): CentralTenantRow {
     name: t.name,
     slug: t.subdomain,
     tier: t.subscriptionTier,
+    planName: t.subscription?.package?.name ?? titleCase(t.subscriptionTier),
     status: t.subscriptionStatus,
     employees: t._count.employees,
     mrr: tenantMrrPesos(t.subscription),

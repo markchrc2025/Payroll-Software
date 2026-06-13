@@ -2805,26 +2805,34 @@ enum PaymentMethod {
   // Gateway-backed methods added later: CARD, GCASH, MAYA, etc.
 }
 
-/// Catalog of offered packages (one per tier). Flat price per cycle.
+/// Catalog of billing packages (plans). Free-form: any number of packages,
+/// each optionally tagged with a coarse tier for badge colour / grouping.
 /// monthlyPrice / annualPrice are centavos. taxRateBps is basis points.
 model BillingPackage {
-  id              String           @id @default(cuid())
-  tier            SubscriptionTier @unique
+  id              String            @id @default(cuid())
+  /// Optional coarse tag (badge colour / analytics grouping). No longer unique.
+  tier            SubscriptionTier?
   name            String
   description     String?
-  monthlyPrice    BigInt           @default(0)
-  annualPrice     BigInt           @default(0)
+  monthlyPrice    BigInt            @default(0)
+  annualPrice     BigInt            @default(0)
   /// Tax rate in basis points applied to invoices for this package (1200 = 12%).
-  taxRateBps      Int              @default(0)
-  currency        String           @default("PHP")
-  isActive        Boolean          @default(true)
+  taxRateBps      Int               @default(0)
+  currency        String            @default("PHP")
+  isActive        Boolean           @default(true)
+  /// Only published packages can be assigned to tenants / offered.
+  isPublished     Boolean           @default(true)
+  /// Display order in the Packages list (ascending).
+  sortOrder       Int               @default(0)
   /// Marketing/feature list shown alongside the package.
-  features        Json             @default("[]")
+  features        Json              @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   subscriptions TenantSubscription[]
+
+  @@index([isPublished])
 }
 
 /// The live billing state for a tenant. At most one per tenant.

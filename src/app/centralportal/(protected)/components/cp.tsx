@@ -46,6 +46,7 @@ export const CP_ICONS = {
   plus: "M12 5v14M5 12h14",
   chevR: "M9 6l6 6-6 6",
   refresh: "M21 12a9 9 0 1 1-3-6.7M21 4v4h-4",
+  compliance: "M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2M9 4h6M9.5 13l1.7 1.7 3.3-3.6",
 } as const;
 
 export type CpIconName = keyof typeof CP_ICONS;
@@ -87,6 +88,15 @@ const PLAN_TONES: Record<string, [string, string]> = {
 export function PlanBadge({ tier }: { tier: string }) {
   const [c, bg] = PLAN_TONES[tier] ?? PLAN_TONES.STARTER;
   return <span className="cp-badge" style={{ color: c, background: bg }}>{titleCase(tier)}</span>;
+}
+
+/**
+ * Plan pill showing an arbitrary package name, coloured by an optional coarse
+ * tier tag (falls back to a neutral tone when the package has no tier).
+ */
+export function PlanPill({ label, tier }: { label: string; tier?: string | null }) {
+  const [c, bg] = (tier && PLAN_TONES[tier]) || ["#6b6259", "#efeae3"];
+  return <span className="cp-badge" style={{ color: c, background: bg }}>{label}</span>;
 }
 
 export function titleCase(s: string): string {

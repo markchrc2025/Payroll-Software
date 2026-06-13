@@ -8,19 +8,19 @@ import { PageHead, StatCard, Card, BarChart, Donut } from "../components/cp";
 export const dynamic = "force-dynamic";
 
 const TIER_COLOR: Record<string, string> = { PRO: "#e8693a", GROWTH: "#3e63a0", STARTER: "#c7913d" };
-const TIER_LABEL: Record<string, string> = { PRO: "Pro", GROWTH: "Growth", STARTER: "Starter" };
+// Palette for packages without a tier tag (cycled).
+const MIX_PALETTE = ["#e8693a", "#3e63a0", "#c7913d", "#4f9373", "#a0627d", "#5e7fb1", "#9a6a12"];
 
 export default async function AnalyticsPage() {
   const ctx = await getSuperAdminContext();
   if (!ctx) redirect("/centralportal/login");
 
-  const [stats, revenue, byTier, subEvents] = await Promise.all([
+  const [stats, revenue, pkgs, subEvents] = await Promise.all([
     getPlatformStats(),
     getRevenueSeries(),
-    prismaAdmin.tenant.groupBy({
-      by: ["subscriptionTier"],
-      where: { deletedAt: null },
-      _count: { _all: true },
+    prismaAdmin.billingPackage.findMany({
+      orderBy: [{ sortOrder: "asc" }, { monthlyPrice: "asc" }],
+      select: { name: true, tier: true, _count: { select: { subscriptions: true } } },
     }),
     prismaAdmin.subscriptionEvent.findMany({
       where: { type: { in: ["TRIAL_STARTED", "SUBSCRIBED"] } },
@@ -42,11 +42,13 @@ export default async function AnalyticsPage() {
   const converted = [...trialed].filter((t) => subscribed.has(t)).length;
   const trialToPaid = trialed.size > 0 ? `${Math.round((converted / trialed.size) * 100)}%` : "—";
 
-  const planMix = (["PRO", "GROWTH", "STARTER"] as const).map((tier) => ({
-    label: TIER_LABEL[tier],
-    value: byTier.find((g) => g.subscriptionTier === tier)?._count._all ?? 0,
-    color: TIER_COLOR[tier],
-  }));
+  const planMix = pkgs
+    .filter((p) => p._count.subscriptions > 0)
+    .map((p, i) => ({
+      label: p.name,
+      value: p._count.subscriptions,
+      color: (p.tier && TIER_COLOR[p.tier]) || MIX_PALETTE[i % MIX_PALETTE.length],
+    }));
 
   return (
     <>

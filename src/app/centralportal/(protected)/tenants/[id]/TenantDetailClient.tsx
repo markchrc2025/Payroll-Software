@@ -296,7 +296,7 @@ export default function TenantDetailClient({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 mb-5 overflow-x-auto" style={{ borderBottom: "1px solid " + BORDER }}>
+      <div className="flex gap-0 mb-5 flex-wrap" style={{ borderBottom: "1px solid " + BORDER }}>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)} className="flex items-center gap-1.5 px-3.5 py-2.5 text-xs whitespace-nowrap" style={tab === id ? { color: NAVY, borderBottom: "2px solid " + NAVY, fontWeight: 500, marginBottom: -1 } : { color: SUB, borderBottom: "2px solid transparent", marginBottom: -1 }}>
             <Icon className="w-3.5 h-3.5" />{label}

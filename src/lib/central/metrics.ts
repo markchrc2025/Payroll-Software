@@ -88,7 +88,8 @@ export type CentralTenantRow = {
   id: string;
   name: string;
   slug: string | null;
-  tier: string;
+  tier: string; // legacy coarse tag (badge colour)
+  planName: string; // the subscribed package name, or the tier as a fallback
   status: string;
   employees: number;
   mrr: number; // whole pesos
