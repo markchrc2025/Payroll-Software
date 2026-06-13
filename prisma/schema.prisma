@@ -511,6 +511,16 @@ model Tenant {
   /// Takes precedence over logoUrl, which remains for externally-hosted logos.
   logoKey      String?
 
+  // Employee ID format — controls how auto-generated employeeNumbers look.
+  empIdPrefix      String  @default("EMP-")
+  empIdIncludeYear Boolean @default(false)
+  empIdPadding     Int     @default(4)
+  empIdSuffix      String  @default("")
+  /// Next sequence number to claim atomically on employee creation.
+  empIdNextSeq     Int     @default(1)
+  /// Calendar year of the current sequence (used to reset seq to 1 each year when empIdIncludeYear=true).
+  empIdSeqYear     Int?
+
   // Subscription
   subscriptionTier   SubscriptionTier   @default(STARTER)
   subscriptionStatus SubscriptionStatus @default(TRIALING)

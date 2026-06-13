@@ -194,6 +194,7 @@ export function buildColumns(
       cell: ({ row }) => {
         const emp = row.original;
         const name = `${emp.firstName} ${emp.lastName}`;
+        const ref = encodeURIComponent(emp.employeeNumber);
         return (
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -210,14 +211,14 @@ export function buildColumns(
               <span className="sr-only">Open menu</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem render={<Link href={`/employees/${emp.id}/edit`} />}>
+              <DropdownMenuItem render={<Link href={`/employees/${ref}/edit`} />}>
                 <Pencil className="mr-2 h-4 w-4" />Edit
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/employees/${emp.id}/documents`} />}>
+              <DropdownMenuItem render={<Link href={`/employees/${ref}/documents`} />}>
                 <FileText className="mr-2 h-4 w-4" />201 File
               </DropdownMenuItem>
               {!["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus) && (
-                <DropdownMenuItem render={<Link href={`/employees/${emp.id}/offboard`} />}>
+                <DropdownMenuItem render={<Link href={`/employees/${ref}/offboard`} />}>
                   <LogOut className="mr-2 h-4 w-4" />Offboard
                 </DropdownMenuItem>
               )}

@@ -53,16 +53,17 @@ export default async function EmployeeProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id } = await params; // Employee ID (employeeNumber) or legacy CUID
 
-  const [employee, leaveBalances] = await Promise.all([
-    getEmployee(id),
-    getLeaveBalances(id),
-  ]);
-
+  // Resolve the employee first (GET accepts Employee ID or CUID), then load
+  // leave balances by the resolved internal id.
+  const employee = await getEmployee(id);
   if (!employee) notFound();
 
+  const leaveBalances = await getLeaveBalances(employee.id);
+
   const fullName = `${employee.firstName} ${employee.lastName}`;
+  const empRef = encodeURIComponent(employee.employeeNumber);
   const subtitle = [
     employee.employeeNumber,
     employee.position?.title ?? employee.jobTitle,
@@ -94,7 +95,7 @@ export default async function EmployeeProfilePage({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/employees/${id}/edit`}
+            href={`/employees/${empRef}/edit`}
             className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -111,7 +112,7 @@ export default async function EmployeeProfilePage({
             File Leave
           </button>
           <Link
-            href={`/employees/${id}/offboard`}
+            href={`/employees/${empRef}/offboard`}
             className="h-10 px-4 rounded-[9px] border border-[#FACECA] bg-[#FEF3F2] text-[#E0463B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#FCE9E7] transition-colors"
           >
             Initiate Offboarding

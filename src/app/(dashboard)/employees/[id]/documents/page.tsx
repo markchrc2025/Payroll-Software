@@ -12,6 +12,7 @@ import { ArrowLeft } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { isR2Configured } from "@/lib/r2";
+import { employeeRefWhere } from "@/lib/employee-ref";
 import { DocumentManager } from "@/components/employees/DocumentManager";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,10 @@ export default async function EmployeeDocumentsPage({
   const session = await auth();
   if (!session?.user?.tenantId) redirect("/login");
 
-  const { id } = await params;
+  const { id } = await params; // Employee ID (employeeNumber) or legacy CUID
 
   const employee = await prisma.employee.findFirst({
-    where: { id, tenantId: session.user.tenantId, deletedAt: null },
+    where: employeeRefWhere(session.user.tenantId, id),
     select: {
       id: true,
       firstName: true,
@@ -39,7 +40,7 @@ export default async function EmployeeDocumentsPage({
 
   const documents = await prisma.employeeDocument.findMany({
     where: {
-      employeeId: id,
+      employeeId: employee.id,
       tenantId: session.user.tenantId,
       deletedAt: null,
     },
@@ -86,7 +87,7 @@ export default async function EmployeeDocumentsPage({
         </div>
       )}
 
-      <DocumentManager employeeId={id} documents={documents} />
+      <DocumentManager employeeId={employee.id} documents={documents} />
     </div>
   );
 }

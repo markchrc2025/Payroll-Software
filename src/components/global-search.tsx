@@ -110,7 +110,7 @@ export function GlobalSearch() {
               {results.map((hit) => (
                 <Link
                   key={hit.id}
-                  href={`/employees/${hit.id}`}
+                  href={`/employees/${encodeURIComponent(hit.employeeNumber)}`}
                   onClick={handleSelect}
                   className="flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent transition-colors"
                 >

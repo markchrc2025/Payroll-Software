@@ -18,6 +18,7 @@ import {
   listEmployeesSchema,
 } from "@/lib/validations/employee";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { claimEmployeeId } from "@/lib/claim-employee-id";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees
@@ -156,16 +157,8 @@ export async function POST(req: NextRequest) {
       if (!pos) return { error: "Position not found in your tenant" as const };
     }
 
-    // Generate employee number: EMP-XXXX (padded, sequential per tenant)
-    const lastEmployee = await tx.employee.findFirst({
-      where: { tenantId: auth.tenantId },
-      orderBy: { createdAt: "desc" },
-      select: { employeeNumber: true },
-    });
-    const nextNum = lastEmployee
-      ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
-      : 1;
-    const employeeNumber = `EMP-${String(nextNum).padStart(4, "0")}`;
+    // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
+    const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
 
     const emp = await tx.employee.create({
       data: {

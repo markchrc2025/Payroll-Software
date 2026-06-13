@@ -21,6 +21,7 @@ import { toCentavos } from "@/lib/money";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { csvEmployeeRowSchema } from "@/lib/validations/employee";
 import { parseCsvString } from "@/lib/utils/csv";
+import { claimEmployeeIdBulk, formatEmployeeId } from "@/lib/claim-employee-id";
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -44,9 +45,9 @@ export async function POST(req: NextRequest) {
     return err("CSV file is empty or has no data rows.");
   }
 
-  // --- Pre-load dept & branch lookup maps + next number + insert in one tx ---
-  const { departments, branches, startNum } = await withTenant(auth.tenantId, async (tx) => {
-    const [departments, branches, lastEmployee] = await Promise.all([
+  // --- Pre-load dept & branch lookup maps ---
+  const { departments, branches } = await withTenant(auth.tenantId, async (tx) => {
+    const [departments, branches] = await Promise.all([
       tx.department.findMany({
         where: { tenantId: auth.tenantId, deletedAt: null },
         select: { id: true, name: true },
@@ -55,21 +56,12 @@ export async function POST(req: NextRequest) {
         where: { tenantId: auth.tenantId, deletedAt: null },
         select: { id: true, name: true },
       }),
-      tx.employee.findFirst({
-        where: { tenantId: auth.tenantId },
-        orderBy: { createdAt: "desc" },
-        select: { employeeNumber: true },
-      }),
     ]);
-    const startNum = lastEmployee
-      ? parseInt(lastEmployee.employeeNumber.replace(/\D/g, ""), 10) + 1
-      : 1;
-    return { departments, branches, startNum };
+    return { departments, branches };
   });
 
   const deptMap = new Map(departments.map((d) => [d.name.toLowerCase(), d.id]));
   const branchMap = new Map(branches.map((b) => [b.name.toLowerCase(), b.id]));
-  let nextNum = startNum;
 
   // --- Validate each row ---
   const validRows: Array<{
@@ -122,17 +114,22 @@ export async function POST(req: NextRequest) {
       data: d,
       departmentId,
       branchId,
-      employeeNumber: `EMP-${String(nextNum).padStart(4, "0")}`,
+      employeeNumber: "", // filled atomically in the insert transaction below
     });
-    nextNum++;
   }
 
   if (validRows.length === 0) {
     return ok({ imported: 0, errors }, "No valid rows to import");
   }
 
-  // --- Insert valid rows in a single transaction ---
+  // --- Insert valid rows in a single transaction, claiming IDs atomically ---
   await withTenant(auth.tenantId, async (tx) => {
+    // Claim N consecutive sequence numbers in one FOR UPDATE + UPDATE.
+    const { cfg, firstSeq, year } = await claimEmployeeIdBulk(tx, auth.tenantId, validRows.length);
+    validRows.forEach((row, i) => {
+      row.employeeNumber = formatEmployeeId(cfg, firstSeq + i, year);
+    });
+
     for (const row of validRows) {
       const d = row.data;
       const hireDate = new Date(d.hire_date);

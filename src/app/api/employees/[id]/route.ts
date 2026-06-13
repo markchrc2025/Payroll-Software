@@ -16,6 +16,7 @@ import {
 } from "@/lib/api-response";
 import { updateEmployeeSchema } from "@/lib/validations/employee";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { employeeRefWhere } from "@/lib/employee-ref";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees/[id]
@@ -29,10 +30,10 @@ export async function GET(
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
 
-  const { id } = await params; // Next.js 16: params is a Promise
+  const { id } = await params; // Next.js 16: params is a Promise — may be an Employee ID or CUID
 
   const employee = await withTenant(auth.tenantId, (tx) => tx.employee.findFirst({
-    where: { id, tenantId: auth.tenantId, deletedAt: null },
+    where: employeeRefWhere(auth.tenantId, id),
     include: {
       department: { select: { id: true, name: true } },
       branch: { select: { id: true, name: true } },

@@ -346,7 +346,12 @@ export default function ExpenseClaimsPage() {
             ) : (
               claims.map((claim) => (
                 <TableRow key={claim.id}>
-                  <TableCell className="font-medium text-sm">{claimEmpLabel(claim)}</TableCell>
+                  <TableCell className="font-medium text-sm">
+                    {claimEmpLabel(claim)}
+                    <span className="block text-xs text-muted-foreground font-mono">
+                      {empMap.get(claim.employeeId)?.employeeNumber ?? ""}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm">
                     {new Date(claim.claimDate).toLocaleDateString("en-PH")}
                   </TableCell>
@@ -465,7 +470,7 @@ export default function ExpenseClaimsPage() {
           <div className="mt-6 space-y-5">
             {approveTarget && (
               <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
-                <p><span className="text-muted-foreground">Employee:</span> {claimEmpLabel(approveTarget)}</p>
+                <p><span className="text-muted-foreground">Employee:</span> {claimEmpLabel(approveTarget)} <span className="font-mono text-xs text-muted-foreground">{empMap.get(approveTarget.employeeId)?.employeeNumber ?? ""}</span></p>
                 <p><span className="text-muted-foreground">Amount:</span> {formatPeso(approveTarget.amountCents)}</p>
                 <p><span className="text-muted-foreground">Description:</span> {approveTarget.description}</p>
               </div>
