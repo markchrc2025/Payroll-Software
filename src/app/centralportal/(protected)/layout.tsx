@@ -26,6 +26,10 @@ export default async function CentralPortalLayout({
     ...(hasCentralPermission(ctx, "TENANTS", "READ") ? ["/centralportal/tenants"] : []),
     ...(hasCentralPermission(ctx, "BILLING", "READ") ? ["/centralportal/billing"] : []),
     ...(hasCentralPermission(ctx, "SUPPORT", "READ") ? ["/centralportal/support"] : []),
+    // Analytics & Audit log are platform-wide views surfaced to every central
+    // admin for now; dedicated central-permission modules arrive in a later phase.
+    "/centralportal/analytics",
+    "/centralportal/audit",
     ...(hasCentralPermission(ctx, "USERS", "READ") || hasCentralPermission(ctx, "ROLES", "READ")
       ? ["/centralportal/settings"]
       : []),

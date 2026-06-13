@@ -23,7 +23,7 @@ type CatalogPermission = {
   label: string;
 };
 
-const NAVY = "#1E3A5F";
+const NAVY = "#E8693A";
 const GRAY = "#6B7280";
 const INK = "#111827";
 
@@ -246,7 +246,7 @@ export default function CentralRolesClient({
               Permissions — {permRole.name}
             </span>
             {permRole.isSystem && (
-              <span style={pill("#EEF2FF", NAVY)}>System role (read-only)</span>
+              <span style={pill("#fdeee6", NAVY)}>System role (read-only)</span>
             )}
           </div>
 
@@ -340,7 +340,7 @@ export default function CentralRolesClient({
                     r.description ?? "—"
                   )}
                 </td>
-                <td style={td}><span style={pill("#EEF2FF", NAVY)}>{r.permissionCount}</span></td>
+                <td style={td}><span style={pill("#fdeee6", NAVY)}>{r.permissionCount}</span></td>
                 <td style={{ ...td, color: GRAY }}>{r.userCount}</td>
                 <td style={td}>
                   {r.isSystem

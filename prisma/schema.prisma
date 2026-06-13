@@ -511,6 +511,14 @@ model Tenant {
   /// Takes precedence over logoUrl, which remains for externally-hosted logos.
   logoKey      String?
 
+  // Central Portal segmentation / account management
+  /// Geographic region for platform segmentation (e.g. "NCR", "Calabarzon").
+  region      String?
+  /// Primary contact / account owner name shown in the Central Portal.
+  ownerName   String?
+  /// Manual account-health override (0–100). Null → auto-computed heuristic at read time.
+  healthScore Int?
+
   // Employee ID format — controls how auto-generated employeeNumbers look.
   empIdPrefix      String  @default("EMP-")
   empIdIncludeYear Boolean @default(false)

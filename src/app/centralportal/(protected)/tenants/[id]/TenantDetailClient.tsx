@@ -11,7 +11,7 @@ import {
   Home, Coins, FileText, MessageSquare, BellRing, HeartPulse, Loader2,
 } from "lucide-react";
 
-const NAVY = "#1E3A5F";
+const NAVY = "#E8693A";
 const BORDER = "#E5E7EB";
 const BORDER2 = "#F3F4F6";
 const TXT = "#111827";
@@ -266,7 +266,7 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={isActive ? { background: "rgba(11,122,62,0.1)", color: "#0b7a3e" } : isTrial ? { background: "rgba(179,92,0,0.1)", color: "#b35c00" } : { background: "#F3F4F6", color: SUB }}>
           <CircleCheck className="w-3 h-3" />{tenant.subscriptionStatus}
         </span>
-        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(30,58,95,0.1)", color: NAVY }}>
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(232,105,58,0.1)", color: NAVY }}>
           <Star className="w-3 h-3" />{tenant.subscriptionTier} plan
         </span>
         <div className="ml-auto flex gap-2">
@@ -374,7 +374,7 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
           <Card title="Bank file generation" icon={Landmark} action={<button onClick={() => toast.info("Add bank coming soon")} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md" style={{ border: "1px solid " + BORDER, color: SUB }}><Plus className="w-3 h-3" />Add bank</button>}>
             <div className="grid grid-cols-2 gap-2">
               {BANKS.map(([key, name, format, def]) => { const on = flag(key, def); return (
-                <div key={key} className="flex items-center gap-2 rounded-md px-3 py-2.5" style={{ border: "1px solid " + (on ? "rgba(30,58,95,0.4)" : BORDER), background: on ? "rgba(30,58,95,0.03)" : "white" }}>
+                <div key={key} className="flex items-center gap-2 rounded-md px-3 py-2.5" style={{ border: "1px solid " + (on ? "rgba(232,105,58,0.4)" : BORDER), background: on ? "rgba(232,105,58,0.03)" : "white" }}>
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: on ? "#0b7a3e" : "#D1D5DB" }} />
                   <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: TXT }}>{name}</div><div className="text-[10px]" style={{ color: SUB }}>{format}</div></div>
                   <Toggle on={on} disabled={saving} onClick={() => toggleFlag(key, def)} />
@@ -390,9 +390,9 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
       {tab === "modules" && (
         <div className="flex flex-col gap-2.5">
           {MODULES.map((m) => { const on = flag(m.key, false); const Icon = m.icon; return (
-            <div key={m.key} className="rounded-xl bg-white" style={{ border: "1px solid " + (on ? "rgba(30,58,95,0.3)" : BORDER) }}>
+            <div key={m.key} className="rounded-xl bg-white" style={{ border: "1px solid " + (on ? "rgba(232,105,58,0.3)" : BORDER) }}>
               <div className="flex items-start gap-2.5 p-3.5">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={on ? { background: "rgba(30,58,95,0.1)", color: NAVY } : { background: "#F3F4F6", color: MUTE }}><Icon className="w-4 h-4" /></div>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={on ? { background: "rgba(232,105,58,0.1)", color: NAVY } : { background: "#F3F4F6", color: MUTE }}><Icon className="w-4 h-4" /></div>
                 <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: on ? TXT : SUB }}>{m.name}</div><div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: SUB }}>{m.desc}</div></div>
                 <Toggle on={on} disabled={saving} onClick={() => toggleFlag(m.key, false)} />
               </div>
@@ -413,7 +413,7 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
           <Card title="Statutory deduction tables" icon={FileCheck} action={<span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ background: "rgba(11,122,62,0.1)", color: "#0b7a3e" }}>Auto-updated by Sentire</span>}>
             {STATUTORY.map((s) => { const Icon = s.icon; return (
               <div key={s.name} className="flex items-center gap-2.5 py-2.5" style={{ borderBottom: "1px solid " + BORDER2 }}>
-                <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "rgba(30,58,95,0.08)", color: NAVY }}><Icon className="w-3.5 h-3.5" /></div>
+                <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "rgba(232,105,58,0.08)", color: NAVY }}><Icon className="w-3.5 h-3.5" /></div>
                 <div className="text-xs font-medium" style={{ color: TXT, minWidth: 92 }}>{s.name}</div>
                 <div className="text-[11px] flex-1" style={{ color: SUB }}>{s.detail}</div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: "rgba(11,122,62,0.1)", color: "#0b7a3e" }}>Current</span>
@@ -457,7 +457,7 @@ export default function TenantDetailClient({ tenant: initial, users }: { tenant:
           <Card title="Admin users" icon={Users} action={<button onClick={() => toast.info("Add admin coming soon")} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md text-white" style={{ background: NAVY }}><Plus className="w-3 h-3" />Add admin</button>}>
             {users.length === 0 ? <p className="text-xs py-3" style={{ color: MUTE }}>No admin users yet.</p> : users.map((u) => (
               <div key={u.id} className="flex items-center gap-2.5 py-2" style={{ borderBottom: "1px solid " + BORDER2 }}>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium flex-shrink-0" style={{ background: "rgba(30,58,95,0.1)", color: NAVY }}>{(u.firstName[0] || "") + (u.lastName[0] || "")}</div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium flex-shrink-0" style={{ background: "rgba(232,105,58,0.1)", color: NAVY }}>{(u.firstName[0] || "") + (u.lastName[0] || "")}</div>
                 <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: TXT }}>{u.firstName} {u.lastName}</div><div className="text-[11px]" style={{ color: SUB }}>{u.email}</div></div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ border: "1px solid " + BORDER, color: SUB }}>{u.systemRole}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={u.isActive ? { background: "rgba(11,122,62,0.1)", color: "#0b7a3e" } : { background: "#F3F4F6", color: MUTE }}>{u.isActive ? "Active" : "Inactive"}</span>

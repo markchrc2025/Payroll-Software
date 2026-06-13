@@ -11,6 +11,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { tenantMrrPesos, computeHealthScore } from "@/lib/central/metrics";
 import { z } from "zod";
 
 const createTenantSchema = z.object({
@@ -78,14 +79,30 @@ export async function GET(req: NextRequest) {
         subscriptionTier: true,
         subscriptionStatus: true,
         trialEndsAt: true,
+        healthScore: true,
+        region: true,
         featureFlags: true,
         createdAt: true,
         _count: { select: { employees: true, users: true } },
+        subscription: {
+          select: {
+            status: true,
+            billingCycle: true,
+            package: { select: { monthlyPrice: true, annualPrice: true } },
+          },
+        },
       },
     }),
   ]);
 
-  return paginated(tenants, total, page, limit);
+  // Enrich each tenant with derived MRR (whole pesos) and account-health score.
+  const enriched = tenants.map((t) => ({
+    ...t,
+    mrr: tenantMrrPesos(t.subscription),
+    health: computeHealthScore({ subscriptionStatus: t.subscriptionStatus, healthScore: t.healthScore }),
+  }));
+
+  return paginated(enriched, total, page, limit);
 }
 
 export async function POST(req: NextRequest) {

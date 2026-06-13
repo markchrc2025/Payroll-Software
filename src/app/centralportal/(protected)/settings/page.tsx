@@ -1,6 +1,7 @@
 import { getCentralContext, hasCentralPermission } from "@/lib/central-permission";
 import prismaAdmin from "@/lib/prisma-admin";
 import { redirect } from "next/navigation";
+import { PageHead } from "../components/cp";
 import UsersClient from "./UsersClient";
 import CentralRolesClient from "./CentralRolesClient";
 
@@ -66,17 +67,10 @@ export default async function SettingsPage() {
   const roleOptions = serializableRoles.map((r) => ({ id: r.id, name: r.name }));
 
   return (
-    <div style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", margin: 0 }}>
-          Settings
-        </h1>
-        <p style={{ fontSize: 14, color: "#6B7280", marginTop: 4 }}>
-          Manage Central Portal administrators, roles, and access
-        </p>
-      </div>
+    <>
+      <PageHead title="Settings" sub="Central Portal administrators, roles and access" />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {canReadRoles && (
           <CentralRolesClient
             initialRoles={serializableRoles}
@@ -94,6 +88,6 @@ export default async function SettingsPage() {
           />
         )}
       </div>
-    </div>
+    </>
   );
 }
