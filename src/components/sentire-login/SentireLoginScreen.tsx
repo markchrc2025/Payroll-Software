@@ -51,8 +51,12 @@ function ssoErrorMessage(code: string | null, mode: Mode): string {
 export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const searchParams = useSearchParams();
   // Tenant honours ?callbackUrl (relative only, to block open redirects).
-  const rawCallback = searchParams.get("callbackUrl") ?? "/";
-  const callbackUrl = rawCallback.startsWith("/") ? rawCallback : "/";
+  // Missing or bare "/" lands on the dashboard, not the bare root.
+  const rawCallback = searchParams.get("callbackUrl");
+  const callbackUrl =
+    rawCallback && rawCallback.startsWith("/") && rawCallback !== "/"
+      ? rawCallback
+      : "/dashboard";
   const redirectTo = mode === "admin" ? "/centralportal/dashboard" : callbackUrl;
 
   const [companyCode, setCompanyCode] = useState("");
