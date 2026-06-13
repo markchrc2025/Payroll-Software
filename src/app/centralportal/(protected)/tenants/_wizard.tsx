@@ -80,11 +80,11 @@ function FieldGroup({ label, required, hint, children }: {
 }) {
   return (
     <div className="flex flex-col gap-[5px]">
-      <label className="text-[12px] font-medium" style={{ color: "#4B5563" }}>
-        {label}{required && <span style={{ color: "#c0392b", marginLeft: 2 }}>*</span>}
+      <label className="text-[12px] font-medium" style={{ color: "#574D44" }}>
+        {label}{required && <span style={{ color: "#b23b34", marginLeft: 2 }}>*</span>}
       </label>
       {children}
-      {hint && <span className="text-[11px]" style={{ color: "#9CA3AF" }}>{hint}</span>}
+      {hint && <span className="text-[11px]" style={{ color: "#978C80" }}>{hint}</span>}
     </div>
   );
 }
@@ -101,9 +101,9 @@ function FInput({ value, onChange, placeholder, type = "text", autoComplete }: {
       placeholder={placeholder}
       autoComplete={autoComplete}
       className="rounded-[6px] px-[10px] py-[7px] text-[13px] outline-none w-full"
-      style={{ border: "0.5px solid #D1D5DB", background: "white", color: "#111827" }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "#1E3A5F"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(30,58,95,0.1)"; }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = "#D1D5DB"; e.currentTarget.style.boxShadow = "none"; }}
+      style={{ border: "0.5px solid #E0D7CA", background: "white", color: "#2A2420" }}
+      onFocus={(e) => { e.currentTarget.style.borderColor = "#E8693A"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(232,105,58,0.1)"; }}
+      onBlur={(e) => { e.currentTarget.style.borderColor = "#E0D7CA"; e.currentTarget.style.boxShadow = "none"; }}
     />
   );
 }
@@ -117,7 +117,7 @@ function FSelect({ value, onChange, children }: {
       onChange={(e) => onChange(e.target.value)}
       className="rounded-[6px] px-[10px] py-[7px] text-[13px] outline-none w-full appearance-none"
       style={{
-        border: "0.5px solid #D1D5DB", background: "white", color: "#111827",
+        border: "0.5px solid #E0D7CA", background: "white", color: "#2A2420",
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center",
         paddingRight: 28,
@@ -131,7 +131,7 @@ function FSelect({ value, onChange, children }: {
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-medium uppercase tracking-[0.06em] mb-3 pb-2"
-      style={{ color: "#9CA3AF", borderBottom: "0.5px solid #F3F4F6" }}>
+      style={{ color: "#978C80", borderBottom: "0.5px solid #F1ECE4" }}>
       {children}
     </p>
   );
@@ -206,7 +206,7 @@ function Step2({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
     <div>
       <SectionTitle>Subscription plan</SectionTitle>
       {packages.length === 0 ? (
-        <p className="text-[12px] mb-4" style={{ color: "#6B7280" }}>
+        <p className="text-[12px] mb-4" style={{ color: "#6B6259" }}>
           No published packages yet. Create one under Billing → Packages first.
         </p>
       ) : (
@@ -217,13 +217,13 @@ function Step2({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
               onClick={() => set({ packageId: p.id, packageName: p.name })}
               className="rounded-[6px] p-3 cursor-pointer text-center transition-all"
               style={{
-                border: w.packageId === p.id ? "1.5px solid #1E3A5F" : "0.5px solid #E5E7EB",
-                background: w.packageId === p.id ? "rgba(30,58,95,0.05)" : "white",
+                border: w.packageId === p.id ? "1.5px solid #E8693A" : "0.5px solid #ECE6DD",
+                background: w.packageId === p.id ? "rgba(232,105,58,0.05)" : "white",
               }}
             >
-              <div className="text-[13px] font-medium mb-0.5" style={{ color: "#111827" }}>{p.name}</div>
-              <div className="text-[11px]" style={{ color: "#6B7280" }}>{p.description || "—"}</div>
-              <div className="text-[12px] font-medium mt-1" style={{ color: "#1E3A5F" }}>{pesoFromCentavos(p.monthlyPrice)} / mo</div>
+              <div className="text-[13px] font-medium mb-0.5" style={{ color: "#2A2420" }}>{p.name}</div>
+              <div className="text-[11px]" style={{ color: "#6B6259" }}>{p.description || "—"}</div>
+              <div className="text-[12px] font-medium mt-1" style={{ color: "#E8693A" }}>{pesoFromCentavos(p.monthlyPrice)} / mo</div>
             </div>
           ))}
         </div>
@@ -238,14 +238,14 @@ function Step2({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
             className="flex-1 py-2 rounded-[6px] text-center text-[12px] cursor-pointer transition-all"
             style={{
               border: w.accountStatus === s
-                ? (s === "ACTIVE" ? "0.5px solid #0b7a3e" : "0.5px solid #b35c00")
-                : "0.5px solid #E5E7EB",
+                ? (s === "ACTIVE" ? "0.5px solid #1f7a4d" : "0.5px solid #9a6a12")
+                : "0.5px solid #ECE6DD",
               background: w.accountStatus === s
-                ? (s === "ACTIVE" ? "rgba(11,122,62,0.06)" : "rgba(179,92,0,0.06)")
+                ? (s === "ACTIVE" ? "rgba(31,122,77,0.06)" : "rgba(154,106,18,0.06)")
                 : "white",
               color: w.accountStatus === s
-                ? (s === "ACTIVE" ? "#0b7a3e" : "#b35c00")
-                : "#6B7280",
+                ? (s === "ACTIVE" ? "#1f7a4d" : "#9a6a12")
+                : "#6B6259",
               fontWeight: w.accountStatus === s ? 500 : 400,
             }}
           >
@@ -300,21 +300,21 @@ function Step3({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
 
       <SectionTitle>Portal access</SectionTitle>
       <FieldGroup label="Company Code" required hint="Used by employees and admins to identify your company at login. Uppercase letters and numbers only, max 20 characters.">
-        <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #D1D5DB" }}>
+        <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #E0D7CA" }}>
           <input
             type="text"
             value={w.companyCode}
             onChange={(e) => set({ companyCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) })}
             placeholder="ACMECORP"
             className="flex-1 px-2.5 py-[7px] text-[13px] outline-none font-mono tracking-widest"
-            style={{ background: "white", color: "#111827" }}
+            style={{ background: "white", color: "#2A2420" }}
           />
         </div>
       </FieldGroup>
       <div className="mt-3" />
       <FieldGroup label="App subdomain" hint="Auto-generated from company name. Only lowercase letters, numbers, and hyphens.">
-        <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #D1D5DB" }}>
-          <span className="px-2.5 py-[7px] text-[12px] shrink-0" style={{ background: "#F9FAFB", borderRight: "0.5px solid #D1D5DB", color: "#6B7280" }}>
+        <div className="flex items-center rounded-[6px] overflow-hidden" style={{ border: "0.5px solid #E0D7CA" }}>
+          <span className="px-2.5 py-[7px] text-[12px] shrink-0" style={{ background: "#F7F4EF", borderRight: "0.5px solid #E0D7CA", color: "#6B6259" }}>
             app.sentire.ph/
           </span>
           <input
@@ -323,7 +323,7 @@ function Step3({ w, set }: { w: WizardState; set: (p: Partial<WizardState>) => v
             onChange={(e) => set({ subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
             placeholder="acme-corp"
             className="flex-1 px-2.5 py-[7px] text-[13px] outline-none"
-            style={{ background: "white", color: "#111827" }}
+            style={{ background: "white", color: "#2A2420" }}
           />
         </div>
       </FieldGroup>
@@ -346,13 +346,13 @@ function Step4({ w }: { w: WizardState; set: (p: Partial<WizardState>) => void }
           ["Company Code", w.companyCode || "—"],
           ["Subdomain", w.subdomain ? `app.sentire.ph/${w.subdomain}` : "—"],
         ].map(([k, v]) => (
-          <div key={k} className="flex justify-between py-[7px]" style={{ borderBottom: "0.5px solid #F3F4F6" }}>
-            <span className="text-[12px]" style={{ color: "#6B7280" }}>{k}</span>
-            <span className="text-[12px] font-medium text-right" style={{ color: "#111827", maxWidth: "60%" }}>{v}</span>
+          <div key={k} className="flex justify-between py-[7px]" style={{ borderBottom: "0.5px solid #F1ECE4" }}>
+            <span className="text-[12px]" style={{ color: "#6B6259" }}>{k}</span>
+            <span className="text-[12px] font-medium text-right" style={{ color: "#2A2420", maxWidth: "60%" }}>{v}</span>
           </div>
         ))}
       </div>
-      <p className="text-[11px] mt-4 px-3 py-2 rounded-[6px]" style={{ color: "#6B7280", background: "#F9FAFB", border: "0.5px solid #E5E7EB" }}>
+      <p className="text-[11px] mt-4 px-3 py-2 rounded-[6px]" style={{ color: "#6B6259", background: "#F7F4EF", border: "0.5px solid #ECE6DD" }}>
         Pay schedule, statutory cutoff, and 13th month settings can be configured in the Payroll setup tab after creation.
       </p>
     </div>
@@ -446,11 +446,11 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ fontFamily: "var(--font-hanken-grotesk), var(--font-instrument-sans), system-ui, sans-serif" }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(15,30,54,0.55)" }}
+        style={{ background: "rgba(33,26,21,0.5)" }}
         onClick={onClose}
       />
 
@@ -460,24 +460,24 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
         style={{
           width: "100%", maxWidth: 560, maxHeight: "92vh",
           background: "white", borderRadius: 12,
-          border: "0.5px solid #E5E7EB",
+          border: "0.5px solid #ECE6DD",
           boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
         }}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4 shrink-0"
-          style={{ borderBottom: "0.5px solid #F3F4F6" }}>
+          style={{ borderBottom: "0.5px solid #F1ECE4" }}>
           <div>
-            <p className="text-[16px] font-medium" style={{ color: "#111827" }}>Add new tenant</p>
-            <p className="text-[12px] mt-0.5" style={{ color: "#6B7280" }}>Complete all steps to provision a new company account</p>
+            <p className="text-[16px] font-medium" style={{ color: "#2A2420" }}>Add new tenant</p>
+            <p className="text-[12px] mt-0.5" style={{ color: "#6B6259" }}>Complete all steps to provision a new company account</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-[5px] hover:bg-gray-100 transition-colors ml-4">
-            <X size={16} style={{ color: "#6B7280" }} />
+          <button onClick={onClose} className="p-1 rounded-[5px] hover:bg-[#f1ece4] transition-colors ml-4">
+            <X size={16} style={{ color: "#6B6259" }} />
           </button>
         </div>
 
         {/* Step dots */}
-        <div className="flex px-6 py-4 gap-0 shrink-0" style={{ borderBottom: "0.5px solid #F3F4F6" }}>
+        <div className="flex px-6 py-4 gap-0 shrink-0" style={{ borderBottom: "0.5px solid #F1ECE4" }}>
           {STEP_LABELS.map((label, i) => {
             const n = i + 1;
             const done = n < step;
@@ -488,23 +488,23 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
                 {i < STEP_LABELS.length - 1 && (
                   <div className="absolute" style={{
                     top: 14, left: "calc(50% + 16px)", right: "calc(-50% + 16px)",
-                    height: 0.5, background: "#E5E7EB", zIndex: 0,
+                    height: 0.5, background: "#ECE6DD", zIndex: 0,
                   }} />
                 )}
                 <div
                   className="flex items-center justify-center text-[12px] font-medium relative z-10 transition-all"
                   style={{
                     width: 28, height: 28, borderRadius: "50%",
-                    background: done || active ? "#1E3A5F" : "#F9FAFB",
-                    border: done || active ? "none" : "0.5px solid #E5E7EB",
-                    color: done || active ? "white" : "#9CA3AF",
-                    boxShadow: active ? "0 0 0 3px rgba(30,58,95,0.15)" : "none",
+                    background: done || active ? "#E8693A" : "#F7F4EF",
+                    border: done || active ? "none" : "0.5px solid #ECE6DD",
+                    color: done || active ? "white" : "#978C80",
+                    boxShadow: active ? "0 0 0 3px rgba(232,105,58,0.15)" : "none",
                   }}
                 >
                   {done ? <Check size={12} /> : n === 1 ? <Building2 size={13} /> : n}
                 </div>
                 <span className="text-[10px] text-center leading-tight"
-                  style={{ color: active ? "#111827" : "#9CA3AF", fontWeight: active ? 500 : 400 }}>
+                  style={{ color: active ? "#2A2420" : "#978C80", fontWeight: active ? 500 : 400 }}>
                   {label}
                 </span>
               </div>
@@ -522,14 +522,14 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3.5 shrink-0"
-          style={{ borderTop: "0.5px solid #F3F4F6" }}>
-          <span className="text-[12px]" style={{ color: "#9CA3AF" }}>Step {step} of 4</span>
+          style={{ borderTop: "0.5px solid #F1ECE4" }}>
+          <span className="text-[12px]" style={{ color: "#978C80" }}>Step {step} of 4</span>
           <div className="flex gap-2">
             {step > 1 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
-                className="rounded-[7px] px-4 py-2 text-[13px] font-medium transition-colors hover:bg-gray-50"
-                style={{ border: "0.5px solid #E5E7EB", color: "#6B7280", background: "white" }}
+                className="rounded-[7px] px-4 py-2 text-[13px] font-medium transition-colors hover:bg-[#f6f1ea]"
+                style={{ border: "0.5px solid #ECE6DD", color: "#6B6259", background: "white" }}
               >
                 Back
               </button>
@@ -538,7 +538,7 @@ export function AddTenantWizard({ open, onClose, onCreated }: {
               onClick={handleNext}
               disabled={saving}
               className="flex items-center gap-1.5 rounded-[7px] px-4 py-2 text-[13px] font-medium text-white disabled:opacity-60 transition-opacity"
-              style={{ background: "#1E3A5F" }}
+              style={{ background: "#E8693A" }}
             >
               {step === 4 ? (
                 saving ? "Creating…" : <><Check size={13} /> Create tenant</>
