@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import type { Control, FieldErrors, Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, User, ArrowRight } from "lucide-react";
+import { Check, User, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { uploadImage, ACCEPT_ATTR } from "@/lib/upload-image";
 import {
   createEmployeeSchema,
   type CreateEmployeeInput,
@@ -426,7 +427,29 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
     defaultValues: DEFAULTS as CreateEmployeeInput,
   });
 
-  const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset } = form;
+  const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset, setValue } = form;
+
+  // Profile photo upload (R2, tenant-namespaced) — wired to the "Change photo" control.
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  async function handlePhotoFile(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    ev.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const storageKey = await uploadImage(file, "/api/employees/photo/presign");
+      setPhotoPreview(URL.createObjectURL(file));
+      setValue("photoKey", storageKey, { shouldDirty: true });
+      toast.success("Photo uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function handleContinue() {
     const fields = STEP_TRIGGER_FIELDS[step];
@@ -471,6 +494,7 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
     setStep(0);
     setDoneSteps(new Set());
     setSaved(false);
+    setPhotoPreview(null);
   }
 
   // ─── Step field rendering ────────────────────────────────────────────────
@@ -485,12 +509,34 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
         return (
           <FGrid>
             <div className="col-span-2 flex items-center gap-4 py-1">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full"
-                style={{ background: "#fdeee6", border: "2px dashed #E8693A" }}>
-                <User className="h-7 w-7" style={{ color: "#E8693A" }} />
+              <div
+                className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full"
+                style={{ background: "#fdeee6", border: "2px dashed #E8693A" }}
+              >
+                {photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- local blob preview
+                  <img src={photoPreview} alt="Profile photo" className="h-full w-full object-cover" />
+                ) : uploadingPhoto ? (
+                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8693A" }} />
+                ) : (
+                  <User className="h-7 w-7" style={{ color: "#E8693A" }} />
+                )}
               </div>
-              <button type="button" className="text-[13px] font-semibold" style={{ color: "#E8693A" }}>
-                Change photo
+              <input
+                ref={photoRef}
+                type="file"
+                accept={ACCEPT_ATTR}
+                className="hidden"
+                onChange={handlePhotoFile}
+              />
+              <button
+                type="button"
+                className="text-[13px] font-semibold disabled:opacity-60"
+                style={{ color: "#E8693A" }}
+                disabled={uploadingPhoto}
+                onClick={() => photoRef.current?.click()}
+              >
+                {uploadingPhoto ? "Uploading…" : photoPreview ? "Change photo" : "Upload photo"}
               </button>
             </div>
             <TF control={c} name="firstName"     label="First Name"   placeholder="Juan"       req   errors={e} />

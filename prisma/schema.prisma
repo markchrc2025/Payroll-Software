@@ -507,6 +507,9 @@ model Tenant {
   contactEmail String?
   contactPhone String?
   logoUrl      String?
+  /// R2 object key for an uploaded company logo (tenants/{tenantId}/branding/...).
+  /// Takes precedence over logoUrl, which remains for externally-hosted logos.
+  logoKey      String?
 
   // Subscription
   subscriptionTier   SubscriptionTier   @default(STARTER)
@@ -880,6 +883,8 @@ model Employee {
   gender         Gender?
   civilStatus    CivilStatus?
   nationality    String?      @default("Filipino")
+  /// R2 object key for an uploaded profile photo (tenants/{tenantId}/employee-photos/...).
+  photoKey       String?
 
   // Contact
   personalEmail String?

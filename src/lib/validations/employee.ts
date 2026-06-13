@@ -136,6 +136,9 @@ export const createEmployeeSchema = z.object({
   civilStatus: z.nativeEnum(CivilStatus).optional().nullable(),
   nationality: z.string().max(100).optional().nullable(),
 
+  // R2 object key for an uploaded profile photo (set via /api/employees/photo/presign)
+  photoKey: z.string().max(500).optional().nullable(),
+
   // Contact
   personalEmail: z.string().email().optional().nullable().or(z.literal("")),
   workEmail: z.string().email().optional().nullable().or(z.literal("")),

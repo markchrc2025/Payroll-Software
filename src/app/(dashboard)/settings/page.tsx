@@ -6,13 +6,14 @@
  * contact info, logo URL.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Save, RefreshCw, Building2 } from "lucide-react";
+import { Save, RefreshCw, Building2, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { uploadImage, ACCEPT_ATTR } from "@/lib/upload-image";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ type TenantInfo = {
   province: string;
   zipCode: string;
   logoUrl: string;
+  logoKey: string;
 };
 
 const EMPTY: TenantInfo = {
@@ -68,6 +70,7 @@ const EMPTY: TenantInfo = {
   province: "",
   zipCode: "",
   logoUrl: "",
+  logoKey: "",
 };
 
 export default function CompanyBrandingPage() {
@@ -76,6 +79,12 @@ export default function CompanyBrandingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Local object-URL preview of a just-picked logo (before it's reloaded from R2).
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  // Cache-buster for the logo serve route, bumped after each successful upload.
+  const [logoVersion, setLogoVersion] = useState(() => Date.now());
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,9 +103,12 @@ export default function CompanyBrandingPage() {
         province:     d.province ?? "",
         zipCode:      d.zipCode ?? "",
         logoUrl:      d.logoUrl ?? "",
+        logoKey:      d.logoKey ?? "",
       };
       setSaved(loaded);
       setForm(loaded);
+      setLogoPreview(null);
+      setLogoVersion(Date.now());
     }
     setLoading(false);
     setDirty(false);
@@ -108,6 +120,32 @@ export default function CompanyBrandingPage() {
     setForm((f) => ({ ...f, [key]: value }));
     setDirty(true);
   }
+
+  async function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const storageKey = await uploadImage(file, "/api/settings/tenant/logo/presign");
+      setLogoPreview(URL.createObjectURL(file));
+      // Uploaded logo supersedes any legacy external URL.
+      setForm((f) => ({ ...f, logoKey: storageKey, logoUrl: "" }));
+      setDirty(true);
+      toast.success("Logo uploaded — save to apply.");
+    } catch (e2) {
+      toast.error(e2 instanceof Error ? e2.message : "Upload failed");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  // Resolve what to render in the logo preview box.
+  const logoSrc = logoPreview
+    ? logoPreview
+    : form.logoKey
+      ? `/api/settings/tenant/logo?v=${logoVersion}`
+      : form.logoUrl || null;
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error("Company name is required"); return; }
@@ -123,6 +161,7 @@ export default function CompanyBrandingPage() {
       province:     form.province || null,
       zipCode:      form.zipCode  || null,
       logoUrl:      form.logoUrl  || null,
+      logoKey:      form.logoKey  || null,
     };
     const res = await fetch("/api/settings/tenant", {
       method: "PATCH",
@@ -135,6 +174,8 @@ export default function CompanyBrandingPage() {
     toast.success("Company info saved");
     setSaved(form);
     setDirty(false);
+    setLogoPreview(null);
+    setLogoVersion(Date.now());
   }
 
   return (
@@ -146,7 +187,7 @@ export default function CompanyBrandingPage() {
             Company &amp; Branding
           </h1>
           <p className="text-[13px] text-[#6B7A8D] mt-0.5">
-            Your company's legal identity and contact details. Appears on payslips and reports.
+            Your company&apos;s legal identity and contact details. Appears on payslips and reports.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -187,23 +228,56 @@ export default function CompanyBrandingPage() {
               <div
                 className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-[#E8EBF1] bg-[#F5F6FA] overflow-hidden"
               >
-                {form.logoUrl ? (
+                {logoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={form.logoUrl} alt="Logo" className="h-full w-full object-contain" />
+                  <img src={logoSrc} alt="Logo" className="h-full w-full object-contain" />
                 ) : (
                   <Building2 className="h-8 w-8 text-[#C5CDD7]" />
                 )}
               </div>
               <div className="flex-1 space-y-1.5">
-                <Label>Logo URL</Label>
-                <Input
-                  type="url"
-                  placeholder="https://example.com/logo.png"
-                  value={form.logoUrl}
-                  onChange={(e) => set("logoUrl", e.target.value)}
+                <Label>Company Logo</Label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={ACCEPT_ATTR}
+                  className="hidden"
+                  onChange={handleLogoFile}
                 />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-[13px]"
+                    disabled={uploadingLogo}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploadingLogo ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {uploadingLogo ? "Uploading…" : logoSrc ? "Replace logo" : "Upload logo"}
+                  </Button>
+                  {logoSrc && !uploadingLogo && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 text-[13px] text-[#9AA5B4]"
+                      onClick={() => {
+                        setLogoPreview(null);
+                        setForm((f) => ({ ...f, logoKey: "", logoUrl: "" }));
+                        setDirty(true);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-[#9AA5B4]">
-                  Paste a publicly accessible URL to your company logo. Recommended: 400×400 px PNG.
+                  Upload a JPG, PNG, or WebP image (max 5 MB). Recommended: 400×400 px. Stored securely in your company&apos;s file storage.
                 </p>
               </div>
             </div>
