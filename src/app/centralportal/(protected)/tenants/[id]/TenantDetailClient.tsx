@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { TenantAdminUsers } from "./TenantAdminUsers";
 import type { LucideIcon } from "lucide-react";
 import {
   Building2, Users, Calculator, Boxes, FileCheck, Bell, ShieldCheck,
@@ -540,15 +541,11 @@ export default function TenantDetailClient({
       {/* ACCESS & ROLES */}
       {tab === "access" && (
         <div className="flex flex-col gap-3.5">
-          <Card title="Admin users" icon={Users} action={<button onClick={() => toast.info("Add admin coming soon")} className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md text-white" style={{ background: NAVY }}><Plus className="w-3 h-3" />Add admin</button>}>
-            {users.length === 0 ? <p className="text-xs py-3" style={{ color: MUTE }}>No admin users yet.</p> : users.map((u) => (
-              <div key={u.id} className="flex items-center gap-2.5 py-2" style={{ borderBottom: "1px solid " + BORDER2 }}>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium flex-shrink-0" style={{ background: "rgba(232,105,58,0.1)", color: NAVY }}>{(u.firstName[0] || "") + (u.lastName[0] || "")}</div>
-                <div className="flex-1 min-w-0"><div className="text-xs font-medium" style={{ color: TXT }}>{u.firstName} {u.lastName}</div><div className="text-[11px]" style={{ color: SUB }}>{u.email}</div></div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ border: "1px solid " + BORDER, color: SUB }}>{u.systemRole}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={u.isActive ? { background: "rgba(11,122,62,0.1)", color: "#0b7a3e" } : { background: "#F3F4F6", color: MUTE }}>{u.isActive ? "Active" : "Inactive"}</span>
-              </div>
-            ))}
+          <Card title="Admin users" icon={Users}>
+            <p className="text-[11px] mb-1.5" style={{ color: SUB }}>
+              Account recovery only — the tenant manages its own admins, roles and profiles. All actions here are audited.
+            </p>
+            <TenantAdminUsers tenantId={tenant.id} users={users} />
           </Card>
           <div className="grid grid-cols-2 gap-3.5">
             <Card title="Role permissions" icon={Network}>
