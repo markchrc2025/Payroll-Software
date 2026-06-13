@@ -62,52 +62,29 @@ export interface SssContribution {
   };
 }
 
-/** Step compensation to MSC bracket (floor → ceiling, stepping `step`). */
-function deriveMsc(
-  compensationCentavos: bigint,
-  msc: SssSchedulePayload["msc"],
-): bigint {
-  const floor = BigInt(msc.floor);
-  const ceiling = BigInt(msc.ceiling);
-  const step = BigInt(msc.step);
-  if (compensationCentavos <= floor) return floor;
-  if (compensationCentavos >= ceiling) return ceiling;
-  // SSS bracketing rule: midpoint of each ₱500 band rounds to that band's MSC.
-  // Conventionally implemented as: ((comp - floor + step/2) / step) * step + floor.
-  const offset = compensationCentavos - floor + step / 2n;
-  const bands = offset / step;
-  const candidate = floor + bands * step;
-  return clamp(candidate, floor, ceiling);
-}
-
 export function computeSSS(
   payload: SssSchedulePayload,
   compensationCentavos: bigint,
 ): SssContribution {
-  const msc = deriveMsc(compensationCentavos, payload.msc);
-
-  // Regular contribution: rate × MSC, capped at `mpfThresholdMsc` (the part
-  // above that threshold is MPF, not regular).
-  const mpfThreshold = BigInt(payload.mpfThresholdMsc);
-  const regularBase = msc > mpfThreshold ? mpfThreshold : msc;
-  const mpfBase = msc > mpfThreshold ? msc - mpfThreshold : 0n;
-
-  const eeRegular = multiplyHalfUp(regularBase, payload.monthlyRate.ee);
-  const erRegular = multiplyHalfUp(regularBase, payload.monthlyRate.er);
-  const eeMpf = multiplyHalfUp(mpfBase, payload.monthlyRate.ee);
-  const erMpf = multiplyHalfUp(mpfBase, payload.monthlyRate.er);
-
-  const ec =
-    msc > BigInt(payload.ec.thresholdMsc)
-      ? BigInt(payload.ec.highAmount)
-      : BigInt(payload.ec.lowAmount);
+  // Look up the row whose compensationTo is the first value >= compensation.
+  // Rows are stored in ascending order of compensationTo (as uploaded from the
+  // official SSS schedule). If compensation exceeds the highest row, use that
+  // last row (ceiling band).
+  const row =
+    payload.rows.find((r) => compensationCentavos <= BigInt(r.compensationTo)) ??
+    payload.rows[payload.rows.length - 1]!;
 
   return {
-    msc,
-    employee: eeRegular + eeMpf,
-    employer: erRegular + erMpf,
-    ec,
-    breakdown: { eeRegular, erRegular, eeMpf, erMpf },
+    msc: BigInt(row.msc),
+    employee: BigInt(row.totalEmployee),
+    employer: BigInt(row.totalEmployer),
+    ec: BigInt(row.ecEmployer),
+    breakdown: {
+      eeRegular: BigInt(row.regularSSEmployee),
+      erRegular: BigInt(row.regularSSEmployer),
+      eeMpf: BigInt(row.mpfEmployee),
+      erMpf: BigInt(row.mpfEmployer),
+    },
   };
 }
 
