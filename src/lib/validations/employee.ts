@@ -203,6 +203,81 @@ export const createEmployeeSchema = z.object({
 
   // Statutory government IDs (nested — upserted in same transaction)
   statutoryIds: statutoryIdsSchema.optional(),
+
+  // Extended personal
+  nationalId: z.string().max(50).optional().nullable(),
+  passportNumber: z.string().max(50).optional().nullable(),
+  ethnicity: z.string().max(100).optional().nullable(),
+  religion: z.string().max(100).optional().nullable(),
+  allowProfileUpdate: z.coerce.boolean().optional().default(false),
+  needsTimeClock: z.coerce.boolean().optional().default(true),
+
+  // Extended employment
+  probationEndDate: z.coerce.date().optional().nullable(),
+  placementEffectiveDate: z.coerce.date().optional().nullable(),
+  jobType: z.string().max(100).optional().nullable(),
+  jobDescription: z.string().max(100).optional().nullable(),
+  leaveWorkflowKey: z.string().max(100).optional().nullable(),
+  workdayKey: z.string().max(100).optional().nullable(),
+  holidayKey: z.string().max(100).optional().nullable(),
+  termEffectiveDate: z.coerce.date().optional().nullable(),
+  contractStartDate: z.coerce.date().optional().nullable(),
+  contractEndDate: z.coerce.date().optional().nullable(),
+
+  // Salary metadata
+  salaryEffectiveDate: z.coerce.date().optional().nullable(),
+  currency: z.string().max(10).optional().default("PHP"),
+  nextSalaryReviewDate: z.coerce.date().optional().nullable(),
+  payMethod: z.string().max(50).optional().nullable(),
+
+  // Extended contact
+  blogUrl: z.string().max(255).optional().nullable(),
+  officePhone: z.string().max(50).optional().nullable(),
+  housePhone: z.string().max(50).optional().nullable(),
+  postcode: z.string().max(20).optional().nullable(),
+  country: z.string().max(100).optional().default("Philippines"),
+
+  // Health
+  heightCm: z.coerce.number().min(0).max(300).optional().nullable(),
+  weightKg: z.coerce.number().min(0).max(600).optional().nullable(),
+  bloodType: z.string().max(5).optional().nullable(),
+  visionL: z.string().max(20).optional().nullable(),
+  visionR: z.string().max(20).optional().nullable(),
+  hearingL: z.string().max(20).optional().nullable(),
+  hearingR: z.string().max(20).optional().nullable(),
+  handL: z.string().max(20).optional().nullable(),
+  handR: z.string().max(20).optional().nullable(),
+  legL: z.string().max(20).optional().nullable(),
+  legR: z.string().max(20).optional().nullable(),
+
+  // Family / spouse
+  spouseFirstName: z.string().max(100).optional().nullable(),
+  spouseMiddleName: z.string().max(100).optional().nullable(),
+  spouseLastName: z.string().max(100).optional().nullable(),
+  spouseBirthDate: z.coerce.date().optional().nullable(),
+  spouseNationality: z.string().max(100).optional().nullable(),
+  spouseNationalId: z.string().max(50).optional().nullable(),
+  spousePassport: z.string().max(50).optional().nullable(),
+  spouseEthnicity: z.string().max(100).optional().nullable(),
+  spouseReligion: z.string().max(100).optional().nullable(),
+  spouseWorking: z.coerce.boolean().optional().nullable(),
+  numberOfChildren: z.coerce.number().int().min(0).optional().default(0),
+
+  // Directory & privacy
+  directoryRole: z.string().max(50).optional().default("Employee"),
+  pvEmail: z.string().max(50).optional().default("Employee"),
+  pvBlog: z.string().max(50).optional().default("Employee"),
+  pvOfficePhone: z.string().max(50).optional().default("Employee"),
+  pvMobilePhone: z.string().max(50).optional().default("Employee"),
+  pvHousePhone: z.string().max(50).optional().default("Not Accessible"),
+  pvAddress: z.string().max(50).optional().default("Not Accessible"),
+  pvEmergency: z.string().max(50).optional().default("Manager"),
+  pvBirthday: z.string().max(50).optional().default("Employee"),
+  pvFamilyBirthday: z.string().max(50).optional().default("Employee"),
+  pvAnniversary: z.string().max(50).optional().default("Employee"),
+
+  // Others
+  remark: z.string().max(2000).optional().nullable(),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema

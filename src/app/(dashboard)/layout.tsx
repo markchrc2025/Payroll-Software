@@ -69,7 +69,10 @@ export default async function DashboardLayout({
         <header className="flex items-center gap-3 px-4 lg:px-6 py-3 border-b bg-card sticky top-0 z-20 shadow-sm">
           {/* Mobile: show logo inline */}
           <div className="lg:hidden shrink-0 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#5A93F7] to-[#2D6BE4] text-xs font-bold text-white">
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
+              style={{ background: "#E8693A" }}
+            >
               S
             </div>
             <span className="text-sm font-semibold text-foreground">Sentire</span>

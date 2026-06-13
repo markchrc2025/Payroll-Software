@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces, Plus_Jakarta_Sans, Instrument_Sans, Hanken_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces, Plus_Jakarta_Sans, Instrument_Sans, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -39,6 +39,13 @@ const hankenGrotesk = Hanken_Grotesk({
   weight: ["400", "500", "600"],
 });
 
+// Numeric / mono font for the Sentire admin design system.
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Sentire Payroll — HRIS & Payroll for the Philippines",
   description:
@@ -53,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${plusJakartaSans.variable} ${instrumentSans.variable} ${hankenGrotesk.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${plusJakartaSans.variable} ${instrumentSans.variable} ${hankenGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ChevronDown, LogOut, User } from "lucide-react";
+import { ChevronDown, LogOut, User, Building2, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,14 @@ export function UserMenu({ displayName, initials }: Props) {
 
   function onProfileClick() {
     router.push("/profile");
+  }
+
+  function onCompanyClick() {
+    router.push("/settings");
+  }
+
+  function onSecurityClick() {
+    router.push("/settings/roles");
   }
 
   function onSignOutClick() {
@@ -53,12 +61,28 @@ export function UserMenu({ displayName, initials }: Props) {
 
         <DropdownMenuItem onClick={onProfileClick}>
           <User className="h-4 w-4" />
-          <span>Profile</span>
+          <span>My profile</span>
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={onSignOutClick} disabled={isPending}>
+        <DropdownMenuItem onClick={onCompanyClick}>
+          <Building2 className="h-4 w-4" />
+          <span>Company settings</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onClick={onSecurityClick}>
+          <ShieldCheck className="h-4 w-4" />
+          <span>Security</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={onSignOutClick}
+          disabled={isPending}
+          variant="destructive"
+        >
           <LogOut className="h-4 w-4" />
-          <span>{isPending ? "Signing out..." : "Sign Out"}</span>
+          <span>{isPending ? "Signing out..." : "Sign out"}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

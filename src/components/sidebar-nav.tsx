@@ -3,47 +3,82 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  GitBranch,
-  MapPin,
-  Briefcase,
-  Package,
-  AlertCircle,
-  ArrowRightLeft,
-  UserCheck,
-  Receipt,
-  UserSearch,
-  Clock,
-  CalendarDays,
-  CalendarOff,
-  FileText,
-  SlidersHorizontal,
-  Landmark,
-  Building,
-  ShieldCheck,
-  BarChart2,
-  ClipboardList,
-  KeyRound,
-  ChevronsUpDown,
-  Sparkles,
-  ChevronLeft,
-  ChevronRight,
-  Monitor,
-  Percent,
-  Megaphone,
-} from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
 
+// ---- SentireMark: 4-node constellation with accent center dot ----
+function SentireMark({ size = 30 }: { size?: number }) {
+  const ink = "#F7F3EF";
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" style={{ flex: "none", display: "block" }}>
+      <g stroke={ink} strokeWidth="3.4" strokeLinecap="round" opacity="0.5">
+        <line x1="24" y1="24" x2="24" y2="11.5" />
+        <line x1="24" y1="24" x2="38.5" y2="24" />
+        <line x1="24" y1="24" x2="19.55" y2="36.22" />
+        <line x1="24" y1="24" x2="10.84" y2="19.21" />
+      </g>
+      <g stroke={ink} strokeWidth="2.55" strokeLinecap="round" opacity="0.18">
+        <line x1="24" y1="11.5" x2="38.5" y2="24" />
+        <line x1="38.5" y1="24" x2="19.55" y2="36.22" />
+        <line x1="19.55" y1="36.22" x2="10.84" y2="19.21" />
+        <line x1="10.84" y1="19.21" x2="24" y2="11.5" />
+      </g>
+      <circle cx="24" cy="11.5" r="3.68" fill={ink} />
+      <circle cx="38.5" cy="24" r="4.13" fill={ink} />
+      <circle cx="19.55" cy="36.22" r="3.85" fill={ink} />
+      <circle cx="10.84" cy="19.21" r="3.43" fill={ink} />
+      <circle cx="24" cy="24" r="5" fill="#E8693A" />
+    </svg>
+  );
+}
+
+// ---- inline SVG icon set (stroke 1.7, 24×24 viewBox) ----
+const ICON_PATHS: Record<string, string> = {
+  dashboard:     "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
+  employees:     "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11",
+  departments:   "M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 21V9h4a1 1 0 0 1 1 1v11M3 21h18M7.5 8h.01M7.5 12h.01M11 8h.01M11 12h.01",
+  branches:      "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9",
+  locations:     "M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11zM12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  positions:     "M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM14 7h-4V5h4z",
+  assets:        "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96L12 12l8.73-5.04M12 22V12",
+  incidents:     "M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
+  movements:     "M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7",
+  requests:      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6",
+  claims:        "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  announcements: "M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6",
+  recruitment:   "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM16 11l2 2 4-4",
+  time:          "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+  leave:         "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 16l2 2 4-4",
+  payruns:       "M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM2 10h20M6 15h4",
+  components:    "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
+  loans:         "M3 21h18M5 21V11l7-5 7 5v10M9 21v-6h6v6M12 3v2",
+  bankfiles:     "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6M9 9h1",
+  govreports:    "M12 2l8 3v6c0 4.5-3 8.3-8 9.5C7 19.3 4 15.5 4 11V5l8-3zM9 11.5l2 2 4-4.5",
+  analytics:     "M3 3v18h18M7 14l3-3 3 3 5-6",
+  payrules:      "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+  premium:       "M19 5L5 19M6.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM17.5 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  holiday:       "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 14l1 2 2 .3-1.5 1.4.4 2-1.9-1-1.9 1 .4-2L9 16.3l2-.3z",
+  policies:      "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8",
+  roles:         "M7 11V7a5 5 0 0 1 10 0v4M5 11h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM12 15v2",
+  kiosks:        "M2 4h20v12H2zM8 20h8M12 16v4M7 8h2M7 11h6",
+  ai:            "M12 3a3 3 0 0 1 3 3 3 3 0 0 1 0 6 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1 0-6 3 3 0 0 1 3-3zM12 8v.01M9 16v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3",
+};
+
+function NavIcon({ name, size = 17 }: { name: string; size?: number }) {
+  const d = ICON_PATHS[name] || ICON_PATHS.dashboard;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flex: "none" }}>
+      <path d={d} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ---- nav structure ----
 type NavItem = {
   href: string;
   label: string;
-  icon: React.ElementType;
-  badge?: number;
-  badgeAmber?: boolean;
+  icon: string;
+  isNew?: boolean;
 };
-
 type NavSection = {
   label: string;
   items: NavItem[];
@@ -52,71 +87,66 @@ type NavSection = {
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Overview",
-    items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    ],
+    items: [{ href: "/", label: "Dashboard", icon: "dashboard" }],
   },
   {
     label: "Workforce",
     items: [
-      { href: "/employees", label: "Employees", icon: Users },
-      { href: "/departments", label: "Departments", icon: Building2 },
-      { href: "/branches", label: "Branches", icon: GitBranch },
-      { href: "/work-locations", label: "Locations", icon: MapPin },
-      { href: "/positions", label: "Positions", icon: Briefcase },
-      { href: "/assets", label: "Assets", icon: Package },
+      { href: "/employees", label: "Employees", icon: "employees" },
+      { href: "/departments", label: "Departments", icon: "departments" },
+      { href: "/branches", label: "Branches", icon: "branches" },
+      { href: "/work-locations", label: "Locations", icon: "locations" },
+      { href: "/positions", label: "Positions", icon: "positions" },
+      { href: "/assets", label: "Assets", icon: "assets" },
     ],
   },
   {
     label: "HR Ops",
     items: [
-      { href: "/incidents", label: "Incidents", icon: AlertCircle },
-      { href: "/movements", label: "Movements", icon: ArrowRightLeft },
-      { href: "/profile-update-requests", label: "Profile Requests", icon: UserCheck },
-      { href: "/expense-claims", label: "Claims", icon: Receipt },
-      { href: "/announcements", label: "Announcements", icon: Megaphone },
+      { href: "/incidents", label: "Incidents", icon: "incidents" },
+      { href: "/movements", label: "Movements", icon: "movements" },
+      { href: "/profile-update-requests", label: "Profile Requests", icon: "requests" },
+      { href: "/expense-claims", label: "Claims", icon: "claims" },
+      { href: "/announcements", label: "Announcements", icon: "announcements" },
     ],
   },
   {
     label: "Talent",
-    items: [
-      { href: "/recruitment", label: "Recruitment", icon: UserSearch },
-    ],
+    items: [{ href: "/recruitment", label: "Recruitment", icon: "recruitment" }],
   },
   {
     label: "Time",
     items: [
-      { href: "/attendance", label: "Time & Attendance", icon: Clock },
-      { href: "/leave", label: "Leave", icon: CalendarOff },
+      { href: "/attendance", label: "Time & Attendance", icon: "time" },
+      { href: "/leave", label: "Leave", icon: "leave" },
     ],
   },
   {
     label: "Payroll",
     items: [
-      { href: "/payroll", label: "Payroll Runs", icon: FileText },
-      { href: "/pay-components", label: "Pay Components", icon: SlidersHorizontal },
-      { href: "/loans", label: "Loans", icon: Landmark },
-      { href: "/bank-files", label: "Bank Files", icon: Building },
+      { href: "/payroll", label: "Payroll Runs", icon: "payruns" },
+      { href: "/pay-components", label: "Pay Components", icon: "components" },
+      { href: "/loans", label: "Loans", icon: "loans" },
+      { href: "/bank-files", label: "Bank Files", icon: "bankfiles" },
     ],
   },
   {
     label: "Compliance",
     items: [
-      { href: "/reports", label: "Gov't Reports", icon: ShieldCheck },
-      { href: "/analytics", label: "Analytics", icon: BarChart2 },
+      { href: "/reports", label: "Gov't Reports", icon: "govreports" },
+      { href: "/analytics", label: "Analytics", icon: "analytics", isNew: true },
     ],
   },
   {
     label: "Settings",
     items: [
-      { href: "/settings", label: "Company & Branding", icon: Building2 },
-      { href: "/settings/pay-rules", label: "Pay Rules", icon: ClipboardList },
-      { href: "/settings/premium-rates", label: "Premium Rates", icon: Percent },
-      { href: "/settings/holidays", label: "Holiday Calendar", icon: CalendarDays },
-      { href: "/settings/leave-policies", label: "Leave Policies", icon: CalendarOff },
-      { href: "/settings/roles", label: "Roles & Permissions", icon: KeyRound },
-      { href: "/settings/kiosk", label: "Kiosks", icon: Monitor },
-      { href: "/ai", label: "AI Assistant", icon: Sparkles },
+      { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
+      { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
+      { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
+      { href: "/settings/leave-policies", label: "Leave Policies", icon: "policies" },
+      { href: "/settings/roles", label: "Roles & Permissions", icon: "roles" },
+      { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
+      { href: "/ai", label: "AI Assistant", icon: "ai", isNew: true },
     ],
   },
 ];
@@ -132,63 +162,90 @@ type Props = {
 export function SidebarNav({
   tenantName,
   tenantInitials,
-  userName,
-  userRole,
-  userInitials,
 }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
-
-  // Restore from localStorage after hydration
-  useEffect(() => {
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved === "true") setCollapsed(true);
-    setMounted(true);
-  }, []);
-
-  function toggle() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
-      return next;
-    });
-  }
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
-    // Exact match for /settings so sub-pages (/settings/pay-rules etc.) don't
-    // keep "Company & Branding" highlighted — each sub-page has its own nav item.
     if (href === "/settings") return pathname === "/settings";
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  // Avoid layout shift on first render — render expanded until mounted
+  const activeSection = NAV_SECTIONS.find((s) =>
+    s.items.some((i) => isActive(i.href))
+  );
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pa-side-collapsed");
+    if (saved === "1") setCollapsed(true);
+
+    // Initialize group open states
+    const initial: Record<string, boolean> = {};
+    NAV_SECTIONS.forEach((s) => {
+      initial[s.label] = s.label === "Overview" || s.label === activeSection?.label;
+    });
+    setOpenGroups(initial);
+    setMounted(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When route changes, ensure active group is open
+  useEffect(() => {
+    if (activeSection) {
+      setOpenGroups((prev) =>
+        prev[activeSection.label] ? prev : { ...prev, [activeSection.label]: true }
+      );
+    }
+  }, [activeSection]);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("pa-side-collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
+
+  function toggleGroup(label: string) {
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+  }
+
   const isCollapsed = mounted && collapsed;
 
   return (
     <aside
       className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-hidden transition-[width] duration-200 ease-in-out relative"
       style={{
-        width: isCollapsed ? "64px" : "256px",
-        background: "linear-gradient(180deg, #0C2240, #091A30)",
-        borderRight: "1px solid rgba(255,255,255,0.04)",
+        width: isCollapsed ? "76px" : "266px",
+        background: "linear-gradient(168deg, #2E241C, #1f1813)",
+        borderRight: "1px solid rgba(255,255,255,0.05)",
       }}
     >
-      {/* Radial glow */}
+      {/* Radial glow — top-left */}
       <div
-        className="pointer-events-none absolute -left-16 -top-20 h-80 w-80"
+        className="pointer-events-none absolute -left-10 -top-10 h-64 w-64"
         style={{
-          background:
-            "radial-gradient(circle, rgba(45,107,228,0.30) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(232,105,58,0.18) 0%, transparent 70%)",
         }}
       />
 
-      {/* Toggle button */}
+      {/* Collapse/expand toggle */}
       <button
         onClick={toggle}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3 top-[72px] z-50 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#0E2A4A] text-[#7E8FA8] shadow-md hover:text-white transition-colors"
+        className="absolute -right-3.5 top-7 z-50 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-[#ECE6DD] bg-white shadow-md transition-all hover:scale-[1.08]"
+        style={{ color: "#9b9085" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#E8693A";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "#E8693A";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#9b9085";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "#ECE6DD";
+        }}
       >
         {isCollapsed ? (
           <ChevronRight className="h-3.5 w-3.5" />
@@ -197,107 +254,155 @@ export function SidebarNav({
         )}
       </button>
 
-      {/* Brand */}
-      <div className="flex items-center gap-[11px] px-[13px] py-[22px] overflow-hidden">
-        <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] bg-gradient-to-br from-[#5A93F7] to-[#2D6BE4] text-[19px] font-extrabold text-white shadow-[0_6px_16px_-4px_rgba(45,107,228,0.6)] ring-1 ring-white/40">
-          S
+      {/* Brand block */}
+      <div className="flex items-center gap-[11px] px-[14px] py-[18px] overflow-hidden">
+        <div
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-[11px]"
+          style={{ background: "rgba(232,105,58,0.18)", boxShadow: "0 0 0 1px rgba(232,105,58,0.3)" }}
+        >
+          <SentireMark size={28} />
         </div>
         {!isCollapsed && (
-          <div className="relative leading-none overflow-hidden">
+          <div className="leading-none overflow-hidden">
             <div className="text-[15.5px] font-bold tracking-[-0.2px] text-white whitespace-nowrap">
               Sentire Payroll
             </div>
-            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[2.2px] text-[#7E8FA8] whitespace-nowrap">
+            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[2.2px] text-[#8a7e6f] whitespace-nowrap">
               HRIS &amp; Payroll
             </div>
           </div>
         )}
       </div>
 
-      {/* Workspace switcher */}
+      {/* Company switcher */}
       {!isCollapsed ? (
-        <div className="mx-3.5 mb-1 flex cursor-pointer items-center gap-2.5 rounded-[10px] border border-white/[0.06] bg-white/[0.045] px-3 py-2.5 hover:bg-white/[0.07] transition-colors overflow-hidden">
-          <div className="flex h-6 w-6 flex-none items-center justify-center rounded-[6px] bg-gradient-to-br from-[#3D5B86] to-[#27395A] text-[11px] font-bold text-[#CBD8EC]">
+        <div
+          className="mx-3.5 mb-1 flex cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 transition-colors overflow-hidden"
+          style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.04)" }}
+        >
+          <div
+            className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] text-[12px] font-bold text-[#e9e2d8]"
+            style={{ background: "#E8693A" }}
+          >
             {tenantInitials}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[12.5px] font-semibold text-[#E4ECF7]">
+            <div className="truncate text-[12.5px] font-semibold text-[#e9e2d8]">
               {tenantName}
             </div>
-            <div className="text-[9.5px] font-semibold uppercase tracking-[0.4px] text-[#7E8FA8]">
+            <div className="text-[9.5px] font-semibold uppercase tracking-[0.4px] text-[#8a7e6f]">
               Growth plan
             </div>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 flex-none text-[#6C7E98]" />
+          <ChevronsUpDown className="h-3.5 w-3.5 flex-none text-[#8a7e6f]" />
         </div>
       ) : (
-        <div className="mx-auto mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[6px] bg-gradient-to-br from-[#3D5B86] to-[#27395A] text-[11px] font-bold text-[#CBD8EC] hover:brightness-110 transition-all">
+        <div
+          className="mx-auto mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[8px] text-[12px] font-bold text-white hover:brightness-110 transition-all"
+          style={{ background: "#E8693A" }}
+          title={tenantName}
+        >
           {tenantInitials}
         </div>
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.label}>
-            {/* Section label — hidden when collapsed */}
-            {!isCollapsed && (
-              <div className="px-[23px] pb-1.5 pt-3.5 text-[10px] font-bold uppercase tracking-[1.6px] text-white/[0.34]">
-                {section.label}
-              </div>
-            )}
-            {isCollapsed && (
-              <div className="mx-3 mt-3.5 mb-1 border-t border-white/[0.06]" />
-            )}
-            <div className={["space-y-px", isCollapsed ? "px-2" : "px-3.5"].join(" ")}>
-              {section.items.map((item) => {
-                const active = isActive(item.href);
-                return (
-                  <div key={`${section.label}-${item.href}-${item.label}`} className="relative">
-                    {active && !isCollapsed && (
-                      <span className="absolute -left-3.5 bottom-1.5 top-1.5 w-[3px] rounded-r bg-[#5A93F7] shadow-[0_0_12px_#5A93F7]" />
-                    )}
-                    <Link
-                      href={item.href}
-                      title={isCollapsed ? item.label : undefined}
-                      className={[
-                        "flex items-center rounded-[9px] px-[10px] py-2 text-[13.5px] transition-colors",
-                        isCollapsed ? "justify-center" : "gap-[11px]",
-                        active
-                          ? "bg-[linear-gradient(90deg,rgba(45,107,228,0.22),rgba(45,107,228,0.05))] font-semibold text-white"
-                          : "font-medium text-[#AEBCD0] hover:bg-white/[0.055] hover:text-[#EAF1FB]",
-                      ].join(" ")}
-                    >
-                      <item.icon
-                        className="h-[17px] w-[17px] flex-none"
-                        strokeWidth={1.8}
-                      />
-                      {!isCollapsed && (
-                        <>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.badge != null && item.badge > 0 && (
-                            <span
-                              className={[
-                                "ml-auto min-w-[18px] rounded-full px-[7px] py-px text-center text-[10px] font-bold",
-                                item.badgeAmber
-                                  ? "bg-[#D7A23F] text-[#3A2A06]"
-                                  : "bg-[#2D6BE4] text-white",
-                              ].join(" ")}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+        {NAV_SECTIONS.map((section) => {
+          const isOpen = isCollapsed || !!openGroups[section.label];
+          const hasActive = section.items.some((i) => isActive(i.href));
 
+          return (
+            <div key={section.label}>
+              {!isCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(section.label)}
+                  className="flex w-full items-center px-[14px] pb-1.5 pt-3.5 gap-1 group"
+                >
+                  <span
+                    className="flex-1 text-left text-[10px] font-bold uppercase tracking-[0.08em]"
+                    style={{ color: hasActive && !isOpen ? "#E8693A" : "#8a7e6f" }}
+                  >
+                    {section.label}
+                  </span>
+                  {hasActive && !isOpen && (
+                    <span
+                      className="mr-1 h-1.5 w-1.5 rounded-full"
+                      style={{ background: "#E8693A" }}
+                    />
+                  )}
+                  <ChevronDown
+                    className="h-3 w-3 transition-transform duration-[180ms]"
+                    style={{
+                      color: "#8a7e6f",
+                      transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                    }}
+                  />
+                </button>
+              ) : (
+                <div className="mx-3 mt-3.5 mb-1 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }} />
+              )}
+
+              {isOpen && (
+                <div className={["space-y-px", isCollapsed ? "px-2" : "px-[10px]"].join(" ")}>
+                  {section.items.map((item) => {
+                    const active = isActive(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        title={isCollapsed ? item.label : undefined}
+                        className={[
+                          "flex items-center rounded-[9px] px-[10px] py-[9px] text-[13.5px] font-medium transition-colors",
+                          isCollapsed ? "justify-center" : "gap-[10px]",
+                        ].join(" ")}
+                        style={
+                          active
+                            ? {
+                                background: "#E8693A",
+                                color: "#ffffff",
+                                fontWeight: 600,
+                                boxShadow: "0 6px 16px -8px rgba(232,105,58,0.8)",
+                              }
+                            : { color: "#cfc6ba" }
+                        }
+                        onMouseEnter={(e) => {
+                          if (!active) {
+                            (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.07)";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "#e9e2d8";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!active) {
+                            (e.currentTarget as HTMLAnchorElement).style.background = "";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "#cfc6ba";
+                          }
+                        }}
+                      >
+                        <NavIcon name={item.icon} size={17} />
+                        {!isCollapsed && (
+                          <>
+                            <span className="flex-1 truncate">{item.label}</span>
+                            {item.isNew && (
+                              <span
+                                className="ml-auto rounded-full px-[7px] py-px text-[9.5px] font-bold"
+                                style={{ background: "rgba(232,105,58,0.18)", color: "#E8693A" }}
+                              >
+                                New
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
     </aside>
   );
 }
