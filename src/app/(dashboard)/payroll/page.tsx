@@ -149,7 +149,7 @@ export default function PayrollPage() {
         <Button
           size="sm"
           onClick={() => setDialogOpen(true)}
-          className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+          className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
         >
           <Plus className="mr-2 h-3.5 w-3.5" />
           New Payroll Run
@@ -203,7 +203,7 @@ export default function PayrollPage() {
             ) : (
               runs.data.map((run) => {
                 const statusStyle: Record<string, { bg: string; color: string }> = {
-                  DRAFT: { bg: "#EAF1FD", color: "#2D6BE4" },
+                  DRAFT: { bg: "#fdeee6", color: "#E8693A" },
                   FINALIZED: { bg: "#E5F6EE", color: "#0FA36B" },
                   CANCELLED: { bg: "#FCE9E7", color: "#E0463B" },
                 };

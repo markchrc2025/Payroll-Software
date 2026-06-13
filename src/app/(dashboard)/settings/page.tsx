@@ -158,7 +158,7 @@ export default function CompanyBrandingPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+              className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
             >
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Save Changes"}
@@ -182,7 +182,7 @@ export default function CompanyBrandingPage() {
       ) : (
         <div className="space-y-5">
           {/* ── Logo ── */}
-          <Section title="Logo" icon={<Building2 className="h-4 w-4 text-[#2D6BE4]" />}>
+          <Section title="Logo" icon={<Building2 className="h-4 w-4 text-[#E8693A]" />}>
             <div className="flex items-start gap-5">
               <div
                 className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-[#E8EBF1] bg-[#F5F6FA] overflow-hidden"
@@ -317,8 +317,8 @@ export default function CompanyBrandingPage() {
 
       {/* ── Save bar ── */}
       {dirty && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#EAF1FD] bg-[#F5F9FF] px-5 py-3 shadow-sm">
-          <p className="text-[13px] text-[#2D6BE4] font-medium">You have unsaved changes</p>
+        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+          <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -332,7 +332,7 @@ export default function CompanyBrandingPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
             >
               {saving ? "Saving…" : "Save"}
             </Button>

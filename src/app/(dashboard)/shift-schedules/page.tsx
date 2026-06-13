@@ -158,7 +158,7 @@ export default function ShiftSchedulesPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Shift
           </Button>
         </div>
@@ -215,7 +215,7 @@ export default function ShiftSchedulesPage() {
                           className="text-xs px-1 rounded"
                           style={
                             (Array.isArray(row.workDays) ? row.workDays : []).includes(d)
-                              ? { background: "#EAF1FD", color: "#2D6BE4", fontWeight: 600 }
+                              ? { background: "#fdeee6", color: "#E8693A", fontWeight: 600 }
                               : { color: "#C5CDD7" }
                           }
                         >
@@ -345,7 +345,7 @@ export default function ShiftSchedulesPage() {
                     onClick={() => toggleDay(d)}
                     className="px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
                     style={form.workDays.includes(d)
-                      ? { background: "#2D6BE4", color: "#fff", borderColor: "#2D6BE4" }
+                      ? { background: "#E8693A", color: "#fff", borderColor: "#E8693A" }
                       : { background: "#fff", color: "#6B7A8D", borderColor: "#E8EBF1" }}
                   >
                     {DAY_LABELS[d]}

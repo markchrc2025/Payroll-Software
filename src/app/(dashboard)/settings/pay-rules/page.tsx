@@ -115,7 +115,7 @@ export default function PayRulesPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+              className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
             >
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Save Changes"}
@@ -187,8 +187,8 @@ export default function PayRulesPage() {
 
       {/* Save bar */}
       {dirty && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#EAF1FD] bg-[#F5F9FF] px-5 py-3 shadow-sm">
-          <p className="text-[13px] text-[#2D6BE4] font-medium">You have unsaved changes</p>
+        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+          <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -202,7 +202,7 @@ export default function PayRulesPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
             >
               {saving ? "Saving…" : "Save"}
             </Button>
@@ -249,13 +249,13 @@ function OptionGroup({
           onClick={() => onChange(opt.value)}
           className="flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
           style={value === opt.value
-            ? { background: "#EAF1FD", borderColor: "#2D6BE4" }
+            ? { background: "#fdeee6", borderColor: "#E8693A" }
             : { background: "#fff", borderColor: "#E8EBF1" }}
         >
           <span
             className="mt-0.5 flex h-4 w-4 flex-shrink-0 rounded-full border-2 items-center justify-center"
             style={value === opt.value
-              ? { borderColor: "#2D6BE4", background: "#2D6BE4" }
+              ? { borderColor: "#E8693A", background: "#E8693A" }
               : { borderColor: "#C5CDD7", background: "#fff" }}
           >
             {value === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}

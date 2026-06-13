@@ -42,7 +42,7 @@ export type EmployeeRow = {
 // ---------------------------------------------------------------------------
 
 const AVATAR_COLORS = [
-  { bg: "#EAF1FD", color: "#2D6BE4" },
+  { bg: "#fdeee6", color: "#E8693A" },
   { bg: "#F8F0DC", color: "#A87A1E" },
   { bg: "#E5F6EE", color: "#0FA36B" },
   { bg: "#FBF0DD", color: "#DB8A28" },
@@ -68,7 +68,7 @@ export function getInitials(first: string, last: string) {
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   REGULAR:      { bg: "#E5F6EE", color: "#0FA36B", label: "Regular" },
   PROBATIONARY: { bg: "#FBF0DD", color: "#DB8A28", label: "Probationary" },
-  CONTRACTUAL:  { bg: "#EAF1FD", color: "#2D6BE4", label: "Contractual" },
+  CONTRACTUAL:  { bg: "#fdeee6", color: "#E8693A", label: "Contractual" },
   PROJECT_BASED:{ bg: "#F0EDFC", color: "#6D28D9", label: "Project-Based" },
   RESIGNED:     { bg: "#EEF1F6", color: "#8E9AAC", label: "Resigned" },
   TERMINATED:   { bg: "#FCE9E7", color: "#E0463B", label: "Terminated" },

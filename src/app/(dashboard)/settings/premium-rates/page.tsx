@@ -175,7 +175,7 @@ export default function PremiumRatesPage() {
       </div>
 
       {/* Info banner */}
-      <div className="flex items-start gap-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-[12.5px] text-[#1D4ED8]">
+      <div className="flex items-start gap-2 rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-4 py-3 text-[12.5px] text-[#E8693A]">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
         <p>
           NSD compound rates auto-cascade from the NSD base rate (10%) × the base scenario rate.
@@ -212,7 +212,7 @@ export default function PremiumRatesPage() {
                       {item.unit} &nbsp;&middot;&nbsp; DOLE floor: {item.floor.toFixed(2)}&nbsp;
                       <span className="text-[#9CA3AF]">({item.note})</span>
                       {isCustom && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-[#DBEAFE] px-2 py-0.5 text-[10px] font-medium text-[#1D4ED8]">
+                        <span className="ml-2 inline-flex items-center rounded-full bg-[#fdeee6] px-2 py-0.5 text-[10px] font-medium text-[#E8693A]">
                           Custom
                         </span>
                       )}
@@ -227,7 +227,7 @@ export default function PremiumRatesPage() {
                       onChange={(e) => update(item.key, e.target.value)}
                       className={[
                         "w-24 rounded-lg border px-3 py-1.5 text-right text-[13px] font-mono",
-                        "focus:outline-none focus:ring-2 focus:ring-[#2D6BE4]",
+                        "focus:outline-none focus:ring-2 focus:ring-[#E8693A]",
                         belowFloor
                           ? "border-red-400 bg-red-50 text-red-700"
                           : "border-[#D1D5DB] bg-white text-[#111827]",
@@ -244,8 +244,8 @@ export default function PremiumRatesPage() {
 
       {/* Sticky save bar */}
       {dirty && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#EAF1FD] bg-[#F5F9FF] px-5 py-3 shadow-sm">
-          <p className="text-[13px] text-[#2D6BE4] font-medium">You have unsaved changes</p>
+        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+          <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -260,7 +260,7 @@ export default function PremiumRatesPage() {
               size="sm"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
             >
               <Save className="h-3.5 w-3.5 mr-1" />
               {saving ? "Saving..." : "Save"}

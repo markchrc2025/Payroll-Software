@@ -209,8 +209,8 @@ export default async function DashboardPage() {
       value: employees.toString(),
       icon: Users,
       hint: "Non-resigned headcount",
-      chipBg: "#EAF1FD",
-      chipColor: "#2D6BE4",
+      chipBg: "#fdeee6",
+      chipColor: "#E8693A",
     },
     {
       label: "Departments",
@@ -259,8 +259,8 @@ export default async function DashboardPage() {
         </div>
         {cutoffDays !== null && (
           <div className="hidden sm:flex items-center gap-2 rounded-xl border border-[#E8EBF1] bg-white px-4 py-2 shadow-sm">
-            <CalendarDays className="h-4 w-4 text-[#2D6BE4]" />
-            <span className="text-[13px] font-semibold text-[#2D6BE4]">
+            <CalendarDays className="h-4 w-4 text-[#E8693A]" />
+            <span className="text-[13px] font-semibold text-[#E8693A]">
               Cutoff in {cutoffDays}d
             </span>
           </div>
@@ -285,7 +285,7 @@ export default async function DashboardPage() {
               </div>
               <span className="font-display text-[15px] font-semibold text-[#111827]">On Leave Today</span>
             </div>
-            <span className="text-[12px] font-semibold text-[#2D6BE4]">{onLeave.length} people</span>
+            <span className="text-[12px] font-semibold text-[#E8693A]">{onLeave.length} people</span>
           </div>
           <div className="px-3 py-2">
             {onLeave.length === 0 ? (
@@ -323,7 +323,7 @@ export default async function DashboardPage() {
               </div>
               <span className="font-display text-[15px] font-semibold text-[#111827]">Birthdays This Week</span>
             </div>
-            <span className="text-[12px] font-semibold text-[#2D6BE4]">{upcomingBirthdays.length} coming up</span>
+            <span className="text-[12px] font-semibold text-[#E8693A]">{upcomingBirthdays.length} coming up</span>
           </div>
           <div className="px-3 py-2">
             {upcomingBirthdays.length === 0 ? (
@@ -362,7 +362,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-2xl border border-[#E8EBF1] shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#E8EBF1]">
             <div className="flex items-center gap-2.5">
-              <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "#EAF1FD", color: "#2D6BE4" }}>
+              <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "#fdeee6", color: "#E8693A" }}>
                 <CalendarDays className="h-[15px] w-[15px]" />
               </div>
               <span className="font-display text-[15px] font-semibold text-[#111827]">Upcoming Holidays</span>
@@ -382,7 +382,7 @@ export default async function DashboardPage() {
                   const isRegular = h.type === "Regular";
                   return (
                     <li key={h.date} className="flex items-center gap-3 px-2 py-2.5 rounded-[10px] hover:bg-[#F8F9FC]">
-                      <div className="h-[34px] w-[34px] rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ background: "#EAF1FD", color: "#2D6BE4" }}>
+                      <div className="h-[34px] w-[34px] rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ background: "#fdeee6", color: "#E8693A" }}>
                         {d.getDate()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -395,7 +395,7 @@ export default async function DashboardPage() {
                         <span
                           className="text-[10.5px] font-bold px-2 py-0.5 rounded-full"
                           style={isRegular
-                            ? { background: "#EAF1FD", color: "#2D6BE4" }
+                            ? { background: "#fdeee6", color: "#E8693A" }
                             : { background: "#FBF0DD", color: "#DB8A28" }}
                         >
                           {h.type}

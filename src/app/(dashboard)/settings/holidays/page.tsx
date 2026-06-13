@@ -447,9 +447,9 @@ export default function HolidayCalendarPage() {
                   <div
                     key={cell.dateStr}
                     onClick={() => openAdd(cell.dateStr ?? "")}
-                    className={`min-h-[84px] p-1.5 border-b border-r border-[#F0F2F7] cursor-pointer transition-colors hover:bg-[#F5F9FF] flex flex-col gap-0.5 ${isToday ? "bg-blue-50 border-blue-200" : ""}`}
+                    className={`min-h-[84px] p-1.5 border-b border-r border-[#F0F2F7] cursor-pointer transition-colors hover:bg-[#fdeee6] flex flex-col gap-0.5 ${isToday ? "bg-[#fdeee6] border-[#f7c9ac]" : ""}`}
                   >
-                    <span className={`text-[12px] font-semibold self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? "bg-blue-500 text-white" : "text-[#374151]"}`}>
+                    <span className={`text-[12px] font-semibold self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? "bg-[#E8693A] text-white" : "text-[#374151]"}`}>
                       {cell.day}
                     </span>
                     <div className="flex flex-col gap-0.5 mt-0.5">
@@ -514,7 +514,7 @@ export default function HolidayCalendarPage() {
 
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: "Total", value: holidays.length, color: "text-[#2D6BE4]" },
+              { label: "Total", value: holidays.length, color: "text-[#E8693A]" },
               { label: "This Month", value: monthHolidays.length, color: "text-[#111827]" },
               { label: "Legal (200%)", value: holidays.filter(h => h.category === "LEGAL").length, color: "text-red-600" },
               { label: "Special (130%)", value: holidays.filter(h => h.category !== "LEGAL").length, color: "text-amber-600" },
@@ -732,7 +732,7 @@ export default function HolidayCalendarPage() {
 
             <button
               onClick={() => setBulkRows(rows => [...rows, defaultBulkRow()])}
-              className="flex items-center gap-1.5 text-[12px] text-[#2D6BE4] hover:text-[#1E3A5F] transition-colors"
+              className="flex items-center gap-1.5 text-[12px] text-[#E8693A] hover:text-[#C2552F] transition-colors"
             >
               <Plus className="h-3.5 w-3.5" /> Add row
             </button>

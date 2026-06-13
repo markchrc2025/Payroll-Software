@@ -159,8 +159,8 @@ export default function EmployeesPage() {
           </button>
           <Link
             href="/employees/new"
-            className="h-10 px-[17px] rounded-[10px] border-none text-white text-[13.5px] font-semibold flex items-center gap-2 shadow-[0_6px_16px_-5px_rgba(45,107,228,.6)] transition-all hover:-translate-y-px"
-            style={{ background: "linear-gradient(145deg,#5A93F7,#2D6BE4)" }}
+            className="h-10 px-[17px] rounded-[10px] border-none text-white text-[13.5px] font-semibold flex items-center gap-2 shadow-[0_6px_16px_-5px_rgba(232,105,58,.6)] transition-all hover:-translate-y-px"
+            style={{ background: "linear-gradient(145deg,#f08460,#E8693A)" }}
           >
             <Plus className="h-4 w-4" />Add Employee
           </Link>
@@ -173,7 +173,7 @@ export default function EmployeesPage() {
         <div className="relative flex-1 min-w-[220px] max-w-[300px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8E9AAC]" />
           <input
-            className="w-full h-[38px] border border-[#E8EBF1] rounded-[9px] bg-white pl-9 pr-3 text-[13px] text-[#0E1B2E] placeholder:text-[#8E9AAC] outline-none focus:border-[#2D6BE4] focus:shadow-[0_0_0_3px_#EAF1FD] transition"
+            className="w-full h-[38px] border border-[#E8EBF1] rounded-[9px] bg-white pl-9 pr-3 text-[13px] text-[#0E1B2E] placeholder:text-[#8E9AAC] outline-none focus:border-[#E8693A] focus:shadow-[0_0_0_3px_#fdeee6] transition"
             placeholder="Search by name or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -185,7 +185,7 @@ export default function EmployeesPage() {
           <select
             value={departmentId}
             onChange={(e) => setDepartmentId(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#2D6BE4] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
           >
             <option value="all">Department</option>
             {departments.map((d) => (
@@ -200,7 +200,7 @@ export default function EmployeesPage() {
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#2D6BE4] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
           >
             <option value="all">Branch</option>
             {branches.map((b) => (
@@ -215,7 +215,7 @@ export default function EmployeesPage() {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#2D6BE4] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
           >
             <option value="all">Status</option>
             {EMPLOYMENT_STATUSES.map((s) => (

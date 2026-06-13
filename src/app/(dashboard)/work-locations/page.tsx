@@ -167,7 +167,7 @@ export default function WorkLocationsPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#2D6BE4] hover:bg-[#2460CC] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Location
           </Button>
         </div>
@@ -211,7 +211,7 @@ export default function WorkLocationsPage() {
                     {[row.city, row.province].filter(Boolean).join(", ") || "—"}
                   </TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#EAF1FD", color: "#2D6BE4" }}>
+                    <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#fdeee6", color: "#E8693A" }}>
                       {row._count.branches}
                     </span>
                   </TableCell>
