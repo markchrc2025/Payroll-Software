@@ -601,7 +601,7 @@ export default function MovementsPage() {
           <div className="mt-6 space-y-5">
             {rejectTarget && (
               <div className="rounded-md bg-muted/50 p-3 text-sm">
-                <p className="font-medium">{rejectTarget.employee.lastName}, {rejectTarget.employee.firstName}</p>
+                <p className="font-medium">{rejectTarget.employee.lastName}, {rejectTarget.employee.firstName} <span className="font-mono text-xs text-muted-foreground">{rejectTarget.employee.employeeNumber}</span></p>
                 <p className="text-muted-foreground">{movementTypeLabel(rejectTarget.movementType)} · {rejectTarget.effectiveDate.slice(0, 10)}</p>
               </div>
             )}

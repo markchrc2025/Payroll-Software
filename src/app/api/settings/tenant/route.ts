@@ -57,11 +57,12 @@ const patchSchema = z.object({
   thirteenthMonthBasis: z
     .enum(["STRICT_DOLE", "INCLUDE_ALLOWANCES"])
     .optional(),
-  // Employee ID format
-  empIdPrefix:      z.string().max(20).optional(),
+  // Employee ID format — prefix/suffix restricted to URL-safe characters so
+  // the Employee ID can be used directly in routes (e.g. /employees/EMP-0001).
+  empIdPrefix:      z.string().max(20).regex(/^[A-Za-z0-9._-]*$/, "Only letters, numbers, and . _ - are allowed").optional(),
   empIdIncludeYear: z.boolean().optional(),
   empIdPadding:     z.number().int().min(1).max(10).optional(),
-  empIdSuffix:      z.string().max(20).optional(),
+  empIdSuffix:      z.string().max(20).regex(/^[A-Za-z0-9._-]*$/, "Only letters, numbers, and . _ - are allowed").optional(),
   empIdNextSeq:     z.number().int().positive().optional(),
 });
 

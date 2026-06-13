@@ -106,7 +106,8 @@ export default function EmployeeIdPage() {
             Employee ID
           </h1>
           <p className="text-[13px] text-[#6B7A8D] mt-0.5">
-            Configure the format auto-assigned to each new employee record.
+            The Employee ID auto-assigned to each new record. It&apos;s the identifier used
+            across payroll, payslips, ESS, and every transaction — and in employee page URLs.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -167,11 +168,11 @@ export default function EmployeeIdPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                  Prefix <span className="text-[11px] text-[#9CA3AF] font-normal">(max 20 chars)</span>
+                  Prefix <span className="text-[11px] text-[#9CA3AF] font-normal">(letters, numbers, . _ -)</span>
                 </Label>
                 <Input
                   value={form.empIdPrefix}
-                  onChange={(e) => update("empIdPrefix", e.target.value.slice(0, 20))}
+                  onChange={(e) => update("empIdPrefix", e.target.value.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 20))}
                   placeholder="EMP-"
                   className="h-10 text-[13.5px] font-mono"
                   style={{ borderColor: "#ECE6DD" }}
@@ -180,11 +181,11 @@ export default function EmployeeIdPage() {
 
               <div>
                 <Label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                  Suffix <span className="text-[11px] text-[#9CA3AF] font-normal">(optional, max 20 chars)</span>
+                  Suffix <span className="text-[11px] text-[#9CA3AF] font-normal">(optional; letters, numbers, . _ -)</span>
                 </Label>
                 <Input
                   value={form.empIdSuffix}
-                  onChange={(e) => update("empIdSuffix", e.target.value.slice(0, 20))}
+                  onChange={(e) => update("empIdSuffix", e.target.value.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 20))}
                   placeholder=""
                   className="h-10 text-[13.5px] font-mono"
                   style={{ borderColor: "#ECE6DD" }}

@@ -102,13 +102,13 @@ export default async function EditEmployeePage({
 
       <EmployeeForm
         mode="edit"
-        employeeId={id}
+        employeeId={employee.id}
         initialData={initialData}
         departments={departments}
         branches={branches}
       />
 
-      <EssPinCard employeeId={id} hasPin={!!employee.hasEssPin} />
+      <EssPinCard employeeId={employee.id} hasPin={!!employee.hasEssPin} />
     </div>
   );
 }

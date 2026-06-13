@@ -181,7 +181,7 @@ function StepIndicator({
 export default function OffboardPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const employeeId = params.id;
+  const employeeRef = params.id; // Employee ID (employeeNumber) or legacy CUID
 
   const [step, setStep] = useState(1);
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -200,23 +200,27 @@ export default function OffboardPage() {
   const [payPeriodStart, setPayPeriodStart] = useState("");
   const [payFrequency, setPayFrequency] = useState("MONTHLY");
 
-  // ── Fetch employee ──
+  // ── Fetch employee (GET accepts Employee ID or CUID) ──
   useEffect(() => {
     setEmpLoading(true);
-    fetch(`/api/employees/${employeeId}`)
+    fetch(`/api/employees/${employeeRef}`)
       .then((r) => r.json())
       .then((d) => setEmployee(d?.data ?? null))
       .finally(() => setEmpLoading(false));
-  }, [employeeId]);
+  }, [employeeRef]);
+
+  // Resolved internal id — used for all downstream FK-scoped calls.
+  const resolvedId = employee?.id;
 
   // ── Fetch assets when going to step 2 ──
   const fetchAssets = useCallback(() => {
+    if (!resolvedId) return;
     setAssetsLoading(true);
-    fetch(`/api/employees/${employeeId}/assets`)
+    fetch(`/api/employees/${resolvedId}/assets`)
       .then((r) => r.json())
       .then((d) => setAssets(d?.data ?? []))
       .finally(() => setAssetsLoading(false));
-  }, [employeeId]);
+  }, [resolvedId]);
 
   useEffect(() => {
     if (step === 2) fetchAssets();
@@ -230,6 +234,7 @@ export default function OffboardPage() {
 
   // ── Submit ──
   async function handleSubmit() {
+    if (!resolvedId) return;
     setSubmitting(true);
     const body: Record<string, unknown> = {
       separationReason,
@@ -240,7 +245,7 @@ export default function OffboardPage() {
     };
     if (createRun && payPeriodStart) body.payPeriodStart = payPeriodStart;
 
-    const res = await fetch(`/api/employees/${employeeId}/offboard`, {
+    const res = await fetch(`/api/employees/${resolvedId}/offboard`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

@@ -133,7 +133,7 @@ export function EmployeeTable({
                   <tr
                     key={row.id}
                     className="border-b border-[#E8EBF1] cursor-pointer transition-colors hover:bg-[#F8F9FC] last:border-b-0"
-                    onClick={() => router.push(`/employees/${row.original.id}`)}
+                    onClick={() => router.push(`/employees/${encodeURIComponent(row.original.employeeNumber)}`)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3 whitespace-nowrap">

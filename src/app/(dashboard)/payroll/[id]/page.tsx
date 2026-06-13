@@ -659,7 +659,7 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                 {adjustments.map((adj) => (
                   <TableRow key={adj.id}>
                     <TableCell className="font-mono text-xs">
-                      {adj.employeeId.substring(0, 12)}
+                      {run.sheets.find((s) => s.employeeId === adj.employeeId)?.employeeNumber ?? adj.employeeId.substring(0, 12)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={adj.kind === "ADDITION" ? "default" : "destructive"} className="text-xs">
