@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PageHead, StatCard, Card, Badge, PlanBadge, CpIcon, STATUS_LABEL, INVOICE_LABEL } from "../components/cp";
+import { PageHead, StatCard, Card, Badge, PlanPill, CpIcon, STATUS_LABEL, INVOICE_LABEL } from "../components/cp";
 
 type Tier = "STARTER" | "GROWTH" | "PRO";
 type SubStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED";
@@ -11,15 +11,15 @@ type InvStatus = "DRAFT" | "OPEN" | "PAID" | "OVERDUE" | "VOID";
 type Cycle = "MONTHLY" | "ANNUAL";
 
 interface Package {
-  id: string; tier: Tier; name: string; description: string | null;
+  id: string; tier: Tier | null; name: string; description: string | null;
   monthlyPrice: number; annualPrice: number; taxRateBps: number;
-  currency: string; isActive: boolean; features: string[];
+  currency: string; isActive: boolean; isPublished: boolean; sortOrder: number; features: string[];
 }
 interface SubRow {
   id: string; name: string; subdomain: string | null;
   subscription: {
     id: string; billingCycle: Cycle; status: SubStatus; nextBillingDate: string | null;
-    package: { id: string; tier: Tier; name: string; monthlyPrice: number; annualPrice: number; currency: string };
+    package: { id: string; tier: Tier | null; name: string; monthlyPrice: number; annualPrice: number; currency: string };
   } | null;
 }
 interface InvoiceRow {
@@ -155,7 +155,7 @@ function SubscriptionsTab({ router }: { router: ReturnType<typeof useRouter> }) 
                       <div><b>{r.name}</b>{r.subdomain && <i>{r.subdomain}</i>}</div>
                     </div>
                   </td>
-                  <td>{sub ? <PlanBadge tier={sub.package.tier} /> : <span className="cp-muted">Unassigned</span>}</td>
+                  <td>{sub ? <PlanPill label={sub.package.name} tier={sub.package.tier} /> : <span className="cp-muted">Unassigned</span>}</td>
                   <td className="cp-muted">{sub ? (sub.billingCycle === "ANNUAL" ? "Annual" : "Monthly") : "—"}</td>
                   <td className="cp-num">{sub ? peso(mrr, sub.package.currency) : "—"}</td>
                   <td className="cp-muted">{sub ? fmtDate(sub.nextBillingDate) : "—"}</td>
@@ -173,7 +173,9 @@ function SubscriptionsTab({ router }: { router: ReturnType<typeof useRouter> }) 
 function PackagesTab() {
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Package | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,73 +189,168 @@ function PackagesTab() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  async function savePackage(p: Package, patch: Partial<Package>) {
-    setSaving(p.id);
+  async function togglePublish(p: Package) {
+    setBusy(p.id);
     try {
-      const res = await fetch("/api/admin/billing/packages", {
+      const res = await fetch(`/api/admin/billing/packages/${p.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: p.id, ...patch }),
+        body: JSON.stringify({ isPublished: !p.isPublished }),
       });
       if (!res.ok) throw new Error();
-      toast.success("Package updated");
+      toast.success(p.isPublished ? "Package unpublished" : "Package published");
       load();
     } catch { toast.error("Failed to update package"); }
-    finally { setSaving(null); }
+    finally { setBusy(null); }
+  }
+
+  async function remove(p: Package) {
+    if (!confirm(`Delete the "${p.name}" package?`)) return;
+    setBusy(p.id);
+    try {
+      const res = await fetch(`/api/admin/billing/packages/${p.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? "Failed to delete package");
+      toast.success("Package deleted");
+      load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to delete package"); }
+    finally { setBusy(null); }
   }
 
   if (loading) return <div className="cp-empty">Loading packages…</div>;
 
   return (
-    <div className="cp-pkgs">
-      {packages.map((p) => (
-        <div key={p.id} className={"cp-pkg" + (p.tier === "PRO" ? " is-pop" : "")}>
-          {p.tier === "PRO" && <span className="cp-pkg-pop">Most popular</span>}
-          <h4>{p.name}</h4>
-          <div className="cp-pkg-price">{peso(p.monthlyPrice, p.currency)}<span>/mo</span></div>
-          <p className="cp-pkg-blurb">{p.description ?? `${p.tier.charAt(0)}${p.tier.slice(1).toLowerCase()} plan`}</p>
-          {p.features.length > 0 && (
-            <ul>{p.features.map((f) => <li key={f}><CpIcon name="audit" size={14} /> {f}</li>)}</ul>
-          )}
-          <div className="cp-pkg-foot">
-            <span className="cp-muted">{p.isActive ? "Active" : "Inactive"}</span>
-            <Badge tone={p.tier === "PRO" ? "High" : p.tier === "GROWTH" ? "Normal" : "System"}>{p.tier.charAt(0) + p.tier.slice(1).toLowerCase()}</Badge>
-          </div>
-          <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-            <PriceField label="Monthly (₱)" centavos={p.monthlyPrice} disabled={saving === p.id} onCommit={(c) => savePackage(p, { monthlyPrice: c })} />
-            <PriceField label="Annual (₱)" centavos={p.annualPrice} disabled={saving === p.id} onCommit={(c) => savePackage(p, { annualPrice: c })} />
-            <PctField label="Tax (%)" bps={p.taxRateBps} disabled={saving === p.id} onCommit={(b) => savePackage(p, { taxRateBps: b })} />
-          </div>
+    <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+        <button className="cp-btn cp-btn-primary" onClick={() => setCreating(true)}>
+          <CpIcon name="plus" size={16} /> New package
+        </button>
+      </div>
+
+      {packages.length === 0 ? (
+        <div className="cp-empty">No packages yet — create your first one.</div>
+      ) : (
+        <div className="cp-pkgs">
+          {packages.map((p) => (
+            <div key={p.id} className={"cp-pkg" + (p.tier === "PRO" ? " is-pop" : "")} style={p.isPublished ? undefined : { opacity: 0.7 }}>
+              {p.tier === "PRO" && <span className="cp-pkg-pop">Most popular</span>}
+              <h4>{p.name}</h4>
+              <div className="cp-pkg-price">{peso(p.monthlyPrice, p.currency)}<span>/mo</span></div>
+              <p className="cp-pkg-blurb">{p.description || "—"}</p>
+              {p.features.length > 0 && (
+                <ul>{p.features.map((f) => <li key={f}><CpIcon name="audit" size={14} /> {f}</li>)}</ul>
+              )}
+              <div className="cp-pkg-foot">
+                <Badge tone={p.isPublished ? "Active" : "Draft"}>{p.isPublished ? "Published" : "Draft"}</Badge>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="cp-btn cp-btn-ghost" disabled={busy === p.id} onClick={() => togglePublish(p)}>
+                    {p.isPublished ? "Unpublish" : "Publish"}
+                  </button>
+                  <button className="cp-btn cp-btn-ghost" onClick={() => setEditing(p)}>Edit</button>
+                  <button className="cp-btn cp-btn-ghost" disabled={busy === p.id} style={{ color: "#b23b34" }} onClick={() => remove(p)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+
+      {(creating || editing) && (
+        <PackageModal
+          pkg={editing}
+          onClose={() => { setCreating(false); setEditing(null); }}
+          onSaved={() => { setCreating(false); setEditing(null); load(); }}
+        />
+      )}
+    </>
   );
 }
 
-function fieldInputStyle(): React.CSSProperties {
-  return { width: "100%", height: 36, padding: "0 11px", fontSize: 13, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", outline: "none", fontFamily: "var(--font)" };
-}
-function PriceField({ label, centavos, onCommit, disabled }: { label: string; centavos: number; onCommit: (c: number) => void; disabled?: boolean }) {
-  const [local, setLocal] = useState((centavos / 100).toFixed(2));
-  useEffect(() => setLocal((centavos / 100).toFixed(2)), [centavos]);
+const inputStyle: React.CSSProperties = {
+  width: "100%", height: 38, padding: "0 11px", fontSize: 13.5, borderRadius: 9,
+  border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", outline: "none", fontFamily: "var(--body)",
+};
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "block" }}>
-      <span className="cp-muted" style={{ fontSize: 11.5, display: "block", marginBottom: 4 }}>{label}</span>
-      <input type="number" step="0.01" min="0" value={local} disabled={disabled} style={fieldInputStyle()}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => { const c = Math.round(Number(local) * 100); if (!Number.isNaN(c) && c !== centavos) onCommit(c); }} />
+      <span className="cp-muted" style={{ fontSize: 12, display: "block", marginBottom: 5 }}>{label}</span>
+      {children}
     </label>
   );
 }
-function PctField({ label, bps, onCommit, disabled }: { label: string; bps: number; onCommit: (b: number) => void; disabled?: boolean }) {
-  const [local, setLocal] = useState((bps / 100).toString());
-  useEffect(() => setLocal((bps / 100).toString()), [bps]);
+
+function PackageModal({ pkg, onClose, onSaved }: { pkg: Package | null; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(pkg?.name ?? "");
+  const [description, setDescription] = useState(pkg?.description ?? "");
+  const [tier, setTier] = useState<string>(pkg?.tier ?? "");
+  const [monthly, setMonthly] = useState(((pkg?.monthlyPrice ?? 0) / 100).toFixed(2));
+  const [annual, setAnnual] = useState(((pkg?.annualPrice ?? 0) / 100).toFixed(2));
+  const [tax, setTax] = useState(((pkg?.taxRateBps ?? 0) / 100).toString());
+  const [features, setFeatures] = useState((pkg?.features ?? []).join("\n"));
+  const [published, setPublished] = useState(pkg?.isPublished ?? true);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name.trim()) { toast.error("Name is required"); return; }
+    setSaving(true);
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || null,
+      tier: tier || null,
+      monthlyPrice: Math.round(Number(monthly) * 100) || 0,
+      annualPrice: Math.round(Number(annual) * 100) || 0,
+      taxRateBps: Math.round(Number(tax) * 100) || 0,
+      isPublished: published,
+      features: features.split("\n").map((f) => f.trim()).filter(Boolean),
+    };
+    try {
+      const res = await fetch(
+        pkg ? `/api/admin/billing/packages/${pkg.id}` : "/api/admin/billing/packages",
+        { method: pkg ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+      );
+      if (!res.ok) throw new Error();
+      toast.success(pkg ? "Package updated" : "Package created");
+      onSaved();
+    } catch { toast.error("Failed to save package"); }
+    finally { setSaving(false); }
+  }
+
   return (
-    <label style={{ display: "block" }}>
-      <span className="cp-muted" style={{ fontSize: 11.5, display: "block", marginBottom: 4 }}>{label}</span>
-      <input type="number" step="0.01" min="0" max="100" value={local} disabled={disabled} style={fieldInputStyle()}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => { const b = Math.round(Number(local) * 100); if (!Number.isNaN(b) && b !== bps) onCommit(b); }} />
-    </label>
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(33,26,21,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, width: 440, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", padding: 22 }}>
+        <h3 style={{ fontFamily: "var(--font)", fontWeight: 600, fontSize: 17, margin: "0 0 16px" }}>{pkg ? "Edit package" : "New package"}</h3>
+        <div style={{ display: "grid", gap: 12 }}>
+          <Field label="Name"><input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pro Plus" /></Field>
+          <Field label="Description"><input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short blurb" /></Field>
+          <Field label="Tier tag (badge colour)">
+            <select style={{ ...inputStyle, fontFamily: "var(--font)" }} value={tier} onChange={(e) => setTier(e.target.value)}>
+              <option value="">None</option>
+              <option value="STARTER">Starter</option>
+              <option value="GROWTH">Growth</option>
+              <option value="PRO">Pro</option>
+            </select>
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Monthly (₱)"><input type="number" step="0.01" min="0" style={inputStyle} value={monthly} onChange={(e) => setMonthly(e.target.value)} /></Field>
+            <Field label="Annual (₱)"><input type="number" step="0.01" min="0" style={inputStyle} value={annual} onChange={(e) => setAnnual(e.target.value)} /></Field>
+          </div>
+          <Field label="Tax (%)"><input type="number" step="0.01" min="0" max="100" style={inputStyle} value={tax} onChange={(e) => setTax(e.target.value)} /></Field>
+          <Field label="Features (one per line)">
+            <textarea style={{ ...inputStyle, height: 84, padding: "8px 11px", resize: "vertical" }} value={features} onChange={(e) => setFeatures(e.target.value)} />
+          </Field>
+          <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5 }}>
+            <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
+            Published (assignable to tenants)
+          </label>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+          <button className="cp-btn cp-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="cp-btn cp-btn-primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save package"}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

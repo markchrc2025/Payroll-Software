@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, serverError } from "@/lib/api-response";
+import { writeCentralAudit } from "@/lib/central/audit";
+import { getClientIp } from "@/lib/audit";
 import { z } from "zod";
 
 // Money is stored as BigInt centavos; serialize to Number for JSON responses.
@@ -10,29 +12,28 @@ function serialize(p: { monthlyPrice: bigint; annualPrice: bigint } & Record<str
   return { ...p, monthlyPrice: Number(p.monthlyPrice), annualPrice: Number(p.annualPrice) };
 }
 
-// GET /api/admin/billing/packages
-// Returns all billing packages (the catalog of tier pricing).
+// GET /api/admin/billing/packages — full package catalog (published + drafts).
 export async function GET() {
   const ctx = await requireCentralPermission("BILLING", "READ");
   if (ctx instanceof Response) return ctx;
 
   try {
     let packages = await prismaAdmin.billingPackage.findMany({
-      orderBy: { monthlyPrice: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { monthlyPrice: "asc" }],
     });
 
-    // Bootstrap the three tier packages at zero price on first load.
+    // Bootstrap the three starter packages at zero price on first load.
     if (packages.length === 0) {
-      const defaults = [
-        { tier: "STARTER" as const, name: "Starter" },
-        { tier: "GROWTH" as const, name: "Growth" },
-        { tier: "PRO" as const, name: "Pro" },
-      ];
       await prismaAdmin.billingPackage.createMany({
-        data: defaults.map((d) => ({ tier: d.tier, name: d.name })),
-        skipDuplicates: true,
+        data: [
+          { tier: "STARTER", name: "Starter", sortOrder: 0 },
+          { tier: "GROWTH", name: "Growth", sortOrder: 1 },
+          { tier: "PRO", name: "Pro", sortOrder: 2 },
+        ],
       });
-      packages = await prismaAdmin.billingPackage.findMany({ orderBy: { monthlyPrice: "asc" } });
+      packages = await prismaAdmin.billingPackage.findMany({
+        orderBy: [{ sortOrder: "asc" }, { monthlyPrice: "asc" }],
+      });
     }
 
     return ok(packages.map(serialize));
@@ -42,47 +43,56 @@ export async function GET() {
   }
 }
 
-// Prices are sent from the client in centavos; taxRateBps is basis points.
-const updateSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1).optional(),
-  description: z.string().nullable().optional(),
-  monthlyPrice: z.number().int().nonnegative().optional(),
-  annualPrice: z.number().int().nonnegative().optional(),
-  taxRateBps: z.number().int().min(0).max(10000).optional(),
-  currency: z.string().min(1).optional(),
-  isActive: z.boolean().optional(),
-  features: z.array(z.string()).optional(),
+const createSchema = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().max(300).nullable().optional(),
+  tier: z.enum(["STARTER", "GROWTH", "PRO"]).nullable().optional(),
+  monthlyPrice: z.number().int().nonnegative().default(0),
+  annualPrice: z.number().int().nonnegative().default(0),
+  taxRateBps: z.number().int().min(0).max(10000).default(0),
+  currency: z.string().min(1).max(8).default("PHP"),
+  isPublished: z.boolean().default(true),
+  features: z.array(z.string().max(120)).max(20).default([]),
 });
 
-// PATCH /api/admin/billing/packages
-// Update pricing / tax / status for a package.
-export async function PATCH(req: NextRequest) {
+// POST /api/admin/billing/packages — create a new package.
+export async function POST(req: NextRequest) {
   const ctx = await requireCentralPermission("BILLING", "MANAGE");
   if (ctx instanceof Response) return ctx;
 
   try {
-    const body = await req.json();
-    const parsed = updateSchema.safeParse(body);
+    const body = await req.json().catch(() => null);
+    const parsed = createSchema.safeParse(body);
     if (!parsed.success) return err("Invalid request", 400, parsed.error.flatten());
+    const d = parsed.data;
 
-    const { id, ...rest } = parsed.data;
+    const last = await prismaAdmin.billingPackage.aggregate({ _max: { sortOrder: true } });
+    const created = await prismaAdmin.billingPackage.create({
+      data: {
+        name: d.name,
+        description: d.description ?? null,
+        tier: d.tier ?? null,
+        monthlyPrice: BigInt(d.monthlyPrice),
+        annualPrice: BigInt(d.annualPrice),
+        taxRateBps: d.taxRateBps,
+        currency: d.currency,
+        isPublished: d.isPublished,
+        features: d.features as unknown as Prisma.InputJsonValue,
+        sortOrder: (last._max.sortOrder ?? 0) + 1,
+      },
+    });
 
-    const data: Prisma.BillingPackageUpdateInput = {};
-    if (rest.name !== undefined) data.name = rest.name;
-    if (rest.description !== undefined) data.description = rest.description;
-    if (rest.monthlyPrice !== undefined) data.monthlyPrice = BigInt(rest.monthlyPrice);
-    if (rest.annualPrice !== undefined) data.annualPrice = BigInt(rest.annualPrice);
-    if (rest.taxRateBps !== undefined) data.taxRateBps = rest.taxRateBps;
-    if (rest.currency !== undefined) data.currency = rest.currency;
-    if (rest.isActive !== undefined) data.isActive = rest.isActive;
-    if (rest.features !== undefined) data.features = rest.features;
+    await writeCentralAudit({
+      actorUserId: ctx.userId,
+      action: "created package",
+      target: created.name,
+      kind: "BILLING",
+      ipAddress: getClientIp(req),
+    });
 
-    const updated = await prismaAdmin.billingPackage.update({ where: { id }, data });
-
-    return ok(serialize(updated));
+    return ok(serialize(created), "Package created", 201);
   } catch (e) {
-    console.error("[billing/packages] PATCH", e);
+    console.error("[billing/packages] POST", e);
     return serverError(e);
   }
 }

@@ -89,6 +89,15 @@ export function PlanBadge({ tier }: { tier: string }) {
   return <span className="cp-badge" style={{ color: c, background: bg }}>{titleCase(tier)}</span>;
 }
 
+/**
+ * Plan pill showing an arbitrary package name, coloured by an optional coarse
+ * tier tag (falls back to a neutral tone when the package has no tier).
+ */
+export function PlanPill({ label, tier }: { label: string; tier?: string | null }) {
+  const [c, bg] = (tier && PLAN_TONES[tier]) || ["#6b6259", "#efeae3"];
+  return <span className="cp-badge" style={{ color: c, background: bg }}>{label}</span>;
+}
+
 export function titleCase(s: string): string {
   return s.charAt(0) + s.slice(1).toLowerCase();
 }
