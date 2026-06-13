@@ -7,6 +7,7 @@ import { ChevronDown, LogOut, User, Building2, ShieldCheck } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -56,7 +57,9 @@ export function UserMenu({ displayName, initials }: Props) {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" sideOffset={8} className="w-48">
-        <DropdownMenuLabel className="truncate">{displayName}</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="truncate">{displayName}</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onClick={onProfileClick}>
