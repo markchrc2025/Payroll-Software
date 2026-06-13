@@ -936,6 +936,81 @@ model Employee {
   bankAccountNumber String?
   bankAccountName   String?
 
+  // Extended personal fields
+  nationalId        String?
+  passportNumber    String?
+  ethnicity         String?
+  religion          String?
+  allowProfileUpdate Boolean  @default(false)
+  needsTimeClock    Boolean   @default(true)
+
+  // Extended employment fields
+  probationEndDate      DateTime?
+  placementEffectiveDate DateTime?
+  jobType               String?
+  jobDescription        String?
+  leaveWorkflowKey      String?
+  workdayKey            String?
+  holidayKey            String?
+  termEffectiveDate     DateTime?
+  contractStartDate     DateTime?
+  contractEndDate       DateTime?
+
+  // Salary metadata
+  salaryEffectiveDate   DateTime?
+  currency              String?   @default("PHP")
+  nextSalaryReviewDate  DateTime?
+  payMethod             String?
+
+  // Extended contact
+  blogUrl       String?
+  officePhone   String?
+  housePhone    String?
+  postcode      String?
+  country       String?   @default("Philippines")
+
+  // Health
+  heightCm   Decimal?  @db.Decimal(5, 1)
+  weightKg   Decimal?  @db.Decimal(5, 1)
+  bloodType  String?
+  visionL    String?
+  visionR    String?
+  hearingL   String?
+  hearingR   String?
+  handL      String?
+  handR      String?
+  legL       String?
+  legR       String?
+
+  // Family / spouse
+  spouseFirstName   String?
+  spouseMiddleName  String?
+  spouseLastName    String?
+  spouseBirthDate   DateTime?
+  spouseNationality String?
+  spouseNationalId  String?
+  spousePassport    String?
+  spouseEthnicity   String?
+  spouseReligion    String?
+  spouseWorking     Boolean?
+  numberOfChildren  Int?      @default(0)
+
+  // Directory & privacy
+  directoryRole    String?   @default("Employee")
+  pvEmail          String?   @default("Employee")
+  pvBlog           String?   @default("Employee")
+  pvOfficePhone    String?   @default("Employee")
+  pvMobilePhone    String?   @default("Employee")
+  pvHousePhone     String?   @default("Not Accessible")
+  pvAddress        String?   @default("Not Accessible")
+  pvEmergency      String?   @default("Manager")
+  pvBirthday       String?   @default("Employee")
+  pvFamilyBirthday String?   @default("Employee")
+  pvAnniversary    String?   @default("Employee")
+
+  // Others
+  remark String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
