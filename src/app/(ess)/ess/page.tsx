@@ -1,5 +1,5 @@
-import EssApp from "@/components/ess/EssApp";
+import EssRoot from "@/components/ess/EssRoot";
 
 export default function EssHomePage() {
-  return <EssApp />;
+  return <EssRoot />;
 }
