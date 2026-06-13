@@ -24,28 +24,29 @@ const ratio = z.number().min(0).max(1);
 // ---------------------------------------------------------------------------
 // SSS_SCHEDULE
 //
-// We don't enumerate every MSC bracket; compute derives the MSC by stepping
-// monthly compensation through (floor, ceiling, step). EC contribution is a
-// flat amount that flips at `ec.thresholdMsc`.
+// Stores the full published contribution table as uploaded from the official
+// SSS Excel schedule. Each row corresponds to one compensation band.
+// All monetary values are INTEGER CENTAVOS (₱1 = 100).
 // ---------------------------------------------------------------------------
+export const SssTableRow = z.object({
+  compensationFrom: centavos, // 0 for the first (lowest) band
+  compensationTo: centavos,
+  msc: centavos,
+  regularSSEmployer: centavos,
+  regularSSEmployee: centavos,
+  regularSSTotal: centavos,
+  ecEmployer: centavos,
+  mpfEmployer: centavos,
+  mpfEmployee: centavos,
+  mpfTotal: centavos,
+  totalEmployer: centavos,
+  totalEmployee: centavos,
+  totalTotal: centavos,
+});
+export type SssTableRow = z.infer<typeof SssTableRow>;
+
 export const SssSchedulePayload = z.object({
-  // Total contribution rate split between EE and ER (e.g. 0.05 / 0.10).
-  monthlyRate: z.object({ ee: ratio, er: ratio }),
-  // Monthly Salary Credit bounds (centavos).
-  msc: z.object({
-    floor: centavos,
-    ceiling: centavos,
-    step: centavos,
-  }),
-  // Mandatory Provident Fund (MPF) — applies on MSC EXCESS above this threshold.
-  // EE/ER MPF rates use the same split as `monthlyRate`.
-  mpfThresholdMsc: centavos,
-  // Employees' Compensation — employer-only flat amount; switches at threshold.
-  ec: z.object({
-    thresholdMsc: centavos,
-    lowAmount: centavos,
-    highAmount: centavos,
-  }),
+  rows: z.array(SssTableRow).min(1),
 });
 export type SssSchedulePayload = z.infer<typeof SssSchedulePayload>;
 

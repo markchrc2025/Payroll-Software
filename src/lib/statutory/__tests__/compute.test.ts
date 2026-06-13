@@ -36,15 +36,42 @@ import type {
 
 /**
  * SSS 2026 — RA 11199 + SSS Circular 2025-006
- * EE 5%, ER 10%; MSC ₱5,000–₱35,000 in ₱500 steps; MPF threshold ₱20,000
- * EC: ₱10 if MSC ≤ ₱14,750, else ₱30
+ * Full contribution table: MSC ₱5,000–₱35,000 in ₱500 steps.
+ * EC: ₱10 if MSC ≤ ₱14,750, else ₱30. MPF on excess MSC > ₱20,000 at 5%/10%.
+ *
+ * Generated from the same parameters as the official schedule; expected test
+ * values below are derived from these same rates/thresholds.
  */
-const SSS_2026: SssSchedulePayload = {
-  monthlyRate: { ee: 0.05, er: 0.10 },
-  msc: { floor: 500_000, ceiling: 3_500_000, step: 50_000 },
-  mpfThresholdMsc: 2_000_000,
-  ec: { thresholdMsc: 1_475_000, lowAmount: 1_000, highAmount: 3_000 },
-};
+function buildSSSTable(): SssSchedulePayload {
+  const MSC_FLOOR = 500_000;
+  const MSC_CEILING = 3_500_000;
+  const MSC_STEP = 50_000;
+  const rows = [];
+  for (let msc = MSC_FLOOR; msc <= MSC_CEILING; msc += MSC_STEP) {
+    const n = (msc - MSC_FLOOR) / MSC_STEP;
+    const isLast = msc === MSC_CEILING;
+    const compFrom = n === 0 ? 0 : 475_000 + n * MSC_STEP;
+    const compTo = isLast ? 99_999_999 : MSC_FLOOR + n * MSC_STEP + MSC_STEP / 2 - 1;
+    const regularBase = Math.min(msc, 2_000_000);
+    const mpfBase = Math.max(0, msc - 2_000_000);
+    const regularSSEmployer = Math.round(regularBase * 0.10);
+    const regularSSEmployee = Math.round(regularBase * 0.05);
+    const ecEmployer = msc > 1_475_000 ? 3_000 : 1_000;
+    const mpfEmployer = Math.round(mpfBase * 0.10);
+    const mpfEmployee = Math.round(mpfBase * 0.05);
+    rows.push({
+      compensationFrom: compFrom, compensationTo: compTo, msc,
+      regularSSEmployer, regularSSEmployee, regularSSTotal: regularSSEmployer + regularSSEmployee,
+      ecEmployer, mpfEmployer, mpfEmployee, mpfTotal: mpfEmployer + mpfEmployee,
+      totalEmployer: regularSSEmployer + ecEmployer + mpfEmployer,
+      totalEmployee: regularSSEmployee + mpfEmployee,
+      totalTotal: regularSSEmployer + ecEmployer + mpfEmployer + regularSSEmployee + mpfEmployee,
+    });
+  }
+  return { rows };
+}
+
+const SSS_2026: SssSchedulePayload = buildSSSTable();
 
 /**
  * PhilHealth 2025+ — RA 11223 + PhilHealth Circular 2025-001
@@ -292,33 +319,27 @@ describe("§6.3 SSS contributions", () => {
 });
 
 // ===========================================================================
-// §6.3 — SSS bracket (MSC) assignment
-// Worksheet-supplied: salary → MSC mapping from the ₱500-step bracket rule.
-// Source: deriveMsc() in compute.ts using SSS_2026 payload.
+// §6.3 — SSS compensation-to-MSC table lookup
+// The contribution table maps each compensation band to an MSC.
+// These verify the table lookup finds the correct row.
 // ===========================================================================
-describe("§6.3 SSS MSC bracket assignment (worksheet-supplied)", () => {
-  it("₱4,999 → MSC = floor ₱5,000 (at-or-below-floor)", () => {
-    // Source: deriveMsc() with floor=₱5,000
+describe("§6.3 SSS MSC table lookup (row-based)", () => {
+  it("₱4,999 → MSC = ₱5,000 (first row: comp ≤ ₱5,249.99)", () => {
     const r = computeSSS(SSS_2026, 499_900n);
-    expect(r.msc).toBe(500_000n); // ₱5,000
+    expect(r.msc).toBe(500_000n);
   });
 
-  it("₱5,250 → MSC = ₱5,000 (lower half of ₱5,000–₱5,500 band)", () => {
-    // offset = 525_000 - 500_000 + 25_000 = 50_000; bands = 1; candidate = ₱5,500
-    // Actually let's verify: offset = 525_000 - 500_000 + 25_000 = 50_000; 50_000/50_000 = 1; ₱5,000 + 1×₱500 = ₱5,500
-    // Hmm - the bracket rule per the code: ((comp - floor + step/2) / step) * step + floor
-    // (525_000 - 500_000 + 25_000) / 50_000 = 50_000/50_000 = 1 → ₱5,000 + ₱500 = ₱5,500
-    const r = computeSSS(SSS_2026, 525_000n); // ₱5,250
-    // With deriveMsc: offset = 525000 - 500000 + 25000 = 50000; bands = 50000/50000 = 1; MSC = 500000 + 50000 = 550000 = ₱5,500
-    expect(r.msc).toBe(550_000n); // ₱5,500 — step-bracket midpoint rounds to ₱5,500
+  it("₱5,250 → MSC = ₱5,500 (second row: ₱5,250–₱5,749.99)", () => {
+    const r = computeSSS(SSS_2026, 525_000n);
+    expect(r.msc).toBe(550_000n);
   });
 
-  it("₱20,000 → MSC = ₱20,000 (exact bracket boundary)", () => {
+  it("₱20,000 → MSC = ₱20,000 (exact band boundary)", () => {
     const r = computeSSS(SSS_2026, 2_000_000n);
     expect(r.msc).toBe(2_000_000n);
   });
 
-  it("₱35,000 → MSC = ceiling ₱35,000", () => {
+  it("₱35,000 → MSC = ₱35,000 (ceiling row)", () => {
     const r = computeSSS(SSS_2026, 3_500_000n);
     expect(r.msc).toBe(3_500_000n);
   });

@@ -54,25 +54,39 @@ const MIN_WAGE_2025_FROM = new Date("2025-07-01T00:00:00.000Z");
 
 // ---------------------------------------------------------------------------
 // SSS 2026 (RA 11199 + SSS Circular 2025-006)
-//   • Total rate 15% (EE 5%, ER 10%)
-//   • MSC ₱5,000 → ₱35,000 in ₱500 steps
-//   • MPF on MSC excess over ₱20,000
-//   • EC ER-only: ₱10 if MSC ≤ ₱14,750, else ₱30
+//   Full contribution table: MSC ₱5,000–₱35,000 in ₱500 steps.
+//   Rates: EE 5%, ER 10% on regular SS (up to MSC ₱20,000) and MPF (excess).
+//   EC (ER-only): ₱10 if MSC ≤ ₱14,750, else ₱30.
 // ---------------------------------------------------------------------------
-const SSS_2026: SssSchedulePayload = {
-  monthlyRate: { ee: 0.05, er: 0.10 },
-  msc: {
-    floor: 500_000, // ₱5,000
-    ceiling: 3_500_000, // ₱35,000
-    step: 50_000, // ₱500
-  },
-  mpfThresholdMsc: 2_000_000, // ₱20,000
-  ec: {
-    thresholdMsc: 1_475_000, // ₱14,750
-    lowAmount: 1_000, // ₱10
-    highAmount: 3_000, // ₱30
-  },
-};
+function buildSSS2026(): SssSchedulePayload {
+  const MSC_FLOOR = 500_000;
+  const MSC_CEILING = 3_500_000;
+  const MSC_STEP = 50_000;
+  const rows: SssSchedulePayload["rows"] = [];
+  for (let msc = MSC_FLOOR; msc <= MSC_CEILING; msc += MSC_STEP) {
+    const n = (msc - MSC_FLOOR) / MSC_STEP;
+    const isLast = msc === MSC_CEILING;
+    const compFrom = n === 0 ? 0 : 475_000 + n * MSC_STEP;
+    const compTo = isLast ? 99_999_999 : MSC_FLOOR + n * MSC_STEP + MSC_STEP / 2 - 1;
+    const regularBase = Math.min(msc, 2_000_000);
+    const mpfBase = Math.max(0, msc - 2_000_000);
+    const regularSSEmployer = Math.round(regularBase * 0.10);
+    const regularSSEmployee = Math.round(regularBase * 0.05);
+    const ecEmployer = msc > 1_475_000 ? 3_000 : 1_000;
+    const mpfEmployer = Math.round(mpfBase * 0.10);
+    const mpfEmployee = Math.round(mpfBase * 0.05);
+    rows.push({
+      compensationFrom: compFrom, compensationTo: compTo, msc,
+      regularSSEmployer, regularSSEmployee, regularSSTotal: regularSSEmployer + regularSSEmployee,
+      ecEmployer, mpfEmployer, mpfEmployee, mpfTotal: mpfEmployer + mpfEmployee,
+      totalEmployer: regularSSEmployer + ecEmployer + mpfEmployer,
+      totalEmployee: regularSSEmployee + mpfEmployee,
+      totalTotal: regularSSEmployer + ecEmployer + mpfEmployer + regularSSEmployee + mpfEmployee,
+    });
+  }
+  return { rows };
+}
+const SSS_2026: SssSchedulePayload = buildSSS2026();
 
 // ---------------------------------------------------------------------------
 // PhilHealth 2025+ (RA 11223 + PhilHealth Circular 2025-001)

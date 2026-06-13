@@ -27,12 +27,35 @@ import type {
 // ---------------------------------------------------------------------------
 // Statutory payloads — sourced verbatim from load-statutory-2026.ts
 // ---------------------------------------------------------------------------
-const SSS_2026: SssSchedulePayload = {
-  monthlyRate: { ee: 0.05, er: 0.10 },
-  msc: { floor: 500_000, ceiling: 3_500_000, step: 50_000 },
-  mpfThresholdMsc: 2_000_000,
-  ec: { thresholdMsc: 1_475_000, lowAmount: 1_000, highAmount: 3_000 },
-};
+function buildSSSTable(): SssSchedulePayload {
+  const MSC_FLOOR = 500_000;
+  const MSC_CEILING = 3_500_000;
+  const MSC_STEP = 50_000;
+  const rows = [];
+  for (let msc = MSC_FLOOR; msc <= MSC_CEILING; msc += MSC_STEP) {
+    const n = (msc - MSC_FLOOR) / MSC_STEP;
+    const isLast = msc === MSC_CEILING;
+    const compFrom = n === 0 ? 0 : 475_000 + n * MSC_STEP;
+    const compTo = isLast ? 99_999_999 : MSC_FLOOR + n * MSC_STEP + MSC_STEP / 2 - 1;
+    const regularBase = Math.min(msc, 2_000_000);
+    const mpfBase = Math.max(0, msc - 2_000_000);
+    const regularSSEmployer = Math.round(regularBase * 0.10);
+    const regularSSEmployee = Math.round(regularBase * 0.05);
+    const ecEmployer = msc > 1_475_000 ? 3_000 : 1_000;
+    const mpfEmployer = Math.round(mpfBase * 0.10);
+    const mpfEmployee = Math.round(mpfBase * 0.05);
+    rows.push({
+      compensationFrom: compFrom, compensationTo: compTo, msc,
+      regularSSEmployer, regularSSEmployee, regularSSTotal: regularSSEmployer + regularSSEmployee,
+      ecEmployer, mpfEmployer, mpfEmployee, mpfTotal: mpfEmployer + mpfEmployee,
+      totalEmployer: regularSSEmployer + ecEmployer + mpfEmployer,
+      totalEmployee: regularSSEmployee + mpfEmployee,
+      totalTotal: regularSSEmployer + ecEmployer + mpfEmployer + regularSSEmployee + mpfEmployee,
+    });
+  }
+  return { rows };
+}
+const SSS_2026: SssSchedulePayload = buildSSSTable();
 const PHIC_2025: PhilHealthSchedulePayload = {
   rate: 0.05,
   split: { ee: 0.5, er: 0.5 },
