@@ -14,7 +14,7 @@ export default async function AnalyticsPage() {
   const ctx = await getSuperAdminContext();
   if (!ctx) redirect("/centralportal/login");
 
-  const [stats, revenue, byTier] = await Promise.all([
+  const [stats, revenue, byTier, subEvents] = await Promise.all([
     getPlatformStats(),
     getRevenueSeries(),
     prismaAdmin.tenant.groupBy({
@@ -22,11 +22,25 @@ export default async function AnalyticsPage() {
       where: { deletedAt: null },
       _count: { _all: true },
     }),
+    prismaAdmin.subscriptionEvent.findMany({
+      where: { type: { in: ["TRIAL_STARTED", "SUBSCRIBED"] } },
+      select: { tenantId: true, type: true },
+    }),
   ]);
 
   const paying = stats.active + stats.pastDue;
   const arpt = paying > 0 ? Math.round(stats.mrr / paying) : 0;
   const churn = stats.total > 0 ? Math.round((stats.cancelled / stats.total) * 1000) / 10 : 0;
+
+  // Trial → paid: of tenants that started a trial, how many later subscribed.
+  const trialed = new Set<string>();
+  const subscribed = new Set<string>();
+  for (const e of subEvents) {
+    if (e.type === "TRIAL_STARTED") trialed.add(e.tenantId);
+    else subscribed.add(e.tenantId);
+  }
+  const converted = [...trialed].filter((t) => subscribed.has(t)).length;
+  const trialToPaid = trialed.size > 0 ? `${Math.round((converted / trialed.size) * 100)}%` : "—";
 
   const planMix = (["PRO", "GROWTH", "STARTER"] as const).map((tier) => ({
     label: TIER_LABEL[tier],
@@ -39,10 +53,10 @@ export default async function AnalyticsPage() {
       <PageHead title="Analytics" sub="Growth, retention and revenue trends across the platform" />
 
       <div className="cp-stats cp-stats-4">
-        <StatCard label="Net revenue retention" value="—" icon="analytics" tone="green" sub="from next release" />
+        <StatCard label="Net revenue retention" value="—" icon="analytics" tone="green" sub="needs MRR history" />
         <StatCard label="Churn" value={`${churn}%`} icon="tenants" tone="amber" sub="cancelled share" />
         <StatCard label="Avg revenue / tenant" value={peso(arpt)} icon="billing" tone="orange" sub={`${paying} paying`} />
-        <StatCard label="Trial → paid" value="—" icon="support" tone="blue" sub="from next release" />
+        <StatCard label="Trial → paid" value={trialToPaid} icon="support" tone="blue" sub={trialed.size > 0 ? `${trialed.size} trials` : "no trials yet"} />
       </div>
 
       <div className="cp-grid-2">

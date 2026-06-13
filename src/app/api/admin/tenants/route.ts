@@ -11,6 +11,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { writeCentralAudit, logSubscriptionEvent } from "@/lib/central/audit";
 import { tenantMrrPesos, computeHealthScore } from "@/lib/central/metrics";
 import { z } from "zod";
 
@@ -197,6 +198,22 @@ export async function POST(req: NextRequest) {
       entity: "Tenant",
       entityId: tenant.id,
       changes: { name: tenant.name, subscriptionTier: tenant.subscriptionTier },
+      ipAddress: getClientIp(req),
+    });
+
+    // Seed the subscription timeline + platform audit feed for the new account.
+    await logSubscriptionEvent({
+      tenantId: tenant.id,
+      type: tenant.subscriptionStatus === "TRIALING" ? "TRIAL_STARTED" : "SUBSCRIBED",
+      detail: `${tenant.subscriptionTier} plan`,
+      actorUserId: ctx.userId,
+    });
+    await writeCentralAudit({
+      actorUserId: ctx.userId,
+      action: "onboarded tenant",
+      target: tenant.name,
+      kind: "TENANT",
+      tenantId: tenant.id,
       ipAddress: getClientIp(req),
     });
 

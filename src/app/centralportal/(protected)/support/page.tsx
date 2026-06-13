@@ -3,6 +3,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import Link from "next/link";
 import { peso, toPesos } from "@/lib/central/metrics";
 import { PageHead, StatCard, Card, CpIcon } from "../components/cp";
+import { TicketQueue, type Ticket } from "./TicketQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function SupportPage() {
   const now = new Date();
   const in7 = new Date(now.getTime() + 7 * 86_400_000);
 
-  const [pastDue, expiringSoon, counts] = await Promise.all([
+  const [pastDue, expiringSoon, counts, ticketRows, openCount, agents] = await Promise.all([
     prismaAdmin.tenant.findMany({
       where: { deletedAt: null, subscriptionStatus: "PAST_DUE" },
       select: {
@@ -33,26 +34,48 @@ export default async function SupportPage() {
       take: 10,
     }),
     prismaAdmin.tenant.groupBy({ by: ["subscriptionStatus"], where: { deletedAt: null }, _count: true }),
+    prismaAdmin.supportTicket.findMany({
+      where: { status: { in: ["OPEN", "PENDING"] } },
+      orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
+      take: 100,
+      select: {
+        id: true, ticketNumber: true, subject: true, priority: true, status: true, createdAt: true,
+        tenant: { select: { id: true, name: true } },
+        agent: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prismaAdmin.supportTicket.count({ where: { status: "OPEN" } }),
+    prismaAdmin.user.findMany({
+      where: { tenantId: null, deletedAt: null, isActive: true },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: { firstName: "asc" },
+    }),
   ]);
 
   const statusMap = Object.fromEntries(counts.map((c) => [c.subscriptionStatus, c._count]));
   const outstandingFor = (invs: { total: bigint }[]) => toPesos(invs.reduce((a, i) => a + i.total, 0n));
+
+  const tickets: Ticket[] = ticketRows.map((t) => ({
+    id: t.id, ticketNumber: t.ticketNumber, subject: t.subject, priority: t.priority, status: t.status,
+    createdAtMs: t.createdAt.getTime(), tenant: t.tenant, agent: t.agent,
+  }));
+  const agentOpts = agents.map((a) => ({ id: a.id, name: `${a.firstName} ${a.lastName}`.trim() }));
+  // eslint-disable-next-line react-hooks/purity -- server component, intentional
+  const nowMs = Date.now();
 
   return (
     <>
       <PageHead title="Support" sub="Tickets, accounts and trials that need your attention" />
 
       <div className="cp-stats cp-stats-4">
-        <StatCard label="Open tickets" value="—" icon="support" tone="red" sub="from next release" />
-        <StatCard label="Avg first response" value="—" icon="analytics" tone="green" sub="from next release" />
+        <StatCard label="Open tickets" value={openCount} icon="support" tone="red" />
+        <StatCard label="In queue" value={tickets.length} icon="analytics" tone="green" sub="open + pending" />
         <StatCard label="Past due accounts" value={statusMap.PAST_DUE ?? 0} icon="billing" tone="amber" />
         <StatCard label="Trials expiring · 7d" value={expiringSoon.length} icon="tenants" tone="blue" />
       </div>
 
-      <Card title="Ticket queue" action={<span className="cp-muted">Coming soon</span>}>
-        <div className="cp-empty">
-          Support ticketing arrives in the next release. Until then, the accounts that need a nudge are below.
-        </div>
+      <Card title="Ticket queue" pad={false}>
+        <TicketQueue tickets={tickets} agents={agentOpts} nowMs={nowMs} />
       </Card>
 
       <div className="cp-grid-2">

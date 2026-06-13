@@ -610,6 +610,9 @@ model Tenant {
   holidays       Holiday[]
   premiumRateConfigs PremiumRateConfig[]
   announcements  Announcement[]
+  supportTickets     SupportTicket[]
+  subscriptionEvents SubscriptionEvent[]
+  centralAuditEvents CentralAuditEvent[]
 
   @@index([deletedAt])
 }
@@ -678,6 +681,8 @@ model User {
   assignedApplicants    Applicant[]       @relation("ApplicantAssignedTo")
   applicantNotes        ApplicantNote[]
   passwordResetTokens   PasswordResetToken[]
+  assignedTickets       SupportTicket[]     @relation("TicketAgent")
+  centralAuditEvents    CentralAuditEvent[] @relation("CentralAuditActor")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -2907,4 +2912,106 @@ model Payment {
 
   @@index([tenantId])
   @@index([invoiceId])
+}
+
+// ============================================================
+// CENTRAL PORTAL — support tickets, subscription history,
+// and the platform-level audit feed (PR 2).
+// ============================================================
+
+enum TicketPriority {
+  URGENT
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+/// A support ticket raised against a tenant account, worked by central agents.
+model SupportTicket {
+  id           String         @id @default(cuid())
+  ticketNumber String         @unique
+  tenantId     String
+  subject      String
+  body         String?
+  priority     TicketPriority @default(NORMAL)
+  status       TicketStatus   @default(OPEN)
+  agentUserId  String? // null = Unassigned
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent  User?  @relation("TicketAgent", fields: [agentUserId], references: [id])
+
+  @@index([status])
+  @@index([tenantId])
+  @@index([agentUserId])
+}
+
+enum SubscriptionEventType {
+  TRIAL_STARTED
+  SUBSCRIBED
+  UPGRADED
+  DOWNGRADED
+  RENEWED
+  PAYMENT_FAILED
+  CANCELLED
+  REACTIVATED
+}
+
+/// Append-only timeline of a tenant's subscription lifecycle. Powers the
+/// Tenant-detail "Subscription history" tab and the retention analytics.
+model SubscriptionEvent {
+  id          String                @id @default(cuid())
+  tenantId    String
+  type        SubscriptionEventType
+  detail      String?
+  actorUserId String? // central admin who triggered the change, if any
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([type])
+}
+
+enum CentralAuditKind {
+  SECURITY
+  BILLING
+  TENANT
+  SYSTEM
+}
+
+/// Platform-level audit feed for the Central Portal — privileged super-admin
+/// actions, including ones not tied to a single tenant (role / admin changes).
+/// Distinct from the tenant-scoped AuditLog.
+model CentralAuditEvent {
+  id          String           @id @default(cuid())
+  actorUserId String?
+  /// Snapshot of the actor's display name (survives later user deletion).
+  actorName   String
+  action      String
+  target      String
+  kind        CentralAuditKind @default(SYSTEM)
+  tenantId    String? // optional link to a tenant (drives the Activity tab)
+  ipAddress   String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  actor  User?   @relation("CentralAuditActor", fields: [actorUserId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([createdAt])
+  @@index([kind])
+  @@index([tenantId, createdAt])
 }

@@ -10,7 +10,10 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, notFound, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { writeCentralAudit, logSubscriptionEvent } from "@/lib/central/audit";
 import { z } from "zod";
+
+const TIER_RANK: Record<string, number> = { STARTER: 0, GROWTH: 1, PRO: 2 };
 
 const patchTenantSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -101,7 +104,7 @@ export async function PATCH(
 
   const existing = await prismaAdmin.tenant.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, featureFlags: true, subscriptionTier: true },
+    select: { id: true, name: true, featureFlags: true, subscriptionTier: true, subscriptionStatus: true },
   });
   if (!existing) return notFound("Tenant");
 
@@ -150,6 +153,43 @@ export async function PATCH(
       changes: { before: { subscriptionTier: existing.subscriptionTier }, after: { subscriptionTier: updated.subscriptionTier } },
       ipAddress: getClientIp(req),
     });
+
+    // Record subscription lifecycle + platform-audit events when plan/status shifts.
+    const tierChanged = updated.subscriptionTier !== existing.subscriptionTier;
+    const statusChanged = updated.subscriptionStatus !== existing.subscriptionStatus;
+    if (tierChanged) {
+      const up = TIER_RANK[updated.subscriptionTier] > TIER_RANK[existing.subscriptionTier];
+      await logSubscriptionEvent({
+        tenantId: id,
+        type: up ? "UPGRADED" : "DOWNGRADED",
+        detail: `${existing.subscriptionTier} → ${updated.subscriptionTier}`,
+        actorUserId: ctx.userId,
+      });
+    }
+    if (statusChanged) {
+      const s = updated.subscriptionStatus;
+      const type =
+        s === "ACTIVE" ? (existing.subscriptionStatus === "TRIALING" ? "SUBSCRIBED" : "REACTIVATED")
+        : s === "PAST_DUE" ? "PAYMENT_FAILED"
+        : s === "CANCELLED" ? "CANCELLED"
+        : "TRIAL_STARTED";
+      await logSubscriptionEvent({
+        tenantId: id,
+        type,
+        detail: `${existing.subscriptionStatus} → ${s}`,
+        actorUserId: ctx.userId,
+      });
+    }
+    if (tierChanged || statusChanged) {
+      await writeCentralAudit({
+        actorUserId: ctx.userId,
+        action: "changed subscription for",
+        target: existing.name,
+        kind: "BILLING",
+        tenantId: id,
+        ipAddress: getClientIp(req),
+      });
+    }
 
     return ok(updated, "Tenant updated");
   } catch (e: unknown) {
