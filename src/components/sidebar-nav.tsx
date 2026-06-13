@@ -87,8 +87,12 @@ type NavSection = {
 };
 
 // Grouped to mirror hr.my's information architecture, using our own labels.
-// `comingSoon` items are functions hr.my exposes that we haven't built yet —
-// shown as disabled "Soon" rows so the full structure is visible.
+// Group order follows hr.my's menu sequence (Home → Employee → Expense Claim →
+// Leave → Attendance → Document Workflow → Incident → Team → Payroll →
+// Employer); groups hr.my doesn't expose (Recruitment, Insights & Tools) are
+// kept and placed at the end. `comingSoon` items are functions hr.my exposes
+// that we haven't built yet — shown as disabled "Soon" rows so the full
+// structure is visible.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Overview",
@@ -111,36 +115,14 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Employer",
+    label: "Expense Claim",
     items: [
-      { href: "/settings", label: "Company Info", icon: "policies" },
-      { href: "/positions", label: "Positions", icon: "positions" },
-      { href: "/departments", label: "Departments", icon: "departments" },
-      { href: "/branches", label: "Branches", icon: "branches" },
-      { href: "/work-locations", label: "Locations", icon: "locations" },
-      { href: "/assets", label: "Assets", icon: "assets" },
-      { href: "/settings/roles", label: "Module Access", icon: "roles" },
-      { href: "#soon-level", label: "Level", icon: "positions", comingSoon: true },
-      { href: "#soon-bank", label: "Bank", icon: "bankfiles", comingSoon: true },
-      { href: "#soon-course", label: "Course", icon: "recruitment", comingSoon: true },
-      { href: "#soon-trainer", label: "Trainer", icon: "employees", comingSoon: true },
-      { href: "#soon-ethnicity", label: "Ethnicity", icon: "requests", comingSoon: true },
-      { href: "#soon-religion", label: "Religion", icon: "requests", comingSoon: true },
-      { href: "#soon-document-category", label: "Document Category", icon: "claims", comingSoon: true },
-    ],
-  },
-  {
-    label: "Attendance",
-    items: [
-      { href: "/attendance", label: "Time & Attendance", icon: "time" },
-      { href: "/shift-schedules", label: "Shift Schedules", icon: "time" },
-      { href: "/ot-applications", label: "OT Applications", icon: "time" },
-      { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
-      { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
-      { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
-      { href: "#soon-field-checkin", label: "Field Check-In", icon: "locations", comingSoon: true },
-      { href: "#soon-time-clock-report", label: "Time Clock Report", icon: "govreports", comingSoon: true },
-      { href: "#soon-attendance-workday", label: "Workday", icon: "holiday", comingSoon: true },
+      { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
+      { href: "#soon-expense-review", label: "Review", icon: "requests", comingSoon: true },
+      { href: "#soon-expense-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
+      { href: "#soon-expense-category", label: "Category", icon: "components", comingSoon: true },
+      { href: "#soon-expense-type", label: "Type", icon: "components", comingSoon: true },
+      { href: "#soon-expense-approval-workflow", label: "Approval Workflow", icon: "movements", comingSoon: true },
     ],
   },
   {
@@ -160,29 +142,17 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Payroll",
+    label: "Attendance",
     items: [
-      { href: "/payroll", label: "Payroll Runs", icon: "payruns" },
-      { href: "/pay-components", label: "Pay Components", icon: "components" },
-      { href: "/loans", label: "Loans", icon: "loans" },
-      { href: "/bank-files", label: "Bank Files", icon: "bankfiles" },
-      { href: "/reports", label: "Gov't Reports", icon: "govreports" },
-      { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
-      { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
-      { href: "#soon-annual-salary-statement", label: "Annual Salary Statement", icon: "govreports", comingSoon: true },
-      { href: "#soon-statutory-contribution", label: "Statutory Contribution", icon: "premium", comingSoon: true },
-      { href: "#soon-statutory-table", label: "Statutory Table", icon: "payrules", comingSoon: true },
-    ],
-  },
-  {
-    label: "Expense Claim",
-    items: [
-      { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
-      { href: "#soon-expense-review", label: "Review", icon: "requests", comingSoon: true },
-      { href: "#soon-expense-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
-      { href: "#soon-expense-category", label: "Category", icon: "components", comingSoon: true },
-      { href: "#soon-expense-type", label: "Type", icon: "components", comingSoon: true },
-      { href: "#soon-expense-approval-workflow", label: "Approval Workflow", icon: "movements", comingSoon: true },
+      { href: "/attendance", label: "Time & Attendance", icon: "time" },
+      { href: "/shift-schedules", label: "Shift Schedules", icon: "time" },
+      { href: "/ot-applications", label: "OT Applications", icon: "time" },
+      { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
+      { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
+      { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
+      { href: "#soon-field-checkin", label: "Field Check-In", icon: "locations", comingSoon: true },
+      { href: "#soon-time-clock-report", label: "Time Clock Report", icon: "govreports", comingSoon: true },
+      { href: "#soon-attendance-workday", label: "Workday", icon: "holiday", comingSoon: true },
     ],
   },
   {
@@ -209,6 +179,40 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/announcements", label: "Announcements", icon: "announcements" },
       { href: "#soon-team-discussion", label: "Discussion", icon: "requests", comingSoon: true },
       { href: "#soon-team-doc-sharing", label: "Document & Form Sharing", icon: "claims", comingSoon: true },
+    ],
+  },
+  {
+    label: "Payroll",
+    items: [
+      { href: "/payroll", label: "Payroll Runs", icon: "payruns" },
+      { href: "/pay-components", label: "Pay Components", icon: "components" },
+      { href: "/loans", label: "Loans", icon: "loans" },
+      { href: "/bank-files", label: "Bank Files", icon: "bankfiles" },
+      { href: "/reports", label: "Gov't Reports", icon: "govreports" },
+      { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
+      { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
+      { href: "#soon-annual-salary-statement", label: "Annual Salary Statement", icon: "govreports", comingSoon: true },
+      { href: "#soon-statutory-contribution", label: "Statutory Contribution", icon: "premium", comingSoon: true },
+      { href: "#soon-statutory-table", label: "Statutory Table", icon: "payrules", comingSoon: true },
+    ],
+  },
+  {
+    label: "Employer",
+    items: [
+      { href: "/settings", label: "Company Info", icon: "policies" },
+      { href: "/positions", label: "Positions", icon: "positions" },
+      { href: "/departments", label: "Departments", icon: "departments" },
+      { href: "/branches", label: "Branches", icon: "branches" },
+      { href: "/work-locations", label: "Locations", icon: "locations" },
+      { href: "/assets", label: "Assets", icon: "assets" },
+      { href: "/settings/roles", label: "Module Access", icon: "roles" },
+      { href: "#soon-level", label: "Level", icon: "positions", comingSoon: true },
+      { href: "#soon-bank", label: "Bank", icon: "bankfiles", comingSoon: true },
+      { href: "#soon-course", label: "Course", icon: "recruitment", comingSoon: true },
+      { href: "#soon-trainer", label: "Trainer", icon: "employees", comingSoon: true },
+      { href: "#soon-ethnicity", label: "Ethnicity", icon: "requests", comingSoon: true },
+      { href: "#soon-religion", label: "Religion", icon: "requests", comingSoon: true },
+      { href: "#soon-document-category", label: "Document Category", icon: "claims", comingSoon: true },
     ],
   },
   {
