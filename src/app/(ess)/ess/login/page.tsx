@@ -1,22 +1,19 @@
 "use client";
 
 /**
- * ESS login — returning-employee unlock, ported from the design handoff.
- * Brand lockup (Nexus + "Sentire Payroll"), then PIN / password / date-of-birth
- * methods wired to POST /api/ess/auth. The device remembers the employee's
- * identity (company code + employee number + display name) after a first
- * successful sign-in so the unlock screen can greet them by name.
- *
- * Phase 5: WebAuthn biometric — Face ID / fingerprint via @simplewebauthn/browser.
+ * ESS sign-in — restyled to the desktop design handoff (DLogin): a centered
+ * single-column card on the warm background with the Sentire "Nexus" lockup and
+ * a footer. Company code + employee number → 6-box PIN (with password / date of
+ * birth / biometric fallbacks). All auth is real (POST /api/ess/auth and the
+ * WebAuthn endpoints); the device remembers the employee so we can greet by name.
  */
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { NexusMark } from "@/components/sentire-login/glyphs";
 import { EIcon } from "@/components/ess/icons";
-import { EAvatar } from "@/components/ess/primitives";
 import "@/components/ess/ess.css";
 
 const IDENTITY_KEY = "ess_identity";
@@ -32,6 +29,53 @@ interface Identity {
 
 type Method = "pin" | "password" | "dob";
 type Status = "idle" | "error" | "success";
+
+// 6-box PIN entry backed by a hidden numeric input (handoff DPinBoxes).
+function DPinBoxes({
+  pin,
+  error,
+  busy,
+  onPin,
+}: {
+  pin: string;
+  error: boolean;
+  busy: boolean;
+  onPin: (v: string) => void;
+}) {
+  const LEN = 6;
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div
+      className={"d-pinrow" + (error ? " is-error" : "")}
+      onClick={() => ref.current?.focus()}
+    >
+      {Array.from({ length: LEN }).map((_, i) => (
+        <span
+          key={i}
+          className={
+            "d-pinbox" +
+            (i < pin.length ? " is-filled" : "") +
+            (i === pin.length ? " is-next" : "")
+          }
+        >
+          {i < pin.length ? "•" : ""}
+        </span>
+      ))}
+      <input
+        ref={ref}
+        className="d-pinhidden"
+        type="password"
+        inputMode="numeric"
+        autoFocus
+        disabled={busy}
+        value={pin}
+        maxLength={LEN}
+        aria-label="6-digit PIN"
+        onChange={(e) => onPin(e.target.value.replace(/\D/g, "").slice(0, LEN))}
+      />
+    </div>
+  );
+}
 
 function EssLoginContent() {
   const router = useRouter();
@@ -97,8 +141,7 @@ function EssLoginContent() {
         }
         localStorage.setItem(TOKEN_KEY, token);
 
-        // Enrich the remembered identity from the profile so next time we can
-        // greet them by name.
+        // Enrich remembered identity so next time we can greet them by name.
         try {
           const pr = await fetch("/api/ess/profile", { headers: { Authorization: `Bearer ${token}` } });
           const pd = await pr.json();
@@ -129,28 +172,19 @@ function EssLoginContent() {
     [busy, companyCode, employeeNumber, router],
   );
 
-  function pressKey(d: string) {
+  function onPin(v: string) {
     if (busy || status === "success") return;
     if (status === "error") setStatus("idle");
-    setPin((p) => {
-      if (p.length >= 6) return p;
-      const np = p + d;
-      if (np.length === 6) setTimeout(() => authenticate({ pin: np }), 140);
-      return np;
-    });
+    setPin(v);
+    if (v.length === 6) setTimeout(() => authenticate({ pin: v }), 140);
   }
-  function delKey() {
-    if (busy) return;
-    if (status === "error") setStatus("idle");
-    setPin((p) => p.slice(0, -1));
-  }
+
   const faceId = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     setErrMsg("");
     try {
-      // Start: fetch options from server.
-      const startRes = await fetch("/api/ess/webauthn/authenticate/start", {
+      const startRes = await fetch("/api/ess/webauthn/authenticate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,11 +204,9 @@ function EssLoginContent() {
       const { data } = await startRes.json();
       const { options, challengeToken } = data as { options: unknown; challengeToken: string };
 
-      // Call the browser WebAuthn API.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const credential = await startAuthentication(options as any);
 
-      // Finish: send assertion to server.
       const finishRes = await fetch("/api/ess/webauthn/authenticate/finish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -191,7 +223,6 @@ function EssLoginContent() {
       setTimeout(() => router.replace("/ess"), 900);
     } catch (e) {
       if (e instanceof Error && e.name === "NotAllowedError") {
-        // User cancelled the biometric prompt — don't show error.
         setBusy(false);
         return;
       }
@@ -202,6 +233,7 @@ function EssLoginContent() {
       setBusy(false);
     }
   }, [busy, companyCode, employeeNumber, router]);
+
   function switchAccount() {
     localStorage.removeItem(IDENTITY_KEY);
     setIdentity(null);
@@ -214,7 +246,9 @@ function EssLoginContent() {
     setStatus("idle");
     setErrMsg("");
   }
-  function startUnlock() {
+
+  function startUnlock(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!companyCode.trim() || !employeeNumber.trim()) {
       setErrMsg("Enter your company code and employee number.");
       return;
@@ -225,7 +259,7 @@ function EssLoginContent() {
   }
 
   const brand = (
-    <div className="e-login-brand">
+    <div className="d-login-brand">
       <NexusMark size={30} lineW={3.4} core="#E8693A" />
       <b>
         Sentire <span>Payroll</span>
@@ -233,133 +267,116 @@ function EssLoginContent() {
     </div>
   );
 
-  // ── success splash ──
+  const footer = (
+    <div className="d-login-foot">
+      <span>© 2026 Sentire</span>
+      <span className="d-login-dot">·</span>
+      <button type="button" onClick={() => toast.info("Privacy policy coming soon.")}>
+        Privacy
+      </button>
+      <span className="d-login-dot">·</span>
+      <button type="button" onClick={() => toast.info("Contact your HR admin for help.")}>
+        Help
+      </button>
+    </div>
+  );
+
+  let card: React.ReactNode;
+
   if (status === "success") {
-    return (
-      <div className="e-login">
-        <div className="e-login-success">
-          <span className="e-login-check">
-            <EIcon name="checkCircle" size={54} />
-          </span>
-          <h2>Welcome back</h2>
-          <p>Opening your workspace…</p>
-        </div>
+    card = (
+      <div className="d-login-card d-login-okcard">
+        <span className="e-success-ic">
+          <EIcon name="checkCircle" size={50} />
+        </span>
+        <h2>Welcome back{identity?.first ? `, ${identity.first}` : ""}</h2>
+        <p className="d-login-sub">Opening your workspace…</p>
       </div>
     );
-  }
-
-  // ── identify ──
-  if (phase === "identify") {
-    return (
-      <div className="e-login">
-        {brand}
-        <div className="e-login-id">
-          <h2>Sign in</h2>
-          <p>Enter your company code and employee number</p>
-        </div>
-        <div className="e-pwwrap">
+  } else if (phase === "identify") {
+    card = (
+      <form className="d-login-card" onSubmit={startUnlock}>
+        <h2>Sign in</h2>
+        <p className="d-login-sub">Enter your company code and employee number</p>
+        <div className="d-lfield">
           <label className="e-flabel">Company code</label>
           <div className="e-finput">
             <EIcon name="building" size={17} />
             <input
               value={companyCode}
               onChange={(e) => setCompanyCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-              placeholder="e.g. DEMOCORP"
+              placeholder="SENTIREPAYROLL"
               autoCapitalize="none"
               autoCorrect="off"
+              spellCheck={false}
               aria-label="Company code"
+              autoFocus
             />
           </div>
+        </div>
+        <div className="d-lfield">
           <label className="e-flabel">Employee number</label>
           <div className="e-finput">
             <EIcon name="user" size={17} />
             <input
               value={employeeNumber}
-              onChange={(e) => setEmployeeNumber(e.target.value)}
+              onChange={(e) => setEmployeeNumber(e.target.value.toUpperCase())}
               placeholder="EMP-00001"
               autoCapitalize="characters"
               autoCorrect="off"
+              spellCheck={false}
               autoComplete="username"
               aria-label="Employee number"
-              onKeyDown={(e) => e.key === "Enter" && startUnlock()}
             />
           </div>
-          <div style={{ height: 6 }} />
-          <button className="e-btn e-btn-primary e-btn-full" onClick={startUnlock}>
-            Continue
-          </button>
-          {errMsg && <p className="e-login-err">{errMsg}</p>}
         </div>
-        <div className="e-login-links">
-          <button onClick={() => toast.info("Ask your HR admin to send your activation link.")}>
-            New employee?
+        <button className="e-btn e-btn-primary e-btn-full" type="submit">
+          Continue
+        </button>
+        {errMsg && <p className="d-login-err">{errMsg}</p>}
+        <div className="d-login-new">
+          <span>New employee?</span>
+          <button type="button" onClick={() => toast.info("Ask your HR admin to send your activation link.")}>
+            Activate your account
+          </button>
+        </div>
+      </form>
+    );
+  } else if (method === "pin") {
+    card = (
+      <div className="d-login-card">
+        <h2>Enter your PIN</h2>
+        <p className="d-login-sub">
+          Signing in as <b>{employeeNumber}</b> · {identity?.company ?? companyCode}
+        </p>
+        <DPinBoxes pin={pin} error={status === "error"} busy={busy} onPin={onPin} />
+        <p className="d-pinlabel">
+          {status === "error" ? errMsg || "Incorrect PIN — try again." : "Type your 6-digit PIN"}
+        </p>
+        <div className="d-login-links">
+          <button type="button" onClick={faceId} disabled={busy}>
+            Use Face ID
+          </button>
+          <button type="button" onClick={() => { setMethod("password"); setStatus("idle"); }}>
+            Use password
+          </button>
+          <button type="button" onClick={() => { setMethod("dob"); setStatus("idle"); }}>
+            Date of birth
+          </button>
+          <button type="button" onClick={switchAccount}>
+            Use a different account
           </button>
         </div>
       </div>
     );
-  }
-
-  // ── unlock ──
-  const greetName = identity?.first ? `Hi, ${identity.first}` : "Welcome back";
-  const greetSub = identity?.company ?? companyCode;
-
-  return (
-    <div className="e-login">
-      {brand}
-
-      <div className="e-login-id">
-        <EAvatar initials={identity?.initials || employeeNumber.slice(0, 2).toUpperCase() || "ME"} size={64} />
-        <h2>{greetName}</h2>
-        <p>{greetSub}</p>
-      </div>
-
-      {method === "pin" && (
-        <div className="e-pinwrap">
-          <div className={"e-pindots" + (status === "error" ? " is-error" : "")}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <span key={i} className={"e-pindot" + (i < pin.length ? " is-on" : "")} />
-            ))}
-          </div>
-          <p className="e-pinlabel">
-            {status === "error" ? errMsg || "Incorrect PIN. Try again." : "Enter your 6-digit PIN"}
-          </p>
-
-          <div className="e-keypad">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
-              <button key={d} className="e-key" onClick={() => pressKey(String(d))} disabled={busy}>
-                {d}
-              </button>
-            ))}
-            <button className="e-key e-key-fn" onClick={faceId} aria-label="Face ID" disabled={busy}>
-              <EIcon name="faceid" size={26} />
-            </button>
-            <button className="e-key" onClick={() => pressKey("0")} disabled={busy}>
-              0
-            </button>
-            <button className="e-key e-key-fn" onClick={delKey} aria-label="Delete" disabled={busy}>
-              <EIcon name="backspace" size={24} />
-            </button>
-          </div>
-
-          <div className="e-login-links">
-            <button onClick={() => { setMethod("password"); setStatus("idle"); }}>
-              Use password instead
-            </button>
-            <button onClick={() => { setMethod("dob"); setStatus("idle"); }}>
-              Use date of birth
-            </button>
-            <button onClick={switchAccount}>Not you? Switch account</button>
-          </div>
-        </div>
-      )}
-
-      {method === "password" && (
-        <div className="e-pwwrap">
-          <label className="e-flabel">Employee number</label>
-          <div className="e-finput e-finput-ro">
-            <EIcon name="user" size={17} />
-            <input value={employeeNumber} readOnly />
-          </div>
+  } else if (method === "password") {
+    card = (
+      <div className="d-login-card">
+        <h2>Enter your password</h2>
+        <p className="d-login-sub">
+          Signing in as <b>{employeeNumber}</b> · {identity?.company ?? companyCode}
+        </p>
+        <div className="d-lfield">
           <label className="e-flabel">Password</label>
           <div className="e-finput">
             <EIcon name="lock" size={17} />
@@ -370,54 +387,75 @@ function EssLoginContent() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && password && authenticate({ password })}
               autoComplete="current-password"
+              autoFocus
             />
-            <button className="e-eye" onClick={() => setShowPw((s) => !s)} aria-label="Toggle password">
+            <button className="e-seclink" onClick={() => setShowPw((s) => !s)} type="button" aria-label="Toggle password">
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
-          <div style={{ height: 6 }} />
-          <button
-            className="e-btn e-btn-primary e-btn-full"
-            onClick={() => authenticate({ password })}
-            disabled={busy || !password}
-          >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-          {errMsg && <p className="e-login-err">{errMsg}</p>}
-          <div className="e-login-links e-login-links-c">
-            <button onClick={() => { setMethod("pin"); setStatus("idle"); }}>Use PIN instead</button>
-            <button onClick={() => { setMethod("dob"); setStatus("idle"); }}>Date of birth</button>
-          </div>
         </div>
-      )}
-
-      {method === "dob" && (
-        <div className="e-pwwrap">
-          <label className="e-flabel">Employee number</label>
-          <div className="e-finput e-finput-ro">
-            <EIcon name="user" size={17} />
-            <input value={employeeNumber} readOnly />
-          </div>
+        <button
+          className="e-btn e-btn-primary e-btn-full"
+          onClick={() => authenticate({ password })}
+          disabled={busy || !password}
+        >
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+        {errMsg && <p className="d-login-err">{errMsg}</p>}
+        <div className="d-login-links">
+          <button type="button" onClick={() => { setMethod("pin"); setStatus("idle"); }}>
+            Use PIN
+          </button>
+          <button type="button" onClick={() => { setMethod("dob"); setStatus("idle"); }}>
+            Date of birth
+          </button>
+          <button type="button" onClick={switchAccount}>
+            Different account
+          </button>
+        </div>
+      </div>
+    );
+  } else {
+    card = (
+      <div className="d-login-card">
+        <h2>Confirm your date of birth</h2>
+        <p className="d-login-sub">
+          Signing in as <b>{employeeNumber}</b> · {identity?.company ?? companyCode}
+        </p>
+        <div className="d-lfield">
           <label className="e-flabel">Date of birth</label>
           <div className="e-finput">
             <EIcon name="cal" size={17} />
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-          </div>
-          <div style={{ height: 6 }} />
-          <button
-            className="e-btn e-btn-primary e-btn-full"
-            onClick={() => authenticate({ birthDate })}
-            disabled={busy || !birthDate}
-          >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-          {errMsg && <p className="e-login-err">{errMsg}</p>}
-          <div className="e-login-links e-login-links-c">
-            <button onClick={() => { setMethod("pin"); setStatus("idle"); }}>Use PIN instead</button>
-            <button onClick={switchAccount}>Switch account</button>
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoFocus />
           </div>
         </div>
-      )}
+        <button
+          className="e-btn e-btn-primary e-btn-full"
+          onClick={() => authenticate({ birthDate })}
+          disabled={busy || !birthDate}
+        >
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+        {errMsg && <p className="d-login-err">{errMsg}</p>}
+        <div className="d-login-links">
+          <button type="button" onClick={() => { setMethod("pin"); setStatus("idle"); }}>
+            Use PIN
+          </button>
+          <button type="button" onClick={switchAccount}>
+            Different account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="d-login">
+      <div className="d-login-col">
+        {brand}
+        {card}
+        {footer}
+      </div>
     </div>
   );
 }
@@ -426,9 +464,11 @@ export default function EssLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="e-login">
-          <div className="e-login-success">
-            <p>Loading…</p>
+        <div className="d-login">
+          <div className="d-login-col">
+            <div className="d-login-card d-login-okcard">
+              <p className="d-login-sub">Loading…</p>
+            </div>
           </div>
         </div>
       }
