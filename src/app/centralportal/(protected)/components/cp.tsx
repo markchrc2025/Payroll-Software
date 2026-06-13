@@ -46,6 +46,7 @@ export const CP_ICONS = {
   plus: "M12 5v14M5 12h14",
   chevR: "M9 6l6 6-6 6",
   refresh: "M21 12a9 9 0 1 1-3-6.7M21 4v4h-4",
+  compliance: "M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2M9 4h6M9.5 13l1.7 1.7 3.3-3.6",
 } as const;
 
 export type CpIconName = keyof typeof CP_ICONS;

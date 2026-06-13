@@ -30,6 +30,7 @@ export default async function CentralPortalLayout({
     // admin for now; dedicated central-permission modules arrive in a later phase.
     "/centralportal/analytics",
     "/centralportal/audit",
+    "/centralportal/compliance",
     ...(hasCentralPermission(ctx, "USERS", "READ") || hasCentralPermission(ctx, "ROLES", "READ")
       ? ["/centralportal/settings"]
       : []),

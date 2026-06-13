@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { label: "Support",   href: "/centralportal/support",   icon: "support" },
   { label: "Analytics", href: "/centralportal/analytics", icon: "analytics", isNew: true },
   { label: "Audit log", href: "/centralportal/audit",     icon: "audit",     isNew: true },
+  { label: "Compliance", href: "/centralportal/compliance", icon: "compliance", isNew: true },
   { label: "Settings",  href: "/centralportal/settings",  icon: "settings" },
 ];
 
