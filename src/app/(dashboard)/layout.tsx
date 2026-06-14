@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     session.user.tenantId
       ? prismaAdmin.tenant.findUnique({
           where: { id: session.user.tenantId },
-          select: { name: true },
+          select: { name: true, logoKey: true, logoUrl: true },
         })
       : null,
     session.user.roleId
@@ -52,12 +52,19 @@ export default async function DashboardLayout({
 
   const userRole = role?.name ?? (session.user.systemRole === "SUPER_ADMIN" ? "Super Admin" : "Staff");
 
+  // The sidebar tile shows the uploaded company logo when one exists, falling
+  // back to the tenant initials. We point at the logo endpoint (which resolves
+  // to a public or presigned R2 URL) rather than embedding the URL here.
+  const tenantLogoUrl =
+    tenant?.logoKey || tenant?.logoUrl ? "/api/settings/tenant/logo" : null;
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar — self-contained client component with collapse logic */}
       <SidebarNav
         tenantName={tenantName}
         tenantInitials={tenantInitials}
+        tenantLogoUrl={tenantLogoUrl}
         userName={displayName}
         userRole={userRole}
         userInitials={initials}
