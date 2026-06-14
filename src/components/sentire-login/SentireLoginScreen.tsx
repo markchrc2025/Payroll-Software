@@ -320,9 +320,13 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
                       type="button"
                       className={"sn-sso-btn" + (SSO_BUTTONS.length === 1 ? " sn-sso-wide" : "")}
                       disabled={busy}
-                      onClick={() =>
-                        void signIn(id, { callbackUrl: "/centralportal/dashboard" })
-                      }
+                      onClick={() => {
+                        // Mark this as a Central Portal SSO flow so that if
+                        // NextAuth bounces a failure to the global /login page,
+                        // it can route the error back to /centralportal/login.
+                        document.cookie = "central_sso_flow=1; path=/; max-age=300; samesite=lax";
+                        void signIn(id, { callbackUrl: "/centralportal/dashboard" });
+                      }}
                     >
                       <Icon /> {SSO_BUTTONS.length === 1 ? long : short}
                     </button>
