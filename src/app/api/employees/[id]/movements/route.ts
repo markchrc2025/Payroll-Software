@@ -103,6 +103,13 @@ export async function POST(
       });
       if (!x) return { error: "toLevelId not found in your tenant" as const };
     }
+    if (v.toShiftScheduleId) {
+      const x = await tx.shiftSchedule.findFirst({
+        where: { id: v.toShiftScheduleId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!x) return { error: "toShiftScheduleId not found in your tenant" as const };
+    }
 
     const currentBasic = emp.salaryHistory[0]?.basicSalaryCents ?? null;
 
@@ -135,7 +142,7 @@ export async function POST(
         toJobType:          v.toJobType          ?? null,
         toJobStatus:        v.toJobStatus        ?? null,
         toLeaveWorkflowKey: v.toLeaveWorkflowKey ?? null,
-        toWorkdayKey:       v.toWorkdayKey       ?? null,
+        toShiftScheduleId:  v.toShiftScheduleId  ?? null,
         toHolidayKey:       v.toHolidayKey       ?? null,
         toTermStart:        v.toTermStart ? new Date(v.toTermStart) : null,
         toTermEnd:          v.toTermEnd   ? new Date(v.toTermEnd)   : null,

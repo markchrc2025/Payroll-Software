@@ -80,7 +80,7 @@ export async function applyMovementEffects(
         jobType:          movement.toJobType          ?? null,
         jobStatus:        movement.toJobStatus        ?? null,
         leaveWorkflowKey: movement.toLeaveWorkflowKey ?? null,
-        workdayKey:       movement.toWorkdayKey       ?? null,
+        shiftScheduleId:  movement.toShiftScheduleId  ?? null,
         holidayKey:       movement.toHolidayKey       ?? null,
         termStart:        movement.toTermStart        ?? null,
         termEnd:          movement.toTermEnd          ?? null,

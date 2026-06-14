@@ -13,7 +13,7 @@ const patchSchema = z.object({
   jobType:          z.string().max(50).optional().nullable(),
   jobStatus:        z.string().max(50).optional().nullable(),
   leaveWorkflowKey: z.string().max(50).optional().nullable(),
-  workdayKey:       z.string().max(50).optional().nullable(),
+  shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
   termStart:        z.string().optional().nullable(),
   termEnd:          z.string().optional().nullable(),
@@ -40,6 +40,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     });
     if (!existing) return { notFound: true as const };
 
+    if (v.shiftScheduleId) {
+      const sched = await tx.shiftSchedule.findFirst({
+        where: { id: v.shiftScheduleId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!sched) return { error: "Shift schedule not found" as const };
+    }
+
     const record = await tx.employmentTerm.update({
       where: { id: termId },
       data: {
@@ -47,17 +55,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ...(v.jobType          !== undefined && { jobType:          v.jobType          ?? null }),
         ...(v.jobStatus        !== undefined && { jobStatus:        v.jobStatus        ?? null }),
         ...(v.leaveWorkflowKey !== undefined && { leaveWorkflowKey: v.leaveWorkflowKey ?? null }),
-        ...(v.workdayKey       !== undefined && { workdayKey:       v.workdayKey       ?? null }),
+        ...(v.shiftScheduleId  !== undefined && { shiftScheduleId:  v.shiftScheduleId  ?? null }),
         ...(v.holidayKey       !== undefined && { holidayKey:       v.holidayKey       ?? null }),
         ...(v.termStart        !== undefined && { termStart: v.termStart ? new Date(v.termStart) : null }),
         ...(v.termEnd          !== undefined && { termEnd:   v.termEnd   ? new Date(v.termEnd)   : null }),
         ...(v.remark           !== undefined && { remark:    v.remark    ?? null }),
       },
+      include: { shiftSchedule: { select: { id: true, name: true } } },
     });
     return { record };
   });
 
   if ("notFound" in result) return notFound("Employment term record");
+  if ("error" in result && result.error) return err(result.error, 422);
   return ok(result.record, "Employment term record updated");
 }
 

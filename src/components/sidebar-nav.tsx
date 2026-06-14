@@ -138,7 +138,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-leave-entitlement-report", label: "Entitlement Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-earning-policy", label: "Earning Policy", icon: "policies", comingSoon: true },
       { href: "#soon-leave-approval-workflow", label: "Approval Workflow", icon: "movements", comingSoon: true },
-      { href: "#soon-leave-workday", label: "Workday", icon: "holiday", comingSoon: true },
     ],
   },
   {
@@ -152,7 +151,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
       { href: "#soon-field-checkin", label: "Field Check-In", icon: "locations", comingSoon: true },
       { href: "#soon-time-clock-report", label: "Time Clock Report", icon: "govreports", comingSoon: true },
-      { href: "#soon-attendance-workday", label: "Workday", icon: "holiday", comingSoon: true },
     ],
   },
   {

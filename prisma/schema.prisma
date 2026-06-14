@@ -1010,7 +1010,7 @@ model Employee {
   jobType               String?
   jobDescription        String?
   leaveWorkflowKey      String?
-  workdayKey            String?
+  shiftScheduleId       String?
   holidayKey            String?
   termEffectiveDate     DateTime?
   contractStartDate     DateTime?
@@ -1082,6 +1082,7 @@ model Employee {
   branch     Branch?     @relation(fields: [branchId], references: [id])
   position   Position?   @relation(fields: [positionId], references: [id])
   level      JobLevel?   @relation(fields: [levelId], references: [id])
+  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
 
   immediateSupervisor Employee?  @relation("EmployeeSupervisor", fields: [immediateSupervisorId], references: [id])
   supervisorOf        Employee[] @relation("EmployeeSupervisor")
@@ -1254,7 +1255,7 @@ model EmployeeMovement {
   toJobType            String?
   toJobStatus          String?
   toLeaveWorkflowKey   String?
-  toWorkdayKey         String?
+  toShiftScheduleId    String?
   toHolidayKey         String?
   toTermStart          DateTime?
   toTermEnd            DateTime?
@@ -1273,10 +1274,11 @@ model EmployeeMovement {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-  employee   Employee  @relation(fields: [employeeId], references: [id])
-  fromLevel  JobLevel? @relation("MovementFromLevel", fields: [fromLevelId], references: [id])
-  toLevel    JobLevel? @relation("MovementToLevel", fields: [toLevelId], references: [id])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  employee      Employee       @relation(fields: [employeeId], references: [id])
+  fromLevel     JobLevel?      @relation("MovementFromLevel", fields: [fromLevelId], references: [id])
+  toLevel       JobLevel?      @relation("MovementToLevel", fields: [toLevelId], references: [id])
+  toShiftSchedule ShiftSchedule? @relation(fields: [toShiftScheduleId], references: [id])
 
   @@index([tenantId])
   @@index([employeeId, effectiveDate])
@@ -1321,7 +1323,7 @@ model EmploymentTerm {
   jobType          String?
   jobStatus        String?
   leaveWorkflowKey String?
-  workdayKey       String?
+  shiftScheduleId  String?
   holidayKey       String?
   termStart        DateTime?
   termEnd          DateTime?
@@ -1329,8 +1331,9 @@ model EmploymentTerm {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
 
   @@index([tenantId, employeeId])
   @@index([tenantId, effectiveDate])
@@ -2204,6 +2207,9 @@ model ShiftSchedule {
   tenant      Tenant                    @relation(fields: [tenantId], references: [id])
   assignments EmployeeShiftAssignment[]
   dtrRecords  DTRRecord[]
+  employees       Employee[]
+  employmentTerms EmploymentTerm[]
+  movements       EmployeeMovement[]
 
   @@unique([tenantId, name])
   @@index([tenantId])

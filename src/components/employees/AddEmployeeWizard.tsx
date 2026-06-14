@@ -31,12 +31,14 @@ type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
 type Position = { id: string; title: string };
 type JobLevel = { id: string; name: string };
+type ShiftSchedule = { id: string; name: string };
 
 type Props = {
   departments: Dept[];
   branches:    Branch[];
   positions:   Position[];
   jobLevels:   JobLevel[];
+  shiftSchedules: ShiftSchedule[];
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -113,7 +115,6 @@ const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
 const JOB_TYPES   = ["Permanent","Contract","Probationary","Casual","Project-based"];
 const JOB_DESCS   = ["Confirmed","Probation","Resigned","Terminated"];
 const WORKFLOWS   = ["DEFAULT","Executive","Field Staff"];
-const WORKDAYS    = ["DEFAULT","Mon–Fri","Shift"];
 const HOLIDAYS    = ["DEFAULT","NCR","Regional"];
 const CURRENCIES  = ["PHP","USD","SGD"];
 const PAY_METHODS = ["Cash","Bank transfer","Check","GCash"];
@@ -155,7 +156,6 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   jobType: "Permanent",
   jobDescription: "Confirmed",
   leaveWorkflowKey: "DEFAULT",
-  workdayKey: "DEFAULT",
   holidayKey: "DEFAULT",
   taxClassification: "REGULAR",
   nontaxableBasicAmount: 0,
@@ -450,7 +450,7 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, jobLevels }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, jobLevels, shiftSchedules }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -695,7 +695,20 @@ export function AddEmployeeWizard({ departments, branches, positions, jobLevels 
             <SF control={c} name="jobType"           label="Job Type"     options={JOB_TYPES}  placeholder="Permanent"  errors={e} />
             <SF control={c} name="jobDescription"    label="Description"  options={JOB_DESCS}  placeholder="Confirmed"  errors={e} />
             <SF control={c} name="leaveWorkflowKey"  label="Leave Workflow" options={WORKFLOWS} placeholder="DEFAULT"   span2 errors={e} />
-            <SF control={c} name="workdayKey"        label="Workday"      options={WORKDAYS}   placeholder="DEFAULT"    span2 errors={e} />
+            <div className="col-span-2">
+              <Lbl text="Shift Schedule" />
+              <Controller control={c} name="shiftScheduleId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select shift schedule…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {shiftSchedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
             <SF control={c} name="holidayKey"        label="Holiday"      options={HOLIDAYS}   placeholder="DEFAULT"    span2 errors={e} />
             <TF control={c} name="contractStartDate" label="Term Start"   type="date"                                   errors={e} />
             <TF control={c} name="contractEndDate"   label="Term End"     type="date"                                   errors={e} />
