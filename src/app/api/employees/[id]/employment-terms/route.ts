@@ -13,7 +13,7 @@ const createSchema = z.object({
   jobType:          z.string().max(50).optional().nullable(),
   jobStatus:        z.string().max(50).optional().nullable(),
   leaveWorkflowKey: z.string().max(50).optional().nullable(),
-  workdayKey:       z.string().max(50).optional().nullable(),
+  shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
   termStart:        z.string().optional().nullable(),
   termEnd:          z.string().optional().nullable(),
@@ -38,6 +38,7 @@ export async function GET(
     const records = await tx.employmentTerm.findMany({
       where: { employeeId: id, tenantId: auth.tenantId },
       orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
+      include: { shiftSchedule: { select: { id: true, name: true } } },
     });
     return { records };
   });
@@ -67,6 +68,14 @@ export async function POST(
     });
     if (!emp) return { notFound: true as const };
 
+    if (v.shiftScheduleId) {
+      const sched = await tx.shiftSchedule.findFirst({
+        where: { id: v.shiftScheduleId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!sched) return { error: "Shift schedule not found" as const };
+    }
+
     const record = await tx.employmentTerm.create({
       data: {
         tenantId:         auth.tenantId,
@@ -75,16 +84,18 @@ export async function POST(
         jobType:          v.jobType          ?? null,
         jobStatus:        v.jobStatus        ?? null,
         leaveWorkflowKey: v.leaveWorkflowKey ?? null,
-        workdayKey:       v.workdayKey       ?? null,
+        shiftScheduleId:  v.shiftScheduleId  ?? null,
         holidayKey:       v.holidayKey       ?? null,
         termStart:        v.termStart ? new Date(v.termStart) : null,
         termEnd:          v.termEnd   ? new Date(v.termEnd)   : null,
         remark:           v.remark    ?? null,
       },
+      include: { shiftSchedule: { select: { id: true, name: true } } },
     });
     return { record };
   });
 
   if ("notFound" in result) return notFound("Employee");
+  if ("error" in result && result.error) return err(result.error, 422);
   return ok(result.record, "Employment term record created", 201);
 }

@@ -132,6 +132,12 @@ export async function PUT(
       });
       if (!lvl) return { error: "Level not found in your tenant" as const };
     }
+    if (parsed.data.shiftScheduleId !== undefined && parsed.data.shiftScheduleId !== null) {
+      const sched = await tx.shiftSchedule.findFirst({
+        where: { id: parsed.data.shiftScheduleId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!sched) return { error: "Shift schedule not found in your tenant" as const };
+    }
 
     const emp = await tx.employee.update({
       where: { id },

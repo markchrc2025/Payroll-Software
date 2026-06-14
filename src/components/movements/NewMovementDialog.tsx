@@ -31,6 +31,7 @@ type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 type Position = { id: string; title: string };
 type JobLevel = { id: string; name: string };
+type ShiftSchedule = { id: string; name: string };
 
 type Props = {
   open: boolean;
@@ -40,6 +41,7 @@ type Props = {
   branches: Branch[];
   positions: Position[];
   jobLevels: JobLevel[];
+  shiftSchedules: ShiftSchedule[];
   onCreated: () => void;
   reloadReferenceData: () => void;
 };
@@ -67,7 +69,7 @@ const EMPTY_FORM = {
   toJobType: "",
   toJobStatus: "",
   toLeaveWorkflowKey: "",
-  toWorkdayKey: "",
+  toShiftScheduleId: "",
   toHolidayKey: "",
   toTermStart: "",
   toTermEnd: "",
@@ -99,6 +101,7 @@ export function NewMovementDialog({
   branches: branchesProp,
   positions: positionsProp,
   jobLevels: jobLevelsProp,
+  shiftSchedules,
   onCreated,
   reloadReferenceData,
 }: Props) {
@@ -168,7 +171,7 @@ export function NewMovementDialog({
       if (form.toJobType) body.toJobType = form.toJobType;
       if (form.toJobStatus) body.toJobStatus = form.toJobStatus;
       if (form.toLeaveWorkflowKey) body.toLeaveWorkflowKey = form.toLeaveWorkflowKey;
-      if (form.toWorkdayKey) body.toWorkdayKey = form.toWorkdayKey;
+      if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
       if (form.toHolidayKey) body.toHolidayKey = form.toHolidayKey;
       if (form.toTermStart) body.toTermStart = form.toTermStart;
       if (form.toTermEnd) body.toTermEnd = form.toTermEnd;
@@ -336,8 +339,17 @@ export function NewMovementDialog({
                   <Input placeholder="e.g. standard" value={form.toLeaveWorkflowKey} onChange={(e) => set("toLeaveWorkflowKey", e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Workday Key</FieldLabel>
-                  <Input placeholder="e.g. mon-fri" value={form.toWorkdayKey} onChange={(e) => set("toWorkdayKey", e.target.value)} />
+                  <FieldLabel>Shift Schedule</FieldLabel>
+                  <Select value={form.toShiftScheduleId} onValueChange={(v) => set("toShiftScheduleId", v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select shift schedule…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shiftSchedules.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Holiday Key</FieldLabel>

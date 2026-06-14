@@ -39,12 +39,20 @@ async function getJobLevels() {
   return json.data ?? [];
 }
 
+async function getShiftSchedules() {
+  const res = await fetch(`${BASE}/api/shifts?limit=200&isActive=true`, { cache: "no-store" });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
+}
+
 export default async function NewEmployeePage() {
-  const [departments, branches, positions, jobLevels] = await Promise.all([
+  const [departments, branches, positions, jobLevels, shiftSchedules] = await Promise.all([
     getDepartments(),
     getBranches(),
     getPositions(),
     getJobLevels(),
+    getShiftSchedules(),
   ]);
 
   return (
@@ -66,6 +74,7 @@ export default async function NewEmployeePage() {
         branches={branches}
         positions={positions}
         jobLevels={jobLevels}
+        shiftSchedules={shiftSchedules}
       />
     </div>
   );

@@ -221,7 +221,7 @@ export const createEmployeeSchema = z.object({
   jobType: z.string().max(100).optional().nullable(),
   jobDescription: z.string().max(100).optional().nullable(),
   leaveWorkflowKey: z.string().max(100).optional().nullable(),
-  workdayKey: z.string().max(100).optional().nullable(),
+  shiftScheduleId: z.string().cuid().optional().nullable(),
   holidayKey: z.string().max(100).optional().nullable(),
   termEffectiveDate: z.coerce.date().optional().nullable(),
   contractStartDate: z.coerce.date().optional().nullable(),
