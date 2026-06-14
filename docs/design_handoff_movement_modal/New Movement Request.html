@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>New Movement Request — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --acc: #E8693A; --acc-press: #C2552F; --acc-soft: #fdeee6;
+    --ink: #2A2420; --muted: #6B6259; --muted-2: #9b9085;
+    --bg: #F6F2EC; --paper: #ffffff; --line: #ECE6DD; --line-2: #f1ece4;
+    --side-1: #2E241C; --side-2: #1f1813;
+    --font: "Instrument Sans", system-ui, sans-serif;
+    --body: "Hanken Grotesk", system-ui, sans-serif;
+    --mono: "JetBrains Mono", monospace;
+    --fld-gap: 14px; --row-gap: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--body); background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  button { font-family: var(--font); cursor: pointer; }
+  ::selection { background: var(--acc-soft); }
+
+  /* ============ dimmed backdrop (context only) ============ */
+  .bd { position: fixed; inset: 0; overflow: hidden; }
+  .bd-main { padding: 30px 40px; }
+  .bd-h1 { font-family: var(--font); font-weight: 600; font-size: 30px; letter-spacing: -0.025em; margin: 0 0 4px; color: var(--ink); }
+  .bd-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); }
+  .bd-bar { display: flex; gap: 10px; margin-bottom: 18px; }
+  .bd-chip { height: 38px; width: 150px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); }
+  .bd-card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .bd-thead, .bd-trow { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.3fr 1fr; gap: 18px; padding: 14px 18px; align-items: center; }
+  .bd-thead { border-bottom: 1px solid var(--line-2); }
+  .bd-th { font-family: var(--font); font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-2); }
+  .bd-trow { border-bottom: 1px solid var(--line-2); }
+  .bd-sk { height: 13px; border-radius: 6px; background: #efe9e0; }
+
+  /* ============ scrim ============ */
+  .ov { position: fixed; inset: 0; background: rgba(33,26,21,.46); backdrop-filter: blur(2.5px); display: flex; align-items: center; justify-content: center; padding: 28px; z-index: 50; animation: ov .22s ease; }
+  @keyframes ov { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ============ modal ============ */
+  .m { width: 760px; max-width: 100%; max-height: calc(100vh - 56px); background: var(--paper); border-radius: 18px;
+       box-shadow: 0 32px 70px -24px rgba(33,26,21,.55), 0 2px 8px -2px rgba(33,26,21,.18);
+       display: flex; flex-direction: column; overflow: hidden; animation: pop .26s cubic-bezier(.2,.8,.3,1); }
+  @keyframes pop { from { transform: translateY(10px) scale(.985); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  .m-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 26px 16px; border-bottom: 1px solid var(--line); }
+  .m-head-l { display: flex; align-items: center; gap: 13px; }
+  .m-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; flex: none; }
+  .m-head h3 { font-family: var(--font); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; margin: 0; }
+  .m-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+  .m-x { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; transition: background .13s, color .13s; }
+  .m-x:hover { background: #f6f1ea; color: var(--ink); }
+
+  .m-body { padding: 20px 26px 22px; overflow-y: auto; }
+
+  .fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--row-gap) var(--fld-gap); }
+  .fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fld.s2 { grid-column: span 2; }
+  .fld.s3 { grid-column: 1 / -1; }
+  .flabel { font-family: var(--font); font-weight: 600; font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .req { color: var(--acc); font-weight: 700; }
+
+  .inp { font-family: var(--body); font-size: 13.5px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 0 12px; height: 38px; width: 100%; outline: none; transition: border-color .13s, box-shadow .13s; }
+  .inp::placeholder { color: #b3a99c; }
+  .inp:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  textarea.inp { height: auto; padding: 9px 12px; resize: none; line-height: 1.45; }
+  select.inp { appearance: none; cursor: pointer; padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239b9085' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; }
+  select.inp.placeholder { color: #b3a99c; }
+
+  /* employee combo trigger */
+  .emp { display: flex; align-items: center; gap: 10px; height: 38px; border: 1px solid var(--line); border-radius: 9px; padding: 0 11px; background: var(--paper); width: 100%; text-align: left; transition: border-color .13s, box-shadow .13s; }
+  .emp:hover { border-color: #ddd3c6; }
+  .emp.is-on { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  .emp-av { width: 24px; height: 24px; border-radius: 50%; flex: none; font-family: var(--font); font-weight: 600; font-size: 10.5px; color: #fff; display: flex; align-items: center; justify-content: center; }
+  .emp-tx { flex: 1; min-width: 0; line-height: 1.2; }
+  .emp-tx b { font-family: var(--font); font-weight: 600; font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .emp-tx i { font-style: normal; font-size: 11px; color: var(--muted-2); }
+  .emp-tx .emp-ph { font-family: var(--body); font-weight: 400; font-size: 13.5px; color: #b3a99c; }
+  .emp > svg { color: var(--muted-2); flex: none; }
+
+  .fsection { grid-column: 1 / -1; display: flex; align-items: center; gap: 11px; margin: 6px 0 0; }
+  .fsection span { font-family: var(--font); font-weight: 700; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--acc-press); white-space: nowrap; }
+  .fsection .ln { flex: 1; height: 1px; background: var(--line); }
+
+  .selectadd { display: flex; align-items: center; gap: 8px; }
+  .selectadd .inp { flex: 1; min-width: 0; }
+  .addbtn { width: 30px; height: 30px; flex: none; border-radius: 8px; border: 1px dashed #d7ccbd; background: var(--bg); color: var(--acc); display: flex; align-items: center; justify-content: center; transition: background .13s, border-color .13s, transform .13s; }
+  .addbtn:hover { background: var(--acc-soft); border-color: var(--acc); transform: scale(1.06); }
+
+  .m-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 26px; border-top: 1px solid var(--line); background: #fcfaf7; }
+  .m-foot-hint { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted-2); }
+  .m-foot-r { display: flex; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; border-radius: 10px; padding: 10px 17px; border: 1px solid transparent; transition: background .13s, border-color .13s, transform .12s; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--acc); color: #fff; box-shadow: 0 8px 18px -10px rgba(232,105,58,.75); }
+  .btn-primary:hover { background: var(--acc-press); }
+  .btn-ghost { background: var(--paper); color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { background: #f6f1ea; border-color: #ddd3c6; }
+
+  /* density: compact */
+  .m.compact .m-body { padding-top: 16px; padding-bottom: 18px; }
+  .m.compact { --row-gap: 11px; }
+  .m.compact .inp, .m.compact .emp { height: 35px; }
+  .m.compact .fsection { margin-top: 3px; }
+
+  /* placement 2-col variant */
+  .fgrid.plc2 .plc { grid-column: span 1; }
+
+  @media (max-width: 620px) {
+    .fgrid { grid-template-columns: 1fr 1fr; }
+    .fld.s2, .fld.s3 { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "density": "comfortable",
+  "placementCols": "3 columns",
+  "showReasonNotes": true
+}/*EDITMODE-END*/;
+
+function avatarTone(s){ const t=["#E8693A","#4F9373","#3e63a0","#A0627D","#C7913D","#5E7FB1"]; let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))>>>0; return t[h%t.length]; }
+
+function Backdrop(){
+  const rows = [0,1,2,3,4];
+  return (
+    <div className="bd" aria-hidden="true">
+      <div className="bd-main">
+        <h1 className="bd-h1">Employee Movements</h1>
+        <p className="bd-sub">Transfers, promotions, salary adjustments, and status changes</p>
+        <div className="bd-bar"><div className="bd-chip" /><div className="bd-chip" /></div>
+        <div className="bd-card">
+          <div className="bd-thead">
+            <div className="bd-th">Employee</div><div className="bd-th">Type</div>
+            <div className="bd-th">Effective</div><div className="bd-th">Change</div><div className="bd-th">Status</div>
+          </div>
+          {rows.map(r=>(
+            <div className="bd-trow" key={r}>
+              <div className="bd-sk" style={{width:'70%'}} /><div className="bd-sk" style={{width:'55%'}} />
+              <div className="bd-sk" style={{width:'60%'}} /><div className="bd-sk" style={{width:'80%'}} /><div className="bd-sk" style={{width:'45%'}} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, req, span, children }){
+  return (
+    <div className={"fld" + (span===2?" s2":span===3?" s3":"")}>
+      <label className="flabel">{label}{req && <span className="req">*</span>}</label>
+      {children}
+    </div>
+  );
+}
+
+function SelectAdd({ children, value, onChange, placeholder }){
+  return (
+    <div className="selectadd">
+      <select className={"inp" + (value?"":" placeholder")} value={value} onChange={onChange}>
+        <option value="" disabled>{placeholder}</option>
+        {children}
+      </select>
+      <button type="button" className="addbtn" title="Create new" aria-label="Create new">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+  );
+}
+
+function App(){
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const compact = t.density === "compact";
+  const plc2 = t.placementCols === "2 columns";
+
+  const [emp, setEmp] = useState(null);
+  const [empOpen, setEmpOpen] = useState(false);
+  const [scope, setScope] = useState("PLACEMENT_CHANGE");
+  const [date, setDate] = useState("");
+  const [pos, setPos] = useState(""); const [mgr, setMgr] = useState("");
+  const [dept, setDept] = useState(""); const [branch, setBranch] = useState("");
+  const [jobTitle, setJobTitle] = useState(""); const [jobLevel, setJobLevel] = useState("");
+
+  const EMPLOYEES = [
+    ["Maria Santos","Senior Engineer · Engineering"],
+    ["Juan dela Cruz","Accountant · Finance"],
+    ["Liza Reyes","HR Officer · People Ops"],
+    ["Paolo Mendoza","Sales Lead · Commercial"],
+  ];
+
+  return (
+    <React.Fragment>
+      <Backdrop />
+      <div className="ov" onMouseDown={(e)=>{ if(e.target.classList.contains('ov')) setEmpOpen(false); }}>
+        <div className={"m" + (compact?" compact":"")} role="dialog" aria-modal="true" aria-labelledby="mtitle">
+
+          <div className="m-head">
+            <div className="m-head-l">
+              <div className="m-ic">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/></svg>
+              </div>
+              <div>
+                <h3 id="mtitle">New Movement Request</h3>
+                <p>Transfer, promotion, salary or status change.</p>
+              </div>
+            </div>
+            <button className="m-x" aria-label="Close">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <div className="m-body">
+            <div className={"fgrid" + (plc2?" plc2":"")}>
+
+              {/* ---- core ---- */}
+              <Field label="Employee" req>
+                <div style={{position:'relative'}}>
+                  <button type="button" className={"emp" + (empOpen?" is-on":"")} onClick={()=>setEmpOpen(o=>!o)}>
+                    {emp ? (
+                      <React.Fragment>
+                        <span className="emp-av" style={{background:avatarTone(emp[0])}}>{emp[0].split(' ').map(w=>w[0]).join('').slice(0,2)}</span>
+                        <span className="emp-tx"><b>{emp[0]}</b></span>
+                      </React.Fragment>
+                    ) : (
+                      <span className="emp-tx"><span className="emp-ph">Select employee…</span></span>
+                    )}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {empOpen && (
+                    <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,background:'#fff',border:'1px solid var(--line)',borderRadius:11,boxShadow:'0 18px 44px -16px rgba(42,36,32,.4)',padding:6,zIndex:5}}>
+                      {EMPLOYEES.map((e,i)=>(
+                        <button key={i} type="button" onClick={()=>{setEmp(e);setEmpOpen(false);}}
+                          style={{display:'flex',alignItems:'center',gap:10,width:'100%',border:'none',background:'none',padding:'7px 8px',borderRadius:8,textAlign:'left'}}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='#f6f1ea'} onMouseLeave={ev=>ev.currentTarget.style.background='none'}>
+                          <span className="emp-av" style={{background:avatarTone(e[0])}}>{e[0].split(' ').map(w=>w[0]).join('').slice(0,2)}</span>
+                          <span className="emp-tx"><b>{e[0]}</b><i>{e[1]}</i></span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Field>
+
+              <Field label="Scope of Change" req>
+                <select className="inp" value={scope} onChange={e=>setScope(e.target.value)}>
+                  <option value="PLACEMENT_CHANGE">Placement Change</option>
+                  <option value="PROMOTION">Promotion</option>
+                  <option value="TRANSFER">Transfer</option>
+                  <option value="SALARY_ADJUSTMENT">Salary Adjustment</option>
+                  <option value="STATUS_CHANGE">Status Change</option>
+                </select>
+              </Field>
+
+              <Field label="Effective Date" req>
+                <input className="inp" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+              </Field>
+
+              {/* ---- placement ---- */}
+              <div className="fsection"><span>Placement Details</span><div className="ln" /></div>
+
+              <div className={"fld plc"}>
+                <label className="flabel">To Position</label>
+                <SelectAdd value={pos} onChange={e=>setPos(e.target.value)} placeholder="Select position…">
+                  <option>Senior Engineer</option><option>Engineering Lead</option><option>Product Manager</option><option>Finance Analyst</option>
+                </SelectAdd>
+              </div>
+
+              <div className="fld plc" style={plc2?{gridColumn:'span 1'}:null}>
+                <label className="flabel">Job Title</label>
+                <input className="inp" placeholder="e.g. Senior Engineer" value={jobTitle} onChange={e=>setJobTitle(e.target.value)} />
+              </div>
+
+              <div className="fld plc">
+                <label className="flabel">Job Level</label>
+                <input className="inp" placeholder="e.g. L3" value={jobLevel} onChange={e=>setJobLevel(e.target.value)} />
+              </div>
+
+              <div className="fld plc">
+                <label className="flabel">Line Manager</label>
+                <select className={"inp" + (mgr?"":" placeholder")} value={mgr} onChange={e=>setMgr(e.target.value)}>
+                  <option value="" disabled>Select line manager…</option>
+                  <option>Maria Santos</option><option>Paolo Mendoza</option><option>Liza Reyes</option>
+                </select>
+              </div>
+
+              <div className="fld plc">
+                <label className="flabel">Department</label>
+                <SelectAdd value={dept} onChange={e=>setDept(e.target.value)} placeholder="Select department…">
+                  <option>Engineering</option><option>Finance</option><option>People Ops</option><option>Commercial</option>
+                </SelectAdd>
+              </div>
+
+              <div className="fld plc">
+                <label className="flabel">Branch</label>
+                <SelectAdd value={branch} onChange={e=>setBranch(e.target.value)} placeholder="Select branch…">
+                  <option>Makati HQ</option><option>Cebu</option><option>Davao</option>
+                </SelectAdd>
+              </div>
+
+              {/* ---- reason / notes ---- */}
+              {t.showReasonNotes && (
+                <React.Fragment>
+                  <div className="fsection"><span>Justification</span><div className="ln" /></div>
+                  <Field label="Reason" span={plc2?2:undefined}>
+                    <textarea className="inp" rows={compact?2:2} placeholder="Why is this movement being requested?" />
+                  </Field>
+                  <Field label="Notes" span={plc2?2:undefined}>
+                    <textarea className="inp" rows={compact?2:2} placeholder="Optional internal notes" />
+                  </Field>
+                </React.Fragment>
+              )}
+
+            </div>
+          </div>
+
+          <div className="m-foot">
+            <div className="m-foot-hint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span><span className="req" style={{color:'var(--acc)',fontWeight:700}}>*</span> Required fields</span>
+            </div>
+            <div className="m-foot-r">
+              <button className="btn btn-ghost">Cancel</button>
+              <button className="btn btn-primary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                Submit Request
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <TweaksPanel>
+        <TweakSection label="Layout" />
+        <TweakRadio label="Density" value={t.density} options={["comfortable","compact"]} onChange={v=>setTweak('density', v)} />
+        <TweakRadio label="Placement grid" value={t.placementCols} options={["2 columns","3 columns"]} onChange={v=>setTweak('placementCols', v)} />
+        <TweakSection label="Content" />
+        <TweakToggle label="Reason & Notes" value={t.showReasonNotes} onChange={v=>setTweak('showReasonNotes', v)} />
+      </TweaksPanel>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
