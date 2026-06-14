@@ -96,6 +96,13 @@ export async function POST(
       });
       if (!x) return { error: "toLineManagerId not found in your tenant" as const };
     }
+    if (v.toLevelId) {
+      const x = await tx.jobLevel.findFirst({
+        where: { id: v.toLevelId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!x) return { error: "toLevelId not found in your tenant" as const };
+    }
 
     const currentBasic = emp.salaryHistory[0]?.basicSalaryCents ?? null;
 
@@ -117,8 +124,8 @@ export async function POST(
         toPositionId: v.toPositionId ?? null,
         fromJobTitle: emp.jobTitle,
         toJobTitle: v.toJobTitle ?? null,
-        fromJobLevel: emp.jobLevel,
-        toJobLevel: v.toJobLevel ?? null,
+        fromLevelId: emp.levelId,
+        toLevelId: v.toLevelId ?? null,
         fromBasicSalaryCents: currentBasic,
         toBasicSalaryCents,
         fromStatus: emp.employmentStatus,

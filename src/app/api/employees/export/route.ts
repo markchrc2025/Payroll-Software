@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
     include: {
       department: { select: { name: true } },
       branch: { select: { name: true } },
+      level: { select: { name: true } },
       salaryHistory: {
         where: { endDate: null },
         orderBy: { effectiveDate: "desc" },
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
     department_name: e.department?.name ?? "",
     branch_name: e.branch?.name ?? "",
     job_title: e.jobTitle ?? "",
-    job_level: e.jobLevel ?? "",
+    job_level: e.level?.name ?? "",
     employment_type: e.employmentType,
     employment_status: e.employmentStatus,
     hire_date: e.hireDate.toISOString().slice(0, 10),

@@ -53,7 +53,7 @@ interface Employee {
   bankAccountNumber?: string;
   bankAccountName?: string;
   jobTitle?: string;
-  jobLevel?: string;
+  level?: { id: string; name: string };
   department?: { id: string; name: string };
   branch?: { id: string; name: string };
   position?: { id: string; title: string; level?: string };
@@ -195,7 +195,7 @@ function EmploymentTab({ emp }: { emp: Employee }) {
         {irow("Department", fmt(emp.department?.name))}
         {irow("Branch", fmt(emp.branch?.name))}
         {irow("Position", emp.position?.title ?? fmt(emp.jobTitle))}
-        {irow("Job Level", fmt(emp.position?.level ?? emp.jobLevel))}
+        {irow("Job Level", fmt(emp.position?.level ?? emp.level?.name))}
         {irow("Employment Status", fmt(emp.employmentStatus))}
         {irow("Employment Type", fmt(emp.employmentType))}
         {irow("Pay Frequency", fmt(emp.payFrequency))}
@@ -246,7 +246,7 @@ function LeftPanel({
 }) {
   const { bg, color } = getAvatarColor(emp.firstName + " " + emp.lastName);
   const initials = getInitials(emp.firstName, emp.lastName);
-  const posLine = [emp.position?.title ?? emp.jobTitle, emp.position?.level ?? emp.jobLevel]
+  const posLine = [emp.position?.title ?? emp.jobTitle, emp.position?.level ?? emp.level?.name]
     .filter(Boolean)
     .join(" · ");
 

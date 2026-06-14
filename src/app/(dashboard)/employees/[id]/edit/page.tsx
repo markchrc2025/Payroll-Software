@@ -42,16 +42,25 @@ async function getBranches() {
   return json.data ?? [];
 }
 
+async function getJobLevels() {
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const res = await fetch(`${base}/api/job-levels`, { cache: "no-store", headers: await authHeaders() });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
+}
+
 export default async function EditEmployeePage({
   params,
 }: {
   params: Promise<{ id: string }>; // Next.js 16: params is a Promise
 }) {
   const { id } = await params;
-  const [employee, departments, branches] = await Promise.all([
+  const [employee, departments, branches, jobLevels] = await Promise.all([
     getEmployee(id),
     getDepartments(),
     getBranches(),
+    getJobLevels(),
   ]);
 
   if (!employee) notFound();
@@ -106,6 +115,7 @@ export default async function EditEmployeePage({
         initialData={initialData}
         departments={departments}
         branches={branches}
+        jobLevels={jobLevels}
       />
 
       <EssPinCard employeeId={employee.id} hasPin={!!employee.hasEssPin} />

@@ -38,6 +38,7 @@ export async function GET(
       department: { select: { id: true, name: true } },
       branch: { select: { id: true, name: true } },
       position: { select: { id: true, title: true, level: true } },
+      level: { select: { id: true, name: true } },
       statutoryIds: true,
       salaryHistory: {
         where: { endDate: null },
@@ -124,6 +125,12 @@ export async function PUT(
         where: { id: positionId, tenantId: auth.tenantId, deletedAt: null },
       });
       if (!pos) return { error: "Position not found in your tenant" as const };
+    }
+    if (parsed.data.levelId !== undefined && parsed.data.levelId !== null) {
+      const lvl = await tx.jobLevel.findFirst({
+        where: { id: parsed.data.levelId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!lvl) return { error: "Level not found in your tenant" as const };
     }
 
     const emp = await tx.employee.update({

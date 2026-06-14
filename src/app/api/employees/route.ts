@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     statutoryIds,
     placementEffectiveDate,
     jobTitle,
-    jobLevel,
+    levelId,
     termEffectiveDate,
     jobType,
     jobDescription,
@@ -167,6 +167,12 @@ export async function POST(req: NextRequest) {
       });
       if (!pos) return { error: "Position not found in your tenant" as const };
     }
+    if (levelId) {
+      const lvl = await tx.jobLevel.findFirst({
+        where: { id: levelId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!lvl) return { error: "Level not found in your tenant" as const };
+    }
 
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
@@ -187,7 +193,7 @@ export async function POST(req: NextRequest) {
         standardWorkDays: standardWorkDays.toString(),
         placementEffectiveDate: placementEffectiveDate ?? null,
         jobTitle:               jobTitle               ?? null,
-        jobLevel:               jobLevel               ?? null,
+        levelId:                levelId                ?? null,
         termEffectiveDate:      termEffectiveDate      ?? null,
         jobType:                jobType                ?? null,
         jobDescription:         jobDescription         ?? null,
@@ -224,7 +230,7 @@ export async function POST(req: NextRequest) {
         lineManagerId: immediateSupervisorId ?? null,
         departmentId:  departmentId  ?? null,
         branchId:      branchId      ?? null,
-        level:         jobLevel      ?? null,
+        levelId:       levelId       ?? null,
       },
     });
 

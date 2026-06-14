@@ -97,6 +97,7 @@ const SALARY_TYPE_OPTIONS = [
 
 type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
+type JobLevel = { id: string; name: string };
 
 // ---------------------------------------------------------------------------
 // Field helpers — defined OUTSIDE EmployeeForm so their type identity is
@@ -188,6 +189,7 @@ type Props = {
   initialData?: Partial<CreateEmployeeInput>;
   departments: Department[];
   branches: Branch[];
+  jobLevels: JobLevel[];
 };
 
 // ---------------------------------------------------------------------------
@@ -200,6 +202,7 @@ export function EmployeeForm({
   initialData,
   departments,
   branches,
+  jobLevels,
 }: Props) {
   const router = useRouter();
   const schema = mode === "create" ? createEmployeeSchema : updateEmployeeSchema;
@@ -432,7 +435,36 @@ export function EmployeeForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TextField control={ctrl} name="jobTitle" label="Job Title" placeholder="Software Engineer" />
-            <TextField control={ctrl} name="jobLevel" label="Job Level / Grade" placeholder="L3, Senior…" />
+            <FormField
+              control={form.control}
+              name="levelId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Job Level / Grade</FormLabel>
+                  <Select
+                    value={field.value ?? "none"}
+                    onValueChange={(v: string | null) =>
+                      field.onChange(v === "none" ? null : v)
+                    }
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">— No Level —</SelectItem>
+                      {jobLevels.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SelectField

@@ -15,7 +15,7 @@ const patchSchema = z.object({
   lineManagerId: z.string().optional().nullable(),
   departmentId:  z.string().optional().nullable(),
   branchId:      z.string().optional().nullable(),
-  level:         z.string().max(50).optional().nullable(),
+  levelId:       z.string().optional().nullable(),
   remark:        z.string().max(200).optional().nullable(),
 });
 
@@ -67,6 +67,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       });
       if (!br) return { error: "Branch not found" as const };
     }
+    if (v.levelId) {
+      const lvl = await tx.jobLevel.findFirst({
+        where: { id: v.levelId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!lvl) return { error: "Level not found" as const };
+    }
 
     const record = await tx.placement.update({
       where: { id: placementId },
@@ -77,7 +84,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ...(v.lineManagerId !== undefined && { lineManagerId: v.lineManagerId ?? null }),
         ...(v.departmentId  !== undefined && { departmentId:  v.departmentId  ?? null }),
         ...(v.branchId      !== undefined && { branchId:      v.branchId      ?? null }),
-        ...(v.level         !== undefined && { level:         v.level         ?? null }),
+        ...(v.levelId       !== undefined && { levelId:       v.levelId       ?? null }),
         ...(v.remark        !== undefined && { remark:        v.remark        ?? null }),
       },
       include: {
@@ -85,6 +92,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         lineManager: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
         department:  { select: { id: true, name: true } },
         branch:      { select: { id: true, name: true } },
+        level:       { select: { id: true, name: true } },
       },
     });
     return { record };

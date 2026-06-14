@@ -19,7 +19,7 @@ export const createMovementSchema = z
     toBranchId: cuid.optional().nullable(),
     toPositionId: cuid.optional().nullable(),
     toJobTitle: z.string().max(150).optional().nullable(),
-    toJobLevel: z.string().max(50).optional().nullable(),
+    toLevelId: cuid.optional().nullable(),
     /// Pesos as decimal string (e.g. "55000.00") — converted to centavos server-side.
     toBasicSalary: z.string().regex(/^-?\d+(\.\d+)?$/).optional().nullable(),
     toStatus: z.nativeEnum(EmploymentStatus).optional().nullable(),
@@ -45,7 +45,7 @@ export const createMovementSchema = z
         });
       }
     };
-    const placementFields = ["toPositionId", "toJobTitle", "toJobLevel", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
+    const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
     const termsFields     = ["toJobType", "toJobStatus", "toLeaveWorkflowKey", "toWorkdayKey", "toHolidayKey", "toTermStart", "toTermEnd"] as const;
 
     switch (v.movementType) {
@@ -57,13 +57,13 @@ export const createMovementSchema = z
         break;
       case "PROMOTION":
       case "DEMOTION":
-        requireAny(["toPositionId", "toJobTitle", "toJobLevel", "toBasicSalary"]);
+        requireAny(["toPositionId", "toJobTitle", "toLevelId", "toBasicSalary"]);
         break;
       case "SALARY_ADJUSTMENT":
         requireAny(["toBasicSalary"]);
         break;
       case "TITLE_CHANGE":
-        requireAny(["toJobTitle", "toJobLevel", "toPositionId"]);
+        requireAny(["toJobTitle", "toLevelId", "toPositionId"]);
         break;
       case "STATUS_CHANGE":
       case "REGULARIZATION":
