@@ -4,6 +4,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 const patchSchema = z
   .object({
@@ -65,7 +66,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireCentralPermission("USERS", "MANAGE");
   if (ctx instanceof Response) return ctx;
   const { id } = await params;
@@ -73,6 +74,22 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (id === ctx.userId) {
     return err("You cannot delete your own account", 400);
   }
+
+  // Require the caller to confirm with their own password.
+  const body = await req.json().catch(() => null);
+  if (!body?.password || typeof body.password !== "string") {
+    return err("Password confirmation is required", 400);
+  }
+
+  const caller = await prismaAdmin.user.findFirst({
+    where: { id: ctx.userId },
+    select: { passwordHash: true },
+  });
+  if (!caller?.passwordHash) {
+    return err("Cannot verify identity — no password is set on your account", 400);
+  }
+  const passwordOk = await bcrypt.compare(body.password, caller.passwordHash);
+  if (!passwordOk) return err("Incorrect password", 401);
 
   const target = await prismaAdmin.user.findFirst({
     where: { id, tenantId: null, deletedAt: null },
