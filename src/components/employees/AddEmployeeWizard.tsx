@@ -711,7 +711,7 @@ export function AddEmployeeWizard({ departments, branches, positions, jobLevels,
             </div>
             <SF control={c} name="holidayKey"        label="Holiday"      options={HOLIDAYS}   placeholder="DEFAULT"    span2 errors={e} />
             <TF control={c} name="contractStartDate" label="Term Start"   type="date"                                   errors={e} />
-            <TF control={c} name="contractEndDate"   label="Term End"     type="date"                                   errors={e} />
+            <TF control={c} name="contractEndDate"   label="Next Review"  type="date"                                   errors={e} />
           </FGrid>
         );
 

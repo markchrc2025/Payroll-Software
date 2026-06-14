@@ -253,7 +253,7 @@ export async function POST(req: NextRequest) {
         shiftScheduleId:  shiftScheduleId  ?? null,
         holidayKey:       holidayKey       ?? null,
         termStart:        contractStartDate ?? null,
-        termEnd:          contractEndDate   ?? null,
+        nextReviewDate:   contractEndDate   ?? null,
       },
     });
 

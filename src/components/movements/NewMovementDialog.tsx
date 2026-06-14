@@ -72,7 +72,7 @@ const EMPTY_FORM = {
   toShiftScheduleId: "",
   toHolidayKey: "",
   toTermStart: "",
-  toTermEnd: "",
+  toNextReviewDate: "",
 };
 
 function SectionDivider({ label }: { label: string }) {
@@ -174,7 +174,7 @@ export function NewMovementDialog({
       if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
       if (form.toHolidayKey) body.toHolidayKey = form.toHolidayKey;
       if (form.toTermStart) body.toTermStart = form.toTermStart;
-      if (form.toTermEnd) body.toTermEnd = form.toTermEnd;
+      if (form.toNextReviewDate) body.toNextReviewDate = form.toNextReviewDate;
     }
     return body;
   }
@@ -360,8 +360,8 @@ export function NewMovementDialog({
                   <Input type="date" value={form.toTermStart} onChange={(e) => set("toTermStart", e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Term End</FieldLabel>
-                  <Input type="date" value={form.toTermEnd} onChange={(e) => set("toTermEnd", e.target.value)} />
+                  <FieldLabel>Next Review</FieldLabel>
+                  <Input type="date" value={form.toNextReviewDate} onChange={(e) => set("toNextReviewDate", e.target.value)} />
                 </div>
               </>
             )}

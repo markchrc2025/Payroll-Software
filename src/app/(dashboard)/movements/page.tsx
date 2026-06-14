@@ -56,7 +56,7 @@ type Movement = {
   toShiftScheduleId: string | null;
   toHolidayKey: string | null;
   toTermStart: string | null;
-  toTermEnd: string | null;
+  toNextReviewDate: string | null;
   createdAt: string;
   employee: { id: string; employeeNumber: string; firstName: string; lastName: string };
 };

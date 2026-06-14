@@ -145,7 +145,7 @@ export async function POST(
         toShiftScheduleId:  v.toShiftScheduleId  ?? null,
         toHolidayKey:       v.toHolidayKey       ?? null,
         toTermStart:        v.toTermStart ? new Date(v.toTermStart) : null,
-        toTermEnd:          v.toTermEnd   ? new Date(v.toTermEnd)   : null,
+        toNextReviewDate:   v.toNextReviewDate ? new Date(v.toNextReviewDate) : null,
 
         approvalStatus: "PENDING",
         createdByUserId: auth.userId,

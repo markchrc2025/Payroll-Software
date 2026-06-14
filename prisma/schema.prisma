@@ -1258,7 +1258,7 @@ model EmployeeMovement {
   toShiftScheduleId    String?
   toHolidayKey         String?
   toTermStart          DateTime?
-  toTermEnd            DateTime?
+  toNextReviewDate     DateTime?
 
   effectiveDate DateTime
   reason        String?
@@ -1326,7 +1326,7 @@ model EmploymentTerm {
   shiftScheduleId  String?
   holidayKey       String?
   termStart        DateTime?
-  termEnd          DateTime?
+  nextReviewDate   DateTime?
   remark           String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
