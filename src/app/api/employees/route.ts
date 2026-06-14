@@ -1,6 +1,6 @@
 /**
  * GET  /api/employees  — Paginated list with search & filters (tenant-scoped)
- * POST /api/employees  — Create a new employee + initial salary record
+ * POST /api/employees  — Create a new employee + initial salary + placement + employment term records
  */
 
 import type { NextRequest } from "next/server";
@@ -132,6 +132,17 @@ export async function POST(req: NextRequest) {
     standardWorkHours,
     standardWorkDays,
     statutoryIds,
+    placementEffectiveDate,
+    jobTitle,
+    jobLevel,
+    termEffectiveDate,
+    jobType,
+    jobDescription,
+    leaveWorkflowKey,
+    workdayKey,
+    holidayKey,
+    contractStartDate,
+    contractEndDate,
     ...rest
   } = parsed.data;
 
@@ -174,6 +185,17 @@ export async function POST(req: NextRequest) {
         hireDate,
         standardWorkHours: standardWorkHours.toString(),
         standardWorkDays: standardWorkDays.toString(),
+        placementEffectiveDate: placementEffectiveDate ?? null,
+        jobTitle:               jobTitle               ?? null,
+        jobLevel:               jobLevel               ?? null,
+        termEffectiveDate:      termEffectiveDate      ?? null,
+        jobType:                jobType                ?? null,
+        jobDescription:         jobDescription         ?? null,
+        leaveWorkflowKey:       leaveWorkflowKey       ?? null,
+        workdayKey:             workdayKey             ?? null,
+        holidayKey:             holidayKey             ?? null,
+        contractStartDate:      contractStartDate      ?? null,
+        contractEndDate:        contractEndDate        ?? null,
       },
     });
 
@@ -187,6 +209,39 @@ export async function POST(req: NextRequest) {
         effectiveDate: hireDate,
         reason: "Initial hire",
         createdByUserId: auth.userId,
+      },
+    });
+
+    // Initial placement record (if wizard supplied placement data)
+    const placementDate = placementEffectiveDate ?? hireDate;
+    await tx.placement.create({
+      data: {
+        tenantId:      auth.tenantId,
+        employeeId:    emp.id,
+        effectiveDate: placementDate,
+        positionId:    positionId    ?? null,
+        jobTitle:      jobTitle      ?? null,
+        lineManagerId: immediateSupervisorId ?? null,
+        departmentId:  departmentId  ?? null,
+        branchId:      branchId      ?? null,
+        level:         jobLevel      ?? null,
+      },
+    });
+
+    // Initial employment term record (if wizard supplied term data)
+    const termDate = termEffectiveDate ?? hireDate;
+    await tx.employmentTerm.create({
+      data: {
+        tenantId:         auth.tenantId,
+        employeeId:       emp.id,
+        effectiveDate:    termDate,
+        jobType:          jobType          ?? null,
+        jobStatus:        jobDescription   ?? null,
+        leaveWorkflowKey: leaveWorkflowKey ?? null,
+        workdayKey:       workdayKey       ?? null,
+        holidayKey:       holidayKey       ?? null,
+        termStart:        contractStartDate ?? null,
+        termEnd:          contractEndDate   ?? null,
       },
     });
 

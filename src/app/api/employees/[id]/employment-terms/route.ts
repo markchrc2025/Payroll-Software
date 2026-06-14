@@ -1,0 +1,90 @@
+/**
+ * GET  /api/employees/[id]/employment-terms  — list all employment term records (newest first)
+ * POST /api/employees/[id]/employment-terms  — create a new employment term record
+ */
+import type { NextRequest } from "next/server";
+import { z } from "zod";
+import { withTenant } from "@/lib/with-tenant";
+import { getAuthContext } from "@/lib/auth";
+import { ok, err, unauthorized, notFound } from "@/lib/api-response";
+
+const createSchema = z.object({
+  effectiveDate:    z.string().min(1, "Effective date is required"),
+  jobType:          z.string().max(50).optional().nullable(),
+  jobStatus:        z.string().max(50).optional().nullable(),
+  leaveWorkflowKey: z.string().max(50).optional().nullable(),
+  workdayKey:       z.string().max(50).optional().nullable(),
+  holidayKey:       z.string().max(50).optional().nullable(),
+  termStart:        z.string().optional().nullable(),
+  termEnd:          z.string().optional().nullable(),
+  remark:           z.string().max(200).optional().nullable(),
+});
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await getAuthContext(req);
+  if (!auth) return unauthorized();
+  const { id } = await params;
+
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    const emp = await tx.employee.findFirst({
+      where: { id, tenantId: auth.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!emp) return { notFound: true as const };
+
+    const records = await tx.employmentTerm.findMany({
+      where: { employeeId: id, tenantId: auth.tenantId },
+      orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
+    });
+    return { records };
+  });
+
+  if ("notFound" in result) return notFound("Employee");
+  return ok(result.records);
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await getAuthContext(req);
+  if (!auth) return unauthorized();
+  const { id } = await params;
+
+  const body = await req.json().catch(() => null);
+  if (!body) return err("Invalid JSON body");
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
+  const v = parsed.data;
+
+  const result = await withTenant(auth.tenantId, async (tx) => {
+    const emp = await tx.employee.findFirst({
+      where: { id, tenantId: auth.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!emp) return { notFound: true as const };
+
+    const record = await tx.employmentTerm.create({
+      data: {
+        tenantId:         auth.tenantId,
+        employeeId:       id,
+        effectiveDate:    new Date(v.effectiveDate),
+        jobType:          v.jobType          ?? null,
+        jobStatus:        v.jobStatus        ?? null,
+        leaveWorkflowKey: v.leaveWorkflowKey ?? null,
+        workdayKey:       v.workdayKey       ?? null,
+        holidayKey:       v.holidayKey       ?? null,
+        termStart:        v.termStart ? new Date(v.termStart) : null,
+        termEnd:          v.termEnd   ? new Date(v.termEnd)   : null,
+        remark:           v.remark    ?? null,
+      },
+    });
+    return { record };
+  });
+
+  if ("notFound" in result) return notFound("Employee");
+  return ok(result.record, "Employment term record created", 201);
+}

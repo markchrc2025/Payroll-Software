@@ -564,6 +564,8 @@ model Tenant {
   statutoryIds          StatutoryId[]
   employeeSalaries      EmployeeSalary[]
   employeeMovements     EmployeeMovement[]
+  placements            Placement[]
+  employmentTerms       EmploymentTerm[]
   incidentReports       IncidentReport[]
   assets               Asset[]
   assetAssignments     AssetAssignment[]
@@ -830,9 +832,10 @@ model Department {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  employees Employee[]
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  employees   Employee[]
   jobPostings JobPosting[]
+  placements  Placement[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -860,6 +863,7 @@ model Branch {
   geofences    Geofence[]
   kiosks       Kiosk[]
   jobPostings  JobPosting[]
+  placements   Placement[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -878,9 +882,10 @@ model Position {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  employees Employee[]
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  employees   Employee[]
   jobPostings JobPosting[]
+  placements  Placement[]
 
   @@unique([tenantId, title])
   @@index([tenantId])
@@ -1059,6 +1064,9 @@ model Employee {
   statutoryIds            StatutoryId[]
   salaryHistory           EmployeeSalary[]
   movements               EmployeeMovement[]
+  placements              Placement[]
+  lineManaged             Placement[]      @relation("PlacementLineManager")
+  employmentTerms         EmploymentTerm[]
   incidentReports         IncidentReport[]
   assetAssignments        AssetAssignment[]
   documents               EmployeeDocument[]
@@ -1231,6 +1239,59 @@ model EmployeeMovement {
 
   @@index([tenantId])
   @@index([employeeId, effectiveDate])
+}
+
+// =============================================================================
+// PLACEMENT & EMPLOYMENT TERMS — employee history tables
+// =============================================================================
+
+model Placement {
+  id            String   @id @default(cuid())
+  tenantId      String
+  employeeId    String
+  effectiveDate DateTime
+  positionId    String?
+  jobTitle      String?
+  lineManagerId String?
+  departmentId  String?
+  branchId      String?
+  level         String?
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  position    Position?   @relation(fields: [positionId], references: [id])
+  lineManager Employee?   @relation("PlacementLineManager", fields: [lineManagerId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, effectiveDate])
+}
+
+model EmploymentTerm {
+  id               String    @id @default(cuid())
+  tenantId         String
+  employeeId       String
+  effectiveDate    DateTime
+  jobType          String?
+  jobStatus        String?
+  leaveWorkflowKey String?
+  workdayKey       String?
+  holidayKey       String?
+  termStart        DateTime?
+  termEnd          DateTime?
+  remark           String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, effectiveDate])
 }
 
 // =============================================================================
