@@ -26,15 +26,35 @@ import "./sentire-login.css";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CORE = "#E8693A";
 
-// Which Central Portal SSO provider is live (set at build time). Empty until an
-// OAuth app is configured — the button then falls back to an "unavailable" toast.
-const CENTRAL_SSO = process.env.NEXT_PUBLIC_CENTRAL_SSO ?? "";
-const CENTRAL_SSO_LABEL =
-  CENTRAL_SSO === "google"
-    ? "Continue with Google"
-    : CENTRAL_SSO === "microsoft-entra-id"
-      ? "Continue with Microsoft"
-      : "Continue with company SSO";
+// Which Central Portal SSO providers are live (set at build time). Accepts a
+// comma-separated list — e.g. "google,microsoft-entra-id" — so more than one
+// IdP can be offered at once. Empty until an OAuth app is configured, in which
+// case the button falls back to an "unavailable" toast.
+const CENTRAL_SSO_PROVIDERS = (process.env.NEXT_PUBLIC_CENTRAL_SSO ?? "")
+  .split(",")
+  .map((p) => p.trim())
+  .filter(Boolean);
+
+// Per-provider button presentation. `long` is used when a provider is the only
+// option (full-width button); `short` is used when several sit side by side.
+const SSO_PROVIDER_META: Record<
+  string,
+  { short: string; long: string; Icon: () => ReturnType<typeof GoogleIcon> }
+> = {
+  google: { short: "Google", long: "Continue with Google", Icon: GoogleIcon },
+  "microsoft-entra-id": { short: "Microsoft", long: "Continue with Microsoft", Icon: MicrosoftIcon },
+};
+
+// Resolve the configured ids to renderable buttons (unknown ids get a generic label).
+const SSO_BUTTONS = CENTRAL_SSO_PROVIDERS.map((id) => {
+  const meta = SSO_PROVIDER_META[id];
+  return {
+    id,
+    short: meta?.short ?? "Company SSO",
+    long: meta?.long ?? "Continue with company SSO",
+    Icon: meta?.Icon ?? KeyIcon,
+  };
+});
 
 type Mode = "tenant" | "admin";
 type Status = "idle" | "loading" | "error" | "success";
@@ -284,20 +304,30 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
               </div>
             ) : (
               <div className="sn-sso">
-                <button
-                  type="button"
-                  className="sn-sso-btn sn-sso-wide"
-                  disabled={busy}
-                  onClick={() => {
-                    if (CENTRAL_SSO) {
-                      void signIn(CENTRAL_SSO, { callbackUrl: "/centralportal/dashboard" });
-                    } else {
-                      ssoUnavailable();
-                    }
-                  }}
-                >
-                  <KeyIcon /> {CENTRAL_SSO_LABEL}
-                </button>
+                {SSO_BUTTONS.length === 0 ? (
+                  <button
+                    type="button"
+                    className="sn-sso-btn sn-sso-wide"
+                    disabled={busy}
+                    onClick={ssoUnavailable}
+                  >
+                    <KeyIcon /> Continue with company SSO
+                  </button>
+                ) : (
+                  SSO_BUTTONS.map(({ id, short, long, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={"sn-sso-btn" + (SSO_BUTTONS.length === 1 ? " sn-sso-wide" : "")}
+                      disabled={busy}
+                      onClick={() =>
+                        void signIn(id, { callbackUrl: "/centralportal/dashboard" })
+                      }
+                    >
+                      <Icon /> {SSO_BUTTONS.length === 1 ? long : short}
+                    </button>
+                  ))
+                )}
               </div>
             )}
 
