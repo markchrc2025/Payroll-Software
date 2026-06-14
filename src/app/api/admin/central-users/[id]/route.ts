@@ -11,6 +11,8 @@ const patchSchema = z
     firstName: z.string().min(1).max(100).optional(),
     lastName: z.string().min(1).max(100).optional(),
     email: z.string().email().optional(),
+    // empty string / null clears the title; omit to leave unchanged.
+    jobTitle: z.string().trim().max(100).nullable().optional(),
     // null clears the role; a string assigns it. Omit to leave unchanged.
     centralRoleId: z.string().min(1).nullable().optional(),
   })
@@ -49,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       where: { id },
       data: parsed.data,
       select: {
-        id: true, email: true, firstName: true, lastName: true, isActive: true,
+        id: true, email: true, firstName: true, lastName: true, jobTitle: true, isActive: true,
         centralRoleId: true,
         centralRole: { select: { id: true, name: true } },
       },

@@ -23,7 +23,7 @@ export default async function SettingsPage() {
     prismaAdmin.user.findMany({
       where: { tenantId: null, deletedAt: null },
       select: {
-        id: true, email: true, firstName: true, lastName: true,
+        id: true, email: true, firstName: true, lastName: true, jobTitle: true,
         systemRole: true, isActive: true, lastLoginAt: true, createdAt: true,
         centralRoleId: true,
         centralRole: { select: { id: true, name: true } },
@@ -46,6 +46,7 @@ export default async function SettingsPage() {
     email: a.email,
     firstName: a.firstName,
     lastName: a.lastName,
+    jobTitle: a.jobTitle,
     systemRole: a.systemRole,
     isActive: a.isActive,
     lastLoginAt: a.lastLoginAt ? a.lastLoginAt.toISOString() : null,

@@ -12,7 +12,7 @@ export async function GET() {
   const admins = await prismaAdmin.user.findMany({
     where: { tenantId: null, deletedAt: null },
     select: {
-      id: true, email: true, firstName: true, lastName: true,
+      id: true, email: true, firstName: true, lastName: true, jobTitle: true,
       systemRole: true, isActive: true, lastLoginAt: true, createdAt: true,
       centralRoleId: true,
       centralRole: { select: { id: true, name: true } },
@@ -24,9 +24,12 @@ export async function GET() {
 
 const inviteSchema = z.object({
   email: z.string().email(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  centralRoleId: z.string().min(1).optional(),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  jobTitle: z.string().trim().max(100).optional(),
+  // A role is required on invite so we never create a powerless ("No role")
+  // administrator that can sign in but see nothing.
+  centralRoleId: z.string().min(1, "A role is required"),
 });
 
 export async function POST(req: Request) {
@@ -36,28 +39,27 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) return err("Invalid invite payload", 422);
-  const { email, firstName, lastName, centralRoleId } = parsed.data;
+  const { email, firstName, lastName, jobTitle, centralRoleId } = parsed.data;
 
   const existing = await prismaAdmin.user.findFirst({ where: { email } });
   if (existing) return err("A user with that email already exists", 409);
 
-  // If a role was supplied, ensure it is a live central role.
-  if (centralRoleId) {
-    const role = await prismaAdmin.centralRole.findFirst({
-      where: { id: centralRoleId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!role) return err("Selected role no longer exists", 422);
-  }
+  // Ensure the chosen role is a live central role.
+  const role = await prismaAdmin.centralRole.findFirst({
+    where: { id: centralRoleId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!role) return err("Selected role no longer exists", 422);
 
   const user = await prismaAdmin.user.create({
     data: {
       email, firstName, lastName,
+      jobTitle: jobTitle || null,
       tenantId: null,
       systemRole: "SUPER_ADMIN",
       isActive: false,
       passwordHash: "",
-      centralRoleId: centralRoleId ?? null,
+      centralRoleId,
     },
     select: { id: true, email: true, firstName: true },
   });
