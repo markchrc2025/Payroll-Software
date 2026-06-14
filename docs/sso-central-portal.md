@@ -26,8 +26,13 @@ Set the vars below and the button activates.
 ### Common
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `NEXT_PUBLIC_CENTRAL_SSO` | `google` or `microsoft-entra-id` | **Build-time** — controls the button label/action. Redeploy after changing. |
+| `NEXT_PUBLIC_CENTRAL_SSO` | `google`, `microsoft-entra-id`, or a comma-separated list of both | **Build-time** — controls which SSO buttons appear. One value → a single full-width button; a list (e.g. `google,microsoft-entra-id`) → one button per provider, side by side. Redeploy after changing. |
 | `CENTRAL_SSO_ALLOWED_DOMAIN` | `sentire.solutions` | Optional. Fences SSO to this email domain. |
+
+> To offer **both** Google and Microsoft on the login screen, set
+> `NEXT_PUBLIC_CENTRAL_SSO=google,microsoft-entra-id` and provide the credentials
+> for both providers below. Each provider's backend is independently env-gated, so
+> a button only works once its `AUTH_*` vars are present.
 
 ### Google Workspace
 | Variable | Value |
@@ -71,7 +76,8 @@ second entry for any custom domain such as `app.sentire.solutions`.)
 3. **Certificates & secrets → New client secret** → copy the *value*.
 4. Fill `AUTH_MICROSOFT_ENTRA_ID_ID` / `_SECRET` / `_ISSUER` (issuer uses your
    directory/tenant ID).
-5. Set `NEXT_PUBLIC_CENTRAL_SSO=microsoft-entra-id`.
+5. Set `NEXT_PUBLIC_CENTRAL_SSO=microsoft-entra-id` (or
+   `google,microsoft-entra-id` to keep the Google button too).
 
 ## Known follow-up
 
