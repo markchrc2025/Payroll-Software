@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import SentireLoginScreen from "@/components/sentire-login/SentireLoginScreen";
 
@@ -23,10 +24,17 @@ export default async function LoginPage({
   const { callbackUrl, error } = await searchParams;
 
   // Central Portal SSO is a separate sign-in surface from the tenant workspace.
-  // NextAuth's signIn page is global (/login), so a rejected admin OAuth attempt
-  // lands here with callbackUrl=/centralportal/…. Forward it back to the Central
-  // Portal login (preserving ?error) so the two portals stay distinct.
-  if (isCentralCallback(callbackUrl)) {
+  // NextAuth's signIn page is global (/login), so a failed admin OAuth attempt
+  // lands here. Two ways we recognise it as a Central flow and forward it back
+  // to /centralportal/login (preserving ?error) so the portals stay distinct:
+  //   1. callbackUrl=/centralportal/… (present on some bounces), or
+  //   2. the `central_sso_flow` marker cookie set when the admin SSO button is
+  //      clicked (covers OAuthCallbackError bounces, which drop the callbackUrl).
+  // The cookie path is gated on ?error so a deliberate visit to the tenant
+  // /login (no error) is never hijacked while the short-lived cookie lingers.
+  const fromCentralCookie =
+    !!error && (await cookies()).get("central_sso_flow")?.value === "1";
+  if (isCentralCallback(callbackUrl) || fromCentralCookie) {
     redirect(`/centralportal/login${error ? `?error=${encodeURIComponent(error)}` : ""}`);
   }
 
