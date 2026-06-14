@@ -232,14 +232,51 @@ const NAV_SECTIONS: NavSection[] = [
 type Props = {
   tenantName: string;
   tenantInitials: string;
+  /** Endpoint/URL for the uploaded company logo, or null to show initials. */
+  tenantLogoUrl?: string | null;
   userName: string;
   userRole: string;
   userInitials: string;
 };
 
+// Company tile avatar — renders the uploaded logo when available, and falls
+// back to the tenant initials if there's no logo or the image fails to load
+// (e.g. R2 not yet configured, so the logo endpoint returns 503/404).
+function CompanyAvatar({
+  logoUrl,
+  initials,
+  size,
+}: {
+  logoUrl?: string | null;
+  initials: string;
+  size: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showLogo = logoUrl && !failed;
+  return (
+    <div
+      className="flex flex-none items-center justify-center overflow-hidden rounded-[8px] text-[12px] font-bold text-[#e9e2d8]"
+      style={{ height: size, width: size, background: showLogo ? "#fff" : "#E8693A" }}
+    >
+      {showLogo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
+}
+
 export function SidebarNav({
   tenantName,
   tenantInitials,
+  tenantLogoUrl,
 }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -357,12 +394,7 @@ export function SidebarNav({
           className="mx-3.5 mb-1 flex cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 transition-colors overflow-hidden"
           style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.04)" }}
         >
-          <div
-            className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] text-[12px] font-bold text-[#e9e2d8]"
-            style={{ background: "#E8693A" }}
-          >
-            {tenantInitials}
-          </div>
+          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12.5px] font-semibold text-[#e9e2d8]">
               {tenantName}
@@ -374,12 +406,8 @@ export function SidebarNav({
           <ChevronsUpDown className="h-3.5 w-3.5 flex-none text-[#8a7e6f]" />
         </div>
       ) : (
-        <div
-          className="mx-auto mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[8px] text-[12px] font-bold text-white hover:brightness-110 transition-all"
-          style={{ background: "#E8693A" }}
-          title={tenantName}
-        >
-          {tenantInitials}
+        <div className="mx-auto mb-1 cursor-pointer hover:brightness-110 transition-all" title={tenantName}>
+          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={32} />
         </div>
       )}
 
