@@ -10,6 +10,7 @@ type Admin = {
   email: string;
   firstName: string;
   lastName: string;
+  jobTitle: string | null;
   systemRole: string;
   isActive: boolean;
   lastLoginAt: string | null;
@@ -45,35 +46,44 @@ export default function UsersClient({
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [inviteRoleId, setInviteRoleId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editFirst, setEditFirst] = useState("");
   const [editLast, setEditLast] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editJobTitle, setEditJobTitle] = useState("");
 
   function startEdit(a: Admin) {
     setEditId(a.id);
     setEditFirst(a.firstName);
     setEditLast(a.lastName);
     setEditEmail(a.email);
+    setEditJobTitle(a.jobTitle ?? "");
   }
 
   async function handleSaveEdit(admin: Admin) {
     if (!editFirst.trim() || !editLast.trim() || !editEmail.trim()) {
-      toast.error("Fill in all fields");
+      toast.error("First name, last name and email are required");
       return;
     }
     setBusy(admin.id + ":edit");
+    const nextTitle = editJobTitle.trim();
     try {
       const res = await fetch(`/api/admin/central-users/${admin.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName: editFirst.trim(), lastName: editLast.trim(), email: editEmail.trim() }),
+        body: JSON.stringify({
+          firstName: editFirst.trim(),
+          lastName: editLast.trim(),
+          email: editEmail.trim(),
+          jobTitle: nextTitle || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Update failed");
-      setAdmins((prev) => prev.map((a) => (a.id === admin.id ? { ...a, firstName: editFirst.trim(), lastName: editLast.trim(), email: editEmail.trim() } : a)));
+      setAdmins((prev) => prev.map((a) => (a.id === admin.id ? { ...a, firstName: editFirst.trim(), lastName: editLast.trim(), email: editEmail.trim(), jobTitle: nextTitle || null } : a)));
       toast.success("Admin updated");
       setEditId(null);
     } catch (e) {
@@ -121,31 +131,43 @@ export default function UsersClient({
   }
 
   async function handleInvite() {
-    if (!email || !firstName || !lastName) {
-      toast.error("Fill in all fields");
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+      toast.error("First name, last name and email are required");
+      return;
+    }
+    if (!inviteRoleId) {
+      toast.error("Select a role for this administrator");
       return;
     }
     setBusy("invite");
+    const title = jobTitle.trim();
     try {
       const res = await fetch("/api/admin/central-users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, firstName, lastName, centralRoleId: inviteRoleId || undefined }),
+        body: JSON.stringify({
+          email: email.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          jobTitle: title || undefined,
+          centralRoleId: inviteRoleId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Invite failed");
-      toast.success(`Invite sent to ${email}`);
+      toast.success(`Invite sent to ${email.trim()}`);
       const roleName = roleOptions.find((r) => r.id === inviteRoleId)?.name ?? null;
       setAdmins((prev) => [
         ...prev,
         {
-          id: data.id, email, firstName, lastName,
+          id: data.id, email: email.trim(), firstName: firstName.trim(), lastName: lastName.trim(),
+          jobTitle: title || null,
           systemRole: "SUPER_ADMIN", isActive: false,
           lastLoginAt: null, createdAt: new Date().toISOString(),
-          centralRoleId: inviteRoleId || null, centralRoleName: roleName,
+          centralRoleId: inviteRoleId, centralRoleName: roleName,
         },
       ]);
-      setEmail(""); setFirstName(""); setLastName(""); setInviteRoleId(""); setInviteOpen(false);
+      setEmail(""); setFirstName(""); setLastName(""); setJobTitle(""); setInviteRoleId(""); setInviteOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Invite failed");
     } finally {
@@ -223,13 +245,14 @@ export default function UsersClient({
       {inviteOpen && canManage && (
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #E5E7EB", background: "#F9FAFB" }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <Field label="First name" value={firstName} onChange={setFirstName} />
-            <Field label="Last name" value={lastName} onChange={setLastName} />
-            <Field label="Email" value={email} onChange={setEmail} type="email" wide />
+            <Field label="First name" value={firstName} onChange={setFirstName} required />
+            <Field label="Last name" value={lastName} onChange={setLastName} required />
+            <Field label="Email" value={email} onChange={setEmail} type="email" wide required />
+            <Field label="Job title" value={jobTitle} onChange={setJobTitle} placeholder="e.g. Operations Manager" wide />
             <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "0 1 170px" }}>
-              <span style={{ fontSize: 12, color: GRAY }}>Role</span>
+              <span style={{ fontSize: 12, color: GRAY }}>Role <span style={{ color: NAVY }}>*</span></span>
               <select value={inviteRoleId} onChange={(e) => setInviteRoleId(e.target.value)} style={selectStyle}>
-                <option value="">No role</option>
+                <option value="" disabled>Select a role…</option>
                 {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </label>
@@ -243,7 +266,8 @@ export default function UsersClient({
             </Button>
           </div>
           <p style={{ fontSize: 12, color: GRAY, marginTop: 8 }}>
-            The invitee receives an email link to set their own password. They become active once they do.
+            A role is required so the new admin has the right access. The invitee receives an email link to
+            set their own password and becomes active once they do.
           </p>
         </div>
       )}
@@ -266,15 +290,19 @@ export default function UsersClient({
             <tr key={a.id} style={{ borderTop: "1px solid #F3F4F6", fontSize: 14, color: INK }}>
               <td style={td}>
                 {editing ? (
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <input value={editFirst} onChange={(e) => setEditFirst(e.target.value)} placeholder="First" style={inlineInput} />
                     <input value={editLast} onChange={(e) => setEditLast(e.target.value)} placeholder="Last" style={inlineInput} />
+                    <input value={editJobTitle} onChange={(e) => setEditJobTitle(e.target.value)} placeholder="Job title" style={{ ...inlineInput, width: 140 }} />
                   </div>
                 ) : (
                   <>
                     {a.firstName} {a.lastName}
                     {a.id === currentUserId && (
                       <span style={{ fontSize: 11, color: NAVY, marginLeft: 6 }}>(you)</span>
+                    )}
+                    {a.jobTitle && (
+                      <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{a.jobTitle}</div>
                     )}
                   </>
                 )}
@@ -369,16 +397,17 @@ export default function UsersClient({
 }
 
 function Field({
-  label, value, onChange, type = "text", wide = false,
+  label, value, onChange, type = "text", wide = false, required = false, placeholder,
 }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; wide?: boolean;
+  label: string; value: string; onChange: (v: string) => void; type?: string; wide?: boolean; required?: boolean; placeholder?: string;
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: wide ? "1 1 220px" : "0 1 150px" }}>
-      <span style={{ fontSize: 12, color: GRAY }}>{label}</span>
+      <span style={{ fontSize: 12, color: GRAY }}>{label}{required && <span style={{ color: NAVY }}> *</span>}</span>
       <input
         type={type}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         style={{
           border: "1px solid #E5E7EB", borderRadius: 8, padding: "8px 10px",
