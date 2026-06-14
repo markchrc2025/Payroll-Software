@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentire — Email System</title>
+<link rel="icon" type="image/svg+xml" href="../logo-kit/sentire-app-icon.svg" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #f0eee9; }
+  #root { height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+const { useEffect, useRef } = React;
+
+function EmailFrame({ src, fallbackHeight }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const f = ref.current;
+    if (!f) return;
+    const fit = () => {
+      try {
+        const h = f.contentDocument.body.scrollHeight;
+        if (h && Math.abs(h - parseInt(f.style.height || 0)) > 2) f.style.height = h + 'px';
+      } catch (e) {}
+    };
+    f.addEventListener('load', () => { fit(); setTimeout(fit, 400); });
+    const t = setTimeout(fit, 700);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <iframe ref={ref} src={src} scrolling="no"
+      style={{ width: '600px', height: fallbackHeight + 'px', border: '0', display: 'block', background: '#F7F4EF' }} />
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="tenant" title="Tenant Emails" subtitle="Sentire Payroll & Self-Service — sent to companies, their admins and employees">
+        <DCArtboard id="t-emp-onb" label="Employee Onboarding · ESS" width={600} height={756}>
+          <EmailFrame src="tenant/employee-onboarding.html" fallbackHeight={756} />
+        </DCArtboard>
+        <DCArtboard id="t-emp-reset" label="Employee ESS Reset Password" width={600} height={620}>
+          <EmailFrame src="tenant/employee-reset-password.html" fallbackHeight={620} />
+        </DCArtboard>
+        <DCArtboard id="t-emp-notice" label="Employee Reset Password Notice" width={600} height={787}>
+          <EmailFrame src="tenant/employee-reset-password-notice.html" fallbackHeight={787} />
+        </DCArtboard>
+        <DCArtboard id="t-ten-onb" label="Tenant Onboarding · Admin" width={600} height={967}>
+          <EmailFrame src="tenant/tenant-onboarding.html" fallbackHeight={967} />
+        </DCArtboard>
+        <DCArtboard id="t-ten-reset" label="Tenant Admin Reset Password" width={600} height={640}>
+          <EmailFrame src="tenant/tenant-admin-reset-password.html" fallbackHeight={640} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="billing" title="Tenant Billing Emails" subtitle="Sentire Payroll — billing lifecycle sent to the tenant's billing admin">
+        <DCArtboard id="b-monthly" label="Monthly Billing Notice" width={600} height={917}>
+          <EmailFrame src="tenant/monthly-billing-notice.html" fallbackHeight={917} />
+        </DCArtboard>
+        <DCArtboard id="b-unpaid" label="Notice of Unpaid Billing" width={600} height={977}>
+          <EmailFrame src="tenant/unpaid-billing-notice.html" fallbackHeight={977} />
+        </DCArtboard>
+        <DCArtboard id="b-deactivation" label="Deactivation Notice" width={600} height={998}>
+          <EmailFrame src="tenant/deactivation-notice.html" fallbackHeight={998} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="central" title="Central Admin Portal Emails" subtitle="Sentire Central — sent to internal platform administrators">
+        <DCArtboard id="c-adm-onb" label="Admin Onboarding" width={600} height={967}>
+          <EmailFrame src="central/admin-onboarding.html" fallbackHeight={967} />
+        </DCArtboard>
+        <DCArtboard id="c-adm-reset" label="Admin Reset Password" width={600} height={640}>
+          <EmailFrame src="central/admin-reset-password.html" fallbackHeight={640} />
+        </DCArtboard>
+        <DCArtboard id="c-adm-notice" label="Admin Reset Password Notice" width={600} height={806}>
+          <EmailFrame src="central/admin-reset-password-notice.html" fallbackHeight={806} />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
