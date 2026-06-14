@@ -16,7 +16,7 @@ const createSchema = z.object({
   shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
   termStart:        z.string().optional().nullable(),
-  termEnd:          z.string().optional().nullable(),
+  nextReviewDate:   z.string().optional().nullable(),
   remark:           z.string().max(200).optional().nullable(),
 });
 
@@ -87,7 +87,7 @@ export async function POST(
         shiftScheduleId:  v.shiftScheduleId  ?? null,
         holidayKey:       v.holidayKey       ?? null,
         termStart:        v.termStart ? new Date(v.termStart) : null,
-        termEnd:          v.termEnd   ? new Date(v.termEnd)   : null,
+        nextReviewDate:   v.nextReviewDate ? new Date(v.nextReviewDate) : null,
         remark:           v.remark    ?? null,
       },
       include: { shiftSchedule: { select: { id: true, name: true } } },

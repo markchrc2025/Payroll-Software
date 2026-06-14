@@ -42,7 +42,7 @@ type TermRecord = {
   shiftScheduleId:  string | null;
   holidayKey:       string | null;
   termStart:        string | null;
-  termEnd:          string | null;
+  nextReviewDate:   string | null;
   remark:           string | null;
   shiftSchedule:    { id: string; name: string } | null;
 };
@@ -67,7 +67,7 @@ const EMPTY_FORM = {
   shiftScheduleId:  "",
   holidayKey:       "",
   termStart:        "",
-  termEnd:          "",
+  nextReviewDate:   "",
   remark:           "",
 };
 
@@ -136,7 +136,7 @@ export default function EmploymentTermsPage() {
       shiftScheduleId:  r.shiftScheduleId  ?? "",
       holidayKey:       r.holidayKey       ?? "",
       termStart:        r.termStart ? r.termStart.slice(0, 10) : "",
-      termEnd:          r.termEnd   ? r.termEnd.slice(0, 10)   : "",
+      nextReviewDate:   r.nextReviewDate ? r.nextReviewDate.slice(0, 10) : "",
       remark:           r.remark    ?? "",
     });
     setSheetOpen(true);
@@ -158,7 +158,7 @@ export default function EmploymentTermsPage() {
       shiftScheduleId:  form.shiftScheduleId  || null,
       holidayKey:       form.holidayKey       || null,
       termStart:        form.termStart        || null,
-      termEnd:          form.termEnd          || null,
+      nextReviewDate:   form.nextReviewDate   || null,
       remark:           form.remark           || null,
     };
 
@@ -279,7 +279,7 @@ export default function EmploymentTermsPage() {
               <TableHead>Leave Workflow</TableHead>
               <TableHead>Shift Schedule</TableHead>
               <TableHead>Holiday</TableHead>
-              <TableHead>Term Period</TableHead>
+              <TableHead>Term / Next Review</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -318,8 +318,8 @@ export default function EmploymentTermsPage() {
                   <TableCell className="text-sm text-muted-foreground">{r.holidayKey       ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {r.termStart
-                      ? `${r.termStart.slice(0, 10)}${r.termEnd ? ` → ${r.termEnd.slice(0, 10)}` : " →"}`
-                      : "—"}
+                      ? `${r.termStart.slice(0, 10)}${r.nextReviewDate ? ` → ${r.nextReviewDate.slice(0, 10)}` : " →"}`
+                      : (r.nextReviewDate ? r.nextReviewDate.slice(0, 10) : "—")}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -392,11 +392,11 @@ export default function EmploymentTermsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Term End</Label>
+                <Label>Next Review</Label>
                 <Input
                   type="date"
-                  value={form.termEnd}
-                  onChange={(e) => setForm({ ...form, termEnd: e.target.value })}
+                  value={form.nextReviewDate}
+                  onChange={(e) => setForm({ ...form, nextReviewDate: e.target.value })}
                 />
               </div>
             </div>

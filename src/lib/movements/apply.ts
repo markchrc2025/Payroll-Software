@@ -83,7 +83,7 @@ export async function applyMovementEffects(
         shiftScheduleId:  movement.toShiftScheduleId  ?? null,
         holidayKey:       movement.toHolidayKey       ?? null,
         termStart:        movement.toTermStart        ?? null,
-        termEnd:          movement.toTermEnd          ?? null,
+        nextReviewDate:   movement.toNextReviewDate   ?? null,
         remark:           movement.reason             ?? null,
       },
     });

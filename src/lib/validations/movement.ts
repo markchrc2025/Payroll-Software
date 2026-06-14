@@ -33,7 +33,7 @@ export const createMovementSchema = z
     toShiftScheduleId:  cuid.optional().nullable(),
     toHolidayKey:       z.string().max(50).optional().nullable(),
     toTermStart:        z.string().optional().nullable(),
-    toTermEnd:          z.string().optional().nullable(),
+    toNextReviewDate:   z.string().optional().nullable(),
   })
   .superRefine((v, ctx) => {
     const has = (k: keyof typeof v) => v[k] !== undefined && v[k] !== null && v[k] !== "";
@@ -46,7 +46,7 @@ export const createMovementSchema = z
       }
     };
     const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
-    const termsFields     = ["toJobType", "toJobStatus", "toLeaveWorkflowKey", "toShiftScheduleId", "toHolidayKey", "toTermStart", "toTermEnd"] as const;
+    const termsFields     = ["toJobType", "toJobStatus", "toLeaveWorkflowKey", "toShiftScheduleId", "toHolidayKey", "toTermStart", "toNextReviewDate"] as const;
 
     switch (v.movementType) {
       case "DEPARTMENT_TRANSFER":

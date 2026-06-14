@@ -16,7 +16,7 @@ const patchSchema = z.object({
   shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
   termStart:        z.string().optional().nullable(),
-  termEnd:          z.string().optional().nullable(),
+  nextReviewDate:   z.string().optional().nullable(),
   remark:           z.string().max(200).optional().nullable(),
 });
 
@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ...(v.shiftScheduleId  !== undefined && { shiftScheduleId:  v.shiftScheduleId  ?? null }),
         ...(v.holidayKey       !== undefined && { holidayKey:       v.holidayKey       ?? null }),
         ...(v.termStart        !== undefined && { termStart: v.termStart ? new Date(v.termStart) : null }),
-        ...(v.termEnd          !== undefined && { termEnd:   v.termEnd   ? new Date(v.termEnd)   : null }),
+        ...(v.nextReviewDate   !== undefined && { nextReviewDate: v.nextReviewDate ? new Date(v.nextReviewDate) : null }),
         ...(v.remark           !== undefined && { remark:    v.remark    ?? null }),
       },
       include: { shiftSchedule: { select: { id: true, name: true } } },
