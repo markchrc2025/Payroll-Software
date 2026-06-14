@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -174,6 +174,68 @@ function parseSSSXlsx(buffer: ArrayBuffer): SssRow[] | string {
   return rows;
 }
 
+// Shared renderer for the SSS contribution schedule — used both by the upload
+// preview (before publishing) and the "View full table" modal (after publishing).
+function SssRowsTable({ rows }: { rows: SssRow[] }) {
+  return (
+    <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--line)" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 900 }}>
+        <thead>
+          <tr style={{ background: "var(--bg-2, #faf7f2)" }}>
+            {["Comp. From","Comp. To","MSC","Reg. SS ER","Reg. SS EE","Reg. SS Total","EC ER","MPF ER","MPF EE","MPF Total","Total ER","Total EE","Grand Total"].map((h) => (
+              <th key={h} style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap", borderBottom: "1px solid var(--line)", position: "sticky", top: 0, background: "var(--bg-2, #faf7f2)" }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid var(--line-2, #f0ebe2)" }}>
+              <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{r.compensationFrom === 0 ? "–" : fmtPeso(r.compensationFrom)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.compensationTo)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 500 }}>{fmtPeso(r.msc)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.regularSSEmployer)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.regularSSEmployee)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{fmtPeso(r.regularSSTotal)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.ecEmployer)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.mpfEmployer === 0 ? "–" : fmtPeso(r.mpfEmployer)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.mpfEmployee === 0 ? "–" : fmtPeso(r.mpfEmployee)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{r.mpfTotal === 0 ? "–" : fmtPeso(r.mpfTotal)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalEmployer)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalEmployee)}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalTotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Coerce a stored payload row (plain JSON) into the typed SssRow shape.
+function coerceSssRow(o: unknown): SssRow {
+  const g = (k: string) => {
+    const v = o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined;
+    return typeof v === "number" ? v : 0;
+  };
+  return {
+    compensationFrom: g("compensationFrom"),
+    compensationTo: g("compensationTo"),
+    msc: g("msc"),
+    regularSSEmployer: g("regularSSEmployer"),
+    regularSSEmployee: g("regularSSEmployee"),
+    regularSSTotal: g("regularSSTotal"),
+    ecEmployer: g("ecEmployer"),
+    mpfEmployer: g("mpfEmployer"),
+    mpfEmployee: g("mpfEmployee"),
+    mpfTotal: g("mpfTotal"),
+    totalEmployer: g("totalEmployer"),
+    totalEmployee: g("totalEmployee"),
+    totalTotal: g("totalTotal"),
+  };
+}
+
 function SssUploadForm({ onDone }: { onDone: () => void }) {
   const m = useMeta();
   const [rows, setRows] = useState<SssRow[] | null>(null);
@@ -249,38 +311,7 @@ function SssUploadForm({ onDone }: { onDone: () => void }) {
             </span>
             <span style={{ fontSize: 11.5, color: "#1f7a4d", background: "#e7f4ec", borderRadius: 4, padding: "2px 7px" }}>Ready</span>
           </div>
-          <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--line)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 900 }}>
-              <thead>
-                <tr style={{ background: "var(--bg-2, #faf7f2)" }}>
-                  {["Comp. From","Comp. To","MSC","Reg. SS ER","Reg. SS EE","Reg. SS Total","EC ER","MPF ER","MPF EE","MPF Total","Total ER","Total EE","Grand Total"].map((h) => (
-                    <th key={h} style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap", borderBottom: "1px solid var(--line)" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--line-2, #f0ebe2)" }}>
-                    <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{r.compensationFrom === 0 ? "–" : fmtPeso(r.compensationFrom)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.compensationTo)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 500 }}>{fmtPeso(r.msc)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.regularSSEmployer)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.regularSSEmployee)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{fmtPeso(r.regularSSTotal)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtPeso(r.ecEmployer)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.mpfEmployer === 0 ? "–" : fmtPeso(r.mpfEmployer)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.mpfEmployee === 0 ? "–" : fmtPeso(r.mpfEmployee)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--muted)" }}>{r.mpfTotal === 0 ? "–" : fmtPeso(r.mpfTotal)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalEmployer)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalEmployee)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{fmtPeso(r.totalTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SssRowsTable rows={rows} />
         </div>
       )}
 
@@ -519,15 +550,68 @@ function CurrentSummary({ rule }: { rule?: RuleRow }) {
 }
 
 function SssCurrentSummary({ rule }: { rule?: RuleRow }) {
+  const [viewing, setViewing] = useState(false);
   if (!rule) return <p className="cp-muted" style={{ marginBottom: 12 }}>No contribution table published yet — upload the SSS schedule below.</p>;
-  const rowCount = Array.isArray(rule.payload?.rows) ? (rule.payload.rows as unknown[]).length : null;
+  const rawRows = Array.isArray(rule.payload?.rows) ? (rule.payload.rows as unknown[]) : [];
+  const rowCount = rawRows.length;
+  const tableRows = rawRows.map(coerceSssRow);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
       <Badge tone="Active">In effect</Badge>
       <span className="cp-mono">{rule.version}</span>
       <span className="cp-muted">from {fmtDate(rule.effectiveFrom)}</span>
       <span className="cp-muted">· {rule.legalBasis}</span>
-      {rowCount != null && <span className="cp-muted">· {rowCount} compensation bands</span>}
+      {rowCount > 0 && <span className="cp-muted">· {rowCount} compensation bands</span>}
+      {rowCount > 0 && (
+        <button type="button" className="cp-link" onClick={() => setViewing(true)} style={{ marginLeft: "auto" }}>
+          View full table
+        </button>
+      )}
+      {viewing && (
+        <Modal title={`SSS contribution schedule — ${rule.version}`} onClose={() => setViewing(false)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <Badge tone="Active">In effect</Badge>
+            <span className="cp-muted">from {fmtDate(rule.effectiveFrom)}</span>
+            <span className="cp-muted">· {rule.legalBasis}</span>
+            <span className="cp-muted">· {rowCount} compensation bands</span>
+          </div>
+          <SssRowsTable rows={tableRows} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// Lightweight modal for the Central Portal — overlay + centered panel, closes on
+// backdrop click or Escape. Built inline (no shared primitive exists yet).
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100, background: "rgba(40,30,22,0.42)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--paper, #fff)", borderRadius: 14, width: "100%", maxWidth: 1000,
+          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          boxShadow: "0 24px 70px -20px rgba(40,30,22,0.45)", overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--line)" }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>{title}</h3>
+          <button type="button" className="cp-btn cp-btn-ghost" onClick={onClose} aria-label="Close" style={{ padding: "5px 10px" }}>✕</button>
+        </div>
+        <div style={{ padding: 20, overflow: "auto" }}>{children}</div>
+      </div>
     </div>
   );
 }
