@@ -89,6 +89,13 @@ export async function POST(
       });
       if (!x) return { error: "toPositionId not found in your tenant" as const };
     }
+    if (v.toLineManagerId) {
+      const x = await tx.employee.findFirst({
+        where: { id: v.toLineManagerId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!x) return { error: "toLineManagerId not found in your tenant" as const };
+    }
 
     const currentBasic = emp.salaryHistory[0]?.basicSalaryCents ?? null;
 
@@ -116,6 +123,15 @@ export async function POST(
         toBasicSalaryCents,
         fromStatus: emp.employmentStatus,
         toStatus: v.toStatus ?? null,
+
+        toLineManagerId:    v.toLineManagerId    ?? null,
+        toJobType:          v.toJobType          ?? null,
+        toJobStatus:        v.toJobStatus        ?? null,
+        toLeaveWorkflowKey: v.toLeaveWorkflowKey ?? null,
+        toWorkdayKey:       v.toWorkdayKey       ?? null,
+        toHolidayKey:       v.toHolidayKey       ?? null,
+        toTermStart:        v.toTermStart ? new Date(v.toTermStart) : null,
+        toTermEnd:          v.toTermEnd   ? new Date(v.toTermEnd)   : null,
 
         approvalStatus: "PENDING",
         createdByUserId: auth.userId,

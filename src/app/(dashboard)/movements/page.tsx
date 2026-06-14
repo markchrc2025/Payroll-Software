@@ -49,6 +49,14 @@ type Movement = {
   toJobTitle: string | null;
   toBasicSalaryCents: string | null;
   toStatus: string | null;
+  toLineManagerId: string | null;
+  toJobType: string | null;
+  toJobStatus: string | null;
+  toLeaveWorkflowKey: string | null;
+  toWorkdayKey: string | null;
+  toHolidayKey: string | null;
+  toTermStart: string | null;
+  toTermEnd: string | null;
   createdAt: string;
   employee: { id: string; employeeNumber: string; firstName: string; lastName: string };
 };
@@ -62,15 +70,24 @@ type Position = { id: string; title: string };
 // Constants
 // ---------------------------------------------------------------------------
 
+const MOVEMENT_SCOPES = [
+  { value: "PLACEMENT_CHANGE", label: "Change in Placement" },
+  { value: "TERMS_CHANGE",     label: "Change in Employment Terms" },
+  { value: "COMBINED_CHANGE",  label: "Both (Placement + Employment Terms)" },
+];
+
 const MOVEMENT_TYPES = [
+  { value: "PLACEMENT_CHANGE",   label: "Change in Placement" },
+  { value: "TERMS_CHANGE",       label: "Change in Employment Terms" },
+  { value: "COMBINED_CHANGE",    label: "Placement + Terms" },
   { value: "DEPARTMENT_TRANSFER", label: "Department Transfer" },
-  { value: "BRANCH_TRANSFER", label: "Branch Transfer" },
-  { value: "PROMOTION", label: "Promotion" },
-  { value: "DEMOTION", label: "Demotion" },
-  { value: "SALARY_ADJUSTMENT", label: "Salary Adjustment" },
-  { value: "TITLE_CHANGE", label: "Title Change" },
-  { value: "STATUS_CHANGE", label: "Status Change" },
-  { value: "REGULARIZATION", label: "Regularization" },
+  { value: "BRANCH_TRANSFER",     label: "Branch Transfer" },
+  { value: "PROMOTION",           label: "Promotion" },
+  { value: "DEMOTION",            label: "Demotion" },
+  { value: "SALARY_ADJUSTMENT",   label: "Salary Adjustment" },
+  { value: "TITLE_CHANGE",        label: "Title Change" },
+  { value: "STATUS_CHANGE",       label: "Status Change" },
+  { value: "REGULARIZATION",      label: "Regularization" },
 ];
 
 const EMPLOYMENT_STATUSES = [
@@ -137,6 +154,15 @@ function changeSummary(m: Movement, departments: Department[], branches: Branch[
     case "STATUS_CHANGE":
     case "REGULARIZATION":
       return m.toStatus ?? "—";
+    case "PLACEMENT_CHANGE": {
+      const pos = positions.find((p) => p.id === m.toPositionId);
+      const dept = departments.find((d) => d.id === m.toDepartmentId);
+      return [pos?.title && `→ ${pos.title}`, dept?.name && `(${dept.name})`].filter(Boolean).join(" ") || "—";
+    }
+    case "TERMS_CHANGE":
+      return [m.toJobType, m.toJobStatus].filter(Boolean).join(" / ") || "—";
+    case "COMBINED_CHANGE":
+      return "Placement + Terms";
     default:
       return "—";
   }
@@ -167,17 +193,25 @@ export default function MovementsPage() {
   // Create form
   const [form, setForm] = useState({
     employeeId: "",
-    movementType: "DEPARTMENT_TRANSFER",
+    scope: "PLACEMENT_CHANGE",
     effectiveDate: "",
     reason: "",
     notes: "",
-    // dynamic fields
+    // Placement fields
     toDepartmentId: "",
     toBranchId: "",
     toPositionId: "",
     toJobTitle: "",
-    toBasicSalary: "",
-    toStatus: "REGULAR",
+    toJobLevel: "",
+    toLineManagerId: "",
+    // Terms fields
+    toJobType: "",
+    toJobStatus: "",
+    toLeaveWorkflowKey: "",
+    toWorkdayKey: "",
+    toHolidayKey: "",
+    toTermStart: "",
+    toTermEnd: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -222,34 +256,29 @@ export default function MovementsPage() {
 
   function buildCreateBody() {
     const body: Record<string, unknown> = {
-      movementType: form.movementType,
+      movementType: form.scope,
       effectiveDate: form.effectiveDate,
       reason: form.reason || null,
       notes: form.notes || null,
     };
-    switch (form.movementType) {
-      case "DEPARTMENT_TRANSFER":
-        body.toDepartmentId = form.toDepartmentId;
-        break;
-      case "BRANCH_TRANSFER":
-        body.toBranchId = form.toBranchId;
-        break;
-      case "PROMOTION":
-      case "DEMOTION":
-        if (form.toPositionId) body.toPositionId = form.toPositionId;
-        if (form.toJobTitle) body.toJobTitle = form.toJobTitle;
-        if (form.toBasicSalary) body.toBasicSalary = parseFloat(form.toBasicSalary).toFixed(2);
-        break;
-      case "SALARY_ADJUSTMENT":
-        body.toBasicSalary = parseFloat(form.toBasicSalary).toFixed(2);
-        break;
-      case "TITLE_CHANGE":
-        body.toJobTitle = form.toJobTitle;
-        break;
-      case "STATUS_CHANGE":
-      case "REGULARIZATION":
-        body.toStatus = form.toStatus;
-        break;
+    const isPlacement = form.scope === "PLACEMENT_CHANGE" || form.scope === "COMBINED_CHANGE";
+    const isTerms     = form.scope === "TERMS_CHANGE"     || form.scope === "COMBINED_CHANGE";
+    if (isPlacement) {
+      if (form.toPositionId)    body.toPositionId    = form.toPositionId;
+      if (form.toJobTitle)      body.toJobTitle      = form.toJobTitle;
+      if (form.toJobLevel)      body.toJobLevel      = form.toJobLevel;
+      if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
+      if (form.toDepartmentId)  body.toDepartmentId  = form.toDepartmentId;
+      if (form.toBranchId)      body.toBranchId      = form.toBranchId;
+    }
+    if (isTerms) {
+      if (form.toJobType)          body.toJobType          = form.toJobType;
+      if (form.toJobStatus)        body.toJobStatus        = form.toJobStatus;
+      if (form.toLeaveWorkflowKey) body.toLeaveWorkflowKey = form.toLeaveWorkflowKey;
+      if (form.toWorkdayKey)       body.toWorkdayKey       = form.toWorkdayKey;
+      if (form.toHolidayKey)       body.toHolidayKey       = form.toHolidayKey;
+      if (form.toTermStart)        body.toTermStart        = form.toTermStart;
+      if (form.toTermEnd)          body.toTermEnd          = form.toTermEnd;
     }
     return body;
   }
@@ -316,85 +345,117 @@ export default function MovementsPage() {
   // Render — dynamic fields based on movementType
   // ---------------------------------------------------------------------------
 
+  function renderPlacementFields() {
+    return (
+      <>
+        <div className="space-y-1.5">
+          <Label>To Position</Label>
+          <Select value={form.toPositionId} onValueChange={(v) => setForm({ ...form, toPositionId: v ?? "" })}>
+            <SelectTrigger><SelectValue placeholder="Select position…" /></SelectTrigger>
+            <SelectContent>
+              {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Job Title</Label>
+          <Input placeholder="e.g. Senior Engineer" value={form.toJobTitle} onChange={(e) => setForm({ ...form, toJobTitle: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Job Level</Label>
+          <Input placeholder="e.g. L3" value={form.toJobLevel} onChange={(e) => setForm({ ...form, toJobLevel: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Line Manager</Label>
+          <Select value={form.toLineManagerId} onValueChange={(v) => setForm({ ...form, toLineManagerId: v ?? "" })}>
+            <SelectTrigger><SelectValue placeholder="Select line manager…" /></SelectTrigger>
+            <SelectContent>
+              {employees.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.lastName}, {e.firstName} ({e.employeeNumber})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Department</Label>
+          <Select value={form.toDepartmentId} onValueChange={(v) => setForm({ ...form, toDepartmentId: v ?? "" })}>
+            <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
+            <SelectContent>
+              {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Branch</Label>
+          <Select value={form.toBranchId} onValueChange={(v) => setForm({ ...form, toBranchId: v ?? "" })}>
+            <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </>
+    );
+  }
+
+  function renderTermsFields() {
+    return (
+      <>
+        <div className="space-y-1.5">
+          <Label>Job Type</Label>
+          <Input placeholder="e.g. Full-time" value={form.toJobType} onChange={(e) => setForm({ ...form, toJobType: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Job Status</Label>
+          <Input placeholder="e.g. Regular" value={form.toJobStatus} onChange={(e) => setForm({ ...form, toJobStatus: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Leave Workflow Key</Label>
+          <Input placeholder="e.g. standard" value={form.toLeaveWorkflowKey} onChange={(e) => setForm({ ...form, toLeaveWorkflowKey: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Workday Key</Label>
+          <Input placeholder="e.g. mon-fri" value={form.toWorkdayKey} onChange={(e) => setForm({ ...form, toWorkdayKey: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Holiday Key</Label>
+          <Input placeholder="e.g. ph-standard" value={form.toHolidayKey} onChange={(e) => setForm({ ...form, toHolidayKey: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Term Start</Label>
+            <Input type="date" value={form.toTermStart} onChange={(e) => setForm({ ...form, toTermStart: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Term End</Label>
+            <Input type="date" value={form.toTermEnd} onChange={(e) => setForm({ ...form, toTermEnd: e.target.value })} />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   function renderDynamicFields() {
-    switch (form.movementType) {
-      case "DEPARTMENT_TRANSFER":
-        return (
-          <div className="space-y-1.5">
-            <Label>To Department <span className="text-destructive">*</span></Label>
-            <Select value={form.toDepartmentId} onValueChange={(v) => setForm({ ...form, toDepartmentId: v ?? "" })}>
-              <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
-              <SelectContent>
-                {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      case "BRANCH_TRANSFER":
-        return (
-          <div className="space-y-1.5">
-            <Label>To Branch <span className="text-destructive">*</span></Label>
-            <Select value={form.toBranchId} onValueChange={(v) => setForm({ ...form, toBranchId: v ?? "" })}>
-              <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
-              <SelectContent>
-                {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      case "PROMOTION":
-      case "DEMOTION":
-        return (
+    const isPlacement = form.scope === "PLACEMENT_CHANGE" || form.scope === "COMBINED_CHANGE";
+    const isTerms     = form.scope === "TERMS_CHANGE"     || form.scope === "COMBINED_CHANGE";
+    return (
+      <>
+        {isPlacement && (
           <>
-            <div className="space-y-1.5">
-              <Label>To Position</Label>
-              <Select value={form.toPositionId} onValueChange={(v) => setForm({ ...form, toPositionId: v ?? "" })}>
-                <SelectTrigger><SelectValue placeholder="Select position…" /></SelectTrigger>
-                <SelectContent>
-                  {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>New Job Title</Label>
-              <Input placeholder="e.g. Senior Engineer" value={form.toJobTitle} onChange={(e) => setForm({ ...form, toJobTitle: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>New Basic Salary (₱)</Label>
-              <Input type="number" step="0.01" min="0" placeholder="55000.00" value={form.toBasicSalary} onChange={(e) => setForm({ ...form, toBasicSalary: e.target.value })} />
-            </div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Placement Details</p>
+            {renderPlacementFields()}
           </>
-        );
-      case "SALARY_ADJUSTMENT":
-        return (
-          <div className="space-y-1.5">
-            <Label>New Basic Salary (₱) <span className="text-destructive">*</span></Label>
-            <Input type="number" step="0.01" min="0" placeholder="55000.00" value={form.toBasicSalary} onChange={(e) => setForm({ ...form, toBasicSalary: e.target.value })} />
-          </div>
-        );
-      case "TITLE_CHANGE":
-        return (
-          <div className="space-y-1.5">
-            <Label>New Job Title <span className="text-destructive">*</span></Label>
-            <Input value={form.toJobTitle} onChange={(e) => setForm({ ...form, toJobTitle: e.target.value })} />
-          </div>
-        );
-      case "STATUS_CHANGE":
-      case "REGULARIZATION":
-        return (
-          <div className="space-y-1.5">
-            <Label>New Status <span className="text-destructive">*</span></Label>
-            <Select value={form.toStatus} onValueChange={(v) => setForm({ ...form, toStatus: v ?? form.toStatus })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EMPLOYMENT_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      default:
-        return null;
-    }
+        )}
+        {isTerms && (
+          <>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-3">Employment Terms</p>
+            {renderTermsFields()}
+          </>
+        )}
+      </>
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -438,7 +499,7 @@ export default function MovementsPage() {
           <Button variant="outline" size="sm" onClick={loadMovements} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => { setForm({ employeeId: "", movementType: "DEPARTMENT_TRANSFER", effectiveDate: "", reason: "", notes: "", toDepartmentId: "", toBranchId: "", toPositionId: "", toJobTitle: "", toBasicSalary: "", toStatus: "REGULAR" }); setCreateOpen(true); }}>
+          <Button size="sm" onClick={() => { setForm({ employeeId: "", scope: "PLACEMENT_CHANGE", effectiveDate: "", reason: "", notes: "", toDepartmentId: "", toBranchId: "", toPositionId: "", toJobTitle: "", toJobLevel: "", toLineManagerId: "", toJobType: "", toJobStatus: "", toLeaveWorkflowKey: "", toWorkdayKey: "", toHolidayKey: "", toTermStart: "", toTermEnd: "" }); setCreateOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" /> New Movement
           </Button>
         </div>
@@ -556,12 +617,12 @@ export default function MovementsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Movement Type</Label>
-              <Select value={form.movementType} onValueChange={(v) => setForm({ ...form, movementType: v ?? form.movementType })}>
+              <Label>Scope of Change <span className="text-destructive">*</span></Label>
+              <Select value={form.scope} onValueChange={(v) => setForm({ ...form, scope: v ?? form.scope })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MOVEMENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  {MOVEMENT_SCOPES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
