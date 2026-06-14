@@ -55,6 +55,12 @@ export default function UsersClient({
   const [editEmail, setEditEmail] = useState("");
   const [editJobTitle, setEditJobTitle] = useState("");
 
+  // Delete confirmation modal state
+  const [deleteTarget, setDeleteTarget] = useState<Admin | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   function startEdit(a: Admin) {
     setEditId(a.id);
     setEditFirst(a.firstName);
@@ -114,19 +120,39 @@ export default function UsersClient({
     }
   }
 
-  async function handleDelete(admin: Admin) {
-    if (!confirm(`Delete ${admin.firstName} ${admin.lastName}? This removes their Central Portal access.`)) return;
-    setBusy(admin.id + ":delete");
+  function handleDelete(admin: Admin) {
+    setDeleteTarget(admin);
+    setDeletePassword("");
+    setDeleteError(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    if (!deletePassword) {
+      setDeleteError("Enter your password to confirm");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      const res = await fetch(`/api/admin/central-users/${admin.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/central-users/${deleteTarget.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
       const data = await res.json();
+      if (res.status === 401) {
+        setDeleteError("Incorrect password. Please try again.");
+        return;
+      }
       if (!res.ok) throw new Error(data?.error ?? "Delete failed");
-      setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
-      toast.success("Admin deleted");
+      setAdmins((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+      toast.success(`${deleteTarget.firstName} ${deleteTarget.lastName} has been deleted`);
+      setDeleteTarget(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Delete failed");
+      setDeleteError(e instanceof Error ? e.message : "Delete failed");
     } finally {
-      setBusy(null);
+      setDeleteBusy(false);
     }
   }
 
@@ -269,6 +295,77 @@ export default function UsersClient({
             A role is required so the new admin has the right access. The invitee receives an email link to
             set their own password and becomes active once they do.
           </p>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 50,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: 14, padding: "28px 28px 24px",
+            width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <Trash2 size={20} color="#c0392b" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>Delete Administrator</span>
+            </div>
+            <p style={{ fontSize: 14, color: GRAY, marginBottom: 20, lineHeight: 1.55 }}>
+              You are about to permanently remove{" "}
+              <strong style={{ color: INK }}>{deleteTarget.firstName} {deleteTarget.lastName}</strong>{" "}
+              from the Central Portal. This action cannot be undone.
+              <br />Enter your password to confirm.
+            </p>
+            <label style={{ display: "block", marginBottom: 16 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: GRAY, display: "block", marginBottom: 5 }}>
+                Your password
+              </span>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmDelete(); }}
+                placeholder="Enter your password"
+                autoFocus
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  border: deleteError ? "1px solid #c0392b" : "1px solid #E5E7EB",
+                  borderRadius: 8, padding: "9px 12px", fontSize: 14,
+                  color: INK, outline: "none", fontFamily: "inherit",
+                }}
+              />
+              {deleteError && (
+                <span style={{ fontSize: 12, color: "#c0392b", marginTop: 5, display: "block" }}>
+                  {deleteError}
+                </span>
+              )}
+            </label>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setDeleteTarget(null); setDeletePassword(""); setDeleteError(null); }}
+                disabled={deleteBusy}
+                style={{ ...ghostBtn, padding: "8px 18px" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteBusy}
+                style={{
+                  ...ghostBtn, padding: "8px 18px",
+                  background: "#c0392b", color: "#fff",
+                  border: "1px solid #c0392b",
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {deleteBusy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
