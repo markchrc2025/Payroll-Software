@@ -50,4 +50,42 @@ export async function applyMovementEffects(
       },
     });
   }
+
+  const isPlacement = movement.movementType === "PLACEMENT_CHANGE" || movement.movementType === "COMBINED_CHANGE";
+  const isTerms     = movement.movementType === "TERMS_CHANGE"     || movement.movementType === "COMBINED_CHANGE";
+
+  if (isPlacement) {
+    await tx.placement.create({
+      data: {
+        tenantId:      movement.tenantId,
+        employeeId:    movement.employeeId,
+        effectiveDate: movement.effectiveDate,
+        positionId:    movement.toPositionId    ?? null,
+        jobTitle:      movement.toJobTitle      ?? null,
+        lineManagerId: movement.toLineManagerId ?? null,
+        departmentId:  movement.toDepartmentId  ?? null,
+        branchId:      movement.toBranchId      ?? null,
+        level:         movement.toJobLevel      ?? null,
+        remark:        movement.reason          ?? null,
+      },
+    });
+  }
+
+  if (isTerms) {
+    await tx.employmentTerm.create({
+      data: {
+        tenantId:         movement.tenantId,
+        employeeId:       movement.employeeId,
+        effectiveDate:    movement.effectiveDate,
+        jobType:          movement.toJobType          ?? null,
+        jobStatus:        movement.toJobStatus        ?? null,
+        leaveWorkflowKey: movement.toLeaveWorkflowKey ?? null,
+        workdayKey:       movement.toWorkdayKey       ?? null,
+        holidayKey:       movement.toHolidayKey       ?? null,
+        termStart:        movement.toTermStart        ?? null,
+        termEnd:          movement.toTermEnd          ?? null,
+        remark:           movement.reason             ?? null,
+      },
+    });
+  }
 }

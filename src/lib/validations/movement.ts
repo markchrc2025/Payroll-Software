@@ -23,6 +23,17 @@ export const createMovementSchema = z
     /// Pesos as decimal string (e.g. "55000.00") — converted to centavos server-side.
     toBasicSalary: z.string().regex(/^-?\d+(\.\d+)?$/).optional().nullable(),
     toStatus: z.nativeEnum(EmploymentStatus).optional().nullable(),
+
+    // Placement-scope fields
+    toLineManagerId:    cuid.optional().nullable(),
+    // Terms-scope fields
+    toJobType:          z.string().max(50).optional().nullable(),
+    toJobStatus:        z.string().max(50).optional().nullable(),
+    toLeaveWorkflowKey: z.string().max(50).optional().nullable(),
+    toWorkdayKey:       z.string().max(50).optional().nullable(),
+    toHolidayKey:       z.string().max(50).optional().nullable(),
+    toTermStart:        z.string().optional().nullable(),
+    toTermEnd:          z.string().optional().nullable(),
   })
   .superRefine((v, ctx) => {
     const has = (k: keyof typeof v) => v[k] !== undefined && v[k] !== null && v[k] !== "";
@@ -34,6 +45,9 @@ export const createMovementSchema = z
         });
       }
     };
+    const placementFields = ["toPositionId", "toJobTitle", "toJobLevel", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
+    const termsFields     = ["toJobType", "toJobStatus", "toLeaveWorkflowKey", "toWorkdayKey", "toHolidayKey", "toTermStart", "toTermEnd"] as const;
+
     switch (v.movementType) {
       case "DEPARTMENT_TRANSFER":
         requireAny(["toDepartmentId"]);
@@ -54,6 +68,16 @@ export const createMovementSchema = z
       case "STATUS_CHANGE":
       case "REGULARIZATION":
         requireAny(["toStatus"]);
+        break;
+      case "PLACEMENT_CHANGE":
+        requireAny([...placementFields]);
+        break;
+      case "TERMS_CHANGE":
+        requireAny([...termsFields]);
+        break;
+      case "COMBINED_CHANGE":
+        requireAny([...placementFields]);
+        requireAny([...termsFields]);
         break;
     }
   });
