@@ -72,6 +72,7 @@ type Employee = {
 type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 type Position = { id: string; title: string };
+type JobLevel = { id: string; name: string };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -169,6 +170,7 @@ export default function MovementsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [jobLevels, setJobLevels] = useState<JobLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
@@ -187,19 +189,21 @@ export default function MovementsPage() {
   // ---------------------------------------------------------------------------
 
   const loadReferenceData = useCallback(async () => {
-    const [empRes, deptRes, brRes, posRes] = await Promise.all([
+    const [empRes, deptRes, brRes, posRes, lvlRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
       fetch("/api/positions?limit=200"),
+      fetch("/api/job-levels"),
     ]);
-    const [empJson, deptJson, brJson, posJson] = await Promise.all([
-      empRes.json(), deptRes.json(), brRes.json(), posRes.json(),
+    const [empJson, deptJson, brJson, posJson, lvlJson] = await Promise.all([
+      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), lvlRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setDepartments(deptJson.data ?? []);
     setBranches(brJson.data ?? []);
     setPositions(posJson.data ?? []);
+    setJobLevels(lvlJson.data ?? []);
   }, []);
 
   const loadMovements = useCallback(async () => {
@@ -406,6 +410,7 @@ export default function MovementsPage() {
         departments={departments}
         branches={branches}
         positions={positions}
+        jobLevels={jobLevels}
         onCreated={loadMovements}
         reloadReferenceData={loadReferenceData}
       />

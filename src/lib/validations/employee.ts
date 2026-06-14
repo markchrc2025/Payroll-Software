@@ -165,7 +165,7 @@ export const createEmployeeSchema = z.object({
   immediateSupervisorId: z.string().cuid().optional().nullable(),
   managerId: z.string().cuid().optional().nullable(),
   jobTitle: z.string().max(150).optional().nullable(),
-  jobLevel: z.string().max(100).optional().nullable(),
+  levelId: z.string().cuid().optional().nullable(),
   employmentStatus: z.nativeEnum(EmploymentStatus).default("PROBATIONARY"),
   employmentType: z.nativeEnum(EmploymentType).default("FULL_TIME"),
   hireDate: z.coerce.date({ error: "Hire date is required" }),

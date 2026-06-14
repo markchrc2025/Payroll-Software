@@ -563,6 +563,7 @@ model Tenant {
   branches              Branch[]
   workLocations         WorkLocation[]
   positions             Position[]
+  jobLevels             JobLevel[]
   employees             Employee[]
   statutoryIds          StatutoryId[]
   employeeSalaries      EmployeeSalary[]
@@ -895,6 +896,28 @@ model Position {
   @@index([deletedAt])
 }
 
+model JobLevel {
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String
+  rank        Int     @default(0)
+  description String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  employees Employee[]
+  placements Placement[]
+  movementsTo   EmployeeMovement[] @relation("MovementToLevel")
+  movementsFrom EmployeeMovement[] @relation("MovementFromLevel")
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
 // =============================================================================
 // CORE HRIS — Employee
 // =============================================================================
@@ -938,7 +961,7 @@ model Employee {
   positionId         String?
   /// Free-text fallback when no Position row is assigned (legacy data).
   jobTitle           String?
-  jobLevel           String?
+  levelId            String?
   employmentStatus   EmploymentStatus @default(PROBATIONARY)
   employmentType     EmploymentType   @default(FULL_TIME)
   hireDate           DateTime
@@ -1058,6 +1081,7 @@ model Employee {
   department Department? @relation(fields: [departmentId], references: [id])
   branch     Branch?     @relation(fields: [branchId], references: [id])
   position   Position?   @relation(fields: [positionId], references: [id])
+  level      JobLevel?   @relation(fields: [levelId], references: [id])
 
   immediateSupervisor Employee?  @relation("EmployeeSupervisor", fields: [immediateSupervisorId], references: [id])
   supervisorOf        Employee[] @relation("EmployeeSupervisor")
@@ -1104,6 +1128,7 @@ model Employee {
   @@index([departmentId])
   @@index([branchId])
   @@index([positionId])
+  @@index([levelId])
   @@index([immediateSupervisorId])
   @@index([managerId])
   @@index([deletedAt])
@@ -1216,8 +1241,8 @@ model EmployeeMovement {
   toPositionId         String?
   fromJobTitle         String?
   toJobTitle           String?
-  fromJobLevel         String?
-  toJobLevel           String?
+  fromLevelId          String?
+  toLevelId            String?
   fromBasicSalaryCents BigInt?
   toBasicSalaryCents   BigInt?
   fromStatus           EmploymentStatus?
@@ -1248,8 +1273,10 @@ model EmployeeMovement {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  fromLevel  JobLevel? @relation("MovementFromLevel", fields: [fromLevelId], references: [id])
+  toLevel    JobLevel? @relation("MovementToLevel", fields: [toLevelId], references: [id])
 
   @@index([tenantId])
   @@index([employeeId, effectiveDate])
@@ -1269,7 +1296,7 @@ model Placement {
   lineManagerId String?
   departmentId  String?
   branchId      String?
-  level         String?
+  levelId       String?
   remark        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1280,6 +1307,7 @@ model Placement {
   lineManager Employee?   @relation("PlacementLineManager", fields: [lineManagerId], references: [id])
   department  Department? @relation(fields: [departmentId], references: [id])
   branch      Branch?     @relation(fields: [branchId], references: [id])
+  level       JobLevel?   @relation(fields: [levelId], references: [id])
 
   @@index([tenantId, employeeId])
   @@index([tenantId, effectiveDate])

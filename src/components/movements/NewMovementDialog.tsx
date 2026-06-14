@@ -30,6 +30,7 @@ import {
 type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 type Position = { id: string; title: string };
+type JobLevel = { id: string; name: string };
 
 type Props = {
   open: boolean;
@@ -38,6 +39,7 @@ type Props = {
   departments: Department[];
   branches: Branch[];
   positions: Position[];
+  jobLevels: JobLevel[];
   onCreated: () => void;
   reloadReferenceData: () => void;
 };
@@ -59,7 +61,7 @@ const EMPTY_FORM = {
   toBranchId: "",
   toPositionId: "",
   toJobTitle: "",
-  toJobLevel: "",
+  toLevelId: "",
   toLineManagerId: "",
   // Terms fields
   toJobType: "",
@@ -96,6 +98,7 @@ export function NewMovementDialog({
   departments: departmentsProp,
   branches: branchesProp,
   positions: positionsProp,
+  jobLevels: jobLevelsProp,
   onCreated,
   reloadReferenceData,
 }: Props) {
@@ -108,10 +111,12 @@ export function NewMovementDialog({
   const [departments, setDepartments] = useState(departmentsProp);
   const [branches, setBranches] = useState(branchesProp);
   const [positions, setPositions] = useState(positionsProp);
+  const [jobLevels, setJobLevels] = useState(jobLevelsProp);
 
   useEffect(() => setDepartments(departmentsProp), [departmentsProp]);
   useEffect(() => setBranches(branchesProp), [branchesProp]);
   useEffect(() => setPositions(positionsProp), [positionsProp]);
+  useEffect(() => setJobLevels(jobLevelsProp), [jobLevelsProp]);
 
   // Reset the form each time the dialog opens.
   useEffect(() => {
@@ -134,6 +139,9 @@ export function NewMovementDialog({
     } else if (entity === "department") {
       setDepartments((d) => [{ id: record.id, name: record.name ?? "Untitled" }, ...d]);
       set("toDepartmentId", record.id);
+    } else if (entity === "level") {
+      setJobLevels((l) => [{ id: record.id, name: record.name ?? "Untitled" }, ...l]);
+      set("toLevelId", record.id);
     } else {
       setBranches((b) => [{ id: record.id, name: record.name ?? "Untitled" }, ...b]);
       set("toBranchId", record.id);
@@ -151,7 +159,7 @@ export function NewMovementDialog({
     if (isPlacement) {
       if (form.toPositionId) body.toPositionId = form.toPositionId;
       if (form.toJobTitle) body.toJobTitle = form.toJobTitle;
-      if (form.toJobLevel) body.toJobLevel = form.toJobLevel;
+      if (form.toLevelId) body.toLevelId = form.toLevelId;
       if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
       if (form.toDepartmentId) body.toDepartmentId = form.toDepartmentId;
       if (form.toBranchId) body.toBranchId = form.toBranchId;
@@ -271,7 +279,13 @@ export function NewMovementDialog({
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Job Level</FieldLabel>
-                  <Input placeholder="e.g. L3" value={form.toJobLevel} onChange={(e) => set("toJobLevel", e.target.value)} />
+                  <SelectWithAdd
+                    value={form.toLevelId}
+                    onValueChange={(v) => set("toLevelId", v)}
+                    placeholder="Select level…"
+                    options={jobLevels.map((l) => ({ id: l.id, label: l.name }))}
+                    onAdd={() => setQuickCreate("level")}
+                  />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Line Manager</FieldLabel>

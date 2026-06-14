@@ -41,24 +41,24 @@ type PlacementRecord = {
   lineManagerId: string | null;
   departmentId: string | null;
   branchId: string | null;
-  level: string | null;
+  levelId: string | null;
   remark: string | null;
   position:    { id: string; title: string } | null;
   lineManager: { id: string; firstName: string; lastName: string; employeeNumber: string } | null;
   department:  { id: string; name: string } | null;
   branch:      { id: string; name: string } | null;
+  level:       { id: string; name: string } | null;
 };
 
 type Employee   = { id: string; employeeNumber: string; firstName: string; lastName: string };
 type Position   = { id: string; title: string };
 type Department = { id: string; name: string };
 type Branch     = { id: string; name: string };
+type JobLevel   = { id: string; name: string };
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const JOB_LEVELS = ["Entry", "Junior", "Mid", "Senior", "Lead", "Manager", "Executive"];
 
 const EMPTY_FORM = {
   effectiveDate: "",
@@ -67,7 +67,7 @@ const EMPTY_FORM = {
   lineManagerId: "",
   departmentId:  "",
   branchId:      "",
-  level:         "",
+  levelId:       "",
   remark:        "",
 };
 
@@ -80,6 +80,7 @@ export default function PlacementPage() {
   const [positions,   setPositions]   = useState<Position[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [branches,    setBranches]    = useState<Branch[]>([]);
+  const [jobLevels,   setJobLevels]   = useState<JobLevel[]>([]);
 
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [records,  setRecords]  = useState<PlacementRecord[]>([]);
@@ -97,17 +98,19 @@ export default function PlacementPage() {
   // ---------------------------------------------------------------------------
 
   const loadRefData = useCallback(async () => {
-    const [eRes, pRes, dRes, bRes] = await Promise.all([
+    const [eRes, pRes, dRes, bRes, lRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/positions?limit=200"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
+      fetch("/api/job-levels"),
     ]);
-    const [eJ, pJ, dJ, bJ] = await Promise.all([eRes.json(), pRes.json(), dRes.json(), bRes.json()]);
+    const [eJ, pJ, dJ, bJ, lJ] = await Promise.all([eRes.json(), pRes.json(), dRes.json(), bRes.json(), lRes.json()]);
     setEmployees(eJ.data ?? []);
     setPositions(pJ.data ?? []);
     setDepartments(dJ.data ?? []);
     setBranches(bJ.data ?? []);
+    setJobLevels(lJ.data ?? []);
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -141,7 +144,7 @@ export default function PlacementPage() {
       lineManagerId: r.lineManagerId ?? "",
       departmentId:  r.departmentId  ?? "",
       branchId:      r.branchId      ?? "",
-      level:         r.level         ?? "",
+      levelId:       r.levelId       ?? "",
       remark:        r.remark        ?? "",
     });
     setSheetOpen(true);
@@ -162,7 +165,7 @@ export default function PlacementPage() {
       lineManagerId: form.lineManagerId || null,
       departmentId:  form.departmentId  || null,
       branchId:      form.branchId      || null,
-      level:         form.level         || null,
+      levelId:       form.levelId       || null,
       remark:        form.remark        || null,
     };
 
@@ -301,7 +304,7 @@ export default function PlacementPage() {
                   </TableCell>
                   <TableCell className="text-sm">{r.department?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm">{r.branch?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{r.level ?? "—"}</TableCell>
+                  <TableCell className="text-sm">{r.level?.name ?? "—"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button
@@ -423,14 +426,14 @@ export default function PlacementPage() {
             <div className="space-y-1.5">
               <Label>Level</Label>
               <Select
-                value={form.level || "none"}
-                onValueChange={(v) => setForm({ ...form, level: (v ?? "") === "none" ? "" : (v ?? "") })}
+                value={form.levelId || "none"}
+                onValueChange={(v) => setForm({ ...form, levelId: (v ?? "") === "none" ? "" : (v ?? "") })}
               >
                 <SelectTrigger><SelectValue placeholder="Select level…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— None —</SelectItem>
-                  {JOB_LEVELS.map((l) => (
-                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  {jobLevels.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

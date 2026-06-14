@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type QuickCreateEntity = "position" | "department" | "branch";
+export type QuickCreateEntity = "position" | "department" | "branch" | "level";
 
 export type CreatedRecord = { id: string; title?: string; name?: string };
 
@@ -36,6 +36,7 @@ const ENTITY_META: Record<QuickCreateEntity, { label: string; endpoint: string; 
   position:   { label: "Position",   endpoint: "/api/positions",   nameLabel: "Title", placeholder: "e.g. Senior Engineer" },
   department: { label: "Department", endpoint: "/api/departments", nameLabel: "Name",  placeholder: "e.g. Engineering" },
   branch:     { label: "Branch",     endpoint: "/api/branches",    nameLabel: "Name",  placeholder: "e.g. Makati HQ" },
+  level:      { label: "Level",      endpoint: "/api/job-levels",  nameLabel: "Name",  placeholder: "e.g. Senior" },
 };
 
 const POSITION_LEVELS = ["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"];

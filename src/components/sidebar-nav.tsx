@@ -207,7 +207,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/assets", label: "Assets", icon: "assets" },
       { href: "/settings/roles", label: "Module Access", icon: "roles" },
       { href: "/settings/employee-id", label: "Employee ID", icon: "roles" },
-      { href: "#soon-level", label: "Level", icon: "positions", comingSoon: true },
+      { href: "/levels", label: "Level", icon: "positions" },
       { href: "#soon-bank", label: "Bank", icon: "bankfiles", comingSoon: true },
       { href: "#soon-course", label: "Course", icon: "recruitment", comingSoon: true },
       { href: "#soon-trainer", label: "Trainer", icon: "employees", comingSoon: true },

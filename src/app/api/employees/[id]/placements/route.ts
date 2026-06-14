@@ -15,7 +15,7 @@ const createSchema = z.object({
   lineManagerId: z.string().optional().nullable(),
   departmentId:  z.string().optional().nullable(),
   branchId:      z.string().optional().nullable(),
-  level:         z.string().max(50).optional().nullable(),
+  levelId:       z.string().optional().nullable(),
   remark:        z.string().max(200).optional().nullable(),
 });
 
@@ -42,6 +42,7 @@ export async function GET(
         lineManager: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
         department:  { select: { id: true, name: true } },
         branch:      { select: { id: true, name: true } },
+        level:       { select: { id: true, name: true } },
       },
     });
     return { records };
@@ -100,6 +101,13 @@ export async function POST(
       });
       if (!br) return { error: "Branch not found" as const };
     }
+    if (v.levelId) {
+      const lvl = await tx.jobLevel.findFirst({
+        where: { id: v.levelId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!lvl) return { error: "Level not found" as const };
+    }
 
     const record = await tx.placement.create({
       data: {
@@ -111,7 +119,7 @@ export async function POST(
         lineManagerId: v.lineManagerId ?? null,
         departmentId:  v.departmentId  ?? null,
         branchId:      v.branchId      ?? null,
-        level:         v.level   ?? null,
+        levelId:       v.levelId  ?? null,
         remark:        v.remark  ?? null,
       },
       include: {
@@ -119,6 +127,7 @@ export async function POST(
         lineManager: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
         department:  { select: { id: true, name: true } },
         branch:      { select: { id: true, name: true } },
+        level:       { select: { id: true, name: true } },
       },
     });
     return { record };

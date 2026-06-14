@@ -32,11 +32,19 @@ async function getPositions() {
   return json.data ?? [];
 }
 
+async function getJobLevels() {
+  const res = await fetch(`${BASE}/api/job-levels`, { cache: "no-store" });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
+}
+
 export default async function NewEmployeePage() {
-  const [departments, branches, positions] = await Promise.all([
+  const [departments, branches, positions, jobLevels] = await Promise.all([
     getDepartments(),
     getBranches(),
     getPositions(),
+    getJobLevels(),
   ]);
 
   return (
@@ -57,6 +65,7 @@ export default async function NewEmployeePage() {
         departments={departments}
         branches={branches}
         positions={positions}
+        jobLevels={jobLevels}
       />
     </div>
   );

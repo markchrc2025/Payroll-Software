@@ -30,11 +30,13 @@ import { Switch } from "@/components/ui/switch";
 type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
 type Position = { id: string; title: string };
+type JobLevel = { id: string; name: string };
 
 type Props = {
   departments: Dept[];
   branches:    Branch[];
   positions:   Position[];
+  jobLevels:   JobLevel[];
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -108,7 +110,6 @@ const SENSE       = ["Normal","Mild","Moderate","Severe"];
 const LIMB        = ["Normal","Limited","None"];
 const PRIVACY     = ["Not Accessible","Employee","Manager"];
 const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
-const JOB_LEVELS  = ["Entry","Junior","Mid","Senior","Lead","Manager","Executive"];
 const JOB_TYPES   = ["Permanent","Contract","Probationary","Casual","Project-based"];
 const JOB_DESCS   = ["Confirmed","Probation","Resigned","Terminated"];
 const WORKFLOWS   = ["DEFAULT","Executive","Field Staff"];
@@ -449,7 +450,7 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, jobLevels }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -675,7 +676,20 @@ export function AddEmployeeWizard({ departments, branches, positions }: Props) {
                 </Select>
               )} />
             </div>
-            <SF control={c} name="jobLevel" label="Level" options={JOB_LEVELS} placeholder="Select…" span2 errors={e} />
+            <div className="col-span-2">
+              <Lbl text="Level" />
+              <Controller control={c} name="levelId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select level…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {jobLevels.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
             <FSec label="Employment Terms" />
             <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <SF control={c} name="jobType"           label="Job Type"     options={JOB_TYPES}  placeholder="Permanent"  errors={e} />

@@ -16,7 +16,7 @@ export async function applyMovementEffects(
   if (movement.toBranchId) data.branch = { connect: { id: movement.toBranchId } };
   if (movement.toPositionId) data.position = { connect: { id: movement.toPositionId } };
   if (movement.toJobTitle != null) data.jobTitle = movement.toJobTitle;
-  if (movement.toJobLevel != null) data.jobLevel = movement.toJobLevel;
+  if (movement.toLevelId) data.level = { connect: { id: movement.toLevelId } };
   if (movement.toStatus != null) {
     data.employmentStatus = movement.toStatus;
     if (movement.movementType === "REGULARIZATION") {
@@ -65,7 +65,7 @@ export async function applyMovementEffects(
         lineManagerId: movement.toLineManagerId ?? null,
         departmentId:  movement.toDepartmentId  ?? null,
         branchId:      movement.toBranchId      ?? null,
-        level:         movement.toJobLevel      ?? null,
+        levelId:       movement.toLevelId       ?? null,
         remark:        movement.reason          ?? null,
       },
     });
