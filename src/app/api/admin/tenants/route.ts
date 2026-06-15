@@ -193,6 +193,14 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true, email: true },
       }).catch(() => null); // don't fail tenant creation if user creation fails
+
+      // 3. Designate the first admin as the tenant owner.
+      if (adminUser) {
+        await prismaAdmin.tenant.update({
+          where: { id: tenant.id },
+          data: { ownerUserId: adminUser.id },
+        });
+      }
     }
 
     // Assign the chosen package (creates the subscription + syncs the tier tag).

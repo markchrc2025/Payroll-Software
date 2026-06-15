@@ -81,6 +81,8 @@ export async function GET(
         zipCode: true,
         createdAt: true,
         updatedAt: true,
+        ownerUserId: true,
+        owner: { select: { id: true, firstName: true, lastName: true, email: true } },
         _count: { select: { employees: true, users: true, payrollBooks: true } },
       },
     });
