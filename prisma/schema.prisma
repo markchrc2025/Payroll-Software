@@ -521,6 +521,9 @@ model Tenant {
   ownerName   String?
   /// Manual account-health override (0–100). Null → auto-computed heuristic at read time.
   healthScore Int?
+  /// FK to the User who is the designated Super Admin / primary owner of this tenant.
+  /// Set on creation; transferable by the owner or Central Portal admins.
+  ownerUserId String?
 
   // Employee ID format — controls how auto-generated employeeNumbers look.
   empIdPrefix      String  @default("EMP-")
@@ -604,6 +607,7 @@ model Tenant {
   dtrAuditLogs          DTRAuditLog[]
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
+  owner              User?     @relation("TenantOwner", fields: [ownerUserId], references: [id])
 
   // Billing
   subscription TenantSubscription?
@@ -679,6 +683,7 @@ model User {
   deletedAt DateTime?
 
   tenant       Tenant?      @relation(fields: [tenantId], references: [id])
+  ownedTenants Tenant[]     @relation("TenantOwner")
   assignedRole Role?        @relation(fields: [roleId], references: [id])
   centralRole  CentralRole? @relation(fields: [centralRoleId], references: [id])
   employee     Employee?

@@ -36,10 +36,29 @@ import {
   Table2,
   Code2,
   Bot,
+  Crown,
 } from "lucide-react";
 
 type SubscriptionTier = "STARTER" | "GROWTH" | "PRO";
 type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED";
+
+interface TenantOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface TenantUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  assignedRole: { name: string } | null;
+}
 
 interface Tenant {
   id: string;
@@ -54,6 +73,8 @@ interface Tenant {
   subscriptionTier: SubscriptionTier;
   subscriptionStatus: SubscriptionStatus;
   featureFlags: Record<string, boolean>;
+  ownerUserId: string | null;
+  owner: TenantOwner | null;
 }
 
 interface AuditEntry {
@@ -134,6 +155,11 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Users tab
+  const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [transferringOwner, setTransferringOwner] = useState<string | null>(null);
+
   useEffect(() => {
     fetchTenant();
   }, [id]);
@@ -178,6 +204,39 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
       toast.error("Failed to load audit log");
     } finally {
       setAuditLoading(false);
+    }
+  }
+
+  async function fetchUsers() {
+    setUsersLoading(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${id}/users`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTenantUsers(data.data ?? []);
+    } catch {
+      toast.error("Failed to load tenant users");
+    } finally {
+      setUsersLoading(false);
+    }
+  }
+
+  async function makeOwner(userId: string) {
+    setTransferringOwner(userId);
+    try {
+      const res = await fetch(`/api/admin/tenants/${id}/owner`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Failed to transfer ownership"); return; }
+      toast.success("Ownership transferred");
+      fetchTenant();
+    } catch {
+      toast.error("Failed to transfer ownership");
+    } finally {
+      setTransferringOwner(null);
     }
   }
 
@@ -260,7 +319,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
-  const [activeTab, setActiveTab] = useState<"overview" | "features" | "billing" | "audit">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "features" | "billing" | "users" | "audit">("overview");
 
   if (loading) {
     return (
@@ -284,6 +343,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
     { key: "overview", label: "Overview" },
     { key: "features", label: "Features" },
     { key: "billing", label: "Billing" },
+    { key: "users", label: "Users" },
     { key: "audit", label: "Activity" },
   ];
 
@@ -322,6 +382,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
             onClick={() => {
               setActiveTab(key);
               if (key === "audit") fetchAudit();
+              if (key === "users") fetchUsers();
             }}
             className={`px-3.5 py-2.5 text-xs border-b-2 transition-colors ${
               activeTab === key
@@ -524,6 +585,91 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
               <p className="text-xs font-medium text-gray-900 mb-3">Invoice history</p>
               <p className="text-[11px] text-gray-400 py-6 text-center">Invoice management coming soon.</p>
             </div>
+          </div>
+        )}
+
+        {/* ── USERS ─────────────────────────────────────── */}
+        {activeTab === "users" && (
+          <div className="space-y-3">
+            {/* Current owner banner */}
+            {tenant.owner && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2.5">
+                <Crown size={14} className="text-amber-600 shrink-0" />
+                <p className="text-[11px] text-amber-800">
+                  <strong>Super Admin / Owner:</strong>{" "}
+                  {`${tenant.owner.firstName} ${tenant.owner.lastName}`.trim() || tenant.owner.email}
+                  {" "}({tenant.owner.email})
+                </p>
+              </div>
+            )}
+
+            {usersLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[10px]">Name</TableHead>
+                      <TableHead className="text-[10px]">Email</TableHead>
+                      <TableHead className="text-[10px]">Role</TableHead>
+                      <TableHead className="text-[10px]">Status</TableHead>
+                      <TableHead className="text-[10px]">Last Login</TableHead>
+                      <TableHead className="text-[10px]">Owner</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tenantUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-gray-400 text-xs py-8">
+                          No users found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      tenantUsers.map((u) => {
+                        const isOwner = u.id === tenant.ownerUserId;
+                        return (
+                          <TableRow key={u.id}>
+                            <TableCell className="text-[11px] font-medium">
+                              {u.firstName} {u.lastName}
+                            </TableCell>
+                            <TableCell className="text-[11px] text-gray-500">{u.email}</TableCell>
+                            <TableCell className="text-[11px]">
+                              {u.assignedRole?.name ?? <span className="text-gray-300">—</span>}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`text-[10px] rounded-full px-2 py-0.5 ${u.isActive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                                {u.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-[11px] text-gray-500">
+                              {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString("en-PH") : "Never"}
+                            </TableCell>
+                            <TableCell>
+                              {isOwner ? (
+                                <span className="text-[10px] bg-amber-50 text-amber-700 rounded-full px-2 py-0.5 font-medium">
+                                  Owner
+                                </span>
+                              ) : (
+                                <button
+                                  disabled={transferringOwner === u.id}
+                                  onClick={() => makeOwner(u.id)}
+                                  className="text-[10px] text-blue-600 hover:underline disabled:opacity-50"
+                                >
+                                  {transferringOwner === u.id ? "Transferring…" : "Make Owner"}
+                                </button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         )}
 
