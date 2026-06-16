@@ -29,8 +29,7 @@ import {
 
 type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
-type Position = { id: string; title: string };
-type JobLevel = { id: string; name: string };
+type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 
 type Props = {
@@ -40,7 +39,6 @@ type Props = {
   departments: Department[];
   branches: Branch[];
   positions: Position[];
-  jobLevels: JobLevel[];
   shiftSchedules: ShiftSchedule[];
   onCreated: () => void;
   reloadReferenceData: () => void;
@@ -62,8 +60,6 @@ const EMPTY_FORM = {
   toDepartmentId: "",
   toBranchId: "",
   toPositionId: "",
-  toJobTitle: "",
-  toLevelId: "",
   toLineManagerId: "",
   // Terms fields
   toJobType: "",
@@ -100,7 +96,6 @@ export function NewMovementDialog({
   departments: departmentsProp,
   branches: branchesProp,
   positions: positionsProp,
-  jobLevels: jobLevelsProp,
   shiftSchedules,
   onCreated,
   reloadReferenceData,
@@ -114,12 +109,10 @@ export function NewMovementDialog({
   const [departments, setDepartments] = useState(departmentsProp);
   const [branches, setBranches] = useState(branchesProp);
   const [positions, setPositions] = useState(positionsProp);
-  const [jobLevels, setJobLevels] = useState(jobLevelsProp);
 
   useEffect(() => setDepartments(departmentsProp), [departmentsProp]);
   useEffect(() => setBranches(branchesProp), [branchesProp]);
   useEffect(() => setPositions(positionsProp), [positionsProp]);
-  useEffect(() => setJobLevels(jobLevelsProp), [jobLevelsProp]);
 
   // Reset the form each time the dialog opens.
   useEffect(() => {
@@ -137,14 +130,11 @@ export function NewMovementDialog({
 
   function handleCreated(entity: QuickCreateEntity, record: CreatedRecord) {
     if (entity === "position") {
-      setPositions((p) => [{ id: record.id, title: record.title ?? "Untitled" }, ...p]);
+      setPositions((p) => [{ id: record.id, title: record.title ?? "Untitled", departmentId: form.toDepartmentId || null }, ...p]);
       set("toPositionId", record.id);
     } else if (entity === "department") {
       setDepartments((d) => [{ id: record.id, name: record.name ?? "Untitled" }, ...d]);
       set("toDepartmentId", record.id);
-    } else if (entity === "level") {
-      setJobLevels((l) => [{ id: record.id, name: record.name ?? "Untitled" }, ...l]);
-      set("toLevelId", record.id);
     } else {
       setBranches((b) => [{ id: record.id, name: record.name ?? "Untitled" }, ...b]);
       set("toBranchId", record.id);
@@ -160,11 +150,9 @@ export function NewMovementDialog({
       notes: form.notes || null,
     };
     if (isPlacement) {
-      if (form.toPositionId) body.toPositionId = form.toPositionId;
-      if (form.toJobTitle) body.toJobTitle = form.toJobTitle;
-      if (form.toLevelId) body.toLevelId = form.toLevelId;
-      if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
       if (form.toDepartmentId) body.toDepartmentId = form.toDepartmentId;
+      if (form.toPositionId) body.toPositionId = form.toPositionId;
+      if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
       if (form.toBranchId) body.toBranchId = form.toBranchId;
     }
     if (isTerms) {
@@ -267,27 +255,34 @@ export function NewMovementDialog({
               <>
                 <SectionDivider label="Placement Details" />
                 <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Department</FieldLabel>
+                  <SelectWithAdd
+                    value={form.toDepartmentId}
+                    onValueChange={(v) => {
+                      set("toDepartmentId", v);
+                      // clear position if it belongs to a different department
+                      const pos = positions.find((p) => p.id === form.toPositionId);
+                      if (pos && pos.departmentId && pos.departmentId !== v) {
+                        set("toPositionId", "");
+                      }
+                    }}
+                    placeholder="Select department…"
+                    options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                    onAdd={() => setQuickCreate("department")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <FieldLabel>To Position</FieldLabel>
                   <SelectWithAdd
                     value={form.toPositionId}
                     onValueChange={(v) => set("toPositionId", v)}
-                    placeholder="Select position…"
-                    options={positions.map((p) => ({ id: p.id, label: p.title }))}
+                    placeholder={form.toDepartmentId ? "Select position…" : "Select department first"}
+                    options={
+                      form.toDepartmentId
+                        ? positions.filter((p) => p.departmentId === form.toDepartmentId).map((p) => ({ id: p.id, label: p.title }))
+                        : []
+                    }
                     onAdd={() => setQuickCreate("position")}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Job Title</FieldLabel>
-                  <Input placeholder="e.g. Senior Engineer" value={form.toJobTitle} onChange={(e) => set("toJobTitle", e.target.value)} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Job Level</FieldLabel>
-                  <SelectWithAdd
-                    value={form.toLevelId}
-                    onValueChange={(v) => set("toLevelId", v)}
-                    placeholder="Select level…"
-                    options={jobLevels.map((l) => ({ id: l.id, label: l.name }))}
-                    onAdd={() => setQuickCreate("level")}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -297,16 +292,6 @@ export function NewMovementDialog({
                     value={form.toLineManagerId}
                     onChange={(id) => set("toLineManagerId", id)}
                     placeholder="Select line manager…"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Department</FieldLabel>
-                  <SelectWithAdd
-                    value={form.toDepartmentId}
-                    onValueChange={(v) => set("toDepartmentId", v)}
-                    placeholder="Select department…"
-                    options={departments.map((d) => ({ id: d.id, label: d.name }))}
-                    onAdd={() => setQuickCreate("department")}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
