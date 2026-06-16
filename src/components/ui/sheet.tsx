@@ -38,6 +38,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
 
 function SheetContent({
   className,
+  contentClassName,
   children,
   side = "right",
   showCloseButton = true,
@@ -45,6 +46,10 @@ function SheetContent({
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
+  /** Class applied to the inner scrollable wrapper. Holds the padding so
+   * focus rings/shadows on edge elements aren't clipped by the scroll box.
+   * Defaults to "p-6"; pass "p-0" for full-bleed custom layouts. */
+  contentClassName?: string
 }) {
   return (
     <SheetPortal>
@@ -53,12 +58,12 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 flex flex-col bg-white rounded-2xl p-6 shadow-xl text-sm w-full max-w-lg max-h-[90vh] overflow-hidden transition duration-200 ease-in-out data-ending-style:opacity-0 data-ending-style:scale-95 data-starting-style:opacity-0 data-starting-style:scale-95",
+          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 flex flex-col bg-white rounded-2xl shadow-xl text-sm w-full max-w-lg max-h-[90vh] overflow-hidden transition duration-200 ease-in-out data-ending-style:opacity-0 data-ending-style:scale-95 data-starting-style:opacity-0 data-starting-style:scale-95",
           className
         )}
         {...props}
       >
-        <div className="flex flex-col flex-1 overflow-y-auto">
+        <div className={cn("flex flex-col flex-1 overflow-y-auto p-6", contentClassName)}>
           {children}
         </div>
         {showCloseButton && (
