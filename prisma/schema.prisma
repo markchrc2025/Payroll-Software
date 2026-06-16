@@ -843,6 +843,7 @@ model Department {
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id])
   employees   Employee[]
+  positions   Position[]
   jobPostings JobPosting[]
   placements  Placement[]
 
@@ -881,23 +882,26 @@ model Branch {
 }
 
 model Position {
-  id          String        @id @default(cuid())
-  tenantId    String
-  title       String
-  level       PositionLevel @default(MID)
-  description String?
+  id           String        @id @default(cuid())
+  tenantId     String
+  title        String
+  level        PositionLevel @default(MID)
+  description  String?
+  departmentId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
   employees   Employee[]
   jobPostings JobPosting[]
   placements  Placement[]
 
   @@unique([tenantId, title])
   @@index([tenantId])
+  @@index([departmentId])
   @@index([deletedAt])
 }
 

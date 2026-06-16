@@ -14,6 +14,7 @@ const patchSchema = z.object({
   title: z.string().min(1).max(150).optional(),
   level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"]).optional(),
   description: z.string().max(500).nullable().optional(),
+  departmentId: z.string().cuid().optional().nullable(),
 });
 
 export async function GET(
