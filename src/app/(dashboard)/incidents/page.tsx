@@ -398,7 +398,7 @@ export default function IncidentsPage() {
 
       {/* Create Sheet */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>New Incident</SheetTitle>
           </SheetHeader>
@@ -457,7 +457,7 @@ export default function IncidentsPage() {
 
       {/* Edit Sheet */}
       <Sheet open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Edit Incident</SheetTitle>
           </SheetHeader>
@@ -507,7 +507,7 @@ export default function IncidentsPage() {
 
       {/* Resolve Sheet */}
       <Sheet open={!!resolveTarget} onOpenChange={(o) => !o && setResolveTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Resolve Incident</SheetTitle>
           </SheetHeader>

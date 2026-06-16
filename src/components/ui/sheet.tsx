@@ -53,12 +53,14 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 flex flex-col bg-white rounded-2xl p-6 shadow-xl text-sm w-full max-w-lg max-h-[90vh] overflow-y-auto transition duration-200 ease-in-out data-ending-style:opacity-0 data-ending-style:scale-95 data-starting-style:opacity-0 data-starting-style:scale-95",
+          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 flex flex-col bg-white rounded-2xl p-6 shadow-xl text-sm w-full max-w-lg max-h-[90vh] overflow-hidden transition duration-200 ease-in-out data-ending-style:opacity-0 data-ending-style:scale-95 data-starting-style:opacity-0 data-starting-style:scale-95",
           className
         )}
         {...props}
       >
-        {children}
+        <div className="flex flex-col flex-1 overflow-y-auto">
+          {children}
+        </div>
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
@@ -70,8 +72,7 @@ function SheetContent({
               />
             }
           >
-            <XIcon
-            />
+            <XIcon />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
         )}

@@ -254,7 +254,7 @@ export default function ShiftSchedulesPage() {
 
       {/* ── Side sheet ── */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit Shift Schedule" : "Add Shift Schedule"}</SheetTitle>
           </SheetHeader>

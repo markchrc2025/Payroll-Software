@@ -300,7 +300,7 @@ export default function TenantsPage() {
 
       {/* Create Sheet */}
       <Sheet open={createOpen} onOpenChange={(o: boolean) => { if (!o) setCreateOpen(false); }}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
+        <SheetContent className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Create Tenant</SheetTitle>
           </SheetHeader>

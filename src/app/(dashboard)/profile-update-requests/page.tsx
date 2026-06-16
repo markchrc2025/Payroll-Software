@@ -285,7 +285,7 @@ export default function ProfileUpdateRequestsPage() {
 
       {/* Reject Sheet */}
       <Sheet open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Reject Profile Update</SheetTitle>
           </SheetHeader>

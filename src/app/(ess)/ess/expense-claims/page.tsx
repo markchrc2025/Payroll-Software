@@ -298,7 +298,7 @@ export default function EssExpenseClaimsPage() {
           if (!o) setSheetOpen(false);
         }}
       >
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>File Expense Claim</SheetTitle>
           </SheetHeader>

@@ -241,7 +241,7 @@ export default function WorkLocationsPage() {
 
       {/* ── Side sheet ── */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit Work Location" : "Add Work Location"}</SheetTitle>
           </SheetHeader>

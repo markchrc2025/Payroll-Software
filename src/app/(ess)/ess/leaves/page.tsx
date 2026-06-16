@@ -247,7 +247,7 @@ export default function EssLeavesPage() {
 
       {/* File Leave Sheet */}
       <Sheet open={sheetOpen} onOpenChange={(o) => { if (!o) setSheetOpen(false); }}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>File Leave Request</SheetTitle>
           </SheetHeader>

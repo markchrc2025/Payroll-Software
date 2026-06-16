@@ -412,7 +412,7 @@ export default function AnnouncementsPage() {
       {/* Create Sheet                                                         */}
       {/* ------------------------------------------------------------------- */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>New Announcement</SheetTitle>
           </SheetHeader>
@@ -431,7 +431,7 @@ export default function AnnouncementsPage() {
       {/* Edit Sheet                                                           */}
       {/* ------------------------------------------------------------------- */}
       <Sheet open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Edit Announcement</SheetTitle>
           </SheetHeader>
@@ -450,7 +450,7 @@ export default function AnnouncementsPage() {
       {/* Preview Sheet                                                        */}
       {/* ------------------------------------------------------------------- */}
       <Sheet open={!!previewTarget} onOpenChange={(o) => !o && setPreviewTarget(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle className="text-base">Preview</SheetTitle>
           </SheetHeader>
