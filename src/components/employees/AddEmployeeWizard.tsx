@@ -643,6 +643,20 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <div className="col-span-2">
+              <Lbl text="Department" />
+              <Controller control={c} name="departmentId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select department…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
+            <div className="col-span-2">
               <Lbl text="Job Position" />
               <Controller control={c} name="positionId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
@@ -655,21 +669,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                       ? positions.filter((p) => p.departmentId === watchedDeptId)
                       : positions
                     ).map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
-            <TF control={c} name="jobTitle" label="Job Title (free text)" placeholder="e.g. Senior Engineer" span2 errors={e} />
-            <div className="col-span-2">
-              <Lbl text="Department" />
-              <Controller control={c} name="departmentId" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Select department…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )} />
