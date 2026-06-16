@@ -144,8 +144,8 @@ export async function POST(
         toStatus: v.toStatus ?? null,
 
         toLineManagerId:    v.toLineManagerId    ?? null,
-        toJobType:          v.toJobType          ?? null,
-        toJobStatus:        v.toJobStatus        ?? null,
+        toJobTypeId:        v.toJobTypeId        ?? null,
+        toJobStatusId:      v.toJobStatusId      ?? null,
         toLeaveWorkflowKey: v.toLeaveWorkflowKey ?? null,
         toShiftScheduleId:  v.toShiftScheduleId  ?? null,
         toHolidayKey:       v.toHolidayKey       ?? null,

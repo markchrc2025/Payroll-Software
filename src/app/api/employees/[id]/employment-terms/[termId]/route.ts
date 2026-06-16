@@ -10,8 +10,8 @@ import { ok, err, unauthorized, notFound } from "@/lib/api-response";
 
 const patchSchema = z.object({
   effectiveDate:    z.string().optional(),
-  jobType:          z.string().max(50).optional().nullable(),
-  jobStatus:        z.string().max(50).optional().nullable(),
+  jobTypeId:        z.string().optional().nullable(),
+  jobStatusId:      z.string().optional().nullable(),
   leaveWorkflowKey: z.string().max(50).optional().nullable(),
   shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
@@ -52,8 +52,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       where: { id: termId },
       data: {
         ...(v.effectiveDate    !== undefined && { effectiveDate:    new Date(v.effectiveDate) }),
-        ...(v.jobType          !== undefined && { jobType:          v.jobType          ?? null }),
-        ...(v.jobStatus        !== undefined && { jobStatus:        v.jobStatus        ?? null }),
+        ...(v.jobTypeId        !== undefined && { jobTypeId:        v.jobTypeId        ?? null }),
+        ...(v.jobStatusId      !== undefined && { jobStatusId:      v.jobStatusId      ?? null }),
         ...(v.leaveWorkflowKey !== undefined && { leaveWorkflowKey: v.leaveWorkflowKey ?? null }),
         ...(v.shiftScheduleId  !== undefined && { shiftScheduleId:  v.shiftScheduleId  ?? null }),
         ...(v.holidayKey       !== undefined && { holidayKey:       v.holidayKey       ?? null }),
@@ -61,7 +61,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ...(v.nextReviewDate   !== undefined && { nextReviewDate: v.nextReviewDate ? new Date(v.nextReviewDate) : null }),
         ...(v.remark           !== undefined && { remark:    v.remark    ?? null }),
       },
-      include: { shiftSchedule: { select: { id: true, name: true } } },
+      include: {
+        shiftSchedule: { select: { id: true, name: true } },
+        jobType: { select: { id: true, name: true } },
+        jobStatus: { select: { id: true, name: true } },
+      },
     });
     return { record };
   });

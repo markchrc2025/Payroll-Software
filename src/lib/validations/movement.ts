@@ -27,8 +27,8 @@ export const createMovementSchema = z
     // Placement-scope fields
     toLineManagerId:    cuid.optional().nullable(),
     // Terms-scope fields
-    toJobType:          z.string().max(50).optional().nullable(),
-    toJobStatus:        z.string().max(50).optional().nullable(),
+    toJobTypeId:        cuid.optional().nullable(),
+    toJobStatusId:      cuid.optional().nullable(),
     toLeaveWorkflowKey: z.string().max(50).optional().nullable(),
     toShiftScheduleId:  cuid.optional().nullable(),
     toHolidayKey:       z.string().max(50).optional().nullable(),
@@ -46,7 +46,7 @@ export const createMovementSchema = z
       }
     };
     const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
-    const termsFields     = ["toJobType", "toJobStatus", "toLeaveWorkflowKey", "toShiftScheduleId", "toHolidayKey", "toTermStart", "toNextReviewDate"] as const;
+    const termsFields     = ["toJobTypeId", "toJobStatusId", "toLeaveWorkflowKey", "toShiftScheduleId", "toHolidayKey", "toTermStart", "toNextReviewDate"] as const;
 
     switch (v.movementType) {
       case "DEPARTMENT_TRANSFER":
