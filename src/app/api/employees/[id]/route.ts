@@ -45,6 +45,7 @@ export async function GET(
         orderBy: { effectiveDate: "desc" },
         take: 1,
       },
+      user: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   }));
 
@@ -105,8 +106,14 @@ export async function PUT(
   const result = await withTenant(auth.tenantId, async (tx) => {
     const existing = await tx.employee.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
+      select: { id: true, userId: true, departmentId: true, branchId: true, positionId: true },
     });
     if (!existing) return { notFound: true as const };
+
+    // Self-edit safeguard: admins cannot modify their own employee record.
+    if (existing.userId && existing.userId === auth.userId) {
+      return { selfEdit: true as const };
+    }
 
     if (departmentId !== undefined && departmentId !== null) {
       const dept = await tx.department.findFirst({
@@ -193,6 +200,7 @@ export async function PUT(
   });
 
   if ("notFound" in result) return notFound("Employee");
+  if ("selfEdit" in result) return err("You cannot modify your own employee record. Ask another administrator to make this change.", 403);
   if ("error" in result && result.error) return err(result.error, 404);
 
   void writeAuditLog({

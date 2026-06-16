@@ -44,6 +44,17 @@ async function getLeaveBalances(id: string) {
   return json.data ?? [];
 }
 
+async function getCurrentUserId() {
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const res = await fetch(`${base}/api/auth/me`, {
+    cache: "no-store",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return (json.data?.userId as string | null) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -57,10 +68,14 @@ export default async function EmployeeProfilePage({
 
   // Resolve the employee first (GET accepts Employee ID or CUID), then load
   // leave balances by the resolved internal id.
-  const employee = await getEmployee(id);
+  const [employee, currentUserId] = await Promise.all([
+    getEmployee(id),
+    getCurrentUserId(),
+  ]);
   if (!employee) notFound();
 
   const leaveBalances = await getLeaveBalances(employee.id);
+  const isSelf = !!(employee.userId && currentUserId && employee.userId === currentUserId);
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
   const empRef = encodeURIComponent(employee.employeeNumber);
@@ -94,16 +109,29 @@ export default async function EmployeeProfilePage({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href={`/employees/${empRef}/edit`}
-            className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-              <path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            Edit Profile
-          </Link>
+          {isSelf ? (
+            <span
+              title="You cannot edit your own employee record. Ask another administrator to make changes."
+              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-[#F8F9FC] text-[#C5CDD7] text-[13px] font-semibold flex items-center gap-2 cursor-not-allowed select-none"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Edit Profile
+            </span>
+          ) : (
+            <Link
+              href={`/employees/${empRef}/edit`}
+              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Edit Profile
+            </Link>
+          )}
           <button className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="5" y="4" width="14" height="17" rx="2"/>
@@ -121,7 +149,7 @@ export default async function EmployeeProfilePage({
       </div>
 
       {/* Profile body */}
-      <EmployeeProfileClient employee={employee} leaveBalances={leaveBalances} />
+      <EmployeeProfileClient employee={employee} leaveBalances={leaveBalances} isSelf={isSelf} />
     </div>
   );
 }

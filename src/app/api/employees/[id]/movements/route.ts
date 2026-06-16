@@ -67,6 +67,11 @@ export async function POST(
     });
     if (!emp) return { notFound: true as const };
 
+    // Self-edit safeguard: admins cannot create movements for their own record.
+    if (emp.userId && emp.userId === auth.userId) {
+      return { selfEdit: true as const };
+    }
+
     // Validate target references belong to this tenant.
     if (v.toDepartmentId) {
       const x = await tx.department.findFirst({
@@ -167,6 +172,7 @@ export async function POST(
   });
 
   if ("notFound" in result) return notFound("Employee");
+  if ("selfEdit" in result) return err("You cannot create a movement for your own employee record. Ask another administrator to submit this change.", 403);
   if ("error" in result && result.error) return err(result.error, 422);
   return ok(serializeMovement(result.movement), "Movement created", 201);
 }
