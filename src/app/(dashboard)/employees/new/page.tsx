@@ -39,13 +39,6 @@ async function getPositions(headers: HeadersInit) {
   return json.data ?? [];
 }
 
-async function getJobLevels(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/job-levels`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
 async function getShiftSchedules(headers: HeadersInit) {
   const res = await fetch(`${BASE}/api/shifts?limit=200&isActive=true`, { cache: "no-store", headers });
   if (!res.ok) return [];
@@ -55,11 +48,10 @@ async function getShiftSchedules(headers: HeadersInit) {
 
 export default async function NewEmployeePage() {
   const headers = await authHeaders();
-  const [departments, branches, positions, jobLevels, shiftSchedules] = await Promise.all([
+  const [departments, branches, positions, shiftSchedules] = await Promise.all([
     getDepartments(headers),
     getBranches(headers),
     getPositions(headers),
-    getJobLevels(headers),
     getShiftSchedules(headers),
   ]);
 
@@ -81,7 +73,6 @@ export default async function NewEmployeePage() {
         departments={departments}
         branches={branches}
         positions={positions}
-        jobLevels={jobLevels}
         shiftSchedules={shiftSchedules}
       />
     </div>
