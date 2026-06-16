@@ -665,10 +665,11 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— None —</SelectItem>
-                    {(watchedDeptId && watchedDeptId !== "none"
+                    {watchedDeptId && watchedDeptId !== "none"
                       ? positions.filter((p) => p.departmentId === watchedDeptId)
-                      : positions
-                    ).map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                          .map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)
+                      : <SelectItem value="__hint__" disabled>Select a department first</SelectItem>
+                    }
                   </SelectContent>
                 </Select>
               )} />
