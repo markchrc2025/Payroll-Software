@@ -12,6 +12,7 @@ const createSchema = z.object({
   title: z.string().min(1).max(150),
   level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"]).default("MID"),
   description: z.string().max(500).optional().nullable(),
+  departmentId: z.string().cuid().optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const level = url.searchParams.get("level") ?? undefined;
+  const departmentId = url.searchParams.get("departmentId") ?? undefined;
   const includeDeleted = url.searchParams.get("includeDeleted") === "true";
 
   const rows = await withTenant(auth.tenantId, (tx) =>
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
         tenantId: auth.tenantId,
         ...(includeDeleted ? {} : { deletedAt: null }),
         ...(level ? { level: level as "ENTRY" | "MID" | "SENIOR" | "MANAGER" | "DIRECTOR" } : {}),
+        ...(departmentId ? { departmentId } : {}),
       },
       orderBy: [{ level: "asc" }, { title: "asc" }],
       select: {
@@ -36,6 +39,8 @@ export async function GET(req: NextRequest) {
         title: true,
         level: true,
         description: true,
+        departmentId: true,
+        department: { select: { id: true, name: true } },
         deletedAt: true,
         _count: { select: { employees: { where: { deletedAt: null } } } },
       },

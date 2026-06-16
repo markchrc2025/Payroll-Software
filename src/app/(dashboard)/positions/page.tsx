@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * /positions — Job Positions CRUD
- * Moved from /settings tab.
- */
-
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
@@ -33,6 +28,8 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
+  SheetFooter,
 } from "@/components/ui/sheet";
 
 const POSITION_LEVELS = [
@@ -44,19 +41,24 @@ const POSITION_LEVELS = [
   { value: "EXECUTIVE", label: "Executive", bg: "#FCE9E7",  color: "#E0463B" },
 ];
 
+type Dept = { id: string; name: string };
+
 type Position = {
   id: string;
   title: string;
   level: string;
   description: string | null;
+  departmentId: string | null;
+  department: { id: string; name: string } | null;
   deletedAt: string | null;
   _count: { employees: number };
 };
 
-const EMPTY_FORM = { title: "", level: "MID", description: "" };
+const EMPTY_FORM = { title: "", level: "MID", description: "", departmentId: "none" };
 
 export default function PositionsPage() {
   const [rows, setRows] = useState<Position[]>([]);
+  const [departments, setDepartments] = useState<Dept[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
@@ -65,9 +67,14 @@ export default function PositionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/positions?includeDeleted=false");
-    const json = await res.json();
-    setRows(json.data ?? []);
+    const [posRes, deptRes] = await Promise.all([
+      fetch("/api/positions?includeDeleted=false"),
+      fetch("/api/departments"),
+    ]);
+    const posJson = await posRes.json();
+    const deptJson = await deptRes.json();
+    setRows(posJson.data ?? []);
+    setDepartments(deptJson.data ?? []);
     setLoading(false);
   }, []);
 
@@ -81,14 +88,24 @@ export default function PositionsPage() {
 
   function openEdit(row: Position) {
     setEditing(row);
-    setForm({ title: row.title, level: row.level, description: row.description ?? "" });
+    setForm({
+      title: row.title,
+      level: row.level,
+      description: row.description ?? "",
+      departmentId: row.departmentId ?? "none",
+    });
     setSheetOpen(true);
   }
 
   async function handleSave() {
     if (!form.title.trim()) { toast.error("Title is required"); return; }
     setSaving(true);
-    const body = { title: form.title.trim(), level: form.level, description: form.description || null };
+    const body = {
+      title: form.title.trim(),
+      level: form.level,
+      description: form.description || null,
+      departmentId: form.departmentId === "none" ? null : form.departmentId,
+    };
     const url = editing ? `/api/positions/${editing.id}` : "/api/positions";
     const method = editing ? "PATCH" : "POST";
     const res = await fetch(url, {
@@ -146,6 +163,7 @@ export default function PositionsPage() {
           <TableHeader>
             <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Title</TableHead>
+              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Department</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Level</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Description</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Employees</TableHead>
@@ -156,14 +174,14 @@ export default function PositionsPage() {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 6 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={6} className="text-center text-[#6B7A8D] py-10">
                   No positions yet. Add your first one.
                 </TableCell>
               </TableRow>
@@ -173,6 +191,9 @@ export default function PositionsPage() {
                 return (
                   <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
                     <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.title}</TableCell>
+                    <TableCell className="text-[13px] text-[#6B7A8D]">
+                      {row.department?.name ?? <span className="italic opacity-40">—</span>}
+                    </TableCell>
                     <TableCell>
                       <span
                         className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full"
@@ -210,12 +231,30 @@ export default function PositionsPage() {
 
       {/* ── Side sheet ── */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit Position" : "Add Position"}</SheetTitle>
+            <SheetDescription>
+              {editing ? "Update the position details." : "Create a new job position and link it to a department."}
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-5">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={form.departmentId}
+                onValueChange={(v) => setForm({ ...form, departmentId: v ?? "none" })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— No Department —</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Title <span className="text-destructive">*</span></Label>
               <Input
                 placeholder="Senior Software Engineer"
@@ -223,7 +262,7 @@ export default function PositionsPage() {
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label>Level</Label>
               <Select value={form.level} onValueChange={(v) => setForm({ ...form, level: v ?? form.level })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -234,7 +273,7 @@ export default function PositionsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
                 placeholder="Brief description of the role…"
@@ -243,15 +282,13 @@ export default function PositionsPage() {
                 rows={3}
               />
             </div>
-            <div className="flex gap-3 pt-2">
-              <Button className="flex-1" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : editing ? "Save Changes" : "Create Position"}
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setSheetOpen(false)}>
-                Cancel
-              </Button>
-            </div>
           </div>
+          <SheetFooter className="mt-6">
+            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : editing ? "Save Changes" : "Create Position"}
+            </Button>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     </div>

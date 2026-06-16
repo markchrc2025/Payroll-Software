@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/switch";
 
 type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
-type Position = { id: string; title: string };
+type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 
 type Props = {
@@ -477,6 +477,17 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  const watchedDeptId = form.watch("departmentId");
+
+  useEffect(() => {
+    const currentPosId = form.getValues("positionId");
+    if (!currentPosId) return;
+    const pos = positions.find((p) => p.id === currentPosId);
+    if (pos && pos.departmentId && watchedDeptId && pos.departmentId !== watchedDeptId) {
+      form.setValue("positionId", null);
+    }
+  }, [watchedDeptId, form, positions]);
+
   async function handlePhotoFile(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
     ev.target.value = "";
@@ -640,7 +651,10 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— None —</SelectItem>
-                    {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                    {(watchedDeptId && watchedDeptId !== "none"
+                      ? positions.filter((p) => p.departmentId === watchedDeptId)
+                      : positions
+                    ).map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )} />
