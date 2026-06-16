@@ -20,6 +20,8 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
+  SheetFooter,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -197,13 +199,21 @@ export default function LevelsPage() {
 
       {/* Add / Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent>
+        <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit Level" : "Add Level"}</SheetTitle>
+            <SheetDescription>
+              {editing
+                ? "Update the name, rank, or description for this job level."
+                : "Define a new job level. Use Rank to control the sort order (lower = more junior)."}
+            </SheetDescription>
           </SheetHeader>
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="level-name">Name <span className="text-destructive">*</span></Label>
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="level-name">
+                Name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="level-name"
                 ref={nameRef}
@@ -214,7 +224,8 @@ export default function LevelsPage() {
                 maxLength={100}
               />
             </div>
-            <div className="space-y-1.5">
+
+            <div className="space-y-2">
               <Label htmlFor="level-rank">Rank</Label>
               <Input
                 id="level-rank"
@@ -222,24 +233,26 @@ export default function LevelsPage() {
                 min={0}
                 value={form.rank}
                 onChange={(e) => setForm((f) => ({ ...f, rank: e.target.value }))}
-                placeholder="Sort order (low = junior)"
+                placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">
+                Lower numbers appear first. Leave at 0 for automatic ordering.
+              </p>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="space-y-2">
               <Label htmlFor="level-desc">Description</Label>
               <Textarea
                 id="level-desc"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Optional description…"
-                rows={3}
+                rows={4}
                 maxLength={500}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={submitting} className="flex-1">
-                {submitting ? "Saving…" : editing ? "Save Changes" : "Create Level"}
-              </Button>
+
+            <SheetFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -247,7 +260,10 @@ export default function LevelsPage() {
               >
                 Cancel
               </Button>
-            </div>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving…" : editing ? "Save Changes" : "Create Level"}
+              </Button>
+            </SheetFooter>
           </form>
         </SheetContent>
       </Sheet>
