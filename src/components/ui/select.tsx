@@ -6,7 +6,50 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+// Base UI's <Select.Value> resolves the trigger's displayed text from the
+// `items` map passed to <Select.Root> (value -> label). It does NOT read the
+// selected <SelectItem>'s rendered text (unlike Radix). Without `items`, the
+// trigger shows the raw value string (e.g. "PLACEMENT_CHANGE"). To keep the
+// shadcn-style API (labels expressed as <SelectItem> children), we walk the
+// children here and build that map automatically.
+function collectItemLabels(
+  children: React.ReactNode,
+  map: Record<string, React.ReactNode>
+) {
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return
+    if (child.type === SelectItem) {
+      const { value, label, children: itemChildren } = child.props as {
+        value?: string | null
+        label?: React.ReactNode
+        children?: React.ReactNode
+      }
+      if (value != null) {
+        map[value] = label ?? itemChildren
+      }
+      return
+    }
+    const nested = (child.props as { children?: React.ReactNode })?.children
+    if (nested != null) collectItemLabels(nested, map)
+  })
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const items = React.useMemo(() => {
+    const map: Record<string, React.ReactNode> = {}
+    collectItemLabels(children, map)
+    return map
+  }, [children])
+
+  return (
+    <SelectPrimitive.Root items={items} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
