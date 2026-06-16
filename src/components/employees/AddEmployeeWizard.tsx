@@ -30,14 +30,12 @@ import { Switch } from "@/components/ui/switch";
 type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
 type Position = { id: string; title: string };
-type JobLevel = { id: string; name: string };
 type ShiftSchedule = { id: string; name: string };
 
 type Props = {
   departments: Dept[];
   branches:    Branch[];
   positions:   Position[];
-  jobLevels:   JobLevel[];
   shiftSchedules: ShiftSchedule[];
 };
 
@@ -450,7 +448,7 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, jobLevels, shiftSchedules }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -672,20 +670,6 @@ export function AddEmployeeWizard({ departments, branches, positions, jobLevels,
                   <SelectContent>
                     <SelectItem value="none">— None —</SelectItem>
                     {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
-            <div className="col-span-2">
-              <Lbl text="Level" />
-              <Controller control={c} name="levelId" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Select level…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {jobLevels.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )} />
