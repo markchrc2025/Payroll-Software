@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getAvatarColor, getInitials, StatusPill } from "@/components/employees/columns";
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,8 @@ interface Employee {
   statutoryIds?: StatutoryId[];
   salaryHistory?: { basicSalaryCents: number; effectiveDate: string }[];
   immediateSupervisorId?: string;
+  userId?: string | null;
+  user?: { id: string; firstName: string; lastName: string; email: string } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,15 +318,45 @@ function LeftPanel({
 export function EmployeeProfileClient({
   employee,
   leaveBalances,
+  isSelf,
 }: {
   employee: Employee;
   leaveBalances: LeaveBalance[];
+  isSelf: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("Personal & Gov't IDs");
   const [kioskPinOpen, setKioskPinOpen] = useState(false);
   const [kioskPin, setKioskPin] = useState("");
   const [kioskPinConfirm, setKioskPinConfirm] = useState("");
   const [savingKioskPin, setSavingKioskPin] = useState(false);
+
+  // Linked User Account state
+  const [linkedUser, setLinkedUser] = useState<{ id: string; firstName: string; lastName: string; email: string } | null>(employee.user ?? null);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [users, setUsers] = useState<{ id: string; firstName: string; lastName: string; email: string }[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [linking, setLinking] = useState(false);
+
+  const fetchUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch("/api/users");
+      const json = await res.json();
+      setUsers(json.data ?? []);
+    } catch {
+      toast.error("Failed to load users");
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (linkDialogOpen) {
+      void fetchUsers();
+      setSelectedUserId("");
+    }
+  }, [linkDialogOpen, fetchUsers]);
 
   async function handleSaveKioskPin(e: React.FormEvent) {
     e.preventDefault();
@@ -343,6 +376,40 @@ export function EmployeeProfileClient({
       setKioskPin(""); setKioskPinConfirm("");
     } catch { toast.error("Network error"); }
     finally { setSavingKioskPin(false); }
+  }
+
+  async function handleLink() {
+    if (!selectedUserId) return;
+    setLinking(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/link-user`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.error ?? "Failed to link account"); return; }
+      setLinkedUser(users.find((u) => u.id === selectedUserId) ?? null);
+      toast.success("User account linked successfully");
+      setLinkDialogOpen(false);
+    } catch { toast.error("Network error"); }
+    finally { setLinking(false); }
+  }
+
+  async function handleUnlink() {
+    setLinking(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/link-user`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.error ?? "Failed to unlink account"); return; }
+      setLinkedUser(null);
+      toast.success("User account unlinked");
+    } catch { toast.error("Network error"); }
+    finally { setLinking(false); }
   }
 
   return (
@@ -385,6 +452,16 @@ export function EmployeeProfileClient({
           </button>
         </div>
 
+        {/* Self-edit notice */}
+        {isSelf && (
+          <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-[13px] text-amber-800 leading-snug">
+              This is your own employee record. Editing and movement submissions are restricted — ask another administrator to make changes.
+            </p>
+          </div>
+        )}
+
         {/* Tab content */}
         {activeTab === "Personal & Gov't IDs" && <PersonalTab emp={employee} />}
         {activeTab === "Employment" && <EmploymentTab emp={employee} />}
@@ -392,8 +469,116 @@ export function EmployeeProfileClient({
         {activeTab === "Documents" && <PlaceholderTab label="Documents" />}
         {activeTab === "Leave Ledger" && <PlaceholderTab label="Leave Ledger" />}
         {activeTab === "Payslips" && <PlaceholderTab label="Payslips" />}
+
+        {/* Linked User Account card — Employment tab only */}
+        {activeTab === "Employment" && (
+          <div className="mx-5 mb-5 rounded-[12px] border border-[#E8EBF1] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#F8F9FC] border-b border-[#E8EBF1]">
+              <div className="flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-[#4A586B]" />
+                <span className="text-[11px] uppercase tracking-[0.7px] font-bold text-[#8E9AAC]">
+                  Linked User Account
+                </span>
+              </div>
+              {linkedUser && !isSelf && (
+                <button
+                  onClick={handleUnlink}
+                  disabled={linking}
+                  className="flex items-center gap-1 h-7 px-2.5 rounded-md border border-[#FACECA] text-[11.5px] font-semibold text-[#E0463B] hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <Link2Off className="h-3 w-3" />
+                  Unlink
+                </button>
+              )}
+            </div>
+            {linkedUser ? (
+              <div className="px-4 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
+                    style={(() => {
+                      const { bg, color } = getAvatarColor(linkedUser.firstName + " " + linkedUser.lastName);
+                      return { background: bg, color };
+                    })()}
+                  >
+                    {getInitials(linkedUser.firstName, linkedUser.lastName)}
+                  </div>
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-[#0E1B2E]">
+                      {linkedUser.firstName} {linkedUser.lastName}
+                    </p>
+                    <p className="text-[12px] text-[#8E9AAC]">{linkedUser.email}</p>
+                  </div>
+                </div>
+                {!isSelf && (
+                  <button
+                    onClick={() => setLinkDialogOpen(true)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Change
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="px-4 py-4 flex items-center justify-between">
+                <p className="text-[13px] text-[#8E9AAC]">No user account linked yet.</p>
+                {!isSelf && (
+                  <button
+                    onClick={() => setLinkDialogOpen(true)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link User Account
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
+
+      {/* Link User Account dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Link User Account</DialogTitle>
+            <DialogDescription>
+              Connect a system user to <strong>{employee.firstName} {employee.lastName}</strong>. This lets them log in and view their own payslips, leave, and DTR.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Select User Account</Label>
+              <Select value={selectedUserId} onValueChange={(v) => setSelectedUserId(v ?? "")} disabled={usersLoading}>
+                <SelectTrigger>
+                  <SelectValue placeholder={usersLoading ? "Loading users…" : "Choose a user…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName} — {u.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleLink}
+                disabled={!selectedUserId || linking}
+                className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              >
+                {linking ? "Linking…" : "Link Account"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Kiosk PIN dialog */}
       <Dialog open={kioskPinOpen} onOpenChange={setKioskPinOpen}>
