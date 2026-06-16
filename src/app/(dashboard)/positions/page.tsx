@@ -71,8 +71,10 @@ export default function PositionsPage() {
       fetch("/api/positions?includeDeleted=false"),
       fetch("/api/departments"),
     ]);
-    const posJson = await posRes.json();
-    const deptJson = await deptRes.json();
+    const [posJson, deptJson] = await Promise.all([
+      posRes.json().catch(() => ({})),
+      deptRes.json().catch(() => ({})),
+    ]);
     setRows(posJson.data ?? []);
     setDepartments(deptJson.data ?? []);
     setLoading(false);
