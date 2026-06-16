@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
 import { BulkImportDialog } from "@/components/employees/BulkImportDialog";
 import type { EmployeeRow } from "@/components/employees/columns";
 import { useDebounce } from "@/lib/hooks/useDebounce";
-import { ChevronDown, Download, Plus, Search, Upload } from "lucide-react";
+import { ArrowUpDown, ChevronDown, Download, Plus, Search, Upload } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +59,18 @@ export default function EmployeesPage() {
   // --- UI state ---
   const [importOpen, setImportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [ioMenuOpen, setIoMenuOpen] = useState(false);
+  const ioMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ioMenuRef.current && !ioMenuRef.current.contains(e.target as Node)) {
+        setIoMenuOpen(false);
+      }
+    }
+    if (ioMenuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [ioMenuOpen]);
 
   // --- Fetch departments & branches once ---
   useEffect(() => {
@@ -151,12 +163,37 @@ export default function EmployeesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setImportOpen(true)}
-            className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
-          >
-            <Upload className="h-3.5 w-3.5" />Import CSV
-          </button>
+          {/* Combined Import / Export dropdown */}
+          <div className="relative" ref={ioMenuRef}>
+            <button
+              onClick={() => setIoMenuOpen((v) => !v)}
+              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Import / Export
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${ioMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+            {ioMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-44 rounded-[10px] border border-[#E8EBF1] bg-white shadow-lg z-20 py-1 overflow-hidden">
+                <button
+                  onClick={() => { setImportOpen(true); setIoMenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Import CSV
+                </button>
+                <button
+                  disabled={isExporting}
+                  onClick={() => { handleExport(); setIoMenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#4A586B] hover:bg-[#F8F9FC] disabled:opacity-50 transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {isExporting ? "Exporting…" : "Export CSV"}
+                </button>
+              </div>
+            )}
+          </div>
+
           <Link
             href="/employees/new"
             className="h-10 px-[17px] rounded-[10px] border-none text-white text-[13.5px] font-semibold flex items-center gap-2 shadow-[0_6px_16px_-5px_rgba(232,105,58,.6)] transition-all hover:-translate-y-px"
@@ -227,16 +264,6 @@ export default function EmployeesPage() {
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Export button */}
-        <button
-          disabled={isExporting}
-          onClick={handleExport}
-          className="h-[38px] px-4 rounded-[9px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] disabled:opacity-50 transition"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {isExporting ? "Exporting…" : "Export"}
-        </button>
       </div>
 
       {/* Table */}
