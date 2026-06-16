@@ -8,51 +8,59 @@
 import { AddEmployeeWizard } from "@/components/employees/AddEmployeeWizard";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-async function getDepartments() {
-  const res = await fetch(`${BASE}/api/departments`, { cache: "no-store" });
+async function authHeaders(): Promise<HeadersInit> {
+  const store = await cookies();
+  const cookieHeader = store.getAll().map((c) => `${c.name}=${c.value}`).join("; ");
+  return { Cookie: cookieHeader };
+}
+
+async function getDepartments(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/departments`, { cache: "no-store", headers });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
 }
 
-async function getBranches() {
-  const res = await fetch(`${BASE}/api/branches`, { cache: "no-store" });
+async function getBranches(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/branches`, { cache: "no-store", headers });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
 }
 
-async function getPositions() {
-  const res = await fetch(`${BASE}/api/positions`, { cache: "no-store" });
+async function getPositions(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/positions`, { cache: "no-store", headers });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
 }
 
-async function getJobLevels() {
-  const res = await fetch(`${BASE}/api/job-levels`, { cache: "no-store" });
+async function getJobLevels(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/job-levels`, { cache: "no-store", headers });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
 }
 
-async function getShiftSchedules() {
-  const res = await fetch(`${BASE}/api/shifts?limit=200&isActive=true`, { cache: "no-store" });
+async function getShiftSchedules(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/shifts?limit=200&isActive=true`, { cache: "no-store", headers });
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
 }
 
 export default async function NewEmployeePage() {
+  const headers = await authHeaders();
   const [departments, branches, positions, jobLevels, shiftSchedules] = await Promise.all([
-    getDepartments(),
-    getBranches(),
-    getPositions(),
-    getJobLevels(),
-    getShiftSchedules(),
+    getDepartments(headers),
+    getBranches(headers),
+    getPositions(headers),
+    getJobLevels(headers),
+    getShiftSchedules(headers),
   ]);
 
   return (
