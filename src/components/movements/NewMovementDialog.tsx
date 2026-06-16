@@ -31,6 +31,8 @@ type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
+type JobTypeRef = { id: string; name: string };
+type JobStatusRef = { id: string; name: string };
 
 type Props = {
   open: boolean;
@@ -40,6 +42,8 @@ type Props = {
   branches: Branch[];
   positions: Position[];
   shiftSchedules: ShiftSchedule[];
+  jobTypes: JobTypeRef[];
+  jobStatuses: JobStatusRef[];
   onCreated: () => void;
   reloadReferenceData: () => void;
 };
@@ -62,8 +66,8 @@ const EMPTY_FORM = {
   toPositionId: "",
   toLineManagerId: "",
   // Terms fields
-  toJobType: "",
-  toJobStatus: "",
+  toJobTypeId: "",
+  toJobStatusId: "",
   toLeaveWorkflowKey: "",
   toShiftScheduleId: "",
   toHolidayKey: "",
@@ -97,6 +101,8 @@ export function NewMovementDialog({
   branches: branchesProp,
   positions: positionsProp,
   shiftSchedules,
+  jobTypes,
+  jobStatuses,
   onCreated,
   reloadReferenceData,
 }: Props) {
@@ -156,8 +162,8 @@ export function NewMovementDialog({
       if (form.toBranchId) body.toBranchId = form.toBranchId;
     }
     if (isTerms) {
-      if (form.toJobType) body.toJobType = form.toJobType;
-      if (form.toJobStatus) body.toJobStatus = form.toJobStatus;
+      if (form.toJobTypeId) body.toJobTypeId = form.toJobTypeId;
+      if (form.toJobStatusId) body.toJobStatusId = form.toJobStatusId;
       if (form.toLeaveWorkflowKey) body.toLeaveWorkflowKey = form.toLeaveWorkflowKey;
       if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
       if (form.toHolidayKey) body.toHolidayKey = form.toHolidayKey;
@@ -313,11 +319,29 @@ export function NewMovementDialog({
                 <SectionDivider label="Employment Terms" />
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Job Type</FieldLabel>
-                  <Input placeholder="e.g. Full-time" value={form.toJobType} onChange={(e) => set("toJobType", e.target.value)} />
+                  <Select value={form.toJobTypeId} onValueChange={(v) => set("toJobTypeId", v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select job type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jobTypes.map((jt) => (
+                        <SelectItem key={jt.id} value={jt.id}>{jt.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Job Status</FieldLabel>
-                  <Input placeholder="e.g. Regular" value={form.toJobStatus} onChange={(e) => set("toJobStatus", e.target.value)} />
+                  <Select value={form.toJobStatusId} onValueChange={(v) => set("toJobStatusId", v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select job status…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jobStatuses.map((js) => (
+                        <SelectItem key={js.id} value={js.id}>{js.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Leave Workflow Key</FieldLabel>

@@ -50,8 +50,8 @@ type Movement = {
   toBasicSalaryCents: string | null;
   toStatus: string | null;
   toLineManagerId: string | null;
-  toJobType: string | null;
-  toJobStatus: string | null;
+  toJobTypeId: string | null;
+  toJobStatusId: string | null;
   toLeaveWorkflowKey: string | null;
   toShiftScheduleId: string | null;
   toHolidayKey: string | null;
@@ -73,6 +73,8 @@ type Department = { id: string; name: string };
 type Branch = { id: string; name: string };
 type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
+type JobTypeRef = { id: string; name: string };
+type JobStatusRef = { id: string; name: string };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -122,7 +124,14 @@ function formatPeso(centsStr: string | null) {
   return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function changeSummary(m: Movement, departments: Department[], branches: Branch[], positions: Position[]) {
+function changeSummary(
+  m: Movement,
+  departments: Department[],
+  branches: Branch[],
+  positions: Position[],
+  jobTypes: JobTypeRef[],
+  jobStatuses: JobStatusRef[],
+) {
   switch (m.movementType) {
     case "DEPARTMENT_TRANSFER": {
       const dept = departments.find((d) => d.id === m.toDepartmentId);
@@ -151,8 +160,11 @@ function changeSummary(m: Movement, departments: Department[], branches: Branch[
       const dept = departments.find((d) => d.id === m.toDepartmentId);
       return [pos?.title && `→ ${pos.title}`, dept?.name && `(${dept.name})`].filter(Boolean).join(" ") || "—";
     }
-    case "TERMS_CHANGE":
-      return [m.toJobType, m.toJobStatus].filter(Boolean).join(" / ") || "—";
+    case "TERMS_CHANGE": {
+      const jt = jobTypes.find((x) => x.id === m.toJobTypeId);
+      const js = jobStatuses.find((x) => x.id === m.toJobStatusId);
+      return [jt?.name, js?.name].filter(Boolean).join(" / ") || "—";
+    }
     case "COMBINED_CHANGE":
       return "Placement + Terms";
     default:
@@ -171,6 +183,8 @@ export default function MovementsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [shiftSchedules, setShiftSchedules] = useState<ShiftSchedule[]>([]);
+  const [jobTypes, setJobTypes] = useState<JobTypeRef[]>([]);
+  const [jobStatuses, setJobStatuses] = useState<JobStatusRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
@@ -189,21 +203,25 @@ export default function MovementsPage() {
   // ---------------------------------------------------------------------------
 
   const loadReferenceData = useCallback(async () => {
-    const [empRes, deptRes, brRes, posRes, shiftRes] = await Promise.all([
+    const [empRes, deptRes, brRes, posRes, shiftRes, jtRes, jsRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
       fetch("/api/positions?limit=200"),
       fetch("/api/shifts?limit=200&isActive=true"),
+      fetch("/api/job-types"),
+      fetch("/api/job-statuses"),
     ]);
-    const [empJson, deptJson, brJson, posJson, shiftJson] = await Promise.all([
-      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(),
+    const [empJson, deptJson, brJson, posJson, shiftJson, jtJson, jsJson] = await Promise.all([
+      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setDepartments(deptJson.data ?? []);
     setBranches(brJson.data ?? []);
     setPositions(posJson.data ?? []);
     setShiftSchedules(shiftJson.data ?? []);
+    setJobTypes(jtJson.data ?? []);
+    setJobStatuses(jsJson.data ?? []);
   }, []);
 
   const loadMovements = useCallback(async () => {
@@ -353,7 +371,7 @@ export default function MovementsPage() {
                   </TableCell>
                   <TableCell className="text-sm">{m.effectiveDate.slice(0, 10)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {changeSummary(m, departments, branches, positions)}
+                    {changeSummary(m, departments, branches, positions, jobTypes, jobStatuses)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={approvalBadgeVariant(m.approvalStatus)}>
@@ -411,6 +429,8 @@ export default function MovementsPage() {
         branches={branches}
         positions={positions}
         shiftSchedules={shiftSchedules}
+        jobTypes={jobTypes}
+        jobStatuses={jobStatuses}
         onCreated={loadMovements}
         reloadReferenceData={loadReferenceData}
       />

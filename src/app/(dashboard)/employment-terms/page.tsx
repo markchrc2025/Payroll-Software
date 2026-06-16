@@ -36,8 +36,10 @@ import {
 type TermRecord = {
   id: string;
   effectiveDate:    string;
-  jobType:          string | null;
-  jobStatus:        string | null;
+  jobTypeId:        string | null;
+  jobStatusId:      string | null;
+  jobType:          { id: string; name: string } | null;
+  jobStatus:        { id: string; name: string } | null;
   leaveWorkflowKey: string | null;
   shiftScheduleId:  string | null;
   holidayKey:       string | null;
@@ -49,20 +51,20 @@ type TermRecord = {
 
 type Employee = { id: string; employeeNumber: string; firstName: string; lastName: string };
 type ShiftSchedule = { id: string; name: string };
+type JobTypeRef = { id: string; name: string };
+type JobStatusRef = { id: string; name: string };
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const JOB_TYPES   = ["Permanent", "Contract", "Probationary", "Casual", "Project-based"];
-const JOB_STATUSES = ["Confirmed", "Probation", "Resigned", "Terminated"];
-const WORKFLOWS    = ["DEFAULT", "Executive", "Field Staff"];
-const HOLIDAYS     = ["DEFAULT", "NCR", "Regional"];
+const WORKFLOWS = ["DEFAULT", "Executive", "Field Staff"];
+const HOLIDAYS  = ["DEFAULT", "NCR", "Regional"];
 
 const EMPTY_FORM = {
   effectiveDate:    "",
-  jobType:          "",
-  jobStatus:        "",
+  jobTypeId:        "",
+  jobStatusId:      "",
   leaveWorkflowKey: "",
   shiftScheduleId:  "",
   holidayKey:       "",
@@ -78,6 +80,8 @@ const EMPTY_FORM = {
 export default function EmploymentTermsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shiftSchedules, setShiftSchedules] = useState<ShiftSchedule[]>([]);
+  const [jobTypes, setJobTypes] = useState<JobTypeRef[]>([]);
+  const [jobStatuses, setJobStatuses] = useState<JobStatusRef[]>([]);
 
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [records,  setRecords]  = useState<TermRecord[]>([]);
@@ -95,13 +99,19 @@ export default function EmploymentTermsPage() {
   // ---------------------------------------------------------------------------
 
   const loadRefData = useCallback(async () => {
-    const [empRes, shiftRes] = await Promise.all([
+    const [empRes, shiftRes, jtRes, jsRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/shifts?limit=200&isActive=true"),
+      fetch("/api/job-types"),
+      fetch("/api/job-statuses"),
     ]);
-    const [empJson, shiftJson] = await Promise.all([empRes.json(), shiftRes.json()]);
+    const [empJson, shiftJson, jtJson, jsJson] = await Promise.all([
+      empRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(),
+    ]);
     setEmployees(empJson.data ?? []);
     setShiftSchedules(shiftJson.data ?? []);
+    setJobTypes(jtJson.data ?? []);
+    setJobStatuses(jsJson.data ?? []);
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -130,8 +140,8 @@ export default function EmploymentTermsPage() {
     setEditTarget(r);
     setForm({
       effectiveDate:    r.effectiveDate.slice(0, 10),
-      jobType:          r.jobType          ?? "",
-      jobStatus:        r.jobStatus        ?? "",
+      jobTypeId:        r.jobTypeId        ?? "",
+      jobStatusId:      r.jobStatusId      ?? "",
       leaveWorkflowKey: r.leaveWorkflowKey ?? "",
       shiftScheduleId:  r.shiftScheduleId  ?? "",
       holidayKey:       r.holidayKey       ?? "",
@@ -152,8 +162,8 @@ export default function EmploymentTermsPage() {
 
     const body = {
       effectiveDate:    form.effectiveDate,
-      jobType:          form.jobType          || null,
-      jobStatus:        form.jobStatus        || null,
+      jobTypeId:        form.jobTypeId        || null,
+      jobStatusId:      form.jobStatusId      || null,
       leaveWorkflowKey: form.leaveWorkflowKey || null,
       shiftScheduleId:  form.shiftScheduleId  || null,
       holidayKey:       form.holidayKey       || null,
@@ -222,6 +232,28 @@ export default function EmploymentTermsPage() {
           <SelectContent>
             <SelectItem value="none">— None —</SelectItem>
             {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  function refSelectField(
+    label: string,
+    field: keyof typeof form,
+    options: { id: string; name: string }[],
+  ) {
+    return (
+      <div className="space-y-1.5">
+        <Label>{label}</Label>
+        <Select
+          value={(form[field] as string) || "none"}
+          onValueChange={(v) => setForm({ ...form, [field]: v === "none" ? "" : v })}
+        >
+          <SelectTrigger><SelectValue placeholder={`Select ${label.toLowerCase()}…`} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— None —</SelectItem>
+            {options.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -311,8 +343,8 @@ export default function EmploymentTermsPage() {
                   <TableCell className="text-sm font-medium">
                     {r.effectiveDate.slice(0, 10)}
                   </TableCell>
-                  <TableCell className="text-sm">{r.jobType   ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{r.jobStatus ?? "—"}</TableCell>
+                  <TableCell className="text-sm">{r.jobType?.name   ?? "—"}</TableCell>
+                  <TableCell className="text-sm">{r.jobStatus?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.leaveWorkflowKey ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.shiftSchedule?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.holidayKey       ?? "—"}</TableCell>
@@ -364,8 +396,8 @@ export default function EmploymentTermsPage() {
               />
             </div>
 
-            {selectField("Job Type",        "jobType",          JOB_TYPES)}
-            {selectField("Job Status",       "jobStatus",        JOB_STATUSES)}
+            {refSelectField("Job Type",   "jobTypeId",   jobTypes)}
+            {refSelectField("Job Status", "jobStatusId", jobStatuses)}
             {selectField("Leave Workflow",   "leaveWorkflowKey", WORKFLOWS)}
             <div className="space-y-1.5">
               <Label>Shift Schedule</Label>
@@ -434,7 +466,7 @@ export default function EmploymentTermsPage() {
               <div className="rounded-md bg-muted/50 p-3 text-sm">
                 <p className="font-medium">{deleteTarget.effectiveDate.slice(0, 10)}</p>
                 <p className="text-muted-foreground">
-                  {deleteTarget.jobType ?? "—"} · {deleteTarget.jobStatus ?? "—"}
+                  {deleteTarget.jobType?.name ?? "—"} · {deleteTarget.jobStatus?.name ?? "—"}
                 </p>
               </div>
             )}

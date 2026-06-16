@@ -218,7 +218,7 @@ export const createEmployeeSchema = z.object({
   // Extended employment
   probationEndDate: z.coerce.date().optional().nullable(),
   placementEffectiveDate: z.coerce.date().optional().nullable(),
-  jobType: z.string().max(100).optional().nullable(),
+  jobTypeId: z.string().cuid().optional().nullable(),
   jobDescription: z.string().max(100).optional().nullable(),
   leaveWorkflowKey: z.string().max(100).optional().nullable(),
   shiftScheduleId: z.string().cuid().optional().nullable(),

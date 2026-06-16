@@ -31,12 +31,14 @@ type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
 type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
+type JobTypeRef = { id: string; name: string };
 
 type Props = {
   departments: Dept[];
   branches:    Branch[];
   positions:   Position[];
   shiftSchedules: ShiftSchedule[];
+  jobTypes: JobTypeRef[];
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -110,7 +112,6 @@ const SENSE       = ["Normal","Mild","Moderate","Severe"];
 const LIMB        = ["Normal","Limited","None"];
 const PRIVACY     = ["Not Accessible","Employee","Manager"];
 const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
-const JOB_TYPES   = ["Permanent","Contract","Probationary","Casual","Project-based"];
 const JOB_DESCS   = ["Confirmed","Probation","Resigned","Terminated"];
 const WORKFLOWS   = ["DEFAULT","Executive","Field Staff"];
 const HOLIDAYS    = ["DEFAULT","NCR","Regional"];
@@ -151,10 +152,10 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   pvFamilyBirthday: "Employee",
   pvAnniversary: "Employee",
   numberOfChildren: 0,
-  jobType: "Permanent",
   jobDescription: "Confirmed",
   leaveWorkflowKey: "DEFAULT",
   holidayKey: "DEFAULT",
+  jobTypeId: undefined,
   taxClassification: "REGULAR",
   nontaxableBasicAmount: 0,
   spouseNationality: "Philippines",
@@ -448,7 +449,7 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -690,7 +691,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             </div>
             <FSec label="Employment Terms" />
             <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
-            <SF control={c} name="jobType"           label="Job Type"     options={JOB_TYPES}  placeholder="Permanent"  errors={e} />
+            <SF control={c} name="jobTypeId"         label="Job Type"     options={jobTypes.map((jt) => ({ value: jt.id, label: jt.name }))}  placeholder="Select job type…"  errors={e} />
             <SF control={c} name="jobDescription"    label="Description"  options={JOB_DESCS}  placeholder="Confirmed"  errors={e} />
             <SF control={c} name="leaveWorkflowKey"  label="Leave Workflow" options={WORKFLOWS} placeholder="DEFAULT"   span2 errors={e} />
             <div className="col-span-2">

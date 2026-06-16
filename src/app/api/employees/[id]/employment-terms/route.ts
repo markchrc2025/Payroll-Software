@@ -10,8 +10,8 @@ import { ok, err, unauthorized, notFound } from "@/lib/api-response";
 
 const createSchema = z.object({
   effectiveDate:    z.string().min(1, "Effective date is required"),
-  jobType:          z.string().max(50).optional().nullable(),
-  jobStatus:        z.string().max(50).optional().nullable(),
+  jobTypeId:        z.string().optional().nullable(),
+  jobStatusId:      z.string().optional().nullable(),
   leaveWorkflowKey: z.string().max(50).optional().nullable(),
   shiftScheduleId:  z.string().optional().nullable(),
   holidayKey:       z.string().max(50).optional().nullable(),
@@ -38,7 +38,11 @@ export async function GET(
     const records = await tx.employmentTerm.findMany({
       where: { employeeId: id, tenantId: auth.tenantId },
       orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
-      include: { shiftSchedule: { select: { id: true, name: true } } },
+      include: {
+        shiftSchedule: { select: { id: true, name: true } },
+        jobType: { select: { id: true, name: true } },
+        jobStatus: { select: { id: true, name: true } },
+      },
     });
     return { records };
   });
@@ -81,8 +85,8 @@ export async function POST(
         tenantId:         auth.tenantId,
         employeeId:       id,
         effectiveDate:    new Date(v.effectiveDate),
-        jobType:          v.jobType          ?? null,
-        jobStatus:        v.jobStatus        ?? null,
+        jobTypeId:        v.jobTypeId        ?? null,
+        jobStatusId:      v.jobStatusId      ?? null,
         leaveWorkflowKey: v.leaveWorkflowKey ?? null,
         shiftScheduleId:  v.shiftScheduleId  ?? null,
         holidayKey:       v.holidayKey       ?? null,
@@ -90,7 +94,11 @@ export async function POST(
         nextReviewDate:   v.nextReviewDate ? new Date(v.nextReviewDate) : null,
         remark:           v.remark    ?? null,
       },
-      include: { shiftSchedule: { select: { id: true, name: true } } },
+      include: {
+        shiftSchedule: { select: { id: true, name: true } },
+        jobType: { select: { id: true, name: true } },
+        jobStatus: { select: { id: true, name: true } },
+      },
     });
     return { record };
   });
