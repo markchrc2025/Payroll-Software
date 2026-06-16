@@ -45,3 +45,6 @@ next-env.d.ts
 # local dev cache & virtualenv (never commit)
 /tmp/
 /.venv/
+
+# Claude Code local state (worktrees, local permission overrides)
+.claude/
