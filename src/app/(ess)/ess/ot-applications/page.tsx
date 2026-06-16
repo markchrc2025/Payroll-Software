@@ -281,7 +281,7 @@ export default function EssOTPage() {
           if (!o) setSheetOpen(false);
         }}
       >
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>File OT Application</SheetTitle>
           </SheetHeader>

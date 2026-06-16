@@ -251,7 +251,7 @@ function AdjustmentSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-md">
         <SheetHeader className="mb-4">
           <SheetTitle>Add Adjustment</SheetTitle>
         </SheetHeader>

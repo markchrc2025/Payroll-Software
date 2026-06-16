@@ -434,7 +434,7 @@ export default function AssetsPage() {
 
       {/* Create Sheet */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Add Asset</SheetTitle>
           </SheetHeader>
@@ -506,7 +506,7 @@ export default function AssetsPage() {
 
       {/* Edit Sheet */}
       <Sheet open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Edit Asset</SheetTitle>
           </SheetHeader>
@@ -552,7 +552,7 @@ export default function AssetsPage() {
 
       {/* Assign Sheet */}
       <Sheet open={!!assignTarget} onOpenChange={(o) => !o && setAssignTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Assign Asset</SheetTitle>
           </SheetHeader>
@@ -602,7 +602,7 @@ export default function AssetsPage() {
 
       {/* Return Sheet */}
       <Sheet open={!!returnTarget} onOpenChange={(o) => !o && setReturnTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Return Asset</SheetTitle>
           </SheetHeader>

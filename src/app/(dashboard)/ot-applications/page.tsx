@@ -312,7 +312,7 @@ export default function OTApplicationsPage() {
 
       {/* Create Sheet */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>New OT Application</SheetTitle>
           </SheetHeader>
@@ -362,7 +362,7 @@ export default function OTApplicationsPage() {
 
       {/* Reject Sheet */}
       <Sheet open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Reject OT Application</SheetTitle>
           </SheetHeader>

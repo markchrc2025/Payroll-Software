@@ -292,7 +292,7 @@ function StatutoryTabPanel({ category }: TabPanelProps) {
 
       {/* Add Rule Sheet */}
       <Sheet open={addOpen} onOpenChange={(o: boolean) => { if (!o) setAddOpen(false); }}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
+        <SheetContent className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Add {category.label} Rule</SheetTitle>
           </SheetHeader>

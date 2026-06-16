@@ -577,7 +577,7 @@ export default function RecruitmentPage() {
       {/* JOB POSTING SHEET (create / edit)                                  */}
       {/* ════════════════════════════════════════════════════════════════════ */}
       <Sheet open={postingSheet !== null} onOpenChange={(o) => { if (!o) setPostingSheet(null); }}>
-        <SheetContent className="w-[460px] overflow-y-auto">
+        <SheetContent className="w-[460px]">
           <SheetHeader>
             <SheetTitle>{postingSheet === "edit" ? "Edit Job Posting" : "New Job Posting"}</SheetTitle>
           </SheetHeader>
@@ -657,7 +657,7 @@ export default function RecruitmentPage() {
       {/* ADD APPLICANT SHEET                                                */}
       {/* ════════════════════════════════════════════════════════════════════ */}
       <Sheet open={applicantSheet !== null} onOpenChange={(o) => { if (!o) setApplicantSheet(null); }}>
-        <SheetContent className="w-[420px] overflow-y-auto">
+        <SheetContent className="w-[420px]">
           <SheetHeader>
             <SheetTitle>Add Applicant</SheetTitle>
           </SheetHeader>

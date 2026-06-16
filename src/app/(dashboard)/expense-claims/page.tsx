@@ -408,7 +408,7 @@ export default function ExpenseClaimsPage() {
 
       {/* Create Sheet */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Add Expense Claim</SheetTitle>
           </SheetHeader>
@@ -463,7 +463,7 @@ export default function ExpenseClaimsPage() {
 
       {/* Approve Sheet */}
       <Sheet open={!!approveTarget} onOpenChange={(o) => !o && setApproveTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Approve Expense Claim</SheetTitle>
           </SheetHeader>
@@ -498,7 +498,7 @@ export default function ExpenseClaimsPage() {
 
       {/* Reject Sheet */}
       <Sheet open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Reject Expense Claim</SheetTitle>
           </SheetHeader>
@@ -525,7 +525,7 @@ export default function ExpenseClaimsPage() {
 
       {/* Attach Sheet */}
       <Sheet open={!!attachTarget} onOpenChange={(o) => !o && setAttachTarget(null)}>
-        <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
             <SheetTitle>Attach to Payroll Run</SheetTitle>
           </SheetHeader>

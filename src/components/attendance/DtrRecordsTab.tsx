@@ -711,7 +711,7 @@ function SubmissionDetailSheet({
     <>
       <Sheet open={!!submissionId} onOpenChange={(v) => !v && onClose()}>
         <SheetContent
-          className="w-full sm:max-w-5xl overflow-y-auto flex flex-col gap-0 p-0"
+          className="w-full sm:max-w-5xl flex flex-col gap-0 p-0"
           side="right"
         >
           {loading || !detail ? (

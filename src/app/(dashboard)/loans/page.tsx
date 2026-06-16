@@ -387,7 +387,7 @@ export default function LoansPage() {
 
       {/* Create / Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit Loan" : "Add Loan"}</SheetTitle>
           </SheetHeader>
