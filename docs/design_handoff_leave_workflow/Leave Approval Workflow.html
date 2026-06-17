@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentire Payroll — Leave Approval Workflow</title>
+<link rel="icon" type="image/svg+xml" href="padmin-assets/sentire-app-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="padmin-shell.css" />
+<style>
+  /* ===================== LEAVE APPROVAL WORKFLOW ===================== */
+
+  /* ---- list ---- */
+  .lw-listgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .lw-tcard { text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; transition: border-color .14s, box-shadow .14s, transform .14s; }
+  .lw-tcard:hover { border-color: #ddd3c6; box-shadow: 0 12px 28px -20px rgba(42,36,32,.45); transform: translateY(-2px); }
+  .lw-tcard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .lw-tcard-ic { width: 42px; height: 42px; border-radius: 11px; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+  .lw-tcard h3 { font-family: var(--font); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .lw-tcard-desc { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; min-height: 38px; }
+  .lw-tcard-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--line-2); }
+  .lw-tcard-seq { display: flex; align-items: center; gap: 11px; }
+  .lw-tcard-steps { font-family: var(--font); font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .lw-tcard-go { color: var(--muted-2); display: flex; transition: transform .14s, color .14s; }
+  .lw-tcard:hover .lw-tcard-go { color: var(--acc); transform: translateX(3px); }
+
+  .lw-tcard-add { align-items: center; justify-content: center; text-align: center; border-style: dashed; gap: 4px; color: var(--muted); min-height: 210px; }
+  .lw-tcard-add:hover { border-color: var(--acc); color: var(--acc-press); transform: none; box-shadow: none; }
+  .lw-addbig { width: 48px; height: 48px; border-radius: 13px; background: var(--bg); color: var(--acc); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .lw-tcard-add:hover .lw-addbig { background: var(--acc-soft); }
+  .lw-tcard-add b { font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--ink); }
+  .lw-tcard-add i { font-style: normal; font-size: 12.5px; color: var(--muted-2); }
+
+  /* ---- role stack (list cards) ---- */
+  .lw-rolestack { display: flex; align-items: center; gap: 4px; }
+  .lw-rolestack-tile { width: 26px; height: 26px; border-radius: 8px; flex: none; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+  .lw-rolestack-arrow { color: var(--muted-2); display: flex; }
+
+  /* ---- role tile (stages / picker) ---- */
+  .lw-roletile { border-radius: 10px; flex: none; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+
+  /* ---- detail header ---- */
+  .lw-dethead { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; flex-wrap: wrap; }
+  .lw-dethead-l { display: flex; align-items: center; gap: 15px; }
+  .lw-dethead-ic { width: 54px; height: 54px; border-radius: 14px; flex: none; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+  .lw-dethead-l h1 { font-family: var(--font); font-weight: 600; font-size: 26px; letter-spacing: -0.025em; margin: 0; }
+  .lw-dethead-l p { margin: 3px 0 0; font-size: 13.5px; color: var(--muted); }
+  .lw-dethead-r { display: flex; align-items: center; gap: 10px; }
+  .lw-activeswitch { display: flex; align-items: center; gap: 9px; padding: 7px 13px 7px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+  .lw-activeswitch span { font-family: var(--font); font-weight: 600; font-size: 13px; color: var(--ink); }
+
+  .lw-detgrid { display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: start; }
+
+  .lw-card-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 18px; border-bottom: 1px solid var(--line-2); }
+  .lw-card-head-txt h3 { font-family: var(--font); font-weight: 600; font-size: 15.5px; margin: 0; letter-spacing: -0.01em; }
+  .lw-card-head-txt p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted-2); }
+  .lw-card-body { padding: 20px 18px; }
+
+  /* ---- empty seq ---- */
+  .lw-empty-seq { text-align: center; padding: 30px 16px; }
+  .lw-empty-seq .lw-empty-ic { width: 54px; height: 54px; border-radius: 14px; background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+  .lw-empty-seq b { font-family: var(--font); font-size: 15px; font-weight: 600; display: block; margin-bottom: 4px; }
+  .lw-empty-seq p { margin: 0 0 16px; font-size: 13px; color: var(--muted-2); }
+  .lw-empty { text-align: center; color: var(--muted-2); font-size: 13px; padding: 22px; }
+
+  /* ---- stage (shared card) ---- */
+  .lw-stage { display: flex; align-items: center; gap: 13px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; transition: border-color .14s, box-shadow .14s, opacity .14s; }
+  .lw-stage:hover { border-color: #ddd3c6; box-shadow: 0 6px 16px -12px rgba(42,36,32,.4); }
+  .lw-stage.is-dragging { opacity: .4; }
+  .lw-stage.is-over { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  .lw-stage-grip { color: var(--muted-2); cursor: grab; display: flex; flex: none; letter-spacing: -3px; }
+  .lw-stage-grip:active { cursor: grabbing; }
+  .lw-stage-num { width: 26px; height: 26px; border-radius: 50%; flex: none; background: var(--acc); color: #fff; font-family: var(--font); font-weight: 700; font-size: 12.5px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px -5px rgba(232,105,58,.9); }
+  .lw-stage-av, .lw-stage .lw-roletile { flex: none; display: flex; }
+  .lw-stage-meta { flex: 1; min-width: 0; }
+  .lw-stage-meta b { font-family: var(--font); font-weight: 600; font-size: 14px; display: block; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lw-stage-meta i { font-style: normal; font-size: 12px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .lw-stage-act { display: flex; align-items: center; gap: 4px; flex: none; }
+  .lw-stage-mv { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .lw-stage-mv:first-child svg { transform: rotate(180deg); }
+  .lw-stage-mv:hover:not(:disabled) { background: #f6f1ea; color: var(--ink); }
+  .lw-stage-mv:disabled { opacity: .35; cursor: not-allowed; }
+  .lw-stage-rm { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--muted-2); display: flex; align-items: center; justify-content: center; margin-left: 2px; }
+  .lw-stage-rm:hover { background: #fbe9e7; color: #b23b34; border-color: #f3cfca; }
+
+  /* ---- timeline layout ---- */
+  .lw-seq-timeline { position: relative; padding-left: 4px; }
+  .lw-tl-end { display: flex; align-items: center; gap: 14px; position: relative; }
+  .lw-tl-dot { width: 34px; height: 34px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; margin-left: 5px; }
+  .lw-tl-dot-start { background: var(--bg); color: var(--muted); border: 1.5px dashed #cfc4b5; }
+  .lw-tl-dot-end { background: #e7f4ec; color: #1f7a4d; border: 1.5px solid #b6dcc4; }
+  .lw-tl-endtxt b { font-family: var(--font); font-weight: 600; font-size: 13.5px; display: block; line-height: 1.2; }
+  .lw-tl-endtxt i { font-style: normal; font-size: 12px; color: var(--muted-2); }
+  .lw-tl-row { position: relative; padding-left: 0; }
+  .lw-tl-connect { position: absolute; left: 21px; top: -10px; height: calc(100% + 20px); width: 2px; background: linear-gradient(var(--line), var(--line)); z-index: 0; }
+  .lw-tl-row .lw-stage { position: relative; z-index: 1; margin: 10px 0; margin-left: 0; }
+  .lw-tl-row .lw-stage-num { box-shadow: 0 0 0 4px var(--paper), 0 4px 10px -5px rgba(232,105,58,.9); }
+  .lw-tl-connect-last { top: -10px; height: 22px; }
+  .lw-tl-finish { margin-top: 8px; }
+  .lw-tl-add { display: flex; align-items: center; gap: 11px; width: 100%; background: none; border: 1.5px dashed var(--line); border-radius: 12px; padding: 11px 13px; color: var(--muted); font-family: var(--font); font-weight: 600; font-size: 13.5px; position: relative; z-index: 1; margin: 10px 0; transition: border-color .14s, color .14s, background .14s; }
+  .lw-tl-add:hover { border-color: var(--acc); color: var(--acc-press); background: var(--acc-soft); }
+  .lw-tl-addnum { width: 26px; height: 26px; border-radius: 50%; flex: none; background: var(--paper); border: 1.5px dashed #cdc2b3; color: var(--acc); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px var(--paper); }
+  .lw-tl-add:hover .lw-tl-addnum { border-color: var(--acc); }
+
+  /* ---- cards (horizontal flow) layout ---- */
+  .lw-seq-cards { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .lw-seq-cards .lw-stage-card { flex-direction: column; align-items: flex-start; width: 210px; gap: 9px; position: relative; }
+  .lw-seq-cards .lw-stage-card .lw-stage-grip { position: absolute; top: 11px; right: 12px; }
+  .lw-seq-cards .lw-stage-card .lw-stage-num { position: absolute; top: -10px; left: -9px; box-shadow: 0 0 0 3px var(--paper), 0 4px 10px -5px rgba(232,105,58,.9); }
+  .lw-seq-cards .lw-stage-card .lw-stage-av, .lw-seq-cards .lw-stage-card .lw-roletile { margin-top: 2px; }
+  .lw-seq-cards .lw-stage-card .lw-stage-meta { width: 100%; }
+  .lw-seq-cards .lw-stage-card .lw-stage-act { width: 100%; justify-content: flex-end; border-top: 1px solid var(--line-2); padding-top: 9px; }
+  .lw-flowchip { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font); font-weight: 600; font-size: 12.5px; padding: 9px 13px; border-radius: 10px; white-space: nowrap; }
+  .lw-flowchip-start { background: var(--bg); color: var(--muted); border: 1px dashed #cfc4b5; }
+  .lw-flowchip-end { background: #e7f4ec; color: #1f7a4d; }
+  .lw-flowarrow { color: var(--muted-2); display: flex; flex: none; }
+  .lw-add-card { width: 92px; height: 100%; min-height: 118px; border: 1.5px dashed var(--line); border-radius: 12px; background: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-family: var(--font); font-weight: 600; font-size: 12.5px; transition: border-color .14s, color .14s, background .14s; }
+  .lw-add-card:hover { border-color: var(--acc); color: var(--acc-press); background: var(--acc-soft); }
+
+  /* ---- list layout ---- */
+  .lw-seq-list { display: flex; flex-direction: column; gap: 9px; }
+  .lw-seq-list .lw-stage-row { margin-left: 0; }
+  .lw-add-row { display: flex; align-items: center; gap: 9px; background: none; border: 1.5px dashed var(--line); border-radius: 10px; padding: 11px 14px; color: var(--muted); font-family: var(--font); font-weight: 600; font-size: 13.5px; transition: border-color .14s, color .14s, background .14s; }
+  .lw-add-row:hover { border-color: var(--acc); color: var(--acc-press); background: var(--acc-soft); }
+
+  /* ---- side: fields ---- */
+  .lw-fields { display: flex; flex-direction: column; gap: 14px; }
+  .lw-fields .pa-fld { gap: 6px; }
+  .lw-fields .pa-flabel { font-family: var(--font); font-weight: 600; font-size: 12.5px; color: var(--ink); }
+
+  /* ---- notify ---- */
+  .lw-notify { display: flex; flex-direction: column; gap: 8px; }
+  .lw-notifyopt { display: flex; align-items: flex-start; gap: 11px; text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 12px 13px; transition: border-color .13s, background .13s; }
+  .lw-notifyopt:hover { border-color: #ddd3c6; background: #faf7f2; }
+  .lw-notifyopt.is-on { border-color: var(--acc); background: var(--acc-soft); }
+  .lw-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cfc4b5; flex: none; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: border-color .13s; }
+  .lw-radio span { width: 9px; height: 9px; border-radius: 50%; background: var(--acc); transform: scale(0); transition: transform .14s; }
+  .lw-notifyopt.is-on .lw-radio { border-color: var(--acc); }
+  .lw-notifyopt.is-on .lw-radio span { transform: scale(1); }
+  .lw-notifyopt-txt b { font-family: var(--font); font-weight: 600; font-size: 13px; display: block; line-height: 1.3; color: var(--ink); }
+  .lw-notifyopt-txt i { font-style: normal; font-size: 11.5px; color: var(--muted-2); line-height: 1.35; display: block; margin-top: 2px; }
+
+  .lw-recip { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line-2); }
+  .lw-recip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .lw-recip-head span { font-family: var(--font); font-weight: 600; font-size: 12.5px; color: var(--ink); }
+  .lw-recip-add { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; color: var(--acc-press); font-family: var(--font); font-weight: 600; font-size: 12.5px; }
+  .lw-recip-add:hover { text-decoration: underline; }
+  .lw-recip-empty { font-size: 12.5px; color: var(--muted-2); background: var(--bg); border: 1px dashed var(--line); border-radius: 9px; padding: 11px 13px; }
+  .lw-recip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lw-recip-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px 4px 4px; font-family: var(--font); font-weight: 500; font-size: 12.5px; color: var(--ink); }
+  .lw-recip-roleic { width: 22px; height: 22px; border-radius: 6px; flex: none; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+  .lw-recip-chip button { width: 18px; height: 18px; border-radius: 50%; border: none; background: none; color: var(--muted-2); display: flex; align-items: center; justify-content: center; }
+  .lw-recip-chip button:hover { background: #fbe9e7; color: #b23b34; }
+
+  /* ---- picker ---- */
+  .lw-picklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .lw-picklist button { display: flex; align-items: center; gap: 12px; width: 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; text-align: left; transition: border-color .12s, background .12s; }
+  .lw-picklist button:hover { border-color: var(--acc); background: var(--acc-soft); }
+  .lw-pick-meta { flex: 1; min-width: 0; }
+  .lw-pick-meta b { font-family: var(--font); font-weight: 600; font-size: 13.5px; display: block; }
+  .lw-pick-meta i { font-style: normal; font-size: 12px; color: var(--muted-2); }
+  .lw-pick-add { width: 28px; height: 28px; border-radius: 8px; background: var(--bg); color: var(--acc); display: flex; align-items: center; justify-content: center; flex: none; }
+  .lw-picklist button:hover .lw-pick-add { background: var(--acc); color: #fff; }
+
+  @media (max-width: 1160px) {
+    .lw-detgrid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="padmin-data.jsx"></script>
+<script type="text/babel" src="padmin-shell.jsx"></script>
+<script type="text/babel" src="padmin-pages-1.jsx"></script>
+<script type="text/babel" src="padmin-pages-2.jsx"></script>
+<script type="text/babel" src="padmin-pages-3.jsx"></script>
+<script type="text/babel" src="padmin-drawers.jsx"></script>
+<script type="text/babel" src="leave-workflow.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#E8693A",
+  "sidebar": "espresso",
+  "density": "regular",
+  "radius": 14,
+  "seqLayout": "timeline"
+}/*EDITMODE-END*/;
+
+const ACCENTS = {
+  "#E8693A": { press: "#C2552F", soft: "#fdeee6" },
+  "#4F9373": { press: "#3c7159", soft: "#e6f1ec" },
+  "#3e63a0": { press: "#314f81", soft: "#e9eef6" },
+  "#A0627D": { press: "#824f64", soft: "#f4e9ef" },
+};
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  window.LW_TWEAKS = t; // expose seqLayout to the module
+  const [route, setRoute] = React.useState({ page: "leaveworkflow", param: null });
+  const [drawer, setDrawer] = React.useState(null);
+  const scrollRef = React.useRef(null);
+
+  const nav = React.useMemo(() => ({
+    go: (page, param = null) => setRoute({ page, param }),
+    openDrawer: (kind, extra) => setDrawer({ kind, ...(extra || {}) }),
+    closeDrawer: () => setDrawer(null),
+  }), []);
+
+  React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [route]);
+
+  React.useEffect(() => {
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setDrawer({ kind: "search" }); }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const a = ACCENTS[t.accent] || ACCENTS["#E8693A"];
+    root.style.setProperty("--acc", t.accent);
+    root.style.setProperty("--acc-press", a.press);
+    root.style.setProperty("--acc-soft", a.soft);
+    root.style.setProperty("--r", t.radius + "px");
+  }, [t.accent, t.radius]);
+
+  const navValue = { ...nav, route };
+  let body;
+  if (window.PAGES[route.page]) {
+    const Page = window.PAGES[route.page];
+    body = <Page param={route.param} />;
+  } else if (window.GENERICS[route.page]) {
+    body = <window.GenericRouted page={route.page} />;
+  } else {
+    body = <window.GenericRouted page="ai" />;
+  }
+
+  return (
+    <PNav.Provider value={navValue}>
+      <div className="pa-app" data-side={t.sidebar} data-density={t.density}>
+        <Sidebar />
+        <div className="pa-main">
+          <Topbar />
+          <div className="pa-scroll" ref={scrollRef}>{body}</div>
+        </div>
+      </div>
+      <window.DrawerHost drawer={drawer} route={route} onClose={() => setDrawer(null)} />
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="Workflow" />
+        <TweakRadio label="Sequence layout" value={t.seqLayout}
+          options={["timeline", "cards", "list"]}
+          onChange={(v) => setTweak("seqLayout", v)} />
+        <TweakSection label="Brand" />
+        <TweakColor label="Accent" value={t.accent}
+          options={["#E8693A", "#4F9373", "#3e63a0", "#A0627D"]}
+          onChange={(v) => setTweak("accent", v)} />
+        <TweakRadio label="Sidebar" value={t.sidebar}
+          options={["espresso", "paper"]}
+          onChange={(v) => setTweak("sidebar", v)} />
+        <TweakSection label="Layout" />
+        <TweakRadio label="Density" value={t.density}
+          options={["regular", "compact"]}
+          onChange={(v) => setTweak("density", v)} />
+        <TweakSlider label="Corner radius" value={t.radius} min={6} max={20} unit="px"
+          onChange={(v) => setTweak("radius", v)} />
+      </TweaksPanel>
+    </PNav.Provider>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
