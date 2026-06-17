@@ -13,6 +13,7 @@ import {
   listDtrSubmissionsSchema,
 } from "@/lib/validations/dtr";
 import { enqueueDtrSubmitted } from "@/lib/jobs/workers";
+import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     });
     if (existing) return "DUPLICATE";
 
-    return tx.dTRSubmission.create({
+    const submission = await tx.dTRSubmission.create({
       data: {
         tenantId: auth.tenantId,
         employeeId: d.employeeId,
@@ -105,6 +106,29 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    // Snapshot the DTR approval chain. If no approvers resolve, the submission
+    // is immediately final-approved (eligible for payroll).
+    const snap = await snapshotApprovalChain(tx, {
+      module: "DTR",
+      entityId: submission.id,
+      requesterId: d.employeeId,
+      tenantId: auth.tenantId,
+    });
+
+    if (snap.activeSteps === 0) {
+      await tx.dTRSubmission.update({
+        where: { id: submission.id },
+        data: { status: "MANAGER_APPROVED" },
+      });
+    } else if (snap.firstStepIndex !== 0) {
+      await tx.dTRSubmission.update({
+        where: { id: submission.id },
+        data: { currentStepIndex: snap.firstStepIndex },
+      });
+    }
+
+    return submission;
   });
 
   if (result === "NOT_FOUND_EMP") return err("Employee not found", 404);

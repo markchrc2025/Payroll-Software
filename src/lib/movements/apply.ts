@@ -72,6 +72,7 @@ export async function applyMovementEffects(
         departmentId:  movement.toDepartmentId  ?? null,
         branchId:      movement.toBranchId      ?? null,
         levelId:       movement.toLevelId       ?? null,
+        workflowId:    movement.toWorkflowId    ?? null,
         remark:        movement.reason          ?? null,
       },
     });
@@ -85,7 +86,6 @@ export async function applyMovementEffects(
         effectiveDate:    movement.effectiveDate,
         jobTypeId:        movement.toJobTypeId        ?? null,
         jobStatusId:      movement.toJobStatusId      ?? null,
-        leaveWorkflowKey: movement.toLeaveWorkflowKey ?? null,
         shiftScheduleId:  movement.toShiftScheduleId  ?? null,
         holidayKey:       movement.toHolidayKey       ?? null,
         termStart:        movement.toTermStart        ?? null,

@@ -45,6 +45,17 @@ export async function POST(
     const returnedByRole =
       submission.status === "SUBMITTED" ? "SUPERVISOR" : "MANAGER";
 
+    // Mark the active workflow step (if any) as REJECTED so the chain stops.
+    await tx.approvalStep.updateMany({
+      where: { tenantId: auth.tenantId, module: "DTR", entityId: id, status: "PENDING" },
+      data: {
+        status: "REJECTED",
+        actedByUserId: auth.userId,
+        actedAt: new Date(),
+        note: reason,
+      },
+    });
+
     return tx.dTRSubmission.update({
       where: { id },
       data: {

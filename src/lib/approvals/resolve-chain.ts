@@ -1,13 +1,13 @@
 /**
- * Resolves the ordered approver chain for a leave request.
+ * Resolves the ordered approver chain for an approval request (leave, DTR, etc).
  *
- * Given an employee + a LeaveWorkflow's `approvers` array
+ * Given an employee + an ApprovalWorkflow's resolved role-key array
  * (e.g. ["supervisor","dept_head","hr_manager"]), returns one slot per step:
  *   - A resolved approver record, or
  *   - null when the role cannot be resolved for this employee (slot is skipped).
  *
  * Self-approval guard: if the resolved approver is the same person filing the
- * leave, that slot is also returned as null (skipped).
+ * request, that slot is also returned as null (skipped).
  */
 
 import type { TenantTx } from "@/lib/with-tenant";
@@ -19,6 +19,14 @@ export type RoleKey =
   | "hr_manager"
   | "ceo";
 
+export const VALID_ROLE_KEYS: RoleKey[] = [
+  "supervisor",
+  "line_manager",
+  "dept_head",
+  "hr_manager",
+  "ceo",
+];
+
 export type ResolvedSlot = {
   roleKey: RoleKey;
   approverEmployeeId: string;
@@ -29,9 +37,9 @@ export type ResolvedSlot = {
 /**
  * Resolves a workflow approver chain for a given employee.
  *
- * @param requesterId   - Employee ID of the person filing the leave.
+ * @param requesterId   - Employee ID of the person filing the request.
  * @param tenantId      - Tenant context (used for OrgRole lookups).
- * @param approverKeys  - Ordered array of role keys from `LeaveWorkflow.approvers`.
+ * @param approverKeys  - Ordered array of role keys from the resolved workflow.
  * @param tx            - Active Prisma transaction (from withTenant callback).
  * @returns             Ordered array of resolved/null slots, one per step.
  */

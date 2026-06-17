@@ -1011,7 +1011,7 @@ type PendingApprovalRow = {
     department: { name: string } | null;
   } | null;
   leaveType: { id: string; name: string; code: string; unit: string } | null;
-  leaveApprovals: LeaveApprovalStep[];
+  approvalSteps: LeaveApprovalStep[];
 };
 
 function PendingApprovalsTab() {
@@ -1025,7 +1025,7 @@ function PendingApprovalsTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/leave-approvals/pending");
+    const res = await fetch("/api/approval-steps/pending?module=LEAVE");
     const json = await res.json();
     setRows(json.data ?? []);
     setLoading(false);
@@ -1068,13 +1068,13 @@ function PendingApprovalsTab() {
   }
 
   function StepBadges({ row }: { row: PendingApprovalRow }) {
-    const total = row.leaveApprovals.length;
+    const total = row.approvalSteps.length;
     if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
-    const current = row.leaveApprovals.find((s) => s.stepIndex === row.currentStepIndex);
+    const current = row.approvalSteps.find((s) => s.stepIndex === row.currentStepIndex);
     return (
       <div className="space-y-0.5">
         <div className="flex items-center gap-1">
-          {row.leaveApprovals.map((step) => (
+          {row.approvalSteps.map((step) => (
             <div
               key={step.id}
               className={`h-2 w-2 rounded-full ${

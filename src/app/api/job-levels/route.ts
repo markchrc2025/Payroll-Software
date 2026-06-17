@@ -13,7 +13,7 @@ const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   rank: z.coerce.number().int().min(0).max(9999).optional(),
   description: z.string().max(500).optional().nullable(),
-  defaultLeaveWorkflowId: z.string().cuid().nullable().optional(),
+  defaultWorkflowId: z.string().cuid().nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
       name: true,
       rank: true,
       description: true,
-      defaultLeaveWorkflowId: true,
-      defaultLeaveWorkflow: { select: { id: true, code: true, description: true } },
+      defaultWorkflowId: true,
+      defaultWorkflow: { select: { id: true, code: true, description: true } },
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },
   }));
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
           name: parsed.data.name,
           rank: parsed.data.rank ?? 0,
           description: parsed.data.description ?? null,
-          defaultLeaveWorkflowId: parsed.data.defaultLeaveWorkflowId ?? null,
+          defaultWorkflowId: parsed.data.defaultWorkflowId ?? null,
         },
       }),
     };

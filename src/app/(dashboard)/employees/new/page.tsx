@@ -46,7 +46,7 @@ export default async function NewEmployeePage() {
     get("/api/job-types", headers),
     get("/api/job-statuses", headers),
     get("/api/job-levels", headers),
-    get("/api/leave-workflows?limit=100", headers),
+    get("/api/approval-workflows?limit=100", headers),
     get("/api/employees?limit=500", headers),
   ]);
 

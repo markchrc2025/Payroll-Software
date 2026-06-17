@@ -29,14 +29,14 @@ export async function POST(
   const result = await withTenant(auth.tenantId, async (tx) => {
     const txn = await tx.leaveTransaction.findFirst({
       where: { id, tenantId: auth.tenantId },
-      include: {
-        leaveApprovals: { orderBy: { stepIndex: "asc" } },
-      },
     });
     if (!txn) return "not_found" as const;
     if (txn.approvalStatus !== "PENDING") return "not_pending" as const;
 
-    const steps = txn.leaveApprovals;
+    const steps = await tx.approvalStep.findMany({
+      where: { tenantId: auth.tenantId, module: "LEAVE", entityId: id },
+      orderBy: { stepIndex: "asc" },
+    });
 
     if (steps.length > 0) {
       const currentStep =
@@ -62,7 +62,7 @@ export async function POST(
         return "forbidden" as const;
       }
 
-      await tx.leaveApproval.update({
+      await tx.approvalStep.update({
         where: { id: currentStep.id },
         data: {
           status: "REJECTED",

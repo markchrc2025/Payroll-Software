@@ -140,11 +140,18 @@ enum ApprovalStatus {
   FOR_REVIEW
 }
 
-enum LeaveApprovalStatus {
+enum ApprovalStepStatus {
   PENDING
   APPROVED
   REJECTED
   SKIPPED
+}
+
+enum ApprovalModule {
+  LEAVE
+  DTR
+  EXPENSE
+  DOCUMENT
 }
 
 enum MovementType {
@@ -589,7 +596,7 @@ model Tenant {
   geofences             Geofence[]
   kiosks                Kiosk[]
   leaveTypes            LeaveType[]
-  leaveWorkflows        LeaveWorkflow[]
+  approvalWorkflows     ApprovalWorkflow[]
   leaveTransactions     LeaveTransaction[]
   dtrApprovalConfig     DTRApprovalConfig?
   auditLogs             AuditLog[]
@@ -619,7 +626,7 @@ model Tenant {
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
   owner              User?     @relation("TenantOwner", fields: [ownerUserId], references: [id])
   orgRoles           OrgRole[]
-  leaveApprovals     LeaveApproval[]
+  approvalSteps      ApprovalStep[]
 
   // Billing
   subscription TenantSubscription?
@@ -927,23 +934,23 @@ model JobLevel {
   rank        Int     @default(0)
   description String?
 
-  defaultLeaveWorkflowId String?
+  defaultWorkflowId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant               Tenant             @relation(fields: [tenantId], references: [id])
-  employees            Employee[]
-  placements           Placement[]
-  movementsTo          EmployeeMovement[] @relation("MovementToLevel")
-  movementsFrom        EmployeeMovement[] @relation("MovementFromLevel")
-  defaultLeaveWorkflow LeaveWorkflow?     @relation("LevelDefaultWorkflow", fields: [defaultLeaveWorkflowId], references: [id], onDelete: SetNull)
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  employees       Employee[]
+  placements      Placement[]
+  movementsTo     EmployeeMovement[] @relation("MovementToLevel")
+  movementsFrom   EmployeeMovement[] @relation("MovementFromLevel")
+  defaultWorkflow ApprovalWorkflow?  @relation("LevelDefaultWorkflow", fields: [defaultWorkflowId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@index([deletedAt])
-  @@index([defaultLeaveWorkflowId])
+  @@index([defaultWorkflowId])
 }
 
 // Org-wide singleton role assignments (hr_manager, ceo).
@@ -1093,7 +1100,6 @@ model Employee {
   placementEffectiveDate DateTime?
   jobTypeId             String?
   jobStatusId           String?
-  leaveWorkflowKey      String?
   shiftScheduleId       String?
   holidayKey            String?
   // Org-chart: when set, this employee reports to a (vacant) position/role
@@ -1181,7 +1187,7 @@ model Employee {
 
   headOfDepartments   Department[]    @relation("DepartmentHead")
   orgRoles            OrgRole[]       @relation("OrgRoleEmployee")
-  leaveApprovals      LeaveApproval[] @relation("LeaveApprovalApprover")
+  approvalSteps       ApprovalStep[]  @relation("ApprovalStepApprover")
 
   statutoryIds            StatutoryId[]
   salaryHistory           EmployeeSalary[]
@@ -1352,10 +1358,11 @@ model EmployeeMovement {
   toLineManagerId           String?
   fromImmediateSupervisorId String?
   toImmediateSupervisorId   String?
+  // Placement-scope: approval workflow assignment
+  toWorkflowId         String?
   // Terms-scope fields (used by TERMS_CHANGE and COMBINED_CHANGE)
   toJobTypeId          String?
   toJobStatusId        String?
-  toLeaveWorkflowKey   String?
   toShiftScheduleId    String?
   toHolidayKey         String?
   toTermStart          DateTime?
@@ -1382,6 +1389,7 @@ model EmployeeMovement {
   toShiftSchedule ShiftSchedule? @relation(fields: [toShiftScheduleId], references: [id])
   toJobType     JobType?       @relation("MovementToJobType", fields: [toJobTypeId], references: [id])
   toJobStatus   JobStatus?     @relation("MovementToJobStatus", fields: [toJobStatusId], references: [id])
+  toWorkflow    ApprovalWorkflow? @relation("MovementToWorkflow", fields: [toWorkflowId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId, effectiveDate])
@@ -1403,6 +1411,7 @@ model Placement {
   departmentId  String?
   branchId      String?
   levelId       String?
+  workflowId    String?
   remark        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1415,9 +1424,11 @@ model Placement {
   department  Department? @relation(fields: [departmentId], references: [id])
   branch      Branch?     @relation(fields: [branchId], references: [id])
   level       JobLevel?   @relation(fields: [levelId], references: [id])
+  workflow    ApprovalWorkflow? @relation("PlacementWorkflow", fields: [workflowId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, employeeId])
   @@index([tenantId, effectiveDate])
+  @@index([workflowId])
 }
 
 model EmploymentTerm {
@@ -1427,7 +1438,6 @@ model EmploymentTerm {
   effectiveDate    DateTime
   jobTypeId        String?
   jobStatusId      String?
-  leaveWorkflowKey String?
   shiftScheduleId  String?
   holidayKey       String?
   termStart        DateTime?
@@ -1636,7 +1646,7 @@ model LeaveType {
   @@index([deletedAt])
 }
 
-model LeaveWorkflow {
+model ApprovalWorkflow {
   id          String    @id @default(cuid())
   tenantId    String
   code        String
@@ -1649,33 +1659,35 @@ model LeaveWorkflow {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  tenant           Tenant     @relation(fields: [tenantId], references: [id])
-  defaultForLevels JobLevel[] @relation("LevelDefaultWorkflow")
+  tenant           Tenant      @relation(fields: [tenantId], references: [id])
+  defaultForLevels JobLevel[]  @relation("LevelDefaultWorkflow")
+  placements       Placement[] @relation("PlacementWorkflow")
+  movementsTo      EmployeeMovement[] @relation("MovementToWorkflow")
 
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([deletedAt])
 }
 
-model LeaveApproval {
-  id                 String              @id @default(cuid())
+model ApprovalStep {
+  id                 String             @id @default(cuid())
   tenantId           String
-  leaveTransactionId String
+  module             ApprovalModule
+  entityId           String
   stepIndex          Int
   roleKey            String
   approverEmployeeId String
-  status             LeaveApprovalStatus @default(PENDING)
+  status             ApprovalStepStatus @default(PENDING)
   actedByUserId      String?
   actedAt            DateTime?
   note               String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  tenant           Tenant           @relation(fields: [tenantId], references: [id])
-  leaveTransaction LeaveTransaction @relation(fields: [leaveTransactionId], references: [id], onDelete: Cascade)
-  approver         Employee         @relation("LeaveApprovalApprover", fields: [approverEmployeeId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  approver Employee @relation("ApprovalStepApprover", fields: [approverEmployeeId], references: [id])
 
-  @@index([tenantId, leaveTransactionId])
+  @@index([tenantId, module, entityId])
   @@index([approverEmployeeId, status])
 }
 
@@ -1730,7 +1742,6 @@ model LeaveTransaction {
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
   employee       Employee        @relation(fields: [employeeId], references: [id])
   leaveType      LeaveType       @relation(fields: [leaveTypeId], references: [id])
-  leaveApprovals LeaveApproval[]
 
   @@index([tenantId])
   @@index([employeeId, leaveTypeId])
@@ -2482,6 +2493,9 @@ model DTRSubmission {
 
   submittedAt DateTime            @default(now())
   status      DTRSubmissionStatus @default(SUBMITTED)
+
+  /// Active step pointer into the ApprovalStep chain (module = DTR).
+  currentStepIndex Int @default(0)
 
   /// Employee who acted as Supervisor reviewer (usually immediateSupervisor).
   supervisorId      String?

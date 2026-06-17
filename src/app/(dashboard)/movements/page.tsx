@@ -52,7 +52,7 @@ type Movement = {
   toLineManagerId: string | null;
   toJobTypeId: string | null;
   toJobStatusId: string | null;
-  toLeaveWorkflowKey: string | null;
+  toWorkflowId: string | null;
   toShiftScheduleId: string | null;
   toHolidayKey: string | null;
   toTermStart: string | null;
@@ -75,6 +75,7 @@ type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
+type WorkflowRef = { id: string; code: string };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,6 +186,7 @@ export default function MovementsPage() {
   const [shiftSchedules, setShiftSchedules] = useState<ShiftSchedule[]>([]);
   const [jobTypes, setJobTypes] = useState<JobTypeRef[]>([]);
   const [jobStatuses, setJobStatuses] = useState<JobStatusRef[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
@@ -203,7 +205,7 @@ export default function MovementsPage() {
   // ---------------------------------------------------------------------------
 
   const loadReferenceData = useCallback(async () => {
-    const [empRes, deptRes, brRes, posRes, shiftRes, jtRes, jsRes] = await Promise.all([
+    const [empRes, deptRes, brRes, posRes, shiftRes, jtRes, jsRes, wfRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
@@ -211,9 +213,10 @@ export default function MovementsPage() {
       fetch("/api/shifts?limit=200&isActive=true"),
       fetch("/api/job-types"),
       fetch("/api/job-statuses"),
+      fetch("/api/approval-workflows?limit=100"),
     ]);
-    const [empJson, deptJson, brJson, posJson, shiftJson, jtJson, jsJson] = await Promise.all([
-      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(),
+    const [empJson, deptJson, brJson, posJson, shiftJson, jtJson, jsJson, wfJson] = await Promise.all([
+      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(), wfRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setDepartments(deptJson.data ?? []);
@@ -222,6 +225,7 @@ export default function MovementsPage() {
     setShiftSchedules(shiftJson.data ?? []);
     setJobTypes(jtJson.data ?? []);
     setJobStatuses(jsJson.data ?? []);
+    setWorkflows(wfJson.data ?? []);
   }, []);
 
   const loadMovements = useCallback(async () => {
@@ -431,6 +435,7 @@ export default function MovementsPage() {
         shiftSchedules={shiftSchedules}
         jobTypes={jobTypes}
         jobStatuses={jobStatuses}
+        workflows={workflows}
         onCreated={loadMovements}
         reloadReferenceData={loadReferenceData}
       />

@@ -33,6 +33,7 @@ type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
+type WorkflowRef = { id: string; code: string };
 
 type Props = {
   open: boolean;
@@ -44,6 +45,7 @@ type Props = {
   shiftSchedules: ShiftSchedule[];
   jobTypes: JobTypeRef[];
   jobStatuses: JobStatusRef[];
+  workflows: WorkflowRef[];
   onCreated: () => void;
   reloadReferenceData: () => void;
 };
@@ -66,10 +68,10 @@ const EMPTY_FORM = {
   toPositionId: "",
   toLineManagerId: "",
   toImmediateSupervisorId: "",
+  toWorkflowId: "",
   // Terms fields
   toJobTypeId: "",
   toJobStatusId: "",
-  toLeaveWorkflowKey: "",
   toShiftScheduleId: "",
   toHolidayKey: "",
   toTermStart: "",
@@ -104,6 +106,7 @@ export function NewMovementDialog({
   shiftSchedules,
   jobTypes,
   jobStatuses,
+  workflows,
   onCreated,
   reloadReferenceData,
 }: Props) {
@@ -162,11 +165,11 @@ export function NewMovementDialog({
       if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
       if (form.toImmediateSupervisorId) body.toImmediateSupervisorId = form.toImmediateSupervisorId;
       if (form.toBranchId) body.toBranchId = form.toBranchId;
+      if (form.toWorkflowId) body.toWorkflowId = form.toWorkflowId;
     }
     if (isTerms) {
       if (form.toJobTypeId) body.toJobTypeId = form.toJobTypeId;
       if (form.toJobStatusId) body.toJobStatusId = form.toJobStatusId;
-      if (form.toLeaveWorkflowKey) body.toLeaveWorkflowKey = form.toLeaveWorkflowKey;
       if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
       if (form.toHolidayKey) body.toHolidayKey = form.toHolidayKey;
       if (form.toTermStart) body.toTermStart = form.toTermStart;
@@ -321,6 +324,19 @@ export function NewMovementDialog({
                     onAdd={() => setQuickCreate("branch")}
                   />
                 </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Approval Workflow</FieldLabel>
+                  <Select value={form.toWorkflowId} onValueChange={(v) => set("toWorkflowId", v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select approval workflow…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workflows.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </>
             )}
 
@@ -353,10 +369,6 @@ export function NewMovementDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Leave Workflow Key</FieldLabel>
-                  <Input placeholder="e.g. standard" value={form.toLeaveWorkflowKey} onChange={(e) => set("toLeaveWorkflowKey", e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Shift Schedule</FieldLabel>

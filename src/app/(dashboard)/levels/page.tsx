@@ -40,13 +40,13 @@ type JobLevel = {
   name: string;
   rank: number;
   description: string | null;
-  defaultLeaveWorkflowId: string | null;
-  defaultLeaveWorkflow: WorkflowSummary | null;
+  defaultWorkflowId: string | null;
+  defaultWorkflow: WorkflowSummary | null;
   _count: { employees: number };
 };
 
 const NONE = "__none__";
-const EMPTY_FORM = { name: "", rank: "0", description: "", defaultLeaveWorkflowId: NONE };
+const EMPTY_FORM = { name: "", rank: "0", description: "", defaultWorkflowId: NONE };
 
 export default function LevelsPage() {
   const [levels, setLevels] = useState<JobLevel[]>([]);
@@ -67,7 +67,7 @@ export default function LevelsPage() {
   }
 
   async function loadWorkflows() {
-    const res = await fetch("/api/leave-workflows?limit=100");
+    const res = await fetch("/api/approval-workflows?limit=100");
     const json = await res.json();
     setWorkflows(json.data ?? []);
   }
@@ -87,7 +87,7 @@ export default function LevelsPage() {
       name: level.name,
       rank: String(level.rank),
       description: level.description ?? "",
-      defaultLeaveWorkflowId: level.defaultLeaveWorkflowId ?? NONE,
+      defaultWorkflowId: level.defaultWorkflowId ?? NONE,
     });
     setSheetOpen(true);
     setTimeout(() => nameRef.current?.focus(), 50);
@@ -107,8 +107,8 @@ export default function LevelsPage() {
           name: form.name.trim(),
           rank: Number(form.rank) || 0,
           description: form.description.trim() || null,
-          defaultLeaveWorkflowId:
-            form.defaultLeaveWorkflowId === NONE ? null : form.defaultLeaveWorkflowId,
+          defaultWorkflowId:
+            form.defaultWorkflowId === NONE ? null : form.defaultWorkflowId,
         }),
       });
       const json = await res.json();
@@ -196,9 +196,9 @@ export default function LevelsPage() {
                     {level.description ?? <span className="italic opacity-40">—</span>}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {level.defaultLeaveWorkflow ? (
+                    {level.defaultWorkflow ? (
                       <Badge variant="outline" className="font-mono text-xs">
-                        {level.defaultLeaveWorkflow.code}
+                        {level.defaultWorkflow.code}
                       </Badge>
                     ) : (
                       <span className="italic opacity-40">—</span>
@@ -292,8 +292,8 @@ export default function LevelsPage() {
             <div className="space-y-2">
               <Label htmlFor="level-workflow">Default Leave Workflow</Label>
               <Select
-                value={form.defaultLeaveWorkflowId}
-                onValueChange={(v) => setForm((f) => ({ ...f, defaultLeaveWorkflowId: v ?? NONE }))}
+                value={form.defaultWorkflowId}
+                onValueChange={(v) => setForm((f) => ({ ...f, defaultWorkflowId: v ?? NONE }))}
               >
                 <SelectTrigger id="level-workflow">
                   <SelectValue placeholder="Inherit from tenant default…" />

@@ -8,7 +8,6 @@ import {
   History,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
   ShieldCheck,
   RotateCcw,
   Plus,
@@ -667,9 +666,7 @@ function SubmissionDetailSheet({
     }
   }, [submissionId, fetchDetail]);
 
-  async function handleAction(
-    action: "approve-supervisor" | "approve-manager",
-  ) {
+  async function handleAction(action: "approve") {
     if (!submissionId) return;
     setActionLoading(action);
     try {
@@ -679,7 +676,7 @@ function SubmissionDetailSheet({
       );
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.message ?? "Action failed");
+        toast.error(json.message ?? json.error ?? "Action failed");
         return;
       }
       toast.success(json.message ?? "Done");
@@ -691,8 +688,9 @@ function SubmissionDetailSheet({
   }
 
   const status = detail?.status;
-  const canApproveSupervisor = status === "SUBMITTED";
-  const canApproveManager = status === "SUPERVISOR_APPROVED";
+  // A submission still moving through its approval chain is either SUBMITTED or
+  // SUPERVISOR_APPROVED (an interim state once at least one step has approved).
+  const canApprove = status === "SUBMITTED" || status === "SUPERVISOR_APPROVED";
   const canReturn =
     status === "SUBMITTED" || status === "SUPERVISOR_APPROVED";
   const finalApproved = status === "MANAGER_APPROVED";
@@ -986,7 +984,7 @@ function SubmissionDetailSheet({
               </div>
 
               {/* Action Bar */}
-              {(canApproveSupervisor || canApproveManager || canReturn) && (
+              {(canApprove || canReturn) && (
                 <>
                   <Separator />
                   <div className="px-6 py-4 flex flex-wrap gap-2 justify-end bg-[#FAFBFC]">
@@ -1001,28 +999,14 @@ function SubmissionDetailSheet({
                         Return
                       </Button>
                     )}
-                    {canApproveSupervisor && (
+                    {canApprove && (
                       <Button
-                        variant="outline"
-                        onClick={() => handleAction("approve-supervisor")}
-                        disabled={actionLoading === "approve-supervisor"}
-                      >
-                        <CheckCircle2 className="h-4 w-4 mr-1.5 text-green-600" />
-                        {actionLoading === "approve-supervisor"
-                          ? "Approving…"
-                          : "Supervisor Approve"}
-                      </Button>
-                    )}
-                    {canApproveManager && (
-                      <Button
-                        onClick={() => handleAction("approve-manager")}
-                        disabled={actionLoading === "approve-manager"}
+                        onClick={() => handleAction("approve")}
+                        disabled={actionLoading === "approve"}
                         className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
                       >
                         <ShieldCheck className="h-4 w-4 mr-1.5" />
-                        {actionLoading === "approve-manager"
-                          ? "Finalizing…"
-                          : "Manager Approve"}
+                        {actionLoading === "approve" ? "Approving…" : "Approve"}
                       </Button>
                     )}
                   </div>
