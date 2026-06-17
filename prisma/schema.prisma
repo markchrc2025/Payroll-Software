@@ -901,6 +901,7 @@ model Position {
   employees   Employee[]
   jobPostings JobPosting[]
   placements  Placement[]
+  reportsFromEmployees Employee[] @relation("EmployeeReportsToPosition")
 
   @@unique([tenantId, title])
   @@index([tenantId])
@@ -1060,6 +1061,9 @@ model Employee {
   leaveWorkflowKey      String?
   shiftScheduleId       String?
   holidayKey            String?
+  // Org-chart: when set, this employee reports to a (vacant) position/role
+  // rather than to a specific person. Resolved to the incumbent if filled.
+  reportsToPositionId   String?
   termEffectiveDate     DateTime?
   contractStartDate     DateTime?
   contractEndDate       DateTime?
@@ -1133,6 +1137,7 @@ model Employee {
   jobType    JobType?    @relation(fields: [jobTypeId], references: [id])
   jobStatus  JobStatus?  @relation(fields: [jobStatusId], references: [id])
   shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+  reportsToPosition Position? @relation("EmployeeReportsToPosition", fields: [reportsToPositionId], references: [id])
 
   immediateSupervisor Employee?  @relation("EmployeeSupervisor", fields: [immediateSupervisorId], references: [id])
   supervisorOf        Employee[] @relation("EmployeeSupervisor")
@@ -1182,6 +1187,7 @@ model Employee {
   @@index([levelId])
   @@index([jobTypeId])
   @@index([jobStatusId])
+  @@index([reportsToPositionId])
   @@index([immediateSupervisorId])
   @@index([managerId])
   @@index([deletedAt])
