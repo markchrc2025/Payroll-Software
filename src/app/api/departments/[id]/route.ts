@@ -13,7 +13,7 @@ import { writeAuditLog, getClientIp } from "@/lib/audit";
 const patchSchema = z.object({
   name: z.string().min(1).max(150).optional(),
   description: z.string().max(500).nullable().optional(),
-  managerId: z.string().nullable().optional(),
+  headId: z.string().cuid().nullable().optional(),
 });
 
 export async function GET(
@@ -28,7 +28,10 @@ export async function GET(
   const row = await withTenant(auth.tenantId, (tx) =>
     tx.department.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
-      include: { _count: { select: { employees: { where: { deletedAt: null } } } } },
+      include: {
+        head: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+        _count: { select: { employees: { where: { deletedAt: null } } } },
+      },
     })
   );
 

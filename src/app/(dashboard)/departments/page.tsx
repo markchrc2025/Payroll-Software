@@ -21,20 +21,35 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type DeptHead = { id: string; firstName: string; lastName: string; employeeNumber: string } | null;
 
 type Department = {
   id: string;
   name: string;
   description: string | null;
+  headId: string | null;
+  head: DeptHead;
   _count: { employees: number };
 };
 
-const EMPTY_FORM = { name: "", description: "" };
+type EmpSummary = { id: string; firstName: string; lastName: string; employeeNumber: string };
+
+const NONE = "__none__";
+const EMPTY_FORM = { name: "", description: "", headId: NONE };
 
 export default function DepartmentsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<EmpSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
@@ -50,7 +65,13 @@ export default function DepartmentsPage() {
     setIsLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadEmployees() {
+    const res = await fetch("/api/employees?limit=500");
+    const json = await res.json();
+    setEmployees(json.data ?? []);
+  }
+
+  useEffect(() => { load(); loadEmployees(); }, []);
 
   function openAdd() {
     setEditing(null);
@@ -61,7 +82,11 @@ export default function DepartmentsPage() {
 
   function openEdit(dept: Department) {
     setEditing(dept);
-    setForm({ name: dept.name, description: dept.description ?? "" });
+    setForm({
+      name: dept.name,
+      description: dept.description ?? "",
+      headId: dept.headId ?? NONE,
+    });
     setSheetOpen(true);
     setTimeout(() => nameRef.current?.focus(), 50);
   }
@@ -73,12 +98,14 @@ export default function DepartmentsPage() {
     try {
       const url = editing ? `/api/departments/${editing.id}` : "/api/departments";
       const method = editing ? "PATCH" : "POST";
+      const headId = form.headId === NONE ? null : form.headId;
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
           description: form.description.trim() || null,
+          headId,
         }),
       });
       const json = await res.json();
@@ -109,6 +136,9 @@ export default function DepartmentsPage() {
     }
   }
 
+  const empName = (e: EmpSummary) =>
+    `${[e.firstName, e.lastName].filter(Boolean).join(" ")} (${e.employeeNumber})`;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -131,6 +161,7 @@ export default function DepartmentsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Head</TableHead>
               <TableHead>Description</TableHead>
               <TableHead className="text-center">Employees</TableHead>
               <TableHead className="w-24" />
@@ -141,6 +172,7 @@ export default function DepartmentsPage() {
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                   <TableCell className="text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
                   <TableCell />
@@ -148,7 +180,7 @@ export default function DepartmentsPage() {
               ))
             ) : departments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
                   <Building2 className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No departments yet. Add one to get started.
                 </TableCell>
@@ -157,6 +189,11 @@ export default function DepartmentsPage() {
               departments.map((dept) => (
                 <TableRow key={dept.id}>
                   <TableCell className="font-medium">{dept.name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {dept.head
+                      ? `${[dept.head.firstName, dept.head.lastName].filter(Boolean).join(" ")}`
+                      : <span className="italic opacity-40">—</span>}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {dept.description ?? <span className="italic opacity-40">—</span>}
                   </TableCell>
@@ -208,6 +245,28 @@ export default function DepartmentsPage() {
                 required
                 maxLength={150}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dept-head">Department Head</Label>
+              <Select
+                value={form.headId}
+                onValueChange={(v) => setForm({ ...form, headId: v ?? NONE })}
+              >
+                <SelectTrigger id="dept-head">
+                  <SelectValue placeholder="Select a head…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>
+                    <span className="text-muted-foreground italic">— Unassigned —</span>
+                  </SelectItem>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{empName(e)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Used as the &ldquo;Dept Head&rdquo; approver in Leave Approval Workflows.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="dept-desc">Description</Label>
