@@ -137,7 +137,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-leave-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-entitlement-report", label: "Entitlement Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-earning-policy", label: "Earning Policy", icon: "policies", comingSoon: true },
-      { href: "#soon-leave-approval-workflow", label: "Approval Workflow", icon: "movements", comingSoon: true },
+      { href: "/leave/workflow", label: "Approval Workflow", icon: "movements" },
     ],
   },
   {
