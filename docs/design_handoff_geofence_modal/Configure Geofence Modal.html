@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Configure Geofence — Sentire Payroll</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --acc: #E8693A; --acc-press: #C2552F; --acc-soft: #fdeee6;
+    --ink: #2A2420; --muted: #6B6259; --muted-2: #9b9085;
+    --bg: #F6F2EC; --paper: #ffffff; --line: #ECE6DD; --line-2: #f1ece4;
+    --side-1: #2E241C; --side-2: #1f1813;
+    --green: #1f7a4d; --green-soft: #e7f4ec;
+    --r: 14px;
+    --font: "Instrument Sans", system-ui, sans-serif;
+    --body: "Hanken Grotesk", system-ui, sans-serif;
+    --mono: "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--body); background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  button { font-family: var(--font); cursor: pointer; }
+  ::selection { background: var(--acc-soft); }
+
+  /* ============ BACKDROP (dimmed Branches page, for context) ============ */
+  .stage { position: fixed; inset: 0; display: flex; }
+  .bk-side { width: 230px; flex: none; background: linear-gradient(168deg, var(--side-1), var(--side-2)); padding: 20px 16px; display: flex; flex-direction: column; gap: 7px; }
+  .bk-brand { display: flex; align-items: center; gap: 11px; padding: 4px 6px 18px; }
+  .bk-brand-tile { width: 38px; height: 38px; border-radius: 11px; flex: none; background: linear-gradient(150deg, #38291f, #241b14); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+  .bk-brand b { font-family: var(--font); font-weight: 600; font-size: 15px; color: #fff; display: block; line-height: 1.2; }
+  .bk-brand i { font-style: normal; font-size: 10.5px; color: #b9ad9e; }
+  .bk-nav { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; font-family: var(--font); font-size: 13.5px; font-weight: 500; color: #cfc6ba; }
+  .bk-nav.on { background: var(--acc); color: #fff; font-weight: 600; box-shadow: 0 6px 16px -8px rgba(232,105,58,.8); }
+  .bk-nav svg { opacity: .9; }
+  .bk-main { flex: 1; display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
+  .bk-top { height: 66px; border-bottom: 1px solid var(--line); background: var(--paper); display: flex; align-items: center; padding: 0 30px; gap: 16px; }
+  .bk-search { display: flex; align-items: center; gap: 10px; flex: 1; max-width: 420px; background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 0 13px; height: 40px; color: var(--muted-2); font-size: 14px; }
+  .bk-body { padding: 28px 30px; }
+  .bk-h1 { font-family: var(--font); font-weight: 600; font-size: 30px; letter-spacing: -0.025em; margin: 0 0 4px; }
+  .bk-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); }
+  .bk-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .bk-th, .bk-tr { display: grid; grid-template-columns: 2fr 1.4fr 1fr 1fr 120px; align-items: center; gap: 12px; padding: 13px 22px; }
+  .bk-th { font-family: var(--font); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted-2); border-bottom: 1px solid var(--line-2); }
+  .bk-tr { border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+  .bk-tr:last-child { border-bottom: none; }
+  .bk-branch { display: flex; align-items: center; gap: 11px; }
+  .bk-branch-ic { width: 34px; height: 34px; border-radius: 9px; flex: none; background: var(--bg); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .bk-branch b { font-family: var(--font); font-weight: 600; }
+  .bk-badge { font-family: var(--font); font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green); justify-self: start; }
+  .bk-fade { color: var(--muted); }
+
+  /* ============ OVERLAY ============ */
+  .ov { position: fixed; inset: 0; background: rgba(33,26,21,.46); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 28px; z-index: 60; animation: ov .22s ease; }
+  @keyframes ov { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ============ MODAL ============ */
+  .gf {
+    width: min(980px, 96vw); height: min(740px, 97vh);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: 0 40px 90px -30px rgba(33,26,21,.62);
+    display: flex; flex-direction: column; overflow: hidden;
+    animation: pop .26s cubic-bezier(.3,.85,.36,1);
+  }
+  @keyframes pop { from { transform: translateY(14px) scale(.98); opacity: .5; } to { transform: none; opacity: 1; } }
+
+  .gf-head { display: flex; align-items: flex-start; gap: 14px; padding: 18px 22px 15px; border-bottom: 1px solid var(--line-2); flex: none; }
+  .gf-head-ic { width: 42px; height: 42px; border-radius: 12px; flex: none; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; }
+  .gf-head-txt { flex: 1; min-width: 0; }
+  .gf-head-titlerow { display: flex; align-items: center; gap: 10px; }
+  .gf-head h2 { font-family: var(--font); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; margin: 0; }
+  .gf-branchchip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font); font-weight: 600; font-size: 12px; color: var(--acc-press); background: var(--acc-soft); border-radius: 999px; padding: 3px 11px; }
+  .gf-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.45; max-width: 600px; }
+  .gf-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; transition: background .13s, color .13s; }
+  .gf-x:hover { background: #f6f1ea; color: var(--ink); }
+
+  /* body: two panes */
+  .gf-body { flex: 1; display: grid; grid-template-columns: 1.42fr 1fr; min-height: 0; }
+  .gf-mappane { position: relative; border-right: 1px solid var(--line-2); padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .gf-map-wrap { position: relative; flex: 1; border-radius: 13px; overflow: hidden; border: 1px solid var(--line); min-height: 0; }
+  #map { position: absolute; inset: 0; }
+  .leaflet-container { font-family: var(--body); background: #e9eef0; }
+  .leaflet-control-zoom a { border-radius: 8px !important; color: var(--ink) !important; }
+  .leaflet-bar { border: 1px solid var(--line) !important; box-shadow: 0 4px 12px -6px rgba(33,26,21,.4) !important; }
+
+  /* custom marker */
+  .gf-pin { display: flex; align-items: center; justify-content: center; }
+  .gf-pin svg { filter: drop-shadow(0 5px 7px rgba(40,28,18,.4)); }
+
+  /* coordinate readout under the map */
+  .gf-coordbar { display: flex; align-items: center; gap: 14px; flex: none; padding: 11px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 11px; }
+  .gf-coord { display: flex; flex-direction: column; gap: 2px; }
+  .gf-coord span { font-family: var(--font); font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted-2); }
+  .gf-coord b { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); }
+  .gf-coord-sep { width: 1px; align-self: stretch; background: var(--line); }
+  .gf-recenter { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font); font-weight: 600; font-size: 12px; color: var(--acc-press); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; transition: border-color .13s, background .13s; }
+  .gf-recenter:hover { border-color: #ddd3c6; background: #f6f1ea; }
+
+  /* right control pane */
+  .gf-ctrl { padding: 14px 22px; display: flex; flex-direction: column; gap: 0; overflow-y: auto; }
+  .gf-ctrl::-webkit-scrollbar { width: 6px; }
+  .gf-ctrl::-webkit-scrollbar-thumb { background: #ddd3c6; border-radius: 4px; }
+  .gf-field { display: flex; flex-direction: column; gap: 7px; }
+  .gf-label { font-family: var(--font); font-weight: 600; font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 4px; }
+  .gf-req { color: var(--acc); font-weight: 700; }
+  .gf-input { font-family: var(--body); font-size: 14px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0 13px; height: 42px; outline: none; width: 100%; transition: border-color .13s, box-shadow .13s; }
+  .gf-input:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  .gf-input::placeholder { color: var(--muted-2); }
+
+  .gf-divider { height: 1px; background: var(--line-2); margin: 9px 0; }
+
+  /* radius */
+  .gf-radius-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .gf-radius-top .gf-label { font-size: 13px; }
+  .gf-radius-val { display: flex; align-items: baseline; gap: 4px; }
+  .gf-radius-val b { font-family: var(--font); font-weight: 600; font-size: 26px; letter-spacing: -0.02em; color: var(--ink); line-height: 1; }
+  .gf-radius-val span { font-family: var(--font); font-weight: 600; font-size: 13px; color: var(--muted-2); }
+
+  .gf-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: var(--line); outline: none; margin: 2px 0 11px; }
+  .gf-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--acc); border: 3px solid #fff; box-shadow: 0 2px 7px -1px rgba(232,105,58,.7); cursor: grab; }
+  .gf-slider::-webkit-slider-thumb:active { cursor: grabbing; }
+  .gf-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--acc); border: 3px solid #fff; box-shadow: 0 2px 7px -1px rgba(232,105,58,.7); cursor: grab; }
+
+  .gf-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .gf-preset { font-family: var(--font); font-weight: 600; font-size: 13px; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 8px 0; transition: all .12s; }
+  .gf-preset:hover { border-color: #ddd3c6; background: #f6f1ea; color: var(--ink); }
+  .gf-preset.on { background: var(--acc); border-color: var(--acc); color: #fff; box-shadow: 0 6px 14px -8px rgba(232,105,58,.8); }
+
+  /* guidance reference */
+  .gf-guide { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; }
+  .gf-guide-h { display: flex; align-items: center; gap: 7px; font-family: var(--font); font-weight: 700; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 9px; }
+  .gf-guide-h svg { color: var(--acc); }
+  .gf-guide ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; }
+  .gf-guide li { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  .gf-guide li b { font-family: var(--font); font-weight: 600; color: var(--ink); display: block; }
+
+  /* live summary */
+  .gf-summary { margin-top: auto; display: flex; align-items: center; gap: 13px; padding: 12px 14px; background: var(--acc-soft); border-radius: 12px; flex: none; }
+  .gf-summary-spacer { height: 4px; flex: none; }
+  .gf-summary-ic { width: 36px; height: 36px; border-radius: 10px; flex: none; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .gf-summary-txt { line-height: 1.3; }
+  .gf-summary-txt b { font-family: var(--font); font-weight: 600; font-size: 13.5px; color: var(--acc-press); display: block; }
+  .gf-summary-txt span { font-size: 12px; color: var(--acc-press); opacity: .85; }
+
+  /* footer */
+  .gf-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 22px; border-top: 1px solid var(--line-2); background: var(--paper); flex: none; }
+  .gf-foot-status { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--muted); }
+  .gf-foot-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; box-shadow: 0 0 0 3px var(--green-soft); }
+  .gf-foot-btns { display: flex; gap: 10px; }
+  .gf-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; border-radius: 10px; padding: 11px 18px; border: 1px solid transparent; transition: background .13s, border-color .13s; white-space: nowrap; }
+  .gf-btn-ghost { background: var(--paper); color: var(--ink); border-color: var(--line); }
+  .gf-btn-ghost:hover { background: #f6f1ea; border-color: #ddd3c6; }
+  .gf-btn-primary { background: var(--acc); color: #fff; box-shadow: 0 8px 18px -10px rgba(232,105,58,.75); }
+  .gf-btn-primary:hover { background: var(--acc-press); }
+
+  /* saved toast */
+  .gf-toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px); z-index: 90; display: flex; align-items: center; gap: 11px; background: var(--ink); color: #fff; font-family: var(--font); font-weight: 500; font-size: 13.5px; padding: 13px 18px; border-radius: 12px; box-shadow: 0 18px 40px -14px rgba(33,26,21,.6); opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+  .gf-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .gf-toast svg { color: #74d39e; }
+
+  @media (max-width: 860px) {
+    .gf { height: min(92vh, 760px); }
+    .gf-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .gf-mappane { border-right: none; border-bottom: 1px solid var(--line-2); }
+    .gf-ctrl { overflow-y: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ DIMMED BRANCHES BACKDROP (context) ============ -->
+<div class="stage" aria-hidden="true">
+  <aside class="bk-side">
+    <div class="bk-brand">
+      <div class="bk-brand-tile">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E8693A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="m3 7 9 5 9-5"/><path d="M12 22V12"/></svg>
+      </div>
+      <div><b>Sentire Payroll</b><i>Demo Corporation</i></div>
+    </div>
+    <div class="bk-nav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard</div>
+    <div class="bk-nav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Employees</div>
+    <div class="bk-nav on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Branches</div>
+    <div class="bk-nav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Locations</div>
+    <div class="bk-nav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Attendance</div>
+  </aside>
+  <main class="bk-main">
+    <div class="bk-top">
+      <div class="bk-search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search employees…</div>
+    </div>
+    <div class="bk-body">
+      <h1 class="bk-h1">Branches</h1>
+      <p class="bk-sub">Work locations and their geofenced clock-in boundaries.</p>
+      <div class="bk-card">
+        <div class="bk-th"><span>Name</span><span>City</span><span>Geofence</span><span>Employees</span><span></span></div>
+        <div class="bk-tr">
+          <div class="bk-branch"><span class="bk-branch-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg></span><b>Head Office</b></div>
+          <span class="bk-fade">Quezon City</span>
+          <span class="bk-badge">Set · 100 m</span>
+          <span class="bk-fade">128</span>
+          <span></span>
+        </div>
+        <div class="bk-tr">
+          <div class="bk-branch"><span class="bk-branch-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg></span><b>Cebu Branch</b></div>
+          <span class="bk-fade">Cebu City</span>
+          <span class="bk-badge" style="background:#fbf1dc;color:#9a6a12">Not set</span>
+          <span class="bk-fade">34</span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="ov">
+  <div class="gf" role="dialog" aria-modal="true" aria-labelledby="gf-title">
+    <header class="gf-head">
+      <div class="gf-head-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <div class="gf-head-txt">
+        <div class="gf-head-titlerow">
+          <h2 id="gf-title">Configure Geofence</h2>
+          <span class="gf-branchchip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+            Head Office
+          </span>
+        </div>
+        <p>Drop a pin to mark the clock-in point, drag to fine-tune, then set the enforcement radius. Employees can only clock in inside this boundary.</p>
+      </div>
+      <button class="gf-x" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="gf-body">
+      <!-- LEFT: map -->
+      <section class="gf-mappane">
+        <div class="gf-map-wrap"><div id="map"></div></div>
+        <div class="gf-coordbar">
+          <div class="gf-coord"><span>Latitude</span><b id="lat">14.65750</b></div>
+          <div class="gf-coord-sep"></div>
+          <div class="gf-coord"><span>Longitude</span><b id="lng">121.03240</b></div>
+          <div class="gf-coord-sep"></div>
+          <div class="gf-coord"><span>Coverage</span><b id="area">3.1 ha</b></div>
+          <button class="gf-recenter" id="recenter">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            Center on pin
+          </button>
+        </div>
+      </section>
+
+      <!-- RIGHT: controls -->
+      <section class="gf-ctrl">
+        <div class="gf-field">
+          <label class="gf-label" for="gf-name">Geofence label <span class="gf-req">*</span></label>
+          <input class="gf-input" id="gf-name" type="text" placeholder="e.g. Quezon City Head Office" value="Quezon City Head Office" />
+        </div>
+
+        <div class="gf-divider"></div>
+
+        <div class="gf-radius-top">
+          <span class="gf-label">Enforcement radius</span>
+          <span class="gf-radius-val"><b id="radVal">100</b><span>m</span></span>
+        </div>
+        <input class="gf-slider" id="slider" type="range" min="20" max="500" step="5" value="100" />
+        <div class="gf-presets" id="presets">
+          <button class="gf-preset" data-r="50">50 m</button>
+          <button class="gf-preset on" data-r="100">100 m</button>
+          <button class="gf-preset" data-r="150">150 m</button>
+          <button class="gf-preset" data-r="200">200 m</button>
+          <button class="gf-preset" data-r="300">300 m</button>
+          <button class="gf-preset" data-r="500">500 m</button>
+        </div>
+
+        <div class="gf-divider"></div>
+
+        <div class="gf-guide">
+          <div class="gf-guide-h">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Recommended radius
+          </div>
+          <ul>
+            <li><b>50–100 m</b>Single-floor office</li>
+            <li><b>100–150 m</b>Mall / multi-floor</li>
+            <li><b>150–300 m</b>Outdoor / field site</li>
+            <li><b>300–500 m</b>Multi-building campus</li>
+          </ul>
+        </div>
+
+        <div class="gf-summary-spacer"></div>
+        <div class="gf-summary">
+          <span class="gf-summary-ic">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+          </span>
+          <div class="gf-summary-txt">
+            <b id="sumTitle">100 m boundary set</b>
+            <span id="sumSub">Pin placed in Quezon City · ~3.1 hectares covered</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="gf-foot">
+      <div class="gf-foot-status"><span class="gf-foot-dot"></span><span id="footStatus">Pin placed — ready to save</span></div>
+      <div class="gf-foot-btns">
+        <button class="gf-btn gf-btn-ghost">Cancel</button>
+        <button class="gf-btn gf-btn-primary" id="saveBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          Save geofence
+        </button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<div class="gf-toast" id="toast">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <span>Geofence saved for Head Office</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  var ACC = '#E8693A';
+  var center = [14.6575, 121.0324]; // Quezon City Head Office
+  var radius = 100;
+
+  var map = L.map('map', { zoomControl: true, attributionControl: true }).setView(center, 15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 20, subdomains: 'abcd'
+  }).addTo(map);
+
+  var pinIcon = L.divIcon({
+    className: 'gf-pin',
+    html: '<svg width="34" height="42" viewBox="0 0 34 42" fill="none"><path d="M17 41C17 41 32 26 32 16A15 15 0 0 0 2 16C2 26 17 41 17 41Z" fill="' + ACC + '" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="16" r="5.5" fill="#fff"/></svg>',
+    iconSize: [34, 42], iconAnchor: [17, 41]
+  });
+
+  var marker = L.marker(center, { draggable: true, icon: pinIcon, autoPan: true }).addTo(map);
+  var circle = L.circle(center, {
+    radius: radius, color: ACC, weight: 2, fillColor: ACC, fillOpacity: 0.14
+  }).addTo(map);
+
+  function cityFor() { return 'Quezon City'; }
+
+  function fmtArea(r) {
+    var m2 = Math.PI * r * r;
+    var ha = m2 / 10000;
+    if (ha >= 1) return ha.toFixed(1) + ' ha';
+    return Math.round(m2).toLocaleString() + ' m\u00B2';
+  }
+
+  function refresh() {
+    var ll = marker.getLatLng();
+    document.getElementById('lat').textContent = ll.lat.toFixed(5);
+    document.getElementById('lng').textContent = ll.lng.toFixed(5);
+    document.getElementById('area').textContent = fmtArea(radius);
+    document.getElementById('radVal').textContent = radius;
+    document.getElementById('sumTitle').textContent = radius + ' m boundary set';
+    document.getElementById('sumSub').textContent = 'Pin placed in ' + cityFor() + ' \u00B7 ~' + fmtArea(radius) + ' covered';
+    circle.setLatLng(ll);
+    circle.setRadius(radius);
+    // sync preset highlight
+    document.querySelectorAll('.gf-preset').forEach(function (b) {
+      b.classList.toggle('on', parseInt(b.dataset.r, 10) === radius);
+    });
+  }
+
+  function setRadius(r) {
+    radius = Math.max(20, Math.min(500, r));
+    document.getElementById('slider').value = radius;
+    refresh();
+  }
+
+  // map click drops/moves pin
+  map.on('click', function (e) {
+    marker.setLatLng(e.latlng);
+    refresh();
+  });
+  marker.on('drag', refresh);
+  marker.on('dragend', function () { map.panTo(marker.getLatLng(), { animate: true }); });
+
+  // slider
+  document.getElementById('slider').addEventListener('input', function (e) {
+    setRadius(parseInt(e.target.value, 10));
+  });
+
+  // presets
+  document.getElementById('presets').addEventListener('click', function (e) {
+    var btn = e.target.closest('.gf-preset');
+    if (!btn) return;
+    setRadius(parseInt(btn.dataset.r, 10));
+    // fit circle nicely in view
+    map.fitBounds(circle.getBounds().pad(0.35), { animate: true, maxZoom: 17 });
+  });
+
+  // recenter
+  document.getElementById('recenter').addEventListener('click', function () {
+    map.fitBounds(circle.getBounds().pad(0.4), { animate: true, maxZoom: 17 });
+  });
+
+  // save
+  var toast = document.getElementById('toast');
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    var label = document.getElementById('gf-name').value || 'Head Office';
+    toast.querySelector('span').textContent = 'Geofence "' + label + '" saved \u00B7 ' + radius + ' m';
+    toast.classList.add('show');
+    setTimeout(function () { toast.classList.remove('show'); }, 2600);
+  });
+
+  // ensure tiles render after layout settles
+  setTimeout(function () { map.invalidateSize(); refresh(); }, 200);
+  window.addEventListener('resize', function () { map.invalidateSize(); });
+})();
+</script>
+</body>
+</html>
