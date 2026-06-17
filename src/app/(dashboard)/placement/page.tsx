@@ -39,12 +39,14 @@ type PlacementRecord = {
   positionId: string | null;
   jobTitle: string | null;
   lineManagerId: string | null;
+  immediateSupervisorId: string | null;
   departmentId: string | null;
   branchId: string | null;
   levelId: string | null;
   remark: string | null;
   position:    { id: string; title: string } | null;
   lineManager: { id: string; firstName: string; lastName: string; employeeNumber: string } | null;
+  immediateSupervisor: { id: string; firstName: string; lastName: string; employeeNumber: string } | null;
   department:  { id: string; name: string } | null;
   branch:      { id: string; name: string } | null;
   level:       { id: string; name: string } | null;
@@ -65,6 +67,7 @@ const EMPTY_FORM = {
   positionId:    "",
   jobTitle:      "",
   lineManagerId: "",
+  immediateSupervisorId: "",
   departmentId:  "",
   branchId:      "",
   levelId:       "",
@@ -142,6 +145,7 @@ export default function PlacementPage() {
       positionId:    r.positionId    ?? "",
       jobTitle:      r.jobTitle      ?? "",
       lineManagerId: r.lineManagerId ?? "",
+      immediateSupervisorId: r.immediateSupervisorId ?? "",
       departmentId:  r.departmentId  ?? "",
       branchId:      r.branchId      ?? "",
       levelId:       r.levelId       ?? "",
@@ -163,6 +167,7 @@ export default function PlacementPage() {
       positionId:    form.positionId    || null,
       jobTitle:      form.jobTitle      || null,
       lineManagerId: form.lineManagerId || null,
+      immediateSupervisorId: form.immediateSupervisorId || null,
       departmentId:  form.departmentId  || null,
       branchId:      form.branchId      || null,
       levelId:       form.levelId       || null,
@@ -218,7 +223,7 @@ export default function PlacementPage() {
       <div>
         <h1 className="text-2xl font-bold">Placement</h1>
         <p className="text-sm text-muted-foreground">
-          Job position, line manager, department, branch, and level history per employee
+          Job position, reporting chain, department, branch, and level history per employee
         </p>
       </div>
 
@@ -261,6 +266,7 @@ export default function PlacementPage() {
               <TableHead>Effective Date</TableHead>
               <TableHead>Job Position</TableHead>
               <TableHead>Job Title</TableHead>
+              <TableHead>Reports To</TableHead>
               <TableHead>Line Manager</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Branch</TableHead>
@@ -271,21 +277,21 @@ export default function PlacementPage() {
           <TableBody>
             {!selectedEmployee ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                   Select an employee to view their placement history.
                 </TableCell>
               </TableRow>
             ) : loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : records.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                   No placement records for {selectedEmp ? `${selectedEmp.firstName} ${selectedEmp.lastName}` : "this employee"}.
                 </TableCell>
               </TableRow>
@@ -297,6 +303,11 @@ export default function PlacementPage() {
                   </TableCell>
                   <TableCell className="text-sm">{r.position?.title ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.jobTitle ?? "—"}</TableCell>
+                  <TableCell className="text-sm">
+                    {r.immediateSupervisor
+                      ? `${r.immediateSupervisor.lastName}, ${r.immediateSupervisor.firstName}`
+                      : "—"}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {r.lineManager
                       ? `${r.lineManager.lastName}, ${r.lineManager.firstName}`
@@ -371,6 +382,24 @@ export default function PlacementPage() {
                 value={form.jobTitle}
                 onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Reports To (Immediate Supervisor)</Label>
+              <Select
+                value={form.immediateSupervisorId || "none"}
+                onValueChange={(v) => setForm({ ...form, immediateSupervisorId: (v ?? "") === "none" ? "" : (v ?? "") })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select supervisor…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— None —</SelectItem>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.lastName}, {e.firstName} ({e.employeeNumber})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

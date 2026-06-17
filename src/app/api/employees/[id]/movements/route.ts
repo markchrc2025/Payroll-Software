@@ -101,6 +101,13 @@ export async function POST(
       });
       if (!x) return { error: "toLineManagerId not found in your tenant" as const };
     }
+    if (v.toImmediateSupervisorId) {
+      const x = await tx.employee.findFirst({
+        where: { id: v.toImmediateSupervisorId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!x) return { error: "toImmediateSupervisorId not found in your tenant" as const };
+    }
     if (v.toLevelId) {
       const x = await tx.jobLevel.findFirst({
         where: { id: v.toLevelId, tenantId: auth.tenantId, deletedAt: null },
@@ -143,7 +150,10 @@ export async function POST(
         fromStatus: emp.employmentStatus,
         toStatus: v.toStatus ?? null,
 
-        toLineManagerId:    v.toLineManagerId    ?? null,
+        fromLineManagerId:         emp.managerId,
+        toLineManagerId:           v.toLineManagerId           ?? null,
+        fromImmediateSupervisorId: emp.immediateSupervisorId,
+        toImmediateSupervisorId:   v.toImmediateSupervisorId   ?? null,
         toJobTypeId:        v.toJobTypeId        ?? null,
         toJobStatusId:      v.toJobStatusId      ?? null,
         toLeaveWorkflowKey: v.toLeaveWorkflowKey ?? null,

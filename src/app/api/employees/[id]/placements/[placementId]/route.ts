@@ -13,6 +13,7 @@ const patchSchema = z.object({
   positionId:    z.string().optional().nullable(),
   jobTitle:      z.string().max(100).optional().nullable(),
   lineManagerId: z.string().optional().nullable(),
+  immediateSupervisorId: z.string().optional().nullable(),
   departmentId:  z.string().optional().nullable(),
   branchId:      z.string().optional().nullable(),
   levelId:       z.string().optional().nullable(),
@@ -53,6 +54,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       });
       if (!mgr) return { error: "Line manager not found" as const };
     }
+    if (v.immediateSupervisorId) {
+      const sup = await tx.employee.findFirst({
+        where: { id: v.immediateSupervisorId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!sup) return { error: "Immediate supervisor not found" as const };
+    }
     if (v.departmentId) {
       const dept = await tx.department.findFirst({
         where: { id: v.departmentId, tenantId: auth.tenantId, deletedAt: null },
@@ -82,6 +90,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ...(v.positionId    !== undefined && { positionId:    v.positionId    ?? null }),
         ...(v.jobTitle      !== undefined && { jobTitle:      v.jobTitle      ?? null }),
         ...(v.lineManagerId !== undefined && { lineManagerId: v.lineManagerId ?? null }),
+        ...(v.immediateSupervisorId !== undefined && { immediateSupervisorId: v.immediateSupervisorId ?? null }),
         ...(v.departmentId  !== undefined && { departmentId:  v.departmentId  ?? null }),
         ...(v.branchId      !== undefined && { branchId:      v.branchId      ?? null }),
         ...(v.levelId       !== undefined && { levelId:       v.levelId       ?? null }),
@@ -90,6 +99,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       include: {
         position:    { select: { id: true, title: true } },
         lineManager: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+        immediateSupervisor: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
         department:  { select: { id: true, name: true } },
         branch:      { select: { id: true, name: true } },
         level:       { select: { id: true, name: true } },
