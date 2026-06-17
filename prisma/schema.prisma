@@ -582,6 +582,7 @@ model Tenant {
   geofences             Geofence[]
   kiosks                Kiosk[]
   leaveTypes            LeaveType[]
+  leaveWorkflows        LeaveWorkflow[]
   leaveTransactions     LeaveTransaction[]
   dtrApprovalConfig     DTRApprovalConfig?
   auditLogs             AuditLog[]
@@ -1578,6 +1579,26 @@ model LeaveType {
   tenant       Tenant             @relation(fields: [tenantId], references: [id])
   balances     LeaveBalance[]
   transactions LeaveTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
+model LeaveWorkflow {
+  id          String    @id @default(cuid())
+  tenantId    String
+  code        String
+  description String?
+  isActive    Boolean   @default(true)
+  approvers   Json      @default("[]")
+  notify      String    @default("none")
+  recipients  Json      @default("[]")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, code])
   @@index([tenantId])
