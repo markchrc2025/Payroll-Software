@@ -681,7 +681,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
-            <div>
+            <div className="col-span-2">
               <Lbl text="Branch" />
               <Controller control={c} name="branchId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
@@ -691,20 +691,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                   <SelectContent>
                     <SelectItem value="none">— None —</SelectItem>
                     {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
-            <div>
-              <Lbl text="Level" />
-              <Controller control={c} name="levelId" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Select level…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {levels.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )} />
