@@ -22,7 +22,7 @@ import {
   Search, Download, RefreshCw, Plus, Minus, X, ChevronDown,
   Briefcase, Building2, Crosshair, Workflow, CheckCircle2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -554,6 +554,18 @@ export default function OrgChartPage() {
           </p>
         </div>
         <div className="flex flex-none items-center gap-2">
+          {/* The org chart only *reads* positions — creating one lives in the
+              Positions module. This shortcut opens it in a new tab so the
+              current chart view (zoom / pan / filters) is preserved. */}
+          <a
+            href="/positions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ size: "sm" })}
+            title="Create a position (opens Positions in a new tab)"
+          >
+            <Plus className="mr-1.5 h-4 w-4" /> New position
+          </a>
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="mr-1.5 h-4 w-4" /> Export
           </Button>
