@@ -12,7 +12,6 @@ import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(150).optional(),
-  rank: z.coerce.number().int().min(0).optional(),
   description: z.string().max(500).nullable().optional(),
 });
 

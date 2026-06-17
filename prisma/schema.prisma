@@ -933,7 +933,6 @@ model JobType {
   id          String    @id @default(cuid())
   tenantId    String
   name        String
-  rank        Int       @default(0)
   description String?
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())
@@ -952,7 +951,6 @@ model JobStatus {
   id          String    @id @default(cuid())
   tenantId    String
   name        String
-  rank        Int       @default(0)
   description String?
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())

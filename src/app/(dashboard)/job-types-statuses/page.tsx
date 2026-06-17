@@ -33,7 +33,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 type JobType = {
   id: string;
   name: string;
-  rank: number;
   description: string | null;
   _count: { employees: number; employmentTerms: number };
 };
@@ -41,12 +40,11 @@ type JobType = {
 type JobStatus = {
   id: string;
   name: string;
-  rank: number;
   description: string | null;
   _count: { employmentTerms: number };
 };
 
-const EMPTY_FORM = { name: "", rank: 0, description: "" };
+const EMPTY_FORM = { name: "", description: "" };
 
 // ---------------------------------------------------------------------------
 // JobTypes Tab
@@ -80,7 +78,6 @@ function JobTypesTab() {
     setEditing(row);
     setForm({
       name: row.name,
-      rank: row.rank,
       description: row.description ?? "",
     });
     setSheetOpen(true);
@@ -91,7 +88,6 @@ function JobTypesTab() {
     setSaving(true);
     const body = {
       name: form.name.trim(),
-      rank: form.rank,
       description: form.description || null,
     };
     const url = editing ? `/api/job-types/${editing.id}` : "/api/job-types";
@@ -143,7 +139,6 @@ function JobTypesTab() {
         <Table>
           <TableHeader>
             <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Rank</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Description</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">In Use</TableHead>
@@ -154,21 +149,20 @@ function JobTypesTab() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 4 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={4} className="text-center text-[#6B7A8D] py-10">
                   No job types yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
-                  <TableCell className="text-[13px] text-[#6B7A8D] w-16">{row.rank}</TableCell>
                   <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.name}</TableCell>
                   <TableCell className="text-[13px] text-[#6B7A8D] max-w-xs truncate">
                     {row.description ?? "—"}
@@ -213,15 +207,6 @@ function JobTypesTab() {
                 placeholder="e.g. Permanent"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Rank</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.rank}
-                onChange={(e) => setForm({ ...form, rank: parseInt(e.target.value) || 0 })}
               />
             </div>
             <div className="space-y-2">
@@ -278,7 +263,6 @@ function JobStatusesTab() {
     setEditing(row);
     setForm({
       name: row.name,
-      rank: row.rank,
       description: row.description ?? "",
     });
     setSheetOpen(true);
@@ -289,7 +273,6 @@ function JobStatusesTab() {
     setSaving(true);
     const body = {
       name: form.name.trim(),
-      rank: form.rank,
       description: form.description || null,
     };
     const url = editing ? `/api/job-statuses/${editing.id}` : "/api/job-statuses";
@@ -340,7 +323,6 @@ function JobStatusesTab() {
         <Table>
           <TableHeader>
             <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Rank</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Description</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">In Use</TableHead>
@@ -351,21 +333,20 @@ function JobStatusesTab() {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 4 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={4} className="text-center text-[#6B7A8D] py-10">
                   No job statuses yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
-                  <TableCell className="text-[13px] text-[#6B7A8D] w-16">{row.rank}</TableCell>
                   <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.name}</TableCell>
                   <TableCell className="text-[13px] text-[#6B7A8D] max-w-xs truncate">
                     {row.description ?? "—"}
@@ -410,15 +391,6 @@ function JobStatusesTab() {
                 placeholder="e.g. Confirmed"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Rank</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.rank}
-                onChange={(e) => setForm({ ...form, rank: parseInt(e.target.value) || 0 })}
               />
             </div>
             <div className="space-y-2">
