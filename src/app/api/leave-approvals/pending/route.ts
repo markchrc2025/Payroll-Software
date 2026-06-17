@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
             department: { select: { name: true } },
           },
         },
-        leaveType: { select: { id: true, name: true, code: true } },
+        leaveType: { select: { id: true, name: true, code: true, unit: true } },
         leaveApprovals: { orderBy: { stepIndex: "asc" } },
       },
       orderBy: { createdAt: "asc" },

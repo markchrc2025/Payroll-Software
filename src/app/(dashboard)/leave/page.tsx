@@ -23,6 +23,7 @@ import {
   CalendarDays,
   BookOpen,
   Wallet,
+  Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -971,6 +972,307 @@ function LeaveBalancesTab() {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Pending My Approval Tab
+// ---------------------------------------------------------------------------
+
+const ROLE_KEY_LABELS: Record<string, string> = {
+  supervisor:   "Supervisor",
+  line_manager: "Line Manager",
+  dept_head:    "Department Head",
+  hr_manager:   "HR Manager",
+  ceo:          "CEO / Owner",
+};
+
+type LeaveApprovalStep = {
+  id: string;
+  stepIndex: number;
+  roleKey: string;
+  approverEmployeeId: string;
+  status: string;
+  actedAt: string | null;
+  note: string | null;
+};
+
+type PendingApprovalRow = {
+  id: string;
+  employeeId: string;
+  amount: string;
+  startDate: string | null;
+  endDate: string | null;
+  reason: string | null;
+  approvalStatus: string;
+  currentStepIndex: number;
+  createdAt: string;
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    employeeNumber: string;
+    department: { name: string } | null;
+  } | null;
+  leaveType: { id: string; name: string; code: string; unit: string } | null;
+  leaveApprovals: LeaveApprovalStep[];
+};
+
+function PendingApprovalsTab() {
+  const [rows, setRows] = useState<PendingApprovalRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [approveSheet, setApproveSheet] = useState<PendingApprovalRow | null>(null);
+  const [approveNote, setApproveNote] = useState("");
+  const [rejectSheet, setRejectSheet] = useState<PendingApprovalRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch("/api/leave-approvals/pending");
+    const json = await res.json();
+    setRows(json.data ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleApproveConfirm() {
+    if (!approveSheet) return;
+    setActioning(approveSheet.id);
+    const res = await fetch(`/api/leave-transactions/${approveSheet.id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: approveNote || undefined }),
+    });
+    const json = await res.json();
+    setActioning(null);
+    if (!res.ok) { toast.error(json.error ?? "Failed to approve"); return; }
+    toast.success("Leave request approved");
+    setApproveSheet(null);
+    setApproveNote("");
+    load();
+  }
+
+  async function handleRejectConfirm() {
+    if (!rejectSheet) return;
+    setActioning(rejectSheet.id);
+    const res = await fetch(`/api/leave-transactions/${rejectSheet.id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rejectionReason: rejectReason || null }),
+    });
+    const json = await res.json();
+    setActioning(null);
+    if (!res.ok) { toast.error(json.error ?? "Failed to reject"); return; }
+    toast.success("Leave request rejected");
+    setRejectSheet(null);
+    setRejectReason("");
+    load();
+  }
+
+  function StepBadges({ row }: { row: PendingApprovalRow }) {
+    const total = row.leaveApprovals.length;
+    if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
+    const current = row.leaveApprovals.find((s) => s.stepIndex === row.currentStepIndex);
+    return (
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-1">
+          {row.leaveApprovals.map((step) => (
+            <div
+              key={step.id}
+              className={`h-2 w-2 rounded-full ${
+                step.status === "APPROVED" ? "bg-green-500" :
+                step.status === "REJECTED" ? "bg-destructive" :
+                step.status === "SKIPPED"  ? "bg-muted-foreground/30" :
+                step.stepIndex === row.currentStepIndex ? "bg-yellow-500" :
+                "bg-muted"
+              }`}
+              title={`Step ${step.stepIndex + 1}: ${ROLE_KEY_LABELS[step.roleKey] ?? step.roleKey} — ${step.status}`}
+            />
+          ))}
+        </div>
+        {current && (
+          <p className="text-xs text-muted-foreground">
+            Step {row.currentStepIndex + 1}/{total} · {ROLE_KEY_LABELS[current.roleKey] ?? current.roleKey}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Leave requests assigned to you for approval at the current workflow step.
+        </p>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Leave Type</TableHead>
+              <TableHead>Duration</TableHead>
+              <TableHead>Dates</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Approval Chain</TableHead>
+              <TableHead className="w-[100px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                  No leave requests pending your approval.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <div className="font-medium">
+                      {row.employee?.firstName} {row.employee?.lastName}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {row.employee?.employeeNumber}
+                      {row.employee?.department && ` · ${row.employee.department.name}`}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{row.leaveType?.name ?? "—"}</div>
+                    <div className="text-xs text-muted-foreground">{row.leaveType?.code}</div>
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {fmt(parseFloat(row.amount))} {(row.leaveType?.unit ?? "DAYS").toLowerCase()}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {fmtDate(row.startDate)}
+                    {row.endDate && row.endDate !== row.startDate && (
+                      <> – {fmtDate(row.endDate)}</>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">
+                    {row.reason ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <StepBadges row={row} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:text-green-700"
+                        title="Approve"
+                        disabled={actioning === row.id}
+                        onClick={() => { setApproveSheet(row); setApproveNote(""); }}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        title="Reject"
+                        disabled={actioning === row.id}
+                        onClick={() => { setRejectSheet(row); setRejectReason(""); }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Approve confirmation sheet */}
+      <Sheet open={!!approveSheet} onOpenChange={(o) => { if (!o) setApproveSheet(null); }}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Approve Leave Request</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-5">
+            {approveSheet && (
+              <div className="rounded-md bg-muted p-4 text-sm space-y-1.5">
+                <div><span className="font-medium">Employee: </span>{approveSheet.employee?.firstName} {approveSheet.employee?.lastName}</div>
+                <div><span className="font-medium">Leave Type: </span>{approveSheet.leaveType?.name}</div>
+                <div><span className="font-medium">Duration: </span>{fmt(parseFloat(approveSheet.amount))} {(approveSheet.leaveType?.unit ?? "DAYS").toLowerCase()}</div>
+                <div><span className="font-medium">Dates: </span>{fmtDate(approveSheet.startDate)}{approveSheet.endDate && approveSheet.endDate !== approveSheet.startDate ? ` – ${fmtDate(approveSheet.endDate)}` : ""}</div>
+                {approveSheet.reason && <div><span className="font-medium">Reason: </span>{approveSheet.reason}</div>}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Note (optional)</Label>
+              <Input
+                placeholder="e.g. Approved — enjoy your leave"
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button className="flex-1" onClick={handleApproveConfirm} disabled={!!actioning}>
+                {actioning ? "Approving…" : "Confirm Approve"}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setApproveSheet(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Reject confirmation sheet */}
+      <Sheet open={!!rejectSheet} onOpenChange={(o) => { if (!o) setRejectSheet(null); }}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Reject Leave Request</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-5">
+            {rejectSheet && (
+              <div className="rounded-md bg-muted p-4 text-sm space-y-1.5">
+                <div><span className="font-medium">Employee: </span>{rejectSheet.employee?.firstName} {rejectSheet.employee?.lastName}</div>
+                <div><span className="font-medium">Leave Type: </span>{rejectSheet.leaveType?.name}</div>
+                <div><span className="font-medium">Duration: </span>{fmt(parseFloat(rejectSheet.amount))} {(rejectSheet.leaveType?.unit ?? "DAYS").toLowerCase()}</div>
+                {rejectSheet.reason && <div><span className="font-medium">Reason: </span>{rejectSheet.reason}</div>}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Rejection Reason (optional)</Label>
+              <Input
+                placeholder="e.g. Understaffed on requested dates"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="destructive" className="flex-1" onClick={handleRejectConfirm} disabled={!!actioning}>
+                {actioning ? "Rejecting…" : "Confirm Reject"}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setRejectSheet(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page Shell
 // ---------------------------------------------------------------------------
 
@@ -993,6 +1295,9 @@ export default function LeavePage() {
           <TabsTrigger value="balances" className="gap-1.5">
             <Wallet className="h-4 w-4" /> Balances
           </TabsTrigger>
+          <TabsTrigger value="my-approvals" className="gap-1.5">
+            <Inbox className="h-4 w-4" /> My Approvals
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="leave-types" className="mt-4">
@@ -1003,6 +1308,9 @@ export default function LeavePage() {
         </TabsContent>
         <TabsContent value="balances" className="mt-4">
           <LeaveBalancesTab />
+        </TabsContent>
+        <TabsContent value="my-approvals" className="mt-4">
+          <PendingApprovalsTab />
         </TabsContent>
       </Tabs>
     </div>
