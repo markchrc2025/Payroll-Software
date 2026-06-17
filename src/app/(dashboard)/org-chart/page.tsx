@@ -16,13 +16,14 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Search, Download, RefreshCw, Plus, Minus, X, ChevronDown,
-  Briefcase, Building2, Crosshair, Workflow, CheckCircle2,
+  Briefcase, Building2, Crosshair, Workflow, CheckCircle2, Users,
 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -554,18 +555,6 @@ export default function OrgChartPage() {
           </p>
         </div>
         <div className="flex flex-none items-center gap-2">
-          {/* The org chart only *reads* positions — creating one lives in the
-              Positions module. This shortcut opens it in a new tab so the
-              current chart view (zoom / pan / filters) is preserved. */}
-          <a
-            href="/positions"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({ size: "sm" })}
-            title="Create a position (opens Positions in a new tab)"
-          >
-            <Plus className="mr-1.5 h-4 w-4" /> New position
-          </a>
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="mr-1.5 h-4 w-4" /> Export
           </Button>
@@ -619,31 +608,50 @@ export default function OrgChartPage() {
             </div>
           </div>
 
-          {/* Canvas */}
-          <div className="oc-stage">
-            <div
-              className={"oc-scroll" + (panning ? " is-panning" : "")}
-              ref={scrollRef}
-              onPointerDown={onPanDown}
-              onPointerMove={onPanMove}
-              onPointerUp={onPanUp}
-              onPointerLeave={onPanUp}
-            >
-              <div className="oc-zoomwrap" style={{ width: natSize.w ? natSize.w * zoom : undefined, height: natSize.h ? natSize.h * zoom : undefined }}>
-                <div ref={canvasRef} className="oc-canvas oc-vtree" style={{ transform: `scale(${zoom})` }}>
-                  <ul className="oc-rootul"><TreeNode node={graph.root} /></ul>
-                </div>
+          {/* Canvas — or empty state when no employees exist yet */}
+          {graph.peopleCount === 0 ? (
+            <div className="oc-empty-state">
+              <span className="oc-empty-icon"><Users size={36} strokeWidth={1.4} /></span>
+              <h3 className="oc-empty-title">No employees in the chart yet</h3>
+              <p className="oc-empty-body">
+                The org chart is built from your employee records. Add employees and set their
+                {" "}<strong>Reports To</strong> field — the chart will populate automatically.
+              </p>
+              <div className="oc-empty-actions">
+                <Link href="/employees/new" className="oc-empty-btn oc-empty-btn-primary">
+                  <Plus size={15} strokeWidth={2.4} /> Add first employee
+                </Link>
+                <Link href="/employees" className="oc-empty-btn oc-empty-btn-secondary">
+                  Manage employees
+                </Link>
               </div>
             </div>
+          ) : (
+            <div className="oc-stage">
+              <div
+                className={"oc-scroll" + (panning ? " is-panning" : "")}
+                ref={scrollRef}
+                onPointerDown={onPanDown}
+                onPointerMove={onPanMove}
+                onPointerUp={onPanUp}
+                onPointerLeave={onPanUp}
+              >
+                <div className="oc-zoomwrap" style={{ width: natSize.w ? natSize.w * zoom : undefined, height: natSize.h ? natSize.h * zoom : undefined }}>
+                  <div ref={canvasRef} className="oc-canvas oc-vtree" style={{ transform: `scale(${zoom})` }}>
+                    <ul className="oc-rootul"><TreeNode node={graph.root} /></ul>
+                  </div>
+                </div>
+              </div>
 
-            <div className="oc-zoombar">
-              <button onClick={() => zoomTo(zoom - 0.15)} title="Zoom out" aria-label="Zoom out"><Minus size={16} /></button>
-              <button className="oc-zoomval" onClick={resetView} title="Reset to 100%">{Math.round(zoom * 100)}%</button>
-              <button onClick={() => zoomTo(zoom + 0.15)} title="Zoom in" aria-label="Zoom in"><Plus size={16} /></button>
-              <span className="oc-zoomsep" />
-              <button onClick={resetView} title="Centre & reset" aria-label="Centre"><Crosshair size={16} /></button>
+              <div className="oc-zoombar">
+                <button onClick={() => zoomTo(zoom - 0.15)} title="Zoom out" aria-label="Zoom out"><Minus size={16} /></button>
+                <button className="oc-zoomval" onClick={resetView} title="Reset to 100%">{Math.round(zoom * 100)}%</button>
+                <button onClick={() => zoomTo(zoom + 0.15)} title="Zoom in" aria-label="Zoom in"><Plus size={16} /></button>
+                <span className="oc-zoomsep" />
+                <button onClick={resetView} title="Centre & reset" aria-label="Centre"><Crosshair size={16} /></button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
