@@ -158,7 +158,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   pvFamilyBirthday: "Employee",
   pvAnniversary: "Employee",
   numberOfChildren: 0,
-  leaveWorkflowKey: "",
+  workflowId: "",
   holidayKey: "DEFAULT",
   jobTypeId: undefined,
   jobStatusId: undefined,
@@ -695,6 +695,30 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
+            <div className="col-span-2">
+              <Lbl text="Approval Workflow" />
+              <Controller control={c} name="workflowId" render={({ field }) => (
+                <Select value={field.value ? field.value : "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Use level / tenant default…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="italic text-muted-foreground">— Use level / tenant default —</span>
+                    </SelectItem>
+                    {workflows.map((wf) => (
+                      <SelectItem key={wf.id} value={wf.id}>
+                        <span className="font-mono">{wf.code}</span>
+                        {wf.description && <span className="ml-2 text-muted-foreground text-xs">{wf.description}</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )} />
+              <p className="mt-1 text-[11.5px]" style={{ color: "#9b9085" }}>
+                Routes this employee&apos;s leave, DTR, and expense approvals. Leave blank to inherit from their level or the tenant default.
+              </p>
+            </div>
             <FSec label="Reporting Chain" />
             <FNote lines={[
               "Reports To: the person this employee reports to for DTR and leave approvals (Immediate Supervisor).",
@@ -741,30 +765,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <SF control={c} name="jobTypeId"         label="Job Type"     options={jobTypes.map((jt) => ({ value: jt.id, label: jt.name }))}  placeholder="Select job type…"  errors={e} />
             <SF control={c} name="jobStatusId"       label="Job Status"   options={jobStatuses.map((js) => ({ value: js.id, label: js.name }))}  placeholder="Select job status…"  errors={e} />
-            <div className="col-span-2">
-              <Lbl text="Leave Workflow Override" />
-              <Controller control={c} name="leaveWorkflowKey" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Use level or tenant default…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      <span className="italic text-muted-foreground">— Use level / tenant default —</span>
-                    </SelectItem>
-                    {workflows.map((wf) => (
-                      <SelectItem key={wf.id} value={wf.code}>
-                        <span className="font-mono">{wf.code}</span>
-                        {wf.description && <span className="ml-2 text-muted-foreground text-xs">{wf.description}</span>}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
-              <p className="mt-1 text-[11.5px]" style={{ color: "#9b9085" }}>
-                Override only if this employee needs a different workflow than their level&apos;s default.
-              </p>
-            </div>
             <div className="col-span-2">
               <Lbl text="Shift Schedule" />
               <Controller control={c} name="shiftScheduleId" render={({ field }) => (

@@ -64,14 +64,37 @@ function notifyLabel(k: NotifyKey) {
   return NOTIFY_OPTS.find((o) => o.k === k)?.label ?? "—";
 }
 
+// ─── Module toggles ─────────────────────────────────────────────────────────────
+
+type ModuleFlag = "forLeave" | "forDtr" | "forExpense" | "forDocument";
+
+const MODULE_TOGGLES: { k: ModuleFlag; label: string }[] = [
+  { k: "forLeave",    label: "Leave" },
+  { k: "forDtr",      label: "DTR" },
+  { k: "forExpense",  label: "Expense" },
+  { k: "forDocument", label: "Document" },
+];
+
 // ─── Data types ───────────────────────────────────────────────────────────────
 
-type LeaveWorkflow = {
+type WorkflowStep = {
+  roleKey: RoleKey;
+  forLeave: boolean;
+  forDtr: boolean;
+  forExpense: boolean;
+  forDocument: boolean;
+};
+
+function newStep(roleKey: RoleKey): WorkflowStep {
+  return { roleKey, forLeave: true, forDtr: true, forExpense: true, forDocument: false };
+}
+
+type ApprovalWorkflow = {
   id: string;
   code: string;
   description: string | null;
   isActive: boolean;
-  approvers: RoleKey[];
+  approvers: WorkflowStep[];
   notify: NotifyKey;
   recipients: RoleKey[];
 };
@@ -128,12 +151,14 @@ function SequenceBuilder({
   approvers,
   onReorder,
   onRemove,
+  onToggle,
   onAdd,
   canAdd,
 }: {
-  approvers: RoleKey[];
-  onReorder: (next: RoleKey[]) => void;
+  approvers: WorkflowStep[];
+  onReorder: (next: WorkflowStep[]) => void;
   onRemove: (i: number) => void;
+  onToggle: (i: number, flag: ModuleFlag, value: boolean) => void;
   onAdd: () => void;
   canAdd: boolean;
 }) {
@@ -165,13 +190,14 @@ function SequenceBuilder({
           <Users className="h-4 w-4" />
         </span>
         <div>
-          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Employee files leave</p>
+          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Employee files a request</p>
           <p className="text-[12px] text-muted-foreground">Request enters the approval flow</p>
         </div>
       </div>
 
       {/* Stage rows */}
-      {approvers.map((k, i) => {
+      {approvers.map((step, i) => {
+        const k = step.roleKey;
         const role = roleByKey(k);
         const dragging = dragIdx === i;
         const isOver = overIdx === i && dragIdx !== null && dragIdx !== i;
@@ -188,60 +214,86 @@ function SequenceBuilder({
             />
             {/* Stage card */}
             <div
-              draggable
-              onDragStart={(e) => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
               onDragOver={(e) => { e.preventDefault(); setOverIdx(i); }}
               onDragEnd={() => { handleDrop(dragIdx, overIdx); setDragIdx(null); setOverIdx(null); }}
               onDrop={(e) => e.preventDefault()}
-              className="relative z-10 my-2.5 flex items-center gap-3 rounded-[12px] border bg-white px-3 py-[11px] transition-all"
+              className="relative z-10 my-2.5 rounded-[12px] border bg-white px-3 py-[11px] transition-all"
               style={{
                 borderColor: isOver ? "var(--acc, #E8693A)" : dragging ? "#d6ccc4" : "var(--line, #ECE6DD)",
                 boxShadow: isOver ? "0 0 0 3px var(--acc-soft, #fdeee6)" : "none",
                 opacity: dragging ? 0.4 : 1,
               }}
             >
-              <GripVertical
-                className="h-4 w-4 flex-none cursor-grab text-muted-foreground active:cursor-grabbing"
-                style={{ letterSpacing: "-3px" }}
-              />
-              <span
-                className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full font-sans text-[12.5px] font-bold text-white"
-                style={{
-                  background: "var(--acc, #E8693A)",
-                  boxShadow: "0 0 0 4px #fff, 0 4px 10px -5px rgba(232,105,58,.9)",
-                }}
-              >
-                {i + 1}
-              </span>
-              <RoleTile roleKey={k} size={38} />
-              <div className="min-w-0 flex-1">
-                <p className="font-sans text-[14px] font-semibold leading-tight">{role.label}</p>
-                <p className="text-[12px] text-muted-foreground">{role.desc}</p>
+              <div className="flex items-center gap-3">
+                <span
+                  draggable
+                  onDragStart={(e) => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
+                  className="flex-none cursor-grab text-muted-foreground active:cursor-grabbing"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </span>
+                <span
+                  className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full font-sans text-[12.5px] font-bold text-white"
+                  style={{
+                    background: "var(--acc, #E8693A)",
+                    boxShadow: "0 0 0 4px #fff, 0 4px 10px -5px rgba(232,105,58,.9)",
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <RoleTile roleKey={k} size={38} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-sans text-[14px] font-semibold leading-tight">{role.label}</p>
+                  <p className="text-[12px] text-muted-foreground">{role.desc}</p>
+                </div>
+                <div className="flex flex-none items-center gap-1">
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                    disabled={i === 0}
+                    onClick={() => move(i, -1)}
+                    aria-label="Move up"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                    disabled={i === approvers.length - 1}
+                    onClick={() => move(i, 1)}
+                    aria-label="Move down"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:border-[#f3cfca] hover:bg-[#fbe9e7] hover:text-[#b23b34]"
+                    onClick={() => onRemove(i)}
+                    aria-label="Remove"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-none items-center gap-1">
-                <button
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-                  disabled={i === 0}
-                  onClick={() => move(i, -1)}
-                  aria-label="Move up"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-                  disabled={i === approvers.length - 1}
-                  onClick={() => move(i, 1)}
-                  aria-label="Move down"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:border-[#f3cfca] hover:bg-[#fbe9e7] hover:text-[#b23b34]"
-                  onClick={() => onRemove(i)}
-                  aria-label="Remove"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+              {/* Module toggles — which approval types this step applies to */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t pt-2.5 pl-7" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
+                <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Applies to</span>
+                {MODULE_TOGGLES.map(({ k: flag, label }) => {
+                  const on = step[flag];
+                  return (
+                    <button
+                      key={flag}
+                      type="button"
+                      onClick={() => onToggle(i, flag, !on)}
+                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[12px] font-medium transition-all"
+                      style={{
+                        borderColor: on ? "var(--acc, #E8693A)" : "var(--line, #ECE6DD)",
+                        background: on ? "var(--acc-soft, #fdeee6)" : "#fff",
+                        color: on ? "#C2552F" : "var(--muted-clr, #6B6259)",
+                      }}
+                    >
+                      {on ? <Check className="h-3 w-3" /> : <span className="h-3 w-3" />}
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -291,7 +343,7 @@ function SequenceBuilder({
           <Check className="h-4 w-4" />
         </span>
         <div>
-          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Leave approved</p>
+          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Request approved</p>
           <p className="text-[12px] text-muted-foreground">Employee &amp; recipients notified</p>
         </div>
       </div>
@@ -363,7 +415,7 @@ function WorkflowList({
   onOpen,
   onNew,
 }: {
-  templates: LeaveWorkflow[];
+  templates: ApprovalWorkflow[];
   loading: boolean;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -372,9 +424,9 @@ function WorkflowList({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Leave Approval Workflow</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Approval Workflows</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Templates that define how employees&apos; leave requests are routed and approved across the org chart.
+            Reusable templates that define how employee requests — leave, DTR, expenses and more — are routed and approved across the org chart.
           </p>
         </div>
         <Button onClick={onNew} className="flex-none">
@@ -413,7 +465,7 @@ function WorkflowList({
               </p>
               <div className="mt-4 flex items-center justify-between border-t pt-3.5" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
                 <div className="flex items-center gap-2.5">
-                  <RoleStack roles={t.approvers} />
+                  <RoleStack roles={t.approvers.map((s) => s.roleKey)} />
                   <span className="font-sans text-[12.5px] font-semibold text-muted-foreground">
                     {t.approvers.length}-step approval
                   </span>
@@ -453,17 +505,17 @@ function WorkflowDetail({
   onBack,
   onSave,
 }: {
-  template: LeaveWorkflow;
+  template: ApprovalWorkflow;
   onBack: () => void;
-  onSave: (draft: LeaveWorkflow) => Promise<void>;
+  onSave: (draft: ApprovalWorkflow) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<LeaveWorkflow>(() => JSON.parse(JSON.stringify(template)));
+  const [draft, setDraft] = useState<ApprovalWorkflow>(() => JSON.parse(JSON.stringify(template)));
   const [picker, setPicker] = useState<"approver" | "recipient" | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  function set<K extends keyof LeaveWorkflow>(k: K, v: LeaveWorkflow[K]) {
+  function set<K extends keyof ApprovalWorkflow>(k: K, v: ApprovalWorkflow[K]) {
     setDraft((d) => ({ ...d, [k]: v }));
   }
 
@@ -492,7 +544,7 @@ function WorkflowDetail({
           onClick={onBack}
           className="hover:text-foreground transition-colors"
         >
-          Leave Approval Workflow
+          Approval Workflows
         </button>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="text-foreground font-medium">{draft.code || "New workflow"}</span>
@@ -591,6 +643,9 @@ function WorkflowDetail({
                   canAdd={canAdd}
                   onReorder={(next) => set("approvers", next)}
                   onRemove={(i) => set("approvers", draft.approvers.filter((_, idx) => idx !== i))}
+                  onToggle={(i, flag, value) =>
+                    set("approvers", draft.approvers.map((s, idx) => (idx === i ? { ...s, [flag]: value } : s)))
+                  }
                   onAdd={() => setPicker("approver")}
                 />
               )}
@@ -602,7 +657,8 @@ function WorkflowDetail({
             <Info className="mt-0.5 h-4 w-4 flex-none text-muted-foreground" />
             <div className="text-[12.5px] text-muted-foreground leading-relaxed space-y-1">
               <p>Each level is resolved from the employee&apos;s position in the <b className="font-semibold text-foreground">organization chart</b> at the time of filing — no need to name specific people.</p>
-              <p>This workflow is assigned to employees via their <b className="font-semibold text-foreground">Employment Terms</b>.</p>
+              <p>Use the <b className="font-semibold text-foreground">Applies to</b> toggles on each step to control which approval types (Leave, DTR, Expense, Document) route through that approver.</p>
+              <p>This workflow is assigned to employees via their <b className="font-semibold text-foreground">Placement</b> record.</p>
             </div>
           </div>
         </div>
@@ -742,15 +798,15 @@ function WorkflowDetail({
         <RolePicker
           title="Add approval level"
           sub="Pick the org-chart role that approves at this stage"
-          exclude={draft.approvers}
-          onPick={(k) => { set("approvers", [...draft.approvers, k]); setPicker(null); }}
+          exclude={draft.approvers.map((s) => s.roleKey)}
+          onPick={(k) => { set("approvers", [...draft.approvers, newStep(k)]); setPicker(null); }}
           onClose={() => setPicker(null)}
         />
       )}
       {picker === "recipient" && (
         <RolePicker
           title="Add recipient role"
-          sub="Notify this role about leave decisions"
+          sub="Notify this role about approval decisions"
           exclude={draft.recipients}
           onPick={(k) => { set("recipients", [...draft.recipients, k]); setPicker(null); }}
           onClose={() => setPicker(null)}
@@ -762,14 +818,14 @@ function WorkflowDetail({
 
 // ─── Page root ────────────────────────────────────────────────────────────────
 
-export default function LeaveWorkflowPage() {
-  const [templates, setTemplates] = useState<LeaveWorkflow[]>([]);
+export default function ApprovalWorkflowsPage() {
+  const [templates, setTemplates] = useState<ApprovalWorkflow[]>([]);
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState<{ mode: "list" | "detail"; id: string | null }>({ mode: "list", id: null });
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res  = await fetch("/api/leave-workflows");
+    const res  = await fetch("/api/approval-workflows");
     const json = await res.json();
     setTemplates(json.data ?? []);
     setLoading(false);
@@ -782,7 +838,7 @@ export default function LeaveWorkflowPage() {
   }
 
   async function newTemplate() {
-    const res  = await fetch("/api/leave-workflows", {
+    const res  = await fetch("/api/approval-workflows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: "NEW", description: "", isActive: true, approvers: [], notify: "finalrej", recipients: [] }),
@@ -793,8 +849,8 @@ export default function LeaveWorkflowPage() {
     setView({ mode: "detail", id: json.data.id });
   }
 
-  async function saveTemplate(draft: LeaveWorkflow) {
-    const res  = await fetch(`/api/leave-workflows/${draft.id}`, {
+  async function saveTemplate(draft: ApprovalWorkflow) {
+    const res  = await fetch(`/api/approval-workflows/${draft.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

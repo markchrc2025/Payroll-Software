@@ -40,7 +40,6 @@ type TermRecord = {
   jobStatusId:      string | null;
   jobType:          { id: string; name: string } | null;
   jobStatus:        { id: string; name: string } | null;
-  leaveWorkflowKey: string | null;
   shiftScheduleId:  string | null;
   holidayKey:       string | null;
   termStart:        string | null;
@@ -53,7 +52,6 @@ type Employee = { id: string; employeeNumber: string; firstName: string; lastNam
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
-type WorkflowRef = { id: string; code: string; description: string | null };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,7 +63,6 @@ const EMPTY_FORM = {
   effectiveDate:    "",
   jobTypeId:        "",
   jobStatusId:      "",
-  leaveWorkflowKey: "",
   shiftScheduleId:  "",
   holidayKey:       "",
   termStart:        "",
@@ -82,7 +79,6 @@ export default function EmploymentTermsPage() {
   const [shiftSchedules, setShiftSchedules] = useState<ShiftSchedule[]>([]);
   const [jobTypes, setJobTypes] = useState<JobTypeRef[]>([]);
   const [jobStatuses, setJobStatuses] = useState<JobStatusRef[]>([]);
-  const [workflows, setWorkflows] = useState<WorkflowRef[]>([]);
 
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [records,  setRecords]  = useState<TermRecord[]>([]);
@@ -100,21 +96,19 @@ export default function EmploymentTermsPage() {
   // ---------------------------------------------------------------------------
 
   const loadRefData = useCallback(async () => {
-    const [empRes, shiftRes, jtRes, jsRes, wfRes] = await Promise.all([
+    const [empRes, shiftRes, jtRes, jsRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/shifts?limit=200&isActive=true"),
       fetch("/api/job-types"),
       fetch("/api/job-statuses"),
-      fetch("/api/leave-workflows?limit=100"),
     ]);
-    const [empJson, shiftJson, jtJson, jsJson, wfJson] = await Promise.all([
-      empRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(), wfRes.json(),
+    const [empJson, shiftJson, jtJson, jsJson] = await Promise.all([
+      empRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setShiftSchedules(shiftJson.data ?? []);
     setJobTypes(jtJson.data ?? []);
     setJobStatuses(jsJson.data ?? []);
-    setWorkflows(wfJson.data ?? []);
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -145,7 +139,6 @@ export default function EmploymentTermsPage() {
       effectiveDate:    r.effectiveDate.slice(0, 10),
       jobTypeId:        r.jobTypeId        ?? "",
       jobStatusId:      r.jobStatusId      ?? "",
-      leaveWorkflowKey: r.leaveWorkflowKey ?? "",
       shiftScheduleId:  r.shiftScheduleId  ?? "",
       holidayKey:       r.holidayKey       ?? "",
       termStart:        r.termStart ? r.termStart.slice(0, 10) : "",
@@ -167,7 +160,6 @@ export default function EmploymentTermsPage() {
       effectiveDate:    form.effectiveDate,
       jobTypeId:        form.jobTypeId        || null,
       jobStatusId:      form.jobStatusId      || null,
-      leaveWorkflowKey: form.leaveWorkflowKey || null,
       shiftScheduleId:  form.shiftScheduleId  || null,
       holidayKey:       form.holidayKey       || null,
       termStart:        form.termStart        || null,
@@ -311,7 +303,6 @@ export default function EmploymentTermsPage() {
               <TableHead>Effective Date</TableHead>
               <TableHead>Job Type</TableHead>
               <TableHead>Job Status</TableHead>
-              <TableHead>Leave Workflow</TableHead>
               <TableHead>Shift Schedule</TableHead>
               <TableHead>Holiday</TableHead>
               <TableHead>Term / Next Review</TableHead>
@@ -321,21 +312,21 @@ export default function EmploymentTermsPage() {
           <TableBody>
             {!selectedEmployee ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                   Select an employee to view their employment terms history.
                 </TableCell>
               </TableRow>
             ) : loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : records.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                   No employment term records for{" "}
                   {selectedEmp ? `${selectedEmp.firstName} ${selectedEmp.lastName}` : "this employee"}.
                 </TableCell>
@@ -348,7 +339,6 @@ export default function EmploymentTermsPage() {
                   </TableCell>
                   <TableCell className="text-sm">{r.jobType?.name   ?? "—"}</TableCell>
                   <TableCell className="text-sm">{r.jobStatus?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{r.leaveWorkflowKey ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.shiftSchedule?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.holidayKey       ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -401,7 +391,6 @@ export default function EmploymentTermsPage() {
 
             {refSelectField("Job Type",   "jobTypeId",   jobTypes)}
             {refSelectField("Job Status", "jobStatusId", jobStatuses)}
-            {selectField("Leave Workflow",   "leaveWorkflowKey", workflows.map((w) => w.code))}
             <div className="space-y-1.5">
               <Label>Shift Schedule</Label>
               <Select

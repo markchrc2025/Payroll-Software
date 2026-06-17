@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     termEffectiveDate,
     jobTypeId,
     jobStatusId,
-    leaveWorkflowKey,
+    workflowId,
     shiftScheduleId,
     holidayKey,
     contractStartDate,
@@ -185,6 +185,12 @@ export async function POST(req: NextRequest) {
       });
       if (!status) return { error: "Job status not found in your tenant" as const };
     }
+    if (workflowId) {
+      const wf = await tx.approvalWorkflow.findFirst({
+        where: { id: workflowId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!wf) return { error: "Approval workflow not found in your tenant" as const };
+    }
 
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
@@ -209,7 +215,6 @@ export async function POST(req: NextRequest) {
         termEffectiveDate:      termEffectiveDate      ?? null,
         jobTypeId:              jobTypeId              ?? null,
         jobStatusId:            jobStatusId            ?? null,
-        leaveWorkflowKey:       leaveWorkflowKey       ?? null,
         shiftScheduleId:        shiftScheduleId        ?? null,
         holidayKey:             holidayKey             ?? null,
         contractStartDate:      contractStartDate      ?? null,
@@ -239,10 +244,12 @@ export async function POST(req: NextRequest) {
         effectiveDate: placementDate,
         positionId:    positionId    ?? null,
         jobTitle:      jobTitle      ?? null,
-        lineManagerId: immediateSupervisorId ?? null,
+        lineManagerId: managerId ?? null,
+        immediateSupervisorId: immediateSupervisorId ?? null,
         departmentId:  departmentId  ?? null,
         branchId:      branchId      ?? null,
         levelId:       levelId       ?? null,
+        workflowId:    workflowId    ?? null,
       },
     });
 
@@ -255,7 +262,6 @@ export async function POST(req: NextRequest) {
         effectiveDate:    termDate,
         jobTypeId:        jobTypeId        ?? null,
         jobStatusId:      jobStatusId      ?? null,
-        leaveWorkflowKey: leaveWorkflowKey ?? null,
         shiftScheduleId:  shiftScheduleId  ?? null,
         holidayKey:       holidayKey       ?? null,
         termStart:        contractStartDate ?? null,

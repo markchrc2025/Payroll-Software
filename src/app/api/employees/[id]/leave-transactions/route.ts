@@ -16,8 +16,8 @@ import {
   listLeaveTransactionsSchema,
 } from "@/lib/validations/leave";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
-import { resolveEffectiveWorkflow } from "@/lib/leave/resolve-workflow";
-import { resolveChain } from "@/lib/leave/resolve-approvers";
+import { resolveEffectiveWorkflow } from "@/lib/approvals/resolve-workflow";
+import { resolveChain } from "@/lib/approvals/resolve-chain";
 
 export async function GET(
   req: NextRequest,
@@ -97,8 +97,8 @@ export async function POST(
     });
     if (!balance) return "no_balance" as const;
 
-    // Resolve approver chain from the effective workflow.
-    const workflow = await resolveEffectiveWorkflow(employeeId, auth.tenantId, tx);
+    // Resolve approver chain from the effective workflow (LEAVE module).
+    const workflow = await resolveEffectiveWorkflow(employeeId, auth.tenantId, "LEAVE", tx);
     const slots = workflow
       ? await resolveChain(employeeId, auth.tenantId, workflow.approverKeys, tx)
       : [];
@@ -132,7 +132,7 @@ export async function POST(
       return leaveTransaction;
     }
 
-    // Snapshot one LeaveApproval row per resolvable step (null = unresolvable → omit).
+    // Snapshot one ApprovalStep row per resolvable step (null = unresolvable → omit).
     const activeSlots = slots.flatMap((slot, index) =>
       slot === null
         ? []
@@ -140,7 +140,8 @@ export async function POST(
             {
               id: crypto.randomUUID().replace(/-/g, ""),
               tenantId: auth.tenantId,
-              leaveTransactionId: leaveTransaction.id,
+              module: "LEAVE" as const,
+              entityId: leaveTransaction.id,
               stepIndex: index,
               roleKey: slot.roleKey,
               approverEmployeeId: slot.approverEmployeeId,
@@ -151,7 +152,7 @@ export async function POST(
     );
 
     if (activeSlots.length > 0) {
-      await tx.leaveApproval.createMany({ data: activeSlots });
+      await tx.approvalStep.createMany({ data: activeSlots });
       // Set currentStepIndex to the first active step.
       await tx.leaveTransaction.update({
         where: { id: leaveTransaction.id },

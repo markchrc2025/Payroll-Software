@@ -43,6 +43,7 @@ type PlacementRecord = {
   departmentId: string | null;
   branchId: string | null;
   levelId: string | null;
+  workflowId: string | null;
   remark: string | null;
   position:    { id: string; title: string } | null;
   lineManager: { id: string; firstName: string; lastName: string; employeeNumber: string } | null;
@@ -50,6 +51,7 @@ type PlacementRecord = {
   department:  { id: string; name: string } | null;
   branch:      { id: string; name: string } | null;
   level:       { id: string; name: string } | null;
+  workflow:    { id: string; code: string } | null;
 };
 
 type Employee   = { id: string; employeeNumber: string; firstName: string; lastName: string };
@@ -57,6 +59,7 @@ type Position   = { id: string; title: string };
 type Department = { id: string; name: string };
 type Branch     = { id: string; name: string };
 type JobLevel   = { id: string; name: string };
+type Workflow   = { id: string; code: string; description: string | null };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,6 +74,7 @@ const EMPTY_FORM = {
   departmentId:  "",
   branchId:      "",
   levelId:       "",
+  workflowId:    "",
   remark:        "",
 };
 
@@ -84,6 +88,7 @@ export default function PlacementPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [branches,    setBranches]    = useState<Branch[]>([]);
   const [jobLevels,   setJobLevels]   = useState<JobLevel[]>([]);
+  const [workflows,   setWorkflows]   = useState<Workflow[]>([]);
 
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [records,  setRecords]  = useState<PlacementRecord[]>([]);
@@ -101,19 +106,21 @@ export default function PlacementPage() {
   // ---------------------------------------------------------------------------
 
   const loadRefData = useCallback(async () => {
-    const [eRes, pRes, dRes, bRes, lRes] = await Promise.all([
+    const [eRes, pRes, dRes, bRes, lRes, wRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/positions?limit=200"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
       fetch("/api/job-levels"),
+      fetch("/api/approval-workflows?limit=100"),
     ]);
-    const [eJ, pJ, dJ, bJ, lJ] = await Promise.all([eRes.json(), pRes.json(), dRes.json(), bRes.json(), lRes.json()]);
+    const [eJ, pJ, dJ, bJ, lJ, wJ] = await Promise.all([eRes.json(), pRes.json(), dRes.json(), bRes.json(), lRes.json(), wRes.json()]);
     setEmployees(eJ.data ?? []);
     setPositions(pJ.data ?? []);
     setDepartments(dJ.data ?? []);
     setBranches(bJ.data ?? []);
     setJobLevels(lJ.data ?? []);
+    setWorkflows(wJ.data ?? []);
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -149,6 +156,7 @@ export default function PlacementPage() {
       departmentId:  r.departmentId  ?? "",
       branchId:      r.branchId      ?? "",
       levelId:       r.levelId       ?? "",
+      workflowId:    r.workflowId    ?? "",
       remark:        r.remark        ?? "",
     });
     setSheetOpen(true);
@@ -171,6 +179,7 @@ export default function PlacementPage() {
       departmentId:  form.departmentId  || null,
       branchId:      form.branchId      || null,
       levelId:       form.levelId       || null,
+      workflowId:    form.workflowId    || null,
       remark:        form.remark        || null,
     };
 
@@ -271,27 +280,28 @@ export default function PlacementPage() {
               <TableHead>Department</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Level</TableHead>
+              <TableHead>Workflow</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {!selectedEmployee ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-10">
                   Select an employee to view their placement history.
                 </TableCell>
               </TableRow>
             ) : loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 9 }).map((_, j) => (
+                  {Array.from({ length: 10 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : records.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-10">
                   No placement records for {selectedEmp ? `${selectedEmp.firstName} ${selectedEmp.lastName}` : "this employee"}.
                 </TableCell>
               </TableRow>
@@ -316,6 +326,7 @@ export default function PlacementPage() {
                   <TableCell className="text-sm">{r.department?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm">{r.branch?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm">{r.level?.name ?? "—"}</TableCell>
+                  <TableCell className="text-sm font-mono text-muted-foreground">{r.workflow?.code ?? "—"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button
@@ -466,6 +477,25 @@ export default function PlacementPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Approval Workflow</Label>
+              <Select
+                value={form.workflowId || "none"}
+                onValueChange={(v) => setForm({ ...form, workflowId: (v ?? "") === "none" ? "" : (v ?? "") })}
+              >
+                <SelectTrigger><SelectValue placeholder="Use level / tenant default…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Use level / tenant default —</SelectItem>
+                  {workflows.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Routes this employee&apos;s leave, DTR, and expense approvals from this effective date.
+              </p>
             </div>
 
             <div className="space-y-1.5">

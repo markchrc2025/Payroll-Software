@@ -220,7 +220,7 @@ export const createEmployeeSchema = z.object({
   placementEffectiveDate: z.coerce.date().optional().nullable(),
   jobTypeId: z.string().cuid().optional().nullable(),
   jobStatusId: z.string().cuid().optional().nullable(),
-  leaveWorkflowKey: z.string().max(100).optional().nullable(),
+  workflowId: z.string().cuid().optional().nullable(),
   shiftScheduleId: z.string().cuid().optional().nullable(),
   holidayKey: z.string().max(100).optional().nullable(),
   termEffectiveDate: z.coerce.date().optional().nullable(),
