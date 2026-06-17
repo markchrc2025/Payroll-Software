@@ -65,6 +65,7 @@ const EMPTY_FORM = {
   toBranchId: "",
   toPositionId: "",
   toLineManagerId: "",
+  toImmediateSupervisorId: "",
   // Terms fields
   toJobTypeId: "",
   toJobStatusId: "",
@@ -159,6 +160,7 @@ export function NewMovementDialog({
       if (form.toDepartmentId) body.toDepartmentId = form.toDepartmentId;
       if (form.toPositionId) body.toPositionId = form.toPositionId;
       if (form.toLineManagerId) body.toLineManagerId = form.toLineManagerId;
+      if (form.toImmediateSupervisorId) body.toImmediateSupervisorId = form.toImmediateSupervisorId;
       if (form.toBranchId) body.toBranchId = form.toBranchId;
     }
     if (isTerms) {
@@ -289,6 +291,15 @@ export function NewMovementDialog({
                         : []
                     }
                     onAdd={() => setQuickCreate("position")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Reports To (Immediate Supervisor)</FieldLabel>
+                  <EmployeeCombo
+                    employees={employees}
+                    value={form.toImmediateSupervisorId}
+                    onChange={(id) => set("toImmediateSupervisorId", id)}
+                    placeholder="Select supervisor…"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">

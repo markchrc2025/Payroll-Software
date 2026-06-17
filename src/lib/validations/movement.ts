@@ -25,7 +25,8 @@ export const createMovementSchema = z
     toStatus: z.nativeEnum(EmploymentStatus).optional().nullable(),
 
     // Placement-scope fields
-    toLineManagerId:    cuid.optional().nullable(),
+    toLineManagerId:         cuid.optional().nullable(),
+    toImmediateSupervisorId: cuid.optional().nullable(),
     // Terms-scope fields
     toJobTypeId:        cuid.optional().nullable(),
     toJobStatusId:      cuid.optional().nullable(),
@@ -45,7 +46,7 @@ export const createMovementSchema = z
         });
       }
     };
-    const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId"] as const;
+    const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId", "toImmediateSupervisorId"] as const;
     const termsFields     = ["toJobTypeId", "toJobStatusId", "toLeaveWorkflowKey", "toShiftScheduleId", "toHolidayKey", "toTermStart", "toNextReviewDate"] as const;
 
     switch (v.movementType) {

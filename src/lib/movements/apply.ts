@@ -17,6 +17,11 @@ export async function applyMovementEffects(
   if (movement.toPositionId) data.position = { connect: { id: movement.toPositionId } };
   if (movement.toJobTitle != null) data.jobTitle = movement.toJobTitle;
   if (movement.toLevelId) data.level = { connect: { id: movement.toLevelId } };
+  // Reporting chain — keep the live Employee record in sync so leave/DTR
+  // approval routing resolves to the new manager/supervisor immediately.
+  if (movement.toLineManagerId) data.manager = { connect: { id: movement.toLineManagerId } };
+  if (movement.toImmediateSupervisorId)
+    data.immediateSupervisor = { connect: { id: movement.toImmediateSupervisorId } };
   if (movement.toStatus != null) {
     data.employmentStatus = movement.toStatus;
     if (movement.movementType === "REGULARIZATION") {
@@ -63,6 +68,7 @@ export async function applyMovementEffects(
         positionId:    movement.toPositionId    ?? null,
         jobTitle:      movement.toJobTitle      ?? null,
         lineManagerId: movement.toLineManagerId ?? null,
+        immediateSupervisorId: movement.toImmediateSupervisorId ?? null,
         departmentId:  movement.toDepartmentId  ?? null,
         branchId:      movement.toBranchId      ?? null,
         levelId:       movement.toLevelId       ?? null,

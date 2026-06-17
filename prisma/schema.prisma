@@ -1188,6 +1188,7 @@ model Employee {
   movements               EmployeeMovement[]
   placements              Placement[]
   lineManaged             Placement[]      @relation("PlacementLineManager")
+  supervisedPlacements    Placement[]      @relation("PlacementSupervisor")
   employmentTerms         EmploymentTerm[]
   incidentReports         IncidentReport[]
   assetAssignments        AssetAssignment[]
@@ -1347,7 +1348,10 @@ model EmployeeMovement {
   toStatus             EmploymentStatus?
 
   // Placement-scope fields (used by PLACEMENT_CHANGE and COMBINED_CHANGE)
-  toLineManagerId      String?
+  fromLineManagerId         String?
+  toLineManagerId           String?
+  fromImmediateSupervisorId String?
+  toImmediateSupervisorId   String?
   // Terms-scope fields (used by TERMS_CHANGE and COMBINED_CHANGE)
   toJobTypeId          String?
   toJobStatusId        String?
@@ -1395,6 +1399,7 @@ model Placement {
   positionId    String?
   jobTitle      String?
   lineManagerId String?
+  immediateSupervisorId String?
   departmentId  String?
   branchId      String?
   levelId       String?
@@ -1406,6 +1411,7 @@ model Placement {
   employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   position    Position?   @relation(fields: [positionId], references: [id])
   lineManager Employee?   @relation("PlacementLineManager", fields: [lineManagerId], references: [id])
+  immediateSupervisor Employee? @relation("PlacementSupervisor", fields: [immediateSupervisorId], references: [id])
   department  Department? @relation(fields: [departmentId], references: [id])
   branch      Branch?     @relation(fields: [branchId], references: [id])
   level       JobLevel?   @relation(fields: [levelId], references: [id])
