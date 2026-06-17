@@ -33,6 +33,9 @@ type Position = { id: string; title: string; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
+type LevelRef = { id: string; name: string; rank: number };
+type WorkflowRef = { id: string; code: string; description: string | null };
+type EmpRef = { id: string; firstName: string; lastName: string; employeeNumber: string };
 
 type Props = {
   departments: Dept[];
@@ -41,6 +44,9 @@ type Props = {
   shiftSchedules: ShiftSchedule[];
   jobTypes: JobTypeRef[];
   jobStatuses: JobStatusRef[];
+  levels: LevelRef[];
+  workflows: WorkflowRef[];
+  employees: EmpRef[];
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -114,7 +120,6 @@ const SENSE       = ["Normal","Mild","Moderate","Severe"];
 const LIMB        = ["Normal","Limited","None"];
 const PRIVACY     = ["Not Accessible","Employee","Manager"];
 const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
-const WORKFLOWS   = ["DEFAULT","Executive","Field Staff"];
 const HOLIDAYS    = ["DEFAULT","NCR","Regional"];
 const CURRENCIES  = ["PHP","USD","SGD"];
 const PAY_METHODS = ["Cash","Bank transfer","Check","GCash"];
@@ -153,7 +158,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   pvFamilyBirthday: "Employee",
   pvAnniversary: "Employee",
   numberOfChildren: 0,
-  leaveWorkflowKey: "DEFAULT",
+  leaveWorkflowKey: "",
   holidayKey: "DEFAULT",
   jobTypeId: undefined,
   jobStatusId: undefined,
@@ -450,7 +455,7 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -676,7 +681,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
-            <div className="col-span-2">
+            <div>
               <Lbl text="Branch" />
               <Controller control={c} name="branchId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
@@ -690,11 +695,90 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
+            <div>
+              <Lbl text="Level" />
+              <Controller control={c} name="levelId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select level…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {levels.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
+            <FSec label="Reporting Chain" />
+            <FNote lines={[
+              "Reports To: the person this employee reports to for DTR and leave approvals (Immediate Supervisor).",
+              "Line Manager: the manager responsible for this employee's performance and leave approvals.",
+              "These fields wire up the approval chain automatically — no separate setup needed.",
+            ]} />
+            <div className="col-span-2">
+              <Lbl text="Reports To (Immediate Supervisor)" />
+              <Controller control={c} name="immediateSupervisorId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select supervisor…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {[emp.firstName, emp.lastName].filter(Boolean).join(" ")} ({emp.employeeNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
+            <div className="col-span-2">
+              <Lbl text="Line Manager" />
+              <Controller control={c} name="managerId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select manager…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {[emp.firstName, emp.lastName].filter(Boolean).join(" ")} ({emp.employeeNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
             <FSec label="Employment Terms" />
             <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <SF control={c} name="jobTypeId"         label="Job Type"     options={jobTypes.map((jt) => ({ value: jt.id, label: jt.name }))}  placeholder="Select job type…"  errors={e} />
             <SF control={c} name="jobStatusId"       label="Job Status"   options={jobStatuses.map((js) => ({ value: js.id, label: js.name }))}  placeholder="Select job status…"  errors={e} />
-            <SF control={c} name="leaveWorkflowKey"  label="Leave Workflow" options={WORKFLOWS} placeholder="DEFAULT"   span2 errors={e} />
+            <div className="col-span-2">
+              <Lbl text="Leave Workflow Override" />
+              <Controller control={c} name="leaveWorkflowKey" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Use level or tenant default…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="italic text-muted-foreground">— Use level / tenant default —</span>
+                    </SelectItem>
+                    {workflows.map((wf) => (
+                      <SelectItem key={wf.id} value={wf.code}>
+                        <span className="font-mono">{wf.code}</span>
+                        {wf.description && <span className="ml-2 text-muted-foreground text-xs">{wf.description}</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )} />
+              <p className="mt-1 text-[11.5px]" style={{ color: "#9b9085" }}>
+                Override only if this employee needs a different workflow than their level&apos;s default.
+              </p>
+            </div>
             <div className="col-span-2">
               <Lbl text="Shift Schedule" />
               <Controller control={c} name="shiftScheduleId" render={({ field }) => (
