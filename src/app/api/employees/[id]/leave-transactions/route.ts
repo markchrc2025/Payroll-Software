@@ -16,8 +16,7 @@ import {
   listLeaveTransactionsSchema,
 } from "@/lib/validations/leave";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
-import { resolveEffectiveWorkflow } from "@/lib/approvals/resolve-workflow";
-import { resolveChain } from "@/lib/approvals/resolve-chain";
+import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
 
 export async function GET(
   req: NextRequest,
@@ -97,14 +96,6 @@ export async function POST(
     });
     if (!balance) return "no_balance" as const;
 
-    // Resolve approver chain from the effective workflow (LEAVE module).
-    const workflow = await resolveEffectiveWorkflow(employeeId, auth.tenantId, "LEAVE", tx);
-    const slots = workflow
-      ? await resolveChain(employeeId, auth.tenantId, workflow.approverKeys, tx)
-      : [];
-
-    const hasActiveSteps = slots.some((s) => s !== null);
-
     const leaveTransaction = await tx.leaveTransaction.create({
       data: {
         tenantId: auth.tenantId,
@@ -116,47 +107,39 @@ export async function POST(
         startDate,
         endDate,
         reason: reason ?? null,
-        approvalStatus: hasActiveSteps ? "PENDING" : "APPROVED",
+        approvalStatus: "PENDING",
         createdByUserId: auth.userId,
         currentStepIndex: 0,
       },
     });
 
-    // If no workflow or all slots are null (no resolvable approvers), auto-approve
-    // and debit balance immediately.
-    if (!hasActiveSteps) {
-      await tx.leaveBalance.update({
-        where: { id: balance.id },
-        data: { used: { increment: amount } },
-      });
-      return leaveTransaction;
+    // Snapshot the LEAVE approval chain (one ApprovalStep row per resolvable step).
+    const snap = await snapshotApprovalChain(tx, {
+      module: "LEAVE",
+      entityId: leaveTransaction.id,
+      requesterId: employeeId,
+      tenantId: auth.tenantId,
+    });
+
+    // No resolvable approvers → auto-approve and debit the balance immediately.
+    if (snap.activeSteps === 0) {
+      const [updated] = await Promise.all([
+        tx.leaveTransaction.update({
+          where: { id: leaveTransaction.id },
+          data: { approvalStatus: "APPROVED", approvedAt: new Date() },
+        }),
+        tx.leaveBalance.update({
+          where: { id: balance.id },
+          data: { used: { increment: amount } },
+        }),
+      ]);
+      return updated;
     }
 
-    // Snapshot one ApprovalStep row per resolvable step (null = unresolvable → omit).
-    const activeSlots = slots.flatMap((slot, index) =>
-      slot === null
-        ? []
-        : [
-            {
-              id: crypto.randomUUID().replace(/-/g, ""),
-              tenantId: auth.tenantId,
-              module: "LEAVE" as const,
-              entityId: leaveTransaction.id,
-              stepIndex: index,
-              roleKey: slot.roleKey,
-              approverEmployeeId: slot.approverEmployeeId,
-              status: "PENDING" as const,
-              updatedAt: new Date(),
-            },
-          ],
-    );
-
-    if (activeSlots.length > 0) {
-      await tx.approvalStep.createMany({ data: activeSlots });
-      // Set currentStepIndex to the first active step.
+    if (snap.firstStepIndex !== 0) {
       await tx.leaveTransaction.update({
         where: { id: leaveTransaction.id },
-        data: { currentStepIndex: activeSlots[0].stepIndex },
+        data: { currentStepIndex: snap.firstStepIndex },
       });
     }
 

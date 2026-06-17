@@ -2494,6 +2494,9 @@ model DTRSubmission {
   submittedAt DateTime            @default(now())
   status      DTRSubmissionStatus @default(SUBMITTED)
 
+  /// Active step pointer into the ApprovalStep chain (module = DTR).
+  currentStepIndex Int @default(0)
+
   /// Employee who acted as Supervisor reviewer (usually immediateSupervisor).
   supervisorId      String?
   supervisorActedAt DateTime?
