@@ -159,3 +159,54 @@
     @apply font-sans;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Configure Geofence modal — range slider, custom map pin, Leaflet controls
+   (presentational; tokens come from :root above)
+   ────────────────────────────────────────────────────────────────────────── */
+.gf-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  outline: none;
+}
+.gf-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--acc);
+  border: 3px solid #fff;
+  box-shadow: 0 2px 7px -1px rgba(232, 105, 58, 0.7);
+  cursor: grab;
+}
+.gf-slider::-webkit-slider-thumb:active { cursor: grabbing; }
+.gf-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--acc);
+  border: 3px solid #fff;
+  box-shadow: 0 2px 7px -1px rgba(232, 105, 58, 0.7);
+  cursor: grab;
+}
+
+.gf-pin { display: flex; align-items: center; justify-content: center; }
+.gf-pin svg { filter: drop-shadow(0 5px 7px rgba(40, 28, 18, 0.4)); }
+
+.leaflet-container {
+  font-family: var(--font-hanken-grotesk), system-ui, sans-serif;
+  background: #e9eef0;
+}
+.leaflet-control-zoom a {
+  border-radius: 8px !important;
+  color: var(--ink) !important;
+}
+.leaflet-bar {
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 4px 12px -6px rgba(33, 26, 21, 0.4) !important;
+}
