@@ -14,6 +14,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   rank: z.coerce.number().int().min(0).max(9999).optional(),
   description: z.string().max(500).nullable().optional(),
+  defaultLeaveWorkflowId: z.string().cuid().nullable().optional(),
 });
 
 export async function GET(
@@ -28,7 +29,10 @@ export async function GET(
   const row = await withTenant(auth.tenantId, (tx) =>
     tx.jobLevel.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
-      include: { _count: { select: { employees: { where: { deletedAt: null } } } } },
+      include: {
+        defaultLeaveWorkflow: { select: { id: true, code: true, description: true } },
+        _count: { select: { employees: { where: { deletedAt: null } } } },
+      },
     })
   );
 

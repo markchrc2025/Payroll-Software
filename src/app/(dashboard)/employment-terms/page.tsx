@@ -53,12 +53,12 @@ type Employee = { id: string; employeeNumber: string; firstName: string; lastNam
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
+type WorkflowRef = { id: string; code: string; description: string | null };
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const WORKFLOWS = ["DEFAULT", "Executive", "Field Staff"];
 const HOLIDAYS  = ["DEFAULT", "NCR", "Regional"];
 
 const EMPTY_FORM = {
@@ -82,6 +82,7 @@ export default function EmploymentTermsPage() {
   const [shiftSchedules, setShiftSchedules] = useState<ShiftSchedule[]>([]);
   const [jobTypes, setJobTypes] = useState<JobTypeRef[]>([]);
   const [jobStatuses, setJobStatuses] = useState<JobStatusRef[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowRef[]>([]);
 
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [records,  setRecords]  = useState<TermRecord[]>([]);
@@ -99,19 +100,21 @@ export default function EmploymentTermsPage() {
   // ---------------------------------------------------------------------------
 
   const loadRefData = useCallback(async () => {
-    const [empRes, shiftRes, jtRes, jsRes] = await Promise.all([
+    const [empRes, shiftRes, jtRes, jsRes, wfRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/shifts?limit=200&isActive=true"),
       fetch("/api/job-types"),
       fetch("/api/job-statuses"),
+      fetch("/api/leave-workflows?limit=100"),
     ]);
-    const [empJson, shiftJson, jtJson, jsJson] = await Promise.all([
-      empRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(),
+    const [empJson, shiftJson, jtJson, jsJson, wfJson] = await Promise.all([
+      empRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(), wfRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setShiftSchedules(shiftJson.data ?? []);
     setJobTypes(jtJson.data ?? []);
     setJobStatuses(jsJson.data ?? []);
+    setWorkflows(wfJson.data ?? []);
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -398,7 +401,7 @@ export default function EmploymentTermsPage() {
 
             {refSelectField("Job Type",   "jobTypeId",   jobTypes)}
             {refSelectField("Job Status", "jobStatusId", jobStatuses)}
-            {selectField("Leave Workflow",   "leaveWorkflowKey", WORKFLOWS)}
+            {selectField("Leave Workflow",   "leaveWorkflowKey", workflows.map((w) => w.code))}
             <div className="space-y-1.5">
               <Label>Shift Schedule</Label>
               <Select
