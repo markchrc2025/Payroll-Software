@@ -611,6 +611,7 @@ model Tenant {
 
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
   owner              User?     @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  orgRoles           OrgRole[]
 
   // Billing
   subscription TenantSubscription?
@@ -838,13 +839,14 @@ model Department {
   tenantId    String
   name        String
   description String?
-  managerId   String?
+  headId      String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  head        Employee?  @relation("DepartmentHead", fields: [headId], references: [id])
   employees   Employee[]
   positions   Position[]
   jobPostings JobPosting[]
@@ -852,6 +854,7 @@ model Department {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([headId])
   @@index([deletedAt])
 }
 
@@ -929,6 +932,26 @@ model JobLevel {
   @@unique([tenantId, name])
   @@index([tenantId])
   @@index([deletedAt])
+}
+
+// Org-wide singleton role assignments (hr_manager, ceo).
+// Per-employee roles (supervisor, line_manager) live on Employee directly.
+// Department head lives on Department.headId.
+model OrgRole {
+  id         String   @id @default(cuid())
+  tenantId   String
+  roleKey    String
+  employeeId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation("OrgRoleEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, roleKey])
+  @@index([tenantId])
+  @@index([employeeId])
 }
 
 model JobType {
@@ -1143,6 +1166,9 @@ model Employee {
   supervisorOf        Employee[] @relation("EmployeeSupervisor")
   manager             Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
   managerOf           Employee[] @relation("EmployeeManager")
+
+  headOfDepartments   Department[] @relation("DepartmentHead")
+  orgRoles            OrgRole[]    @relation("OrgRoleEmployee")
 
   statutoryIds            StatutoryId[]
   salaryHistory           EmployeeSalary[]
