@@ -11,7 +11,6 @@ import { z } from "zod";
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(150),
-  rank: z.coerce.number().int().min(0).optional().default(0),
   description: z.string().max(500).optional().nullable(),
 });
 
@@ -22,11 +21,10 @@ export async function GET(req: NextRequest) {
   const jobStatuses = await withTenant(auth.tenantId, (tx) =>
     tx.jobStatus.findMany({
       where: { tenantId: auth.tenantId, deletedAt: null },
-      orderBy: [{ rank: "asc" }, { name: "asc" }],
+      orderBy: { name: "asc" },
       select: {
         id: true,
         name: true,
-        rank: true,
         description: true,
         _count: {
           select: {
