@@ -2,17 +2,19 @@
 
 /**
  * GeofenceMapPicker
- * Interactive OpenStreetMap (Leaflet) component.
- *  - Click anywhere on the map to drop/move the pin
- *  - Drag the marker to fine-tune position
- *  - The blue circle visualises the enforcement radius in real time
- *  - No Google Maps API key required
+ * Interactive map (Leaflet + CARTO Voyager tiles) for the Configure Geofence modal.
+ *  - Click anywhere on the map to drop / move the pin
+ *  - Drag the custom teardrop marker to fine-tune (live updates while dragging)
+ *  - The accent circle visualises the enforcement radius in real time
+ *  - `recenterToken` re-frames the map around the circle (Center-on-pin / preset fit)
+ *  - Fills its (positioned) parent absolutely; the parent controls the size
  *
  * Must be loaded with `dynamic(..., { ssr: false })` because Leaflet
  * depends on `window` / `document`.
  */
 
 import { useEffect, useRef } from "react";
+import type { Map as LeafletMap, Marker, Circle, LeafletMouseEvent } from "leaflet";
 
 interface Props {
   /** Current latitude, or null when not yet set */
@@ -21,32 +23,56 @@ interface Props {
   lng: number | null;
   /** Enforcement radius in metres */
   radius: number;
-  /** Called whenever the pin or radius changes */
+  /** Called whenever the pin moves (radius is echoed back unchanged) */
   onChange: (lat: number, lng: number, radius: number) => void;
+  /**
+   * Increment this to re-frame the map around the current circle
+   * (used by the "Center on pin" button and the radius presets).
+   */
+  recenterToken?: number;
 }
 
 // Geographic centre of the Philippines — used as the default view
 const PH_CENTER: [number, number] = [12.8797, 121.774];
+const ACC = "#E8693A";
 
-export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props) {
+export default function GeofenceMapPicker({
+  lat,
+  lng,
+  radius,
+  onChange,
+  recenterToken = 0,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Keep mutable refs so Leaflet event handlers always see fresh values
   // without needing to re-register them.
   const radiusRef = useRef(radius);
   const onChangeRef = useRef(onChange);
-  const markerRef = useRef<any>(null);
-  const circleRef = useRef<any>(null);
-  const mapRef = useRef<any>(null);
+  const markerRef = useRef<Marker | null>(null);
+  const circleRef = useRef<Circle | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => { radiusRef.current = radius; }, [radius]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
-  // Update circle visuals when the radius slider changes externally
+  // Update the circle when the radius slider/presets change externally.
+  // (Declared before the recenter effect so a preset click resizes the
+  // circle *before* the map re-frames to its new bounds.)
   useEffect(() => {
     circleRef.current?.setRadius(radius);
   }, [radius]);
+
+  // Re-frame the map around the circle when recenter / preset requests it.
+  useEffect(() => {
+    if (!recenterToken) return;
+    const map = mapRef.current;
+    const circle = circleRef.current;
+    if (map && circle) {
+      map.fitBounds(circle.getBounds().pad(0.4), { animate: true, maxZoom: 17 });
+    }
+  }, [recenterToken]);
 
   // Initialise the Leaflet map exactly once per mount
   useEffect(() => {
@@ -62,33 +88,45 @@ export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props)
       document.head.appendChild(link);
     }
 
+    let resizeObserver: ResizeObserver | null = null;
+    let onWinResize: (() => void) | null = null;
+    const timers: number[] = [];
+
     (async () => {
       const L = (await import("leaflet")).default;
-
-      // Fix webpack/Next.js asset-path issue with default Leaflet icons
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
 
       const center: [number, number] =
         lat != null && lng != null ? [lat, lng] : PH_CENTER;
 
       const map = L.map(containerRef.current!, {
         center,
-        zoom: lat != null ? 16 : 6,
+        zoom: lat != null ? 15 : 6,
         zoomControl: true,
+        attributionControl: true,
       });
       mapRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(map);
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        {
+          attribution: "&copy; OpenStreetMap &copy; CARTO",
+          subdomains: "abcd",
+          maxZoom: 20,
+        },
+      ).addTo(map);
+
+      // Custom teardrop pin (accent fill, white stroke + centre dot)
+      const pinIcon = L.divIcon({
+        className: "gf-pin",
+        html:
+          '<svg width="34" height="42" viewBox="0 0 34 42" fill="none">' +
+          '<path d="M17 41C17 41 32 26 32 16A15 15 0 0 0 2 16C2 26 17 41 17 41Z" fill="' +
+          ACC +
+          '" stroke="#fff" stroke-width="2.5"/>' +
+          '<circle cx="17" cy="16" r="5.5" fill="#fff"/></svg>',
+        iconSize: [34, 42],
+        iconAnchor: [17, 41],
+      });
 
       /** Place or move the pin to the given coordinates */
       function placePinAt(newLat: number, newLng: number) {
@@ -97,24 +135,30 @@ export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props)
         if (markerRef.current) {
           // Move existing pin & circle
           markerRef.current.setLatLng([newLat, newLng]);
-          circleRef.current.setLatLng([newLat, newLng]);
+          circleRef.current!.setLatLng([newLat, newLng]);
         } else {
           // First-time: create the draggable marker and circle
-          const marker = L.marker([newLat, newLng], { draggable: true }).addTo(map);
+          const marker = L.marker([newLat, newLng], {
+            draggable: true,
+            icon: pinIcon,
+            autoPan: true,
+          }).addTo(map);
           const circle = L.circle([newLat, newLng], {
             radius: r,
-            color: "#0284c7",
-            fillColor: "#0284c7",
-            fillOpacity: 0.15,
+            color: ACC,
+            fillColor: ACC,
+            fillOpacity: 0.14,
             weight: 2,
           }).addTo(map);
 
-          marker.bindPopup("Drag to fine-tune the location").openPopup();
-
-          marker.on("dragend", () => {
+          // Live updates while dragging; pan to keep the pin in view on release.
+          marker.on("drag", () => {
             const pos = marker.getLatLng();
             circle.setLatLng(pos);
             onChangeRef.current(pos.lat, pos.lng, radiusRef.current);
+          });
+          marker.on("dragend", () => {
+            map.panTo(marker.getLatLng(), { animate: true });
           });
 
           markerRef.current = marker;
@@ -130,12 +174,28 @@ export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props)
       }
 
       // Click-to-place / click-to-move
-      map.on("click", (e: any) => {
+      map.on("click", (e: LeafletMouseEvent) => {
         placePinAt(e.latlng.lat, e.latlng.lng);
       });
+
+      // Leaflet initialises inside a flex/dialog container — force a resize
+      // once the modal has laid out (and again after the open animation).
+      timers.push(window.setTimeout(() => map.invalidateSize(), 250));
+      timers.push(window.setTimeout(() => map.invalidateSize(), 600));
+
+      onWinResize = () => map.invalidateSize();
+      window.addEventListener("resize", onWinResize);
+
+      if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+        resizeObserver = new ResizeObserver(() => map.invalidateSize());
+        resizeObserver.observe(containerRef.current);
+      }
     })();
 
     return () => {
+      timers.forEach((t) => clearTimeout(t));
+      if (onWinResize) window.removeEventListener("resize", onWinResize);
+      resizeObserver?.disconnect();
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -145,11 +205,5 @@ export default function GeofenceMapPicker({ lat, lng, radius, onChange }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div
-      ref={containerRef}
-      className="w-full rounded-lg overflow-hidden border border-border"
-      style={{ height: 300, zIndex: 0 }}
-    />
-  );
+  return <div ref={containerRef} className="absolute inset-0" style={{ zIndex: 0 }} />;
 }
