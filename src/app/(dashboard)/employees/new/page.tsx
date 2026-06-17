@@ -1,8 +1,9 @@
 /**
  * /employees/new — Add Employee wizard page (Server Component)
  *
- * Pre-fetches departments, branches, and positions on the server,
- * then renders the 9-step AddEmployeeWizard client component.
+ * Pre-fetches departments, branches, positions, levels, shift schedules,
+ * job types, job statuses, workflows, and existing employees (for the
+ * supervisor / manager pickers) on the server.
  */
 
 import { AddEmployeeWizard } from "@/components/employees/AddEmployeeWizard";
@@ -18,57 +19,35 @@ async function authHeaders(): Promise<HeadersInit> {
   return { Cookie: cookieHeader };
 }
 
-async function getDepartments(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/departments`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
-async function getBranches(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/branches`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
-async function getPositions(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/positions`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
-async function getShiftSchedules(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/shifts?limit=200&isActive=true`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
-async function getJobTypes(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/job-types`, { cache: "no-store", headers });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
-
-async function getJobStatuses(headers: HeadersInit) {
-  const res = await fetch(`${BASE}/api/job-statuses`, { cache: "no-store", headers });
-  if (!res.ok) return [];
+async function get<T = unknown[]>(url: string, headers: HeadersInit): Promise<T> {
+  const res = await fetch(`${BASE}${url}`, { cache: "no-store", headers });
+  if (!res.ok) return [] as unknown as T;
   const json = await res.json();
   return json.data ?? [];
 }
 
 export default async function NewEmployeePage() {
   const headers = await authHeaders();
-  const [departments, branches, positions, shiftSchedules, jobTypes, jobStatuses] = await Promise.all([
-    getDepartments(headers),
-    getBranches(headers),
-    getPositions(headers),
-    getShiftSchedules(headers),
-    getJobTypes(headers),
-    getJobStatuses(headers),
+  const [
+    departments,
+    branches,
+    positions,
+    shiftSchedules,
+    jobTypes,
+    jobStatuses,
+    levels,
+    workflows,
+    employees,
+  ] = await Promise.all([
+    get("/api/departments", headers),
+    get("/api/branches", headers),
+    get("/api/positions", headers),
+    get("/api/shifts?limit=200&isActive=true", headers),
+    get("/api/job-types", headers),
+    get("/api/job-statuses", headers),
+    get("/api/job-levels", headers),
+    get("/api/leave-workflows?limit=100", headers),
+    get("/api/employees?limit=500", headers),
   ]);
 
   return (
@@ -86,12 +65,15 @@ export default async function NewEmployeePage() {
       </div>
 
       <AddEmployeeWizard
-        departments={departments}
-        branches={branches}
-        positions={positions}
-        shiftSchedules={shiftSchedules}
-        jobTypes={jobTypes}
-        jobStatuses={jobStatuses}
+        departments={departments as { id: string; name: string }[]}
+        branches={branches as { id: string; name: string }[]}
+        positions={positions as { id: string; title: string; departmentId: string | null }[]}
+        shiftSchedules={shiftSchedules as { id: string; name: string }[]}
+        jobTypes={jobTypes as { id: string; name: string }[]}
+        jobStatuses={jobStatuses as { id: string; name: string }[]}
+        levels={levels as { id: string; name: string; rank: number }[]}
+        workflows={workflows as { id: string; code: string; description: string | null }[]}
+        employees={employees as { id: string; firstName: string; lastName: string; employeeNumber: string }[]}
       />
     </div>
   );
