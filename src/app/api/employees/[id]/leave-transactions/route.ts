@@ -16,6 +16,8 @@ import {
   listLeaveTransactionsSchema,
 } from "@/lib/validations/leave";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
+import { resolveEffectiveWorkflow } from "@/lib/leave/resolve-workflow";
+import { resolveChain } from "@/lib/leave/resolve-approvers";
 
 export async function GET(
   req: NextRequest,
@@ -95,7 +97,15 @@ export async function POST(
     });
     if (!balance) return "no_balance" as const;
 
-    return tx.leaveTransaction.create({
+    // Resolve approver chain from the effective workflow.
+    const workflow = await resolveEffectiveWorkflow(employeeId, auth.tenantId, tx);
+    const slots = workflow
+      ? await resolveChain(employeeId, auth.tenantId, workflow.approverKeys, tx)
+      : [];
+
+    const hasActiveSteps = slots.some((s) => s !== null);
+
+    const leaveTransaction = await tx.leaveTransaction.create({
       data: {
         tenantId: auth.tenantId,
         employeeId,
@@ -106,10 +116,50 @@ export async function POST(
         startDate,
         endDate,
         reason: reason ?? null,
-        approvalStatus: "PENDING",
+        approvalStatus: hasActiveSteps ? "PENDING" : "APPROVED",
         createdByUserId: auth.userId,
+        currentStepIndex: 0,
       },
     });
+
+    // If no workflow or all slots are null (no resolvable approvers), auto-approve
+    // and debit balance immediately.
+    if (!hasActiveSteps) {
+      await tx.leaveBalance.update({
+        where: { id: balance.id },
+        data: { used: { increment: amount } },
+      });
+      return leaveTransaction;
+    }
+
+    // Snapshot one LeaveApproval row per resolvable step (null = unresolvable → omit).
+    const activeSlots = slots.flatMap((slot, index) =>
+      slot === null
+        ? []
+        : [
+            {
+              id: crypto.randomUUID().replace(/-/g, ""),
+              tenantId: auth.tenantId,
+              leaveTransactionId: leaveTransaction.id,
+              stepIndex: index,
+              roleKey: slot.roleKey,
+              approverEmployeeId: slot.approverEmployeeId,
+              status: "PENDING" as const,
+              updatedAt: new Date(),
+            },
+          ],
+    );
+
+    if (activeSlots.length > 0) {
+      await tx.leaveApproval.createMany({ data: activeSlots });
+      // Set currentStepIndex to the first active step.
+      await tx.leaveTransaction.update({
+        where: { id: leaveTransaction.id },
+        data: { currentStepIndex: activeSlots[0].stepIndex },
+      });
+    }
+
+    return leaveTransaction;
   });
 
   if (result === "no_employee") return notFound("Employee");

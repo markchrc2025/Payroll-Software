@@ -140,6 +140,13 @@ enum ApprovalStatus {
   FOR_REVIEW
 }
 
+enum LeaveApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
 enum MovementType {
   DEPARTMENT_TRANSFER
   BRANCH_TRANSFER
@@ -612,6 +619,7 @@ model Tenant {
   defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
   owner              User?     @relation("TenantOwner", fields: [ownerUserId], references: [id])
   orgRoles           OrgRole[]
+  leaveApprovals     LeaveApproval[]
 
   // Billing
   subscription TenantSubscription?
@@ -1167,8 +1175,9 @@ model Employee {
   manager             Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
   managerOf           Employee[] @relation("EmployeeManager")
 
-  headOfDepartments   Department[] @relation("DepartmentHead")
-  orgRoles            OrgRole[]    @relation("OrgRoleEmployee")
+  headOfDepartments   Department[]    @relation("DepartmentHead")
+  orgRoles            OrgRole[]       @relation("OrgRoleEmployee")
+  leaveApprovals      LeaveApproval[] @relation("LeaveApprovalApprover")
 
   statutoryIds            StatutoryId[]
   salaryHistory           EmployeeSalary[]
@@ -1637,6 +1646,28 @@ model LeaveWorkflow {
   @@index([deletedAt])
 }
 
+model LeaveApproval {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  leaveTransactionId String
+  stepIndex          Int
+  roleKey            String
+  approverEmployeeId String
+  status             LeaveApprovalStatus @default(PENDING)
+  actedByUserId      String?
+  actedAt            DateTime?
+  note               String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  leaveTransaction LeaveTransaction @relation(fields: [leaveTransactionId], references: [id], onDelete: Cascade)
+  approver         Employee         @relation("LeaveApprovalApprover", fields: [approverEmployeeId], references: [id])
+
+  @@index([tenantId, leaveTransactionId])
+  @@index([approverEmployeeId, status])
+}
+
 model LeaveBalance {
   id          String @id @default(cuid())
   tenantId    String
@@ -1680,12 +1711,15 @@ model LeaveTransaction {
   approvedAt       DateTime?
   rejectionReason  String?
 
+  currentStepIndex Int @default(0)
+
   createdByUserId String?
   createdAt       DateTime @default(now())
 
-  tenant    Tenant    @relation(fields: [tenantId], references: [id])
-  employee  Employee  @relation(fields: [employeeId], references: [id])
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  employee       Employee        @relation(fields: [employeeId], references: [id])
+  leaveType      LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  leaveApprovals LeaveApproval[]
 
   @@index([tenantId])
   @@index([employeeId, leaveTypeId])
