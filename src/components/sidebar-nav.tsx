@@ -200,6 +200,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings", label: "Company Info", icon: "policies" },
       { href: "/positions", label: "Positions", icon: "positions" },
       { href: "/departments", label: "Departments", icon: "departments" },
+      { href: "/org-chart", label: "Org Chart", icon: "branches" },
       { href: "/branches", label: "Branches", icon: "branches" },
       { href: "/work-locations", label: "Locations", icon: "locations" },
       { href: "/assets", label: "Assets", icon: "assets" },
