@@ -23,21 +23,34 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type WorkflowSummary = { id: string; code: string; description: string | null };
 
 type JobLevel = {
   id: string;
   name: string;
   rank: number;
   description: string | null;
+  defaultLeaveWorkflowId: string | null;
+  defaultLeaveWorkflow: WorkflowSummary | null;
   _count: { employees: number };
 };
 
-const EMPTY_FORM = { name: "", rank: "0", description: "" };
+const NONE = "__none__";
+const EMPTY_FORM = { name: "", rank: "0", description: "", defaultLeaveWorkflowId: NONE };
 
 export default function LevelsPage() {
   const [levels, setLevels] = useState<JobLevel[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<JobLevel | null>(null);
@@ -53,7 +66,13 @@ export default function LevelsPage() {
     setIsLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadWorkflows() {
+    const res = await fetch("/api/leave-workflows?limit=100");
+    const json = await res.json();
+    setWorkflows(json.data ?? []);
+  }
+
+  useEffect(() => { load(); loadWorkflows(); }, []);
 
   function openAdd() {
     setEditing(null);
@@ -64,7 +83,12 @@ export default function LevelsPage() {
 
   function openEdit(level: JobLevel) {
     setEditing(level);
-    setForm({ name: level.name, rank: String(level.rank), description: level.description ?? "" });
+    setForm({
+      name: level.name,
+      rank: String(level.rank),
+      description: level.description ?? "",
+      defaultLeaveWorkflowId: level.defaultLeaveWorkflowId ?? NONE,
+    });
     setSheetOpen(true);
     setTimeout(() => nameRef.current?.focus(), 50);
   }
@@ -83,6 +107,8 @@ export default function LevelsPage() {
           name: form.name.trim(),
           rank: Number(form.rank) || 0,
           description: form.description.trim() || null,
+          defaultLeaveWorkflowId:
+            form.defaultLeaveWorkflowId === NONE ? null : form.defaultLeaveWorkflowId,
         }),
       });
       const json = await res.json();
@@ -137,6 +163,7 @@ export default function LevelsPage() {
               <TableHead className="w-20 text-center">Rank</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Default Workflow</TableHead>
               <TableHead className="text-center">Employees</TableHead>
               <TableHead className="w-24" />
             </TableRow>
@@ -148,13 +175,14 @@ export default function LevelsPage() {
                   <TableCell className="text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                   <TableCell className="text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
                   <TableCell />
                 </TableRow>
               ))
             ) : levels.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                   <Layers className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No levels yet. Add one to get started.
                 </TableCell>
@@ -166,6 +194,15 @@ export default function LevelsPage() {
                   <TableCell className="font-medium">{level.name}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {level.description ?? <span className="italic opacity-40">—</span>}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {level.defaultLeaveWorkflow ? (
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {level.defaultLeaveWorkflow.code}
+                      </Badge>
+                    ) : (
+                      <span className="italic opacity-40">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary">{level._count.employees}</Badge>
@@ -247,9 +284,37 @@ export default function LevelsPage() {
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Optional description…"
-                rows={4}
+                rows={3}
                 maxLength={500}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="level-workflow">Default Leave Workflow</Label>
+              <Select
+                value={form.defaultLeaveWorkflowId}
+                onValueChange={(v) => setForm((f) => ({ ...f, defaultLeaveWorkflowId: v ?? NONE }))}
+              >
+                <SelectTrigger id="level-workflow">
+                  <SelectValue placeholder="Inherit from tenant default…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>
+                    <span className="italic text-muted-foreground">— Use tenant default —</span>
+                  </SelectItem>
+                  {workflows.map((wf) => (
+                    <SelectItem key={wf.id} value={wf.id}>
+                      <span className="font-mono">{wf.code}</span>
+                      {wf.description && (
+                        <span className="ml-2 text-muted-foreground text-xs">{wf.description}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Employees at this level use this workflow when no EmploymentTerm override is set.
+              </p>
             </div>
 
             <SheetFooter>

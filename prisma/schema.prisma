@@ -927,19 +927,23 @@ model JobLevel {
   rank        Int     @default(0)
   description String?
 
+  defaultLeaveWorkflowId String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant    Tenant             @relation(fields: [tenantId], references: [id])
-  employees Employee[]
-  placements Placement[]
-  movementsTo   EmployeeMovement[] @relation("MovementToLevel")
-  movementsFrom EmployeeMovement[] @relation("MovementFromLevel")
+  tenant               Tenant             @relation(fields: [tenantId], references: [id])
+  employees            Employee[]
+  placements           Placement[]
+  movementsTo          EmployeeMovement[] @relation("MovementToLevel")
+  movementsFrom        EmployeeMovement[] @relation("MovementFromLevel")
+  defaultLeaveWorkflow LeaveWorkflow?     @relation("LevelDefaultWorkflow", fields: [defaultLeaveWorkflowId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@index([deletedAt])
+  @@index([defaultLeaveWorkflowId])
 }
 
 // Org-wide singleton role assignments (hr_manager, ceo).
@@ -1639,7 +1643,8 @@ model LeaveWorkflow {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant           Tenant     @relation(fields: [tenantId], references: [id])
+  defaultForLevels JobLevel[] @relation("LevelDefaultWorkflow")
 
   @@unique([tenantId, code])
   @@index([tenantId])

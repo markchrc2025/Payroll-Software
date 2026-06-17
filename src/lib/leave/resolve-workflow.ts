@@ -21,26 +21,66 @@ export async function resolveEffectiveWorkflow(
   tenantId: string,
   tx: TenantTx,
 ): Promise<WorkflowSnapshot | null> {
-  // Step 1: check most-recent EmploymentTerm with a leaveWorkflowKey
+  // Step 1: EmploymentTerm key (most recent that has one).
   const latestTerm = await tx.employmentTerm.findFirst({
     where: { employeeId, tenantId, leaveWorkflowKey: { not: null } },
     orderBy: { effectiveDate: "desc" },
     select: { leaveWorkflowKey: true },
   });
 
-  const workflowCode = latestTerm?.leaveWorkflowKey ?? "DEFAULT";
+  if (latestTerm?.leaveWorkflowKey) {
+    return lookupWorkflowByCode(latestTerm.leaveWorkflowKey, tenantId, tx);
+  }
 
-  const workflow = await tx.leaveWorkflow.findFirst({
-    where: { tenantId, code: workflowCode, deletedAt: null, isActive: true },
-    select: { id: true, code: true, approvers: true },
+  // Step 2: Level default workflow.
+  const emp = await tx.employee.findFirst({
+    where: { id: employeeId, tenantId },
+    select: {
+      level: {
+        select: { defaultLeaveWorkflowId: true },
+      },
+    },
   });
 
-  if (!workflow) return null;
+  if (emp?.level?.defaultLeaveWorkflowId) {
+    const wf = await tx.leaveWorkflow.findFirst({
+      where: {
+        id: emp.level.defaultLeaveWorkflowId,
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+      },
+      select: { id: true, code: true, approvers: true },
+    });
+    if (wf) return toSnapshot(wf);
+  }
 
-  const approverKeys = (workflow.approvers as string[]).filter(
+  // Step 3: Tenant DEFAULT workflow.
+  const workflowCode = "DEFAULT";
+
+  return lookupWorkflowByCode(workflowCode, tenantId, tx);
+}
+
+async function lookupWorkflowByCode(
+  code: string,
+  tenantId: string,
+  tx: TenantTx,
+): Promise<WorkflowSnapshot | null> {
+  const wf = await tx.leaveWorkflow.findFirst({
+    where: { tenantId, code, deletedAt: null, isActive: true },
+    select: { id: true, code: true, approvers: true },
+  });
+  return wf ? toSnapshot(wf) : null;
+}
+
+function toSnapshot(wf: {
+  id: string;
+  code: string;
+  approvers: unknown;
+}): WorkflowSnapshot {
+  const approverKeys = (wf.approvers as string[]).filter(
     (k): k is RoleKey =>
       ["supervisor", "line_manager", "dept_head", "hr_manager", "ceo"].includes(k),
   );
-
-  return { workflowId: workflow.id, code: workflow.code, approverKeys };
+  return { workflowId: wf.id, code: wf.code, approverKeys };
 }
