@@ -771,7 +771,7 @@ export default function LeaveWorkflowPage() {
     setLoading(true);
     const res  = await fetch("/api/leave-workflows");
     const json = await res.json();
-    setTemplates(json ?? []);
+    setTemplates(json.data ?? []);
     setLoading(false);
   }, []);
 
@@ -789,8 +789,8 @@ export default function LeaveWorkflowPage() {
     });
     const json = await res.json();
     if (!res.ok) { toast.error(json.error ?? "Failed to create"); return; }
-    setTemplates((prev) => [...prev, json]);
-    setView({ mode: "detail", id: json.id });
+    setTemplates((prev) => [...prev, json.data]);
+    setView({ mode: "detail", id: json.data.id });
   }
 
   async function saveTemplate(draft: LeaveWorkflow) {
@@ -808,7 +808,7 @@ export default function LeaveWorkflowPage() {
     });
     const json = await res.json();
     if (!res.ok) { toast.error(json.error ?? "Failed to save"); throw new Error(json.error); }
-    setTemplates((prev) => prev.map((t) => (t.id === json.id ? json : t)));
+    setTemplates((prev) => prev.map((t) => (t.id === json.data.id ? json.data : t)));
     toast.success("Workflow saved");
   }
 
