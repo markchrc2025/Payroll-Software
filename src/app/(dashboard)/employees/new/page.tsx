@@ -53,14 +53,22 @@ async function getJobTypes(headers: HeadersInit) {
   return json.data ?? [];
 }
 
+async function getJobStatuses(headers: HeadersInit) {
+  const res = await fetch(`${BASE}/api/job-statuses`, { cache: "no-store", headers });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
+}
+
 export default async function NewEmployeePage() {
   const headers = await authHeaders();
-  const [departments, branches, positions, shiftSchedules, jobTypes] = await Promise.all([
+  const [departments, branches, positions, shiftSchedules, jobTypes, jobStatuses] = await Promise.all([
     getDepartments(headers),
     getBranches(headers),
     getPositions(headers),
     getShiftSchedules(headers),
     getJobTypes(headers),
+    getJobStatuses(headers),
   ]);
 
   return (
@@ -83,6 +91,7 @@ export default async function NewEmployeePage() {
         positions={positions}
         shiftSchedules={shiftSchedules}
         jobTypes={jobTypes}
+        jobStatuses={jobStatuses}
       />
     </div>
   );

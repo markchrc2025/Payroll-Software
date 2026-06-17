@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     levelId,
     termEffectiveDate,
     jobTypeId,
-    jobDescription,
+    jobStatusId,
     leaveWorkflowKey,
     shiftScheduleId,
     holidayKey,
@@ -179,6 +179,12 @@ export async function POST(req: NextRequest) {
       });
       if (!sched) return { error: "Shift schedule not found in your tenant" as const };
     }
+    if (jobStatusId) {
+      const status = await tx.jobStatus.findFirst({
+        where: { id: jobStatusId, tenantId: auth.tenantId, deletedAt: null },
+      });
+      if (!status) return { error: "Job status not found in your tenant" as const };
+    }
 
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
@@ -202,7 +208,7 @@ export async function POST(req: NextRequest) {
         levelId:                levelId                ?? null,
         termEffectiveDate:      termEffectiveDate      ?? null,
         jobTypeId:              jobTypeId              ?? null,
-        jobDescription:         jobDescription         ?? null,
+        jobStatusId:            jobStatusId            ?? null,
         leaveWorkflowKey:       leaveWorkflowKey       ?? null,
         shiftScheduleId:        shiftScheduleId        ?? null,
         holidayKey:             holidayKey             ?? null,
@@ -248,6 +254,7 @@ export async function POST(req: NextRequest) {
         employeeId:       emp.id,
         effectiveDate:    termDate,
         jobTypeId:        jobTypeId        ?? null,
+        jobStatusId:      jobStatusId      ?? null,
         leaveWorkflowKey: leaveWorkflowKey ?? null,
         shiftScheduleId:  shiftScheduleId  ?? null,
         holidayKey:       holidayKey       ?? null,
