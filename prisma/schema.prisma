@@ -957,6 +957,7 @@ model JobStatus {
   updatedAt   DateTime  @updatedAt
 
   tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  employees       Employee[]
   employmentTerms EmploymentTerm[]
   toMovements     EmployeeMovement[] @relation("MovementToJobStatus")
 
@@ -1054,7 +1055,7 @@ model Employee {
   probationEndDate      DateTime?
   placementEffectiveDate DateTime?
   jobTypeId             String?
-  jobDescription        String?
+  jobStatusId           String?
   leaveWorkflowKey      String?
   shiftScheduleId       String?
   holidayKey            String?
@@ -1129,6 +1130,7 @@ model Employee {
   position   Position?   @relation(fields: [positionId], references: [id])
   level      JobLevel?   @relation(fields: [levelId], references: [id])
   jobType    JobType?    @relation(fields: [jobTypeId], references: [id])
+  jobStatus  JobStatus?  @relation(fields: [jobStatusId], references: [id])
   shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
 
   immediateSupervisor Employee?  @relation("EmployeeSupervisor", fields: [immediateSupervisorId], references: [id])
@@ -1178,6 +1180,7 @@ model Employee {
   @@index([positionId])
   @@index([levelId])
   @@index([jobTypeId])
+  @@index([jobStatusId])
   @@index([immediateSupervisorId])
   @@index([managerId])
   @@index([deletedAt])
