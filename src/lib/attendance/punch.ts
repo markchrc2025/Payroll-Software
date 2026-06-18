@@ -53,7 +53,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     // 1. Verify employee exists
     const employee = await tx.employee.findFirst({
       where: { id: input.employeeId, tenantId: input.tenantId, deletedAt: null },
-      select: { id: true, branchId: true },
+      select: { id: true, branchId: true, shiftScheduleId: true },
     });
     if (!employee) return { ok: false, code: "EMPLOYEE_NOT_FOUND" };
 
@@ -123,7 +123,20 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       select: { id: true, outsideGeofence: true, distanceMeters: true },
     });
 
-    // 5. Find the employee's active shift for the punch date
+    // 5. Find the employee's active shift for the punch date.
+    //    Priority: (1) EmployeeShiftAssignment (effective-dated) → (2) Employee.shiftScheduleId fallback.
+    const SHIFT_SELECT = {
+      id:                  true,
+      timeIn:              true,
+      timeOut:             true,
+      requiredHours:       true,
+      gracePeriodMinutes:  true,
+      breakMinutes:        true,
+      breakPolicy:         true,
+      crossesMidnight:     true,
+      otThresholdMinutes:  true,
+    } as const;
+
     const shiftAssignment = await tx.employeeShiftAssignment.findFirst({
       where: {
         tenantId:     input.tenantId,
@@ -135,20 +148,18 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         ],
       },
       orderBy: { effectiveFrom: "desc" },
-      select: {
-        shiftSchedule: {
-          select: {
-            id:             true,
-            timeIn:         true,
-            timeOut:        true,
-            breakMinutes:   true,
-            breakPolicy:    true,
-            crossesMidnight: true,
-          },
-        },
-      },
+      select: { shiftSchedule: { select: SHIFT_SELECT } },
     });
-    const shift = shiftAssignment?.shiftSchedule ?? null;
+
+    let shift = shiftAssignment?.shiftSchedule ?? null;
+
+    // Fallback: no EmployeeShiftAssignment found — use Employee.shiftScheduleId directly.
+    if (!shift && employee.shiftScheduleId) {
+      shift = await tx.shiftSchedule.findFirst({
+        where: { id: employee.shiftScheduleId, deletedAt: null },
+        select: SHIFT_SELECT,
+      });
+    }
 
     // 6. Load all punches for this employee on this calendar date
     const dayStart = new Date(punchDate);
@@ -168,10 +179,18 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         punchType: p.punchType as PunchType,
         punchedAt: p.punchedAt,
       })),
-      shift ? {
-        ...shift,
-        breakPolicy: (shift.breakPolicy ?? "FIXED_DEDUCTION") as "FIXED_DEDUCTION" | "TRACK_ACTUAL",
-      } : null,
+      shift
+        ? {
+            timeIn:             shift.timeIn             ?? null,
+            timeOut:            shift.timeOut            ?? null,
+            requiredHours:      shift.requiredHours      ?? null,
+            gracePeriodMinutes: shift.gracePeriodMinutes ?? 0,
+            breakMinutes:       shift.breakMinutes       ?? 60,
+            breakPolicy:        (shift.breakPolicy ?? "FIXED_DEDUCTION") as "FIXED_DEDUCTION" | "TRACK_ACTUAL",
+            crossesMidnight:    shift.crossesMidnight    ?? false,
+            otThresholdMinutes: shift.otThresholdMinutes ?? null,
+          }
+        : null,
     );
 
     // 7. Upsert DTRRecord — skip if locked (payroll finalized)
@@ -183,7 +202,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
           date:       punchDate,
         },
       },
-      select: { id: true, isLocked: true },
+      select: { id: true, isLocked: true, otMinutes: true },
     });
 
     if (existingDtr?.isLocked) {
@@ -191,15 +210,16 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     }
 
     const dtrData: Prisma.DTRRecordCreateInput = {
-      tenant:          { connect: { id: input.tenantId } },
-      employee:        { connect: { id: input.employeeId } },
-      date:            punchDate,
-      shiftSchedule:   shift ? { connect: { id: shift.id } } : undefined,
-      dayStatus:       computed.dayStatus,
-      workedMinutes:   computed.workedMinutes,
-      lateMinutes:     computed.lateMinutes,
+      tenant:           { connect: { id: input.tenantId } },
+      employee:         { connect: { id: input.employeeId } },
+      date:             punchDate,
+      shiftSchedule:    shift ? { connect: { id: shift.id } } : undefined,
+      dayStatus:        computed.dayStatus,
+      workedMinutes:    computed.workedMinutes,
+      lateMinutes:      computed.lateMinutes,
       undertimeMinutes: computed.undertimeMinutes,
-      nsdMinutes:      computed.nsdMinutes,
+      nsdMinutes:       computed.nsdMinutes,
+      otMinutes:        computed.otMinutes ?? 0,
     };
 
     const dtr = existingDtr
@@ -212,6 +232,10 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             undertimeMinutes: computed.undertimeMinutes,
             nsdMinutes:       computed.nsdMinutes,
             ...(shift && { shiftScheduleId: shift.id }),
+            // Auto-flagged OT: only apply when no pre-approved OT exists on this record.
+            ...(computed.otMinutes !== undefined && (existingDtr.otMinutes ?? 0) === 0 && {
+              otMinutes: computed.otMinutes,
+            }),
           },
           select: { id: true },
         })

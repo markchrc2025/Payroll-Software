@@ -11,24 +11,44 @@ const HH_MM = z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format");
 
 const WEEKDAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
-export const createShiftScheduleSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(["FIXED", "FLEXIBLE"]).default("FIXED"),
-  timeIn: HH_MM,
-  timeOut: HH_MM,
-  breakMinutes: z.number().int().min(0).max(480).default(60),
-  breakPolicy: z.enum(["FIXED_DEDUCTION", "TRACK_ACTUAL"]).default("FIXED_DEDUCTION"),
-  crossesMidnight: z.boolean().default(false),
-  workDays: z
-    .array(z.enum(WEEKDAY_CODES))
-    .min(1)
-    .max(7),
-});
+export const createShiftScheduleSchema = z
+  .object({
+    name:               z.string().min(1).max(100),
+    code:               z.string().max(20).optional().nullable(),
+    type:               z.enum(["FIXED", "FLEXIBLE"]).default("FIXED"),
+    timeIn:             HH_MM.optional().nullable(),
+    timeOut:            HH_MM.optional().nullable(),
+    requiredHours:      z.number().min(0).max(24).optional().nullable(),
+    gracePeriodMinutes: z.number().int().min(0).max(60).default(0),
+    breakMinutes:       z.number().int().min(0).max(480).default(60),
+    breakPolicy:        z.enum(["FIXED_DEDUCTION", "TRACK_ACTUAL"]).default("FIXED_DEDUCTION"),
+    crossesMidnight:    z.boolean().default(false),
+    workDays:           z.array(z.enum(WEEKDAY_CODES)).min(1).max(7),
+    otThresholdMinutes: z.number().int().min(0).optional().nullable(),
+    isActive:           z.boolean().default(true).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "FIXED") {
+      if (!data.timeIn)  ctx.addIssue({ code: "custom", path: ["timeIn"],  message: "timeIn is required for FIXED shifts" });
+      if (!data.timeOut) ctx.addIssue({ code: "custom", path: ["timeOut"], message: "timeOut is required for FIXED shifts" });
+    }
+  });
 
-export const updateShiftScheduleSchema = createShiftScheduleSchema
-  .partial()
-  .extend({
-    isActive: z.boolean().optional(),
+export const updateShiftScheduleSchema = z
+  .object({
+    name:               z.string().min(1).max(100).optional(),
+    code:               z.string().max(20).optional().nullable(),
+    type:               z.enum(["FIXED", "FLEXIBLE"]).optional(),
+    timeIn:             HH_MM.optional().nullable(),
+    timeOut:            HH_MM.optional().nullable(),
+    requiredHours:      z.number().min(0).max(24).optional().nullable(),
+    gracePeriodMinutes: z.number().int().min(0).max(60).optional(),
+    breakMinutes:       z.number().int().min(0).max(480).optional(),
+    breakPolicy:        z.enum(["FIXED_DEDUCTION", "TRACK_ACTUAL"]).optional(),
+    crossesMidnight:    z.boolean().optional(),
+    workDays:           z.array(z.enum(WEEKDAY_CODES)).min(1).max(7).optional(),
+    otThresholdMinutes: z.number().int().min(0).optional().nullable(),
+    isActive:           z.boolean().optional(),
   });
 
 export const listShiftSchedulesSchema = z.object({

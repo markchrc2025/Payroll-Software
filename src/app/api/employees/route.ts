@@ -269,6 +269,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Auto-create EmployeeShiftAssignment so punch-time resolver finds a shift from day one.
+    if (shiftScheduleId) {
+      await tx.employeeShiftAssignment.create({
+        data: {
+          tenantId:        auth.tenantId,
+          employeeId:      emp.id,
+          shiftScheduleId: shiftScheduleId,
+          effectiveFrom:   hireDate,
+          effectiveTo:     null,
+        },
+      });
+    }
+
     // Normalised StatutoryId rows — one row per (employee, type)
     const rows: { type: StatutoryIdType; value: string | null }[] = [
       { type: StatutoryIdType.TIN, value: emptyToNull(statutoryIds?.tinNumber) },
