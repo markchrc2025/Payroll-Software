@@ -216,7 +216,6 @@ export const createEmployeeSchema = z.object({
   needsTimeClock: z.coerce.boolean().optional().default(true),
 
   // Extended employment
-  probationEndDate: z.coerce.date().optional().nullable(),
   placementEffectiveDate: z.coerce.date().optional().nullable(),
   jobTypeId: z.string().cuid().optional().nullable(),
   jobStatusId: z.string().cuid().optional().nullable(),

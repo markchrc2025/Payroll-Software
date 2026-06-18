@@ -1096,7 +1096,6 @@ model Employee {
   needsTimeClock    Boolean   @default(true)
 
   // Extended employment fields
-  probationEndDate      DateTime?
   placementEffectiveDate DateTime?
   jobTypeId             String?
   jobStatusId           String?
