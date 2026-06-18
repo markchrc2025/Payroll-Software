@@ -189,6 +189,7 @@ export default function MovementsPage() {
   const [workflows, setWorkflows] = useState<WorkflowRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [canInitiate, setCanInitiate] = useState(false);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState("");
@@ -205,7 +206,7 @@ export default function MovementsPage() {
   // ---------------------------------------------------------------------------
 
   const loadReferenceData = useCallback(async () => {
-    const [empRes, deptRes, brRes, posRes, shiftRes, jtRes, jsRes, wfRes] = await Promise.all([
+    const [empRes, deptRes, brRes, posRes, shiftRes, jtRes, jsRes, wfRes, ciRes] = await Promise.all([
       fetch("/api/employees?limit=500&status=ACTIVE"),
       fetch("/api/departments?limit=200"),
       fetch("/api/branches?limit=200"),
@@ -214,9 +215,10 @@ export default function MovementsPage() {
       fetch("/api/job-types"),
       fetch("/api/job-statuses"),
       fetch("/api/approval-workflows?limit=100"),
+      fetch("/api/movements/can-initiate"),
     ]);
-    const [empJson, deptJson, brJson, posJson, shiftJson, jtJson, jsJson, wfJson] = await Promise.all([
-      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(), wfRes.json(),
+    const [empJson, deptJson, brJson, posJson, shiftJson, jtJson, jsJson, wfJson, ciJson] = await Promise.all([
+      empRes.json(), deptRes.json(), brRes.json(), posRes.json(), shiftRes.json(), jtRes.json(), jsRes.json(), wfRes.json(), ciRes.json(),
     ]);
     setEmployees(empJson.data ?? []);
     setDepartments(deptJson.data ?? []);
@@ -226,6 +228,7 @@ export default function MovementsPage() {
     setJobTypes(jtJson.data ?? []);
     setJobStatuses(jsJson.data ?? []);
     setWorkflows(wfJson.data ?? []);
+    setCanInitiate(ciJson.data?.canInitiate ?? false);
   }, []);
 
   const loadMovements = useCallback(async () => {
@@ -327,9 +330,11 @@ export default function MovementsPage() {
           <Button variant="outline" size="sm" onClick={loadMovements} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> New Movement
-          </Button>
+          {canInitiate && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> New Movement
+            </Button>
+          )}
         </div>
       </div>
 
