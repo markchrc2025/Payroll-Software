@@ -10,7 +10,7 @@ import { ok, err, notFound } from "@/lib/api-response";
 import { z } from "zod";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 
-const LEVEL_SELECT = { select: { id: true, name: true, rank: true } };
+const LEVEL_SELECT = { id: true, name: true, rank: true };
 
 const patchSchema = z.object({
   title:        z.string().min(1).max(150).optional(),
@@ -32,7 +32,7 @@ export async function GET(
     tx.position.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
       include: {
-        level: LEVEL_SELECT,
+        level: { select: LEVEL_SELECT },
         _count: { select: { employees: { where: { deletedAt: null } } } },
       },
     })
@@ -83,7 +83,7 @@ export async function PATCH(
         data:  parsed.data,
         select: {
           id: true, title: true, levelId: true,
-          level: LEVEL_SELECT,
+          level: { select: LEVEL_SELECT },
           description: true, departmentId: true,
           department: { select: { id: true, name: true } },
         },

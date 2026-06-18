@@ -34,9 +34,9 @@ export async function GET(req: NextRequest) {
           branch: { select: { id: true, name: true } },
         },
       }),
-      // Executive-level positions — used to derive the vacant exec layer.
+      // All positions — used to derive vacant nodes in the org chart.
       tx.position.findMany({
-        where: { tenantId: auth.tenantId, deletedAt: null, level: "EXECUTIVE" },
+        where: { tenantId: auth.tenantId, deletedAt: null },
         orderBy: { title: "asc" },
         select: {
           id: true,
