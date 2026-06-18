@@ -91,13 +91,23 @@ function newStep(roleKey: RoleKey): WorkflowStep {
 }
 
 type ApprovalWorkflow = {
-  id: string;
+  id: string;   // "" means unsaved draft
   code: string;
   description: string | null;
   isActive: boolean;
   approvers: WorkflowStep[];
   notify: NotifyKey;
   recipients: RoleKey[];
+};
+
+const BLANK_DRAFT: ApprovalWorkflow = {
+  id: "",
+  code: "NEW",
+  description: null,
+  isActive: true,
+  approvers: [],
+  notify: "finalrej",
+  recipients: [],
 };
 
 // ─── Small role icon tile ─────────────────────────────────────────────────────
@@ -510,7 +520,7 @@ function WorkflowDetail({
   template: ApprovalWorkflow;
   onBack: () => void;
   onSave: (draft: ApprovalWorkflow) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ApprovalWorkflow>(() => JSON.parse(JSON.stringify(template)));
   const [picker, setPicker] = useState<"approver" | "recipient" | null>(null);
@@ -542,6 +552,7 @@ function WorkflowDetail({
   }
 
   async function handleDelete() {
+    if (!onDelete) return;
     setDeleting(true);
     try {
       await onDelete(draft.id);
@@ -609,13 +620,15 @@ function WorkflowDetail({
             </>
           ) : (
             <>
-              <Button
-                variant="outline"
-                className="text-destructive hover:bg-destructive/10 hover:border-destructive/40"
-                onClick={() => setDeleteConfirm(true)}
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-              </Button>
+              {onDelete && (
+                <Button
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/10 hover:border-destructive/40"
+                  onClick={() => setDeleteConfirm(true)}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+                </Button>
+              )}
               <Button variant="outline" onClick={onBack}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>
                 {savedFlash ? (
@@ -857,7 +870,7 @@ function WorkflowDetail({
 export default function ApprovalWorkflowsPage() {
   const [templates, setTemplates] = useState<ApprovalWorkflow[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [view, setView]           = useState<{ mode: "list" | "detail"; id: string | null }>({ mode: "list", id: null });
+  const [view, setView]           = useState<{ mode: "list" | "detail" | "new"; id: string | null }>({ mode: "list", id: null });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -873,16 +886,8 @@ export default function ApprovalWorkflowsPage() {
     setView({ mode: "detail", id });
   }
 
-  async function newTemplate() {
-    const res  = await fetch("/api/approval-workflows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "NEW", description: "", isActive: true, approvers: [], notify: "finalrej", recipients: [] }),
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) { toast.error(json?.error ?? "Failed to create workflow"); return; }
-    setTemplates((prev) => [...prev, json.data]);
-    setView({ mode: "detail", id: json.data.id });
+  function newTemplate() {
+    setView({ mode: "new", id: null });
   }
 
   async function deleteTemplate(id: string) {
@@ -895,22 +900,49 @@ export default function ApprovalWorkflowsPage() {
   }
 
   async function saveTemplate(draft: ApprovalWorkflow) {
-    const res  = await fetch(`/api/approval-workflows/${draft.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code:        draft.code,
-        description: draft.description,
-        isActive:    draft.isActive,
-        approvers:   draft.approvers,
-        notify:      draft.notify,
-        recipients:  draft.recipients,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) { toast.error(json.error ?? "Failed to save"); throw new Error(json.error); }
-    setTemplates((prev) => prev.map((t) => (t.id === json.data.id ? json.data : t)));
-    toast.success("Workflow saved");
+    const payload = {
+      code:        draft.code,
+      description: draft.description,
+      isActive:    draft.isActive,
+      approvers:   draft.approvers,
+      notify:      draft.notify,
+      recipients:  draft.recipients,
+    };
+
+    if (!draft.id) {
+      // New draft — POST to create
+      const res  = await fetch("/api/approval-workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { toast.error(json?.error ?? "Failed to create workflow"); throw new Error(json?.error); }
+      setTemplates((prev) => [...prev, json.data]);
+      setView({ mode: "detail", id: json.data.id });
+      toast.success("Workflow created");
+    } else {
+      // Existing — PATCH
+      const res  = await fetch(`/api/approval-workflows/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Failed to save"); throw new Error(json.error); }
+      setTemplates((prev) => prev.map((t) => (t.id === json.data.id ? json.data : t)));
+      toast.success("Workflow saved");
+    }
+  }
+
+  if (view.mode === "new") {
+    return (
+      <WorkflowDetail
+        template={BLANK_DRAFT}
+        onBack={() => setView({ mode: "list", id: null })}
+        onSave={saveTemplate}
+      />
+    );
   }
 
   if (view.mode === "detail") {
