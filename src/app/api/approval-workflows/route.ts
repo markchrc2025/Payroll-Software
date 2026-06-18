@@ -56,15 +56,33 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  const { code, description, isActive, approvers, notify, recipients } = parsed.data;
+  let { code, description, isActive, approvers, notify, recipients } = parsed.data;
 
   try {
-    const existing = await withTenant(auth.tenantId, (tx) =>
-      tx.approvalWorkflow.findFirst({
-        where: { tenantId: auth.tenantId, code, deletedAt: null },
-      })
-    );
-    if (existing) return err(`Workflow with code "${code}" already exists`, 409);
+    // Check active records for user-supplied codes (non-NEW).
+    if (code !== "NEW") {
+      const existing = await withTenant(auth.tenantId, (tx) =>
+        tx.approvalWorkflow.findFirst({
+          where: { tenantId: auth.tenantId, code, deletedAt: null },
+        })
+      );
+      if (existing) return err(`Workflow with code "${code}" already exists`, 409);
+    } else {
+      // "NEW" is a system-generated placeholder — find a unique variant so
+      // soft-deleted "NEW" rows don't violate the unique constraint.
+      const taken = await withTenant(auth.tenantId, (tx) =>
+        tx.approvalWorkflow.findMany({
+          where: { tenantId: auth.tenantId, code: { startsWith: "NEW" } },
+          select: { code: true },
+        })
+      );
+      const takenSet = new Set(taken.map((r) => r.code));
+      if (takenSet.has("NEW")) {
+        let n = 2;
+        while (takenSet.has(`NEW-${n}`)) n++;
+        code = `NEW-${n}`;
+      }
+    }
 
     const row = await withTenant(auth.tenantId, (tx) =>
       tx.approvalWorkflow.create({
