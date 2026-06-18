@@ -33,12 +33,12 @@ export async function GET(req: NextRequest) {
         ...(levelId      ? { levelId }      : {}),
         ...(departmentId ? { departmentId } : {}),
       },
-      orderBy: [{ level: { rank: "asc" } }, { title: "asc" }],
+      orderBy: [{ title: "asc" }],
       select: {
         id:           true,
         title:        true,
         levelId:      true,
-        level:        { select: { id: true, name: true, rank: true } },
+        level:        { select: { id: true, name: true, rank: true } } as const,
         description:  true,
         departmentId: true,
         department:   { select: { id: true, name: true } },
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         data: { ...parsed.data, tenantId: auth.tenantId },
         select: {
           id: true, title: true, levelId: true,
-          level: { select: { id: true, name: true, rank: true } },
+          level: { select: { id: true, name: true, rank: true } } as const,
           description: true, departmentId: true,
           department: { select: { id: true, name: true } },
         },
