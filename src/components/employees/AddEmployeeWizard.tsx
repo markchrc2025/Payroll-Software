@@ -645,7 +645,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <TF control={c} name="hireDate"            label="Date Joined"      type="date" req        errors={e} />
-            <TF control={c} name="probationEndDate"    label="End of Probation" type="date"            errors={e} />
             <ToggleF control={c} name="needsTimeClock" label="Time Clock Needed"                 span2 />
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
