@@ -17,6 +17,7 @@ import {
   Crown,
   Check,
   Info,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -504,14 +505,18 @@ function WorkflowDetail({
   template,
   onBack,
   onSave,
+  onDelete,
 }: {
   template: ApprovalWorkflow;
   onBack: () => void;
   onSave: (draft: ApprovalWorkflow) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ApprovalWorkflow>(() => JSON.parse(JSON.stringify(template)));
   const [picker, setPicker] = useState<"approver" | "recipient" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -533,6 +538,16 @@ function WorkflowDetail({
       flashTimer.current = setTimeout(() => setSavedFlash(false), 1900);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await onDelete(draft.id);
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(false);
     }
   }
 
@@ -582,14 +597,35 @@ function WorkflowDetail({
               onCheckedChange={(v) => set("isActive", v)}
             />
           </div>
-          <Button variant="outline" onClick={onBack}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {savedFlash ? (
-              <><Check className="mr-1.5 h-4 w-4" /> Saved</>
-            ) : (
-              <><Check className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save workflow"}</>
-            )}
-          </Button>
+          {deleteConfirm ? (
+            <>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                {deleting ? "Deleting…" : "Confirm delete"}
+              </Button>
+              <Button variant="outline" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 hover:border-destructive/40"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+              </Button>
+              <Button variant="outline" onClick={onBack}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {savedFlash ? (
+                  <><Check className="mr-1.5 h-4 w-4" /> Saved</>
+                ) : (
+                  <><Check className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save workflow"}</>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -849,6 +885,15 @@ export default function ApprovalWorkflowsPage() {
     setView({ mode: "detail", id: json.data.id });
   }
 
+  async function deleteTemplate(id: string) {
+    const res  = await fetch(`/api/approval-workflows/${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (!res.ok) { toast.error(json.error ?? "Failed to delete"); throw new Error(json.error); }
+    setTemplates((prev) => prev.filter((t) => t.id !== id));
+    setView({ mode: "list", id: null });
+    toast.success("Workflow deleted");
+  }
+
   async function saveTemplate(draft: ApprovalWorkflow) {
     const res  = await fetch(`/api/approval-workflows/${draft.id}`, {
       method: "PATCH",
@@ -876,6 +921,7 @@ export default function ApprovalWorkflowsPage() {
         template={tpl}
         onBack={() => { setView({ mode: "list", id: null }); load(); }}
         onSave={saveTemplate}
+        onDelete={deleteTemplate}
       />
     );
   }
