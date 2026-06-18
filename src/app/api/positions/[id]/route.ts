@@ -10,10 +10,12 @@ import { ok, err, notFound } from "@/lib/api-response";
 import { z } from "zod";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 
+const LEVEL_SELECT = { select: { id: true, name: true, rank: true } };
+
 const patchSchema = z.object({
-  title: z.string().min(1).max(150).optional(),
-  level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"]).optional(),
-  description: z.string().max(500).nullable().optional(),
+  title:        z.string().min(1).max(150).optional(),
+  levelId:      z.string().cuid().optional().nullable(),
+  description:  z.string().max(500).nullable().optional(),
   departmentId: z.string().cuid().optional().nullable(),
 });
 
@@ -29,7 +31,10 @@ export async function GET(
   const row = await withTenant(auth.tenantId, (tx) =>
     tx.position.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
-      include: { _count: { select: { employees: { where: { deletedAt: null } } } } },
+      include: {
+        level: LEVEL_SELECT,
+        _count: { select: { employees: { where: { deletedAt: null } } } },
+      },
     })
   );
 
@@ -73,7 +78,16 @@ export async function PATCH(
     return {
       notFound: false as const,
       conflict: false as const,
-      row: await tx.position.update({ where: { id }, data: parsed.data }),
+      row: await tx.position.update({
+        where: { id },
+        data:  parsed.data,
+        select: {
+          id: true, title: true, levelId: true,
+          level: LEVEL_SELECT,
+          description: true, departmentId: true,
+          department: { select: { id: true, name: true } },
+        },
+      }),
     };
   });
 
