@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
 
     return ok(row, undefined, 201);
   } catch (e) {
-    return serverError(e);
+    console.error("[approval-workflows POST]", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    return err(`Server error: ${msg}`, 500);
   }
 }
