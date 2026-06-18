@@ -14,7 +14,7 @@ const LEVEL_SELECT = { id: true, name: true, rank: true };
 
 const patchSchema = z.object({
   title:        z.string().min(1).max(150).optional(),
-  levelId:      z.string().cuid().optional().nullable(),
+  levelId:      z.string().min(1).optional().nullable(),
   description:  z.string().max(500).nullable().optional(),
   departmentId: z.string().cuid().optional().nullable(),
 });
