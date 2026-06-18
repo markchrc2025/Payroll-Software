@@ -10,7 +10,7 @@ import { z } from "zod";
 
 const createSchema = z.object({
   title:        z.string().min(1).max(150),
-  levelId:      z.string().cuid().optional().nullable(),
+  levelId:      z.string().min(1).optional().nullable(),
   description:  z.string().max(500).optional().nullable(),
   departmentId: z.string().cuid().optional().nullable(),
 });
