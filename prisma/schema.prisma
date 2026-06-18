@@ -906,7 +906,7 @@ model Position {
   id           String        @id @default(cuid())
   tenantId     String
   title        String
-  level        PositionLevel @default(MID)
+  levelId      String?
   description  String?
   departmentId String?
 
@@ -915,6 +915,7 @@ model Position {
   deletedAt DateTime?
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  level       JobLevel?   @relation("PositionLevel", fields: [levelId], references: [id], onDelete: SetNull)
   department  Department? @relation(fields: [departmentId], references: [id])
   employees   Employee[]
   jobPostings JobPosting[]
@@ -923,6 +924,7 @@ model Position {
 
   @@unique([tenantId, title])
   @@index([tenantId])
+  @@index([levelId])
   @@index([departmentId])
   @@index([deletedAt])
 }
@@ -943,6 +945,7 @@ model JobLevel {
   tenant          Tenant             @relation(fields: [tenantId], references: [id])
   employees       Employee[]
   placements      Placement[]
+  positions       Position[]         @relation("PositionLevel")
   movementsTo     EmployeeMovement[] @relation("MovementToLevel")
   movementsFrom   EmployeeMovement[] @relation("MovementFromLevel")
   defaultWorkflow ApprovalWorkflow?  @relation("LevelDefaultWorkflow", fields: [defaultWorkflowId], references: [id], onDelete: SetNull)

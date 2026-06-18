@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/switch";
 
 type Dept     = { id: string; name: string };
 type Branch   = { id: string; name: string };
-type Position = { id: string; title: string; departmentId: string | null };
+type Position = { id: string; title: string; levelId: string | null; departmentId: string | null };
 type ShiftSchedule = { id: string; name: string };
 type JobTypeRef = { id: string; name: string };
 type JobStatusRef = { id: string; name: string };
@@ -484,16 +484,18 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const watchedDeptId = form.watch("departmentId");
+  const watchedDeptId  = form.watch("departmentId");
+  const watchedLevelId = form.watch("levelId");
 
   useEffect(() => {
     const currentPosId = form.getValues("positionId");
     if (!currentPosId) return;
     const pos = positions.find((p) => p.id === currentPosId);
-    if (pos && pos.departmentId && watchedDeptId && pos.departmentId !== watchedDeptId) {
-      form.setValue("positionId", null);
-    }
-  }, [watchedDeptId, form, positions]);
+    if (!pos) return;
+    const levelMismatch = watchedLevelId && watchedLevelId !== "none" && pos.levelId !== watchedLevelId;
+    const deptMismatch  = pos.departmentId && watchedDeptId && watchedDeptId !== "none" && pos.departmentId !== watchedDeptId;
+    if (levelMismatch || deptMismatch) form.setValue("positionId", null);
+  }, [watchedDeptId, watchedLevelId, form, positions]);
 
   async function handlePhotoFile(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
@@ -649,6 +651,20 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <div className="col-span-2">
+              <Lbl text="Level" />
+              <Controller control={c} name="levelId" render={({ field }) => (
+                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectValue placeholder="Select level…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {levels.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
+            <div className="col-span-2">
               <Lbl text="Department" />
               <Controller control={c} name="departmentId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
@@ -664,21 +680,31 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             </div>
             <div className="col-span-2">
               <Lbl text="Job Position" />
-              <Controller control={c} name="positionId" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Select position…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {watchedDeptId && watchedDeptId !== "none"
-                      ? positions.filter((p) => p.departmentId === watchedDeptId)
-                          .map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)
-                      : <SelectItem value="__hint__" disabled>Select a department first</SelectItem>
-                    }
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller control={c} name="positionId" render={({ field }) => {
+                const hasLevel = watchedLevelId && watchedLevelId !== "none";
+                const hasDept  = watchedDeptId  && watchedDeptId  !== "none";
+                const filtered = positions.filter((p) => {
+                  const levelOk = !hasLevel || p.levelId === watchedLevelId;
+                  const deptOk  = !hasDept  || p.departmentId === watchedDeptId;
+                  return levelOk && deptOk;
+                });
+                return (
+                  <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                    <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                      <SelectValue placeholder="Select position…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— None —</SelectItem>
+                      {filtered.length > 0
+                        ? filtered.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)
+                        : <SelectItem value="__hint__" disabled>
+                            {hasLevel || hasDept ? "No positions match the selected filters" : "Select a level or department first"}
+                          </SelectItem>
+                      }
+                    </SelectContent>
+                  </Select>
+                );
+              }} />
             </div>
             <div className="col-span-2">
               <Lbl text="Branch" />

@@ -9,9 +9,9 @@ import { ok, err } from "@/lib/api-response";
 import { z } from "zod";
 
 const createSchema = z.object({
-  title: z.string().min(1).max(150),
-  level: z.enum(["ENTRY", "MID", "SENIOR", "MANAGER", "DIRECTOR", "EXECUTIVE"]).default("MID"),
-  description: z.string().max(500).optional().nullable(),
+  title:        z.string().min(1).max(150),
+  levelId:      z.string().cuid().optional().nullable(),
+  description:  z.string().max(500).optional().nullable(),
   departmentId: z.string().cuid().optional().nullable(),
 });
 
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const { ctx: auth } = guard;
 
   const url = new URL(req.url);
-  const level = url.searchParams.get("level") ?? undefined;
+  const levelId      = url.searchParams.get("levelId")      ?? undefined;
   const departmentId = url.searchParams.get("departmentId") ?? undefined;
   const includeDeleted = url.searchParams.get("includeDeleted") === "true";
 
@@ -30,18 +30,19 @@ export async function GET(req: NextRequest) {
       where: {
         tenantId: auth.tenantId,
         ...(includeDeleted ? {} : { deletedAt: null }),
-        ...(level ? { level: level as "ENTRY" | "MID" | "SENIOR" | "MANAGER" | "DIRECTOR" } : {}),
+        ...(levelId      ? { levelId }      : {}),
         ...(departmentId ? { departmentId } : {}),
       },
-      orderBy: [{ level: "asc" }, { title: "asc" }],
+      orderBy: [{ level: { rank: "asc" } }, { title: "asc" }],
       select: {
-        id: true,
-        title: true,
-        level: true,
-        description: true,
+        id:           true,
+        title:        true,
+        levelId:      true,
+        level:        { select: { id: true, name: true, rank: true } },
+        description:  true,
         departmentId: true,
-        department: { select: { id: true, name: true } },
-        deletedAt: true,
+        department:   { select: { id: true, name: true } },
+        deletedAt:    true,
         _count: { select: { employees: { where: { deletedAt: null } } } },
       },
     })
@@ -74,6 +75,12 @@ export async function POST(req: NextRequest) {
       duplicate: false as const,
       row: await tx.position.create({
         data: { ...parsed.data, tenantId: auth.tenantId },
+        select: {
+          id: true, title: true, levelId: true,
+          level: { select: { id: true, name: true, rank: true } },
+          description: true, departmentId: true,
+          department: { select: { id: true, name: true } },
+        },
       }),
     };
   });
