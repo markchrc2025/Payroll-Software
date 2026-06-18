@@ -9,7 +9,7 @@
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized } from "@/lib/api-response";
+import { ok, err, unauthorized, serverError } from "@/lib/api-response";
 import { z } from "zod";
 
 const VALID_NOTIFY = ["none", "final", "finalrej", "interim", "all"] as const;
@@ -58,26 +58,30 @@ export async function POST(req: NextRequest) {
 
   const { code, description, isActive, approvers, notify, recipients } = parsed.data;
 
-  const existing = await withTenant(auth.tenantId, (tx) =>
-    tx.approvalWorkflow.findFirst({
-      where: { tenantId: auth.tenantId, code, deletedAt: null },
-    })
-  );
-  if (existing) return err(`Workflow with code "${code}" already exists`, 409);
+  try {
+    const existing = await withTenant(auth.tenantId, (tx) =>
+      tx.approvalWorkflow.findFirst({
+        where: { tenantId: auth.tenantId, code, deletedAt: null },
+      })
+    );
+    if (existing) return err(`Workflow with code "${code}" already exists`, 409);
 
-  const row = await withTenant(auth.tenantId, (tx) =>
-    tx.approvalWorkflow.create({
-      data: {
-        tenantId:    auth.tenantId,
-        code,
-        description: description ?? null,
-        isActive,
-        approvers,
-        notify,
-        recipients,
-      },
-    })
-  );
+    const row = await withTenant(auth.tenantId, (tx) =>
+      tx.approvalWorkflow.create({
+        data: {
+          tenantId:    auth.tenantId,
+          code,
+          description: description ?? null,
+          isActive,
+          approvers,
+          notify,
+          recipients,
+        },
+      })
+    );
 
-  return ok(row, undefined, 201);
+    return ok(row, undefined, 201);
+  } catch (e) {
+    return serverError(e);
+  }
 }
