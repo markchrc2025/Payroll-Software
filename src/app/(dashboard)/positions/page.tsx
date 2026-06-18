@@ -47,7 +47,8 @@ type Position = {
   _count:       { employees: number };
 };
 
-const EMPTY_FORM = { title: "", levelId: "none", description: "", departmentId: "none" };
+type FormState = { title: string; levelId: string; description: string; departmentId: string };
+const EMPTY_FORM: FormState = { title: "", levelId: "none", description: "", departmentId: "none" };
 
 export default function PositionsPage() {
   const [rows, setRows]           = useState<Position[]>([]);
@@ -56,7 +57,7 @@ export default function PositionsPage() {
   const [loading, setLoading]     = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing]     = useState<Position | null>(null);
-  const [form, setForm]           = useState(EMPTY_FORM);
+  const [form, setForm]           = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving]       = useState(false);
 
   const load = useCallback(async () => {
@@ -246,7 +247,7 @@ export default function PositionsPage() {
             </div>
             <div className="space-y-2">
               <Label>Level</Label>
-              <Select value={form.levelId} onValueChange={(v) => setForm({ ...form, levelId: v })}>
+              <Select value={form.levelId} onValueChange={(v) => setForm({ ...form, levelId: v ?? "none" })}>
                 <SelectTrigger><SelectValue placeholder="Select level…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— No Level —</SelectItem>

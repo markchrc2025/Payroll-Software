@@ -67,7 +67,7 @@ export default async function NewEmployeePage() {
       <AddEmployeeWizard
         departments={departments as { id: string; name: string }[]}
         branches={branches as { id: string; name: string }[]}
-        positions={positions as { id: string; title: string; departmentId: string | null }[]}
+        positions={positions as { id: string; title: string; levelId: string | null; departmentId: string | null }[]}
         shiftSchedules={shiftSchedules as { id: string; name: string }[]}
         jobTypes={jobTypes as { id: string; name: string }[]}
         jobStatuses={jobStatuses as { id: string; name: string }[]}
