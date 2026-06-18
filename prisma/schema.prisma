@@ -2354,17 +2354,25 @@ model ShiftSchedule {
   tenantId String
 
   name         String
+  /// Optional short code for payslips/reports (e.g. "FIXED-8", "FLEX-MOR").
+  code         String?
   type         ShiftType @default(FIXED)
-  /// Expected time-in in 24-hour "HH:MM" format (e.g. "08:00").
-  timeIn       String
-  /// Expected time-out in 24-hour "HH:MM" format (e.g. "17:00").
-  timeOut      String
-  breakMinutes Int       @default(60)
-  breakPolicy  BreakPolicy @default(FIXED_DEDUCTION)
+  /// Expected time-in in 24-hour "HH:MM" format. Null for FLEXIBLE shifts.
+  timeIn       String?
+  /// Expected time-out in 24-hour "HH:MM" format. Null for FLEXIBLE shifts.
+  timeOut      String?
+  /// Required hours per day for FLEXIBLE shifts (e.g. 8.0). Ignored for FIXED.
+  requiredHours        Float?
+  /// Minutes after expected time-in before tardiness is recorded (0 = strict).
+  gracePeriodMinutes   Int     @default(0)
+  breakMinutes         Int     @default(60)
+  breakPolicy          BreakPolicy @default(FIXED_DEDUCTION)
   /// True when the shift spans midnight (e.g. night shift 22:00–06:00).
-  crossesMidnight Boolean @default(false)
+  crossesMidnight      Boolean @default(false)
   /// JSON array of ISO weekday names: ["MON","TUE","WED","THU","FRI"].
-  workDays     Json
+  workDays             Json
+  /// If set, auto-flag OT when workedMinutes exceeds this threshold. Null = manual pre-approval only.
+  otThresholdMinutes   Int?
 
   isActive  Boolean   @default(true)
   deletedAt DateTime?

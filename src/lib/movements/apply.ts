@@ -94,4 +94,21 @@ export async function applyMovementEffects(
       },
     });
   }
+
+  // Sync EmployeeShiftAssignment so punch-time resolver sees the new shift immediately.
+  if (movement.toShiftScheduleId) {
+    await tx.employeeShiftAssignment.updateMany({
+      where: { employeeId: movement.employeeId, tenantId: movement.tenantId, effectiveTo: null },
+      data:  { effectiveTo: movement.effectiveDate },
+    });
+    await tx.employeeShiftAssignment.create({
+      data: {
+        tenantId:        movement.tenantId,
+        employeeId:      movement.employeeId,
+        shiftScheduleId: movement.toShiftScheduleId,
+        effectiveFrom:   movement.effectiveDate,
+        effectiveTo:     null,
+      },
+    });
+  }
 }

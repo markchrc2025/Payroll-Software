@@ -64,17 +64,19 @@ export async function PATCH(
     return tx.shiftSchedule.update({
       where: { id },
       data: {
-        ...(d.name !== undefined && { name: d.name }),
-        ...(d.type !== undefined && { type: d.type }),
-        ...(d.timeIn !== undefined && { timeIn: d.timeIn }),
-        ...(d.timeOut !== undefined && { timeOut: d.timeOut }),
-        ...(d.breakMinutes !== undefined && { breakMinutes: d.breakMinutes }),
-        ...(d.breakPolicy !== undefined && { breakPolicy: d.breakPolicy }),
-        ...(d.crossesMidnight !== undefined && {
-          crossesMidnight: d.crossesMidnight,
-        }),
-        ...(d.workDays !== undefined && { workDays: d.workDays }),
-        ...(d.isActive !== undefined && { isActive: d.isActive }),
+        ...(d.name               !== undefined && { name:               d.name }),
+        ...(d.code               !== undefined && { code:               d.code }),
+        ...(d.type               !== undefined && { type:               d.type }),
+        ...(d.timeIn             !== undefined && { timeIn:             d.timeIn }),
+        ...(d.timeOut            !== undefined && { timeOut:            d.timeOut }),
+        ...(d.requiredHours      !== undefined && { requiredHours:      d.requiredHours }),
+        ...(d.gracePeriodMinutes !== undefined && { gracePeriodMinutes: d.gracePeriodMinutes }),
+        ...(d.breakMinutes       !== undefined && { breakMinutes:       d.breakMinutes }),
+        ...(d.breakPolicy        !== undefined && { breakPolicy:        d.breakPolicy }),
+        ...(d.crossesMidnight    !== undefined && { crossesMidnight:    d.crossesMidnight }),
+        ...(d.workDays           !== undefined && { workDays:           d.workDays }),
+        ...(d.otThresholdMinutes !== undefined && { otThresholdMinutes: d.otThresholdMinutes }),
+        ...(d.isActive           !== undefined && { isActive:           d.isActive }),
       },
     });
   });
