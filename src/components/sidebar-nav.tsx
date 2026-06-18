@@ -122,7 +122,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-expense-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
       { href: "#soon-expense-category", label: "Category", icon: "components", comingSoon: true },
       { href: "#soon-expense-type", label: "Type", icon: "components", comingSoon: true },
-      { href: "/approval-workflows", label: "Approval Workflow", icon: "movements" },
     ],
   },
   {
@@ -137,7 +136,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-leave-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-entitlement-report", label: "Entitlement Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-earning-policy", label: "Earning Policy", icon: "policies", comingSoon: true },
-      { href: "/approval-workflows", label: "Approval Workflow", icon: "movements" },
     ],
   },
   {
@@ -158,7 +156,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "#soon-doc-management", label: "Management", icon: "claims", comingSoon: true },
       { href: "#soon-doc-review", label: "Review", icon: "requests", comingSoon: true },
-      { href: "/approval-workflows", label: "Approval Workflow", icon: "movements" },
     ],
   },
   {
