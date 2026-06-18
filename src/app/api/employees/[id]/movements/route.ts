@@ -67,6 +67,26 @@ export async function POST(
     });
     if (!emp) return { notFound: true as const };
 
+    // Initiator check: only Managers, HR staff (hr_manager OrgRole), or SUPER_ADMIN may create movements.
+    if (auth.systemRole !== "SUPER_ADMIN") {
+      const creatorEmp = await tx.employee.findFirst({
+        where: { userId: auth.userId, tenantId: auth.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (creatorEmp) {
+        const [managedCount, hrRole] = await Promise.all([
+          tx.employee.count({
+            where: { managerId: creatorEmp.id, tenantId: auth.tenantId, deletedAt: null },
+          }),
+          tx.orgRole.findFirst({
+            where: { employeeId: creatorEmp.id, tenantId: auth.tenantId, roleKey: "hr_manager" },
+            select: { roleKey: true },
+          }),
+        ]);
+        if (managedCount === 0 && !hrRole) return { forbidden: true as const };
+      }
+    }
+
     // Self-edit safeguard: admins cannot create movements for their own record.
     if (emp.userId && emp.userId === auth.userId) {
       return { selfEdit: true as const };
@@ -189,6 +209,7 @@ export async function POST(
   });
 
   if ("notFound" in result) return notFound("Employee");
+  if ("forbidden" in result) return err("Only Managers and HR staff can initiate Movement Requests.", 403);
   if ("selfEdit" in result) return err("You cannot create a movement for your own employee record. Ask another administrator to submit this change.", 403);
   if ("error" in result && result.error) return err(result.error, 422);
   return ok(serializeMovement(result.movement), "Movement created", 201);
