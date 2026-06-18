@@ -843,8 +843,8 @@ export default function ApprovalWorkflowsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: "NEW", description: "", isActive: true, approvers: [], notify: "finalrej", recipients: [] }),
     });
-    const json = await res.json();
-    if (!res.ok) { toast.error(json.error ?? "Failed to create"); return; }
+    const json = await res.json().catch(() => null);
+    if (!res.ok) { toast.error(json?.error ?? "Failed to create workflow"); return; }
     setTemplates((prev) => [...prev, json.data]);
     setView({ mode: "detail", id: json.data.id });
   }
