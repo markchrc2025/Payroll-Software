@@ -57,7 +57,49 @@ export async function GET(req: NextRequest) {
     ]),
   );
 
-  return paginated(rows, total, page, limit);
+  // Per-day geofence rollup: flag any day that had an out-of-area punch so the
+  // supervisor sees a warning at the DTR level (not just per individual punch).
+  const withGeofence = await attachGeofenceWarnings(auth.tenantId, rows);
+
+  return paginated(withGeofence, total, page, limit);
+}
+
+type DtrRow = { employeeId: string; date: Date };
+
+/** Adds `hadGeofenceViolation: boolean` to each DTR row in the page. */
+async function attachGeofenceWarnings<T extends DtrRow>(
+  tenantId: string,
+  rows: T[],
+): Promise<(T & { hadGeofenceViolation: boolean })[]> {
+  if (rows.length === 0) return [];
+
+  const dates = rows.map((r) => r.date.getTime());
+  const minDate = new Date(Math.min(...dates));
+  minDate.setUTCHours(0, 0, 0, 0);
+  const maxDate = new Date(Math.max(...dates));
+  maxDate.setUTCHours(0, 0, 0, 0);
+  const rangeEnd = new Date(maxDate.getTime() + 86_400_000);
+
+  const violations = await withTenant(tenantId, (tx) =>
+    tx.attendanceLog.findMany({
+      where: {
+        tenantId,
+        employeeId: { in: [...new Set(rows.map((r) => r.employeeId))] },
+        outsideGeofence: true,
+        punchedAt: { gte: minDate, lt: rangeEnd },
+      },
+      select: { employeeId: true, punchedAt: true },
+    }),
+  );
+
+  const flagged = new Set(
+    violations.map((v) => `${v.employeeId}:${v.punchedAt.toISOString().slice(0, 10)}`),
+  );
+
+  return rows.map((r) => ({
+    ...r,
+    hadGeofenceViolation: flagged.has(`${r.employeeId}:${r.date.toISOString().slice(0, 10)}`),
+  }));
 }
 
 export async function POST(req: NextRequest) {

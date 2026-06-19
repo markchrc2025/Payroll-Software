@@ -1121,6 +1121,10 @@ model Employee {
   religion          String?
   allowProfileUpdate Boolean  @default(false)
   needsTimeClock    Boolean   @default(true)
+  /// Skip geofence enforcement for this employee's punches (e.g. field staff,
+  /// or employees whose time clock is off). When true, punches are never
+  /// flagged outsideGeofence.
+  geofenceExempt    Boolean   @default(false)
 
   // Extended employment fields
   placementEffectiveDate DateTime?
