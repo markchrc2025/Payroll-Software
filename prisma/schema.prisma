@@ -391,6 +391,16 @@ enum ShiftType {
   OPEN
 }
 
+/// How a per-shift OT break-deduction rule fires.
+enum OtBreakMode {
+  /// No automatic break deduction from overtime.
+  NONE
+  /// Deduct a fixed break once total OT reaches a trigger (e.g. ≥ 6h → −1h).
+  SINGLE
+  /// Deduct a break for every N-hour block of OT (e.g. −1h per 4h).
+  TIERED
+}
+
 enum BreakPolicy {
   /// System auto-deducts breakMinutes from the total span (firstIN → lastOUT).
   /// Employee does NOT clock out for lunch.
@@ -2382,8 +2392,24 @@ model ShiftSchedule {
   crossesMidnight      Boolean @default(false)
   /// JSON array of ISO weekday names: ["MON","TUE","WED","THU","FRI"].
   workDays             Json
-  /// If set, auto-flag OT when workedMinutes exceeds this threshold. Null = manual pre-approval only.
+  /// If set, the daily worked-minutes threshold above which OT is suggested
+  /// (and, when otAutoApprove is on, auto-approved). Null = no suggestion.
   otThresholdMinutes   Int?
+
+  // -- Overtime policy (per-shift) ------------------------------------------
+  /// OT is never paid from the threshold alone — it must be approved.
+  otRequiresApproval   Boolean     @default(true)
+  /// Employer safeguard: auto-create an APPROVED OT application for worked
+  /// minutes beyond otThresholdMinutes (still subject to the break rule below).
+  otAutoApprove        Boolean     @default(false)
+  /// Break-deduction rule applied to approved OT hours.
+  otBreakMode          OtBreakMode @default(NONE)
+  /// SINGLE: deduct otBreakMinutes once OT ≥ this many hours.
+  otBreakTriggerHours  Decimal?    @db.Decimal(5, 2)
+  /// TIERED: deduct otBreakMinutes for every this-many hours of OT.
+  otBreakBlockHours    Decimal?    @db.Decimal(5, 2)
+  /// Minutes deducted each time the OT break rule fires.
+  otBreakMinutes       Int?
 
   isActive  Boolean   @default(true)
   deletedAt DateTime?
@@ -2440,8 +2466,13 @@ model DTRRecord {
   workedMinutes    Int          @default(0)
   lateMinutes      Int          @default(0)
   undertimeMinutes Int          @default(0)
-  /// Pre-approved overtime minutes for this day.
+  /// Pre-approved overtime minutes for this day. Only ever set from an
+  /// APPROVED OT application (manual or employer auto-approve) — never paid
+  /// from the shift threshold alone.
   otMinutes        Int          @default(0)
+  /// Advisory only: worked minutes flagged beyond the shift OT threshold.
+  /// Surfaced to supervisors as a "file OT?" hint; NEVER consumed by payroll.
+  suggestedOtMinutes Int        @default(0)
   /// Night-shift differential minutes (10 PM – 6 AM window).
   nsdMinutes       Int          @default(0)
   hazardMinutes    Int          @default(0)

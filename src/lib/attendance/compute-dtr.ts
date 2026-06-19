@@ -72,8 +72,12 @@ export interface DtrComputed {
   lateMinutes: number;
   undertimeMinutes: number;
   nsdMinutes: number;
-  /** Set when auto-OT threshold is exceeded. Callers treat absence as 0. */
-  otMinutes?: number;
+  /**
+   * Advisory only: worked minutes beyond the shift OT threshold. NEVER paid —
+   * payable OT comes only from an approved OT application. Callers persist this
+   * to DTRRecord.suggestedOtMinutes. Absence means 0.
+   */
+  suggestedOtMinutes?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,8 +207,9 @@ export function computeDtrFields(
   );
   const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut) : 0;
 
-  // Auto-OT: flag excess minutes when threshold is configured.
-  const otMinutes =
+  // Auto-OT: flag excess minutes when threshold is configured. Advisory only —
+  // this is a "file OT?" hint, never paid without an approved OT application.
+  const suggestedOtMinutes =
     shift.otThresholdMinutes !== null && workedMinutes > shift.otThresholdMinutes
       ? workedMinutes - shift.otThresholdMinutes
       : undefined;
@@ -253,7 +258,7 @@ export function computeDtrFields(
       lateMinutes,
       undertimeMinutes,
       nsdMinutes,
-      ...(otMinutes !== undefined && { otMinutes }),
+      ...(suggestedOtMinutes !== undefined && { suggestedOtMinutes }),
     };
   }
 
@@ -282,6 +287,6 @@ export function computeDtrFields(
     lateMinutes,
     undertimeMinutes,
     nsdMinutes,
-    ...(otMinutes !== undefined && { otMinutes }),
+    ...(suggestedOtMinutes !== undefined && { suggestedOtMinutes }),
   };
 }
