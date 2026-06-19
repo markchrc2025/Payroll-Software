@@ -13,6 +13,7 @@ import { z } from "zod";
 import { getEssContext } from "@/lib/ess-auth";
 import { err, ok, unauthorized, serverError } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
+import { findSubmissionBlockers, describeBlockers } from "@/lib/dtr/submission-guard";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -200,6 +201,18 @@ export async function POST(req: NextRequest) {
   const pe = new Date(periodEnd);
 
   try {
+    // Block submission while OT / undertime / leave for this period are pending.
+    const blockers = await withTenant(ctx.tenantId, (tx) =>
+      findSubmissionBlockers(tx, ctx.tenantId, ctx.employeeId, ps, pe),
+    );
+    if (blockers.length > 0) {
+      return err(
+        `Resolve all filings before submitting: ${describeBlockers(blockers)}.`,
+        409,
+        { blockers },
+      );
+    }
+
     const result = await withTenant(ctx.tenantId, async (tx) => {
       // Upsert: if returned, allow re-submission
       const existing = await tx.dTRSubmission.findUnique({

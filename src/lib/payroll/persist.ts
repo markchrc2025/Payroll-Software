@@ -920,7 +920,22 @@ export async function finalizeRun(
       data: { status: "PAID", paidInBookId: bookId },
     });
 
-    // 4. Transition the book + audit log.
+    // 4. Lock the DTR records that fed this run so they can no longer be
+    //    edited or re-punched (closes the isLocked placeholder).
+    const sheetEmployeeIds = book.sheets.map((s) => s.employeeId);
+    if (sheetEmployeeIds.length > 0) {
+      await tx.dTRRecord.updateMany({
+        where: {
+          tenantId,
+          employeeId: { in: sheetEmployeeIds },
+          date: { gte: book.periodStart, lte: book.periodEnd },
+          isLocked: false,
+        },
+        data: { isLocked: true },
+      });
+    }
+
+    // 5. Transition the book + audit log.
     const finalized = await tx.payrollBook.update({
       where: { id: bookId },
       data: {
