@@ -97,6 +97,10 @@ const MODULE_FLAG: Record<ApprovalModule, keyof WorkflowStep> = {
   DTR: "forDtr",
   EXPENSE: "forExpense",
   DOCUMENT: "forDocument",
+  // OT and Undertime are timekeeping adjustments — they reuse the DTR chain config
+  // so existing workflow setups cover them without any UI changes.
+  OT: "forDtr",
+  UNDERTIME: "forDtr",
 };
 
 function toSnapshot(
