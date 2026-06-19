@@ -82,6 +82,7 @@ export const fileLeaveRequestSchema = z
     amount: z.coerce.number().positive().multipleOf(0.01),
     startDate: z.coerce.date(),
     endDate: z.coerce.date(),
+    dayPortion: z.enum(["FULL", "HALF_AM", "HALF_PM"]).default("FULL"),
     reason: z.string().max(500).optional().nullable(),
   })
   .superRefine((v, ctx) => {
@@ -90,6 +91,14 @@ export const fileLeaveRequestSchema = z
         code: z.ZodIssueCode.custom,
         path: ["endDate"],
         message: "endDate must be >= startDate",
+      });
+    }
+    // Partial-day leaves must be a single date.
+    if (v.dayPortion !== "FULL" && v.endDate.getTime() !== v.startDate.getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["dayPortion"],
+        message: "Half-day leave must be a single date",
       });
     }
   });

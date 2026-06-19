@@ -18,6 +18,7 @@ import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { checkPermission } from "@/lib/require-permission";
+import { finalizeLeaveApproval } from "@/lib/leave/apply-to-dtr";
 
 const bodySchema = z.object({ note: z.string().optional() }).optional();
 
@@ -100,40 +101,30 @@ export async function POST(
         return txn;
       }
 
-      // All steps done — final approval.
-      const [updated] = await Promise.all([
-        tx.leaveTransaction.update({
-          where: { id },
-          data: {
-            approvalStatus: "APPROVED",
-            approvedByUserId: auth.userId,
-            approvedAt: new Date(),
-            currentStepIndex: currentStep.stepIndex,
-          },
-        }),
-        tx.leaveBalance.update({
-          where: { id: txn.leaveBalanceId },
-          data: { used: { increment: txn.amount } },
-        }),
-      ]);
-      return updated;
-    }
-
-    // ----- Legacy / no-workflow mode -----
-    const [updated] = await Promise.all([
-      tx.leaveTransaction.update({
+      // All steps done — final approval. Debit PAID units + write the DTR.
+      const updated = await tx.leaveTransaction.update({
         where: { id },
         data: {
           approvalStatus: "APPROVED",
           approvedByUserId: auth.userId,
           approvedAt: new Date(),
+          currentStepIndex: currentStep.stepIndex,
         },
-      }),
-      tx.leaveBalance.update({
-        where: { id: txn.leaveBalanceId },
-        data: { used: { increment: txn.amount } },
-      }),
-    ]);
+      });
+      await finalizeLeaveApproval(tx, id);
+      return updated;
+    }
+
+    // ----- Legacy / no-workflow mode -----
+    const updated = await tx.leaveTransaction.update({
+      where: { id },
+      data: {
+        approvalStatus: "APPROVED",
+        approvedByUserId: auth.userId,
+        approvedAt: new Date(),
+      },
+    });
+    await finalizeLeaveApproval(tx, id);
     return updated;
   });
 

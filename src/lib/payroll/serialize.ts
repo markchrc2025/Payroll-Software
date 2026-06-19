@@ -134,6 +134,8 @@ export function serializeLeaveTransaction<T extends LeaveTransaction>(lt: T) {
   return {
     ...lt,
     amount: lt.amount.toString(),
+    paidUnits: lt.paidUnits.toString(),
+    unpaidUnits: lt.unpaidUnits.toString(),
   };
 }
 

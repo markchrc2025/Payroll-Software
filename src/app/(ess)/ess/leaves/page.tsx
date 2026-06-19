@@ -82,7 +82,7 @@ export default function EssLeavesPage() {
 
   // File leave form
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [form, setForm] = useState({ leaveTypeId: "", startDate: "", endDate: "", amount: "1", reason: "" });
+  const [form, setForm] = useState({ leaveTypeId: "", startDate: "", endDate: "", amount: "1", dayPortion: "FULL", reason: "" });
   const [saving, setSaving] = useState(false);
 
   function authHeaders() {
@@ -128,6 +128,7 @@ export default function EssLeavesPage() {
       startDate: form.startDate,
       endDate: form.endDate,
       amount: parseFloat(form.amount),
+      dayPortion: form.dayPortion,
       reason: form.reason || undefined,
     };
     const res = await fetch("/api/ess/leaves", {
@@ -140,7 +141,7 @@ export default function EssLeavesPage() {
     if (!res.ok) { toast.error(data?.message ?? "Failed to file leave"); return; }
     toast.success("Leave request filed!");
     setSheetOpen(false);
-    setForm({ leaveTypeId: "", startDate: "", endDate: "", amount: "1", reason: "" });
+    setForm({ leaveTypeId: "", startDate: "", endDate: "", amount: "1", dayPortion: "FULL", reason: "" });
     fetchRequests();
     fetchBalances();
   }
@@ -271,9 +272,37 @@ export default function EssLeavesPage() {
               <Input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>Days *</Label>
-              <Input type="number" min="0.5" step="0.5" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+              <Label>Day Portion</Label>
+              <Select
+                value={form.dayPortion}
+                onValueChange={(v) => setForm((f) => ({ ...f, dayPortion: v ?? "FULL", ...(v !== "FULL" ? { endDate: f.startDate, amount: "0.5" } : {}) }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FULL">Full day</SelectItem>
+                  <SelectItem value="HALF_AM">Half day (AM)</SelectItem>
+                  <SelectItem value="HALF_PM">Half day (PM)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            <div className="space-y-1">
+              <Label>Days *</Label>
+              <Input type="number" min="0.5" step="0.5" value={form.amount} disabled={form.dayPortion !== "FULL"} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+            </div>
+            {(() => {
+              const bal = balances.find((b) => b.leaveTypeId === form.leaveTypeId);
+              const avail = bal ? availableBalance(bal) : 0;
+              const amt = parseFloat(form.amount) || 0;
+              if (form.leaveTypeId && amt > avail) {
+                const lwop = (amt - Math.max(0, avail)).toFixed(2).replace(/\.00$/, "");
+                return (
+                  <p className="text-xs text-amber-600">
+                    Exceeds available balance ({Math.max(0, avail)}). {lwop} will be filed as Leave-Without-Pay.
+                  </p>
+                );
+              }
+              return null;
+            })()}
             <div className="space-y-1">
               <Label>Reason</Label>
               <Textarea rows={3} placeholder="Optional reason..." value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} />
