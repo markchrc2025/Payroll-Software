@@ -2,10 +2,12 @@
  * POST /api/ot-applications/[id]/reject
  *
  * PENDING → REJECTED. rejectionReason is required.
+ * Works in both workflow-step mode and legacy/no-workflow mode.
+ * Reverses DTRRecord.otMinutes to 0 if the application was previously APPROVED.
  */
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission } from "@/lib/require-permission";
+import { requirePermission, checkPermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { z } from "zod";
 
@@ -36,6 +38,37 @@ export async function POST(
     if (ota.status !== "PENDING" && ota.status !== "APPROVED")
       return { notRejectable: true as const, status: ota.status };
 
+    const steps = await tx.approvalStep.findMany({
+      where: { tenantId: auth.tenantId, module: "OT", entityId: id },
+      orderBy: { stepIndex: "asc" },
+    });
+
+    if (steps.length > 0) {
+      const currentStep =
+        steps.find((s) => s.stepIndex === ota.currentStepIndex && s.status === "PENDING") ??
+        steps.find((s) => s.status === "PENDING");
+
+      if (currentStep) {
+        const callerEmployee = await tx.employee.findFirst({
+          where: { userId: auth.userId, tenantId: auth.tenantId, deletedAt: null },
+          select: { id: true },
+        });
+        const isAssignedApprover = callerEmployee?.id === currentStep.approverEmployeeId;
+        const isOverride =
+          auth.systemRole === "SUPER_ADMIN" ||
+          (auth.roleId
+            ? await checkPermission(auth.tenantId, auth.roleId, "TIMESHEETS", "APPROVE")
+            : false);
+
+        if (!isAssignedApprover && !isOverride) return { forbidden: true as const };
+
+        await tx.approvalStep.update({
+          where: { id: currentStep.id },
+          data: { status: "REJECTED", actedByUserId: auth.userId, actedAt: new Date() },
+        });
+      }
+    }
+
     const prevApproved = ota.status === "APPROVED";
     const updated = await tx.oTApplication.update({
       where: { id },
@@ -47,14 +80,9 @@ export async function POST(
       },
     });
 
-    // If was previously APPROVED, reverse the DTR otMinutes sync
     if (prevApproved) {
       await tx.dTRRecord.updateMany({
-        where: {
-          tenantId: auth.tenantId,
-          employeeId: ota.employeeId,
-          date: ota.date,
-        },
+        where: { tenantId: auth.tenantId, employeeId: ota.employeeId, date: ota.date },
         data: { otMinutes: 0 },
       });
     }
@@ -62,8 +90,10 @@ export async function POST(
     return { notFound: false as const, notRejectable: false as const, row: updated };
   });
 
-  if (result.notFound) return notFound("OT application not found");
-  if (result.notRejectable)
+  if ("notFound" in result && result.notFound) return notFound("OT application not found");
+  if ("notRejectable" in result && result.notRejectable)
     return err(`Cannot reject a ${result.status} application`, 409);
+  if ("forbidden" in result && result.forbidden)
+    return err("You are not the assigned approver for this step", 403);
   return ok(result.row, "OT application rejected");
 }

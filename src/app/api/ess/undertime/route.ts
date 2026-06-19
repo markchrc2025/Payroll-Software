@@ -21,6 +21,7 @@ import { z } from "zod";
 import { getEssContext } from "@/lib/ess-auth";
 import { err, ok, paginated, serverError, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
+import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
 
 const createSchema = z.object({
   date: z.string().date("Must be a valid date (YYYY-MM-DD)"),
@@ -131,6 +132,24 @@ export async function POST(req: NextRequest) {
           status: "PENDING",
         },
       });
+
+      // Snapshot the approval chain. If no steps are configured for this
+      // employee, auto-approve immediately (aggregator excuses APPROVED rows).
+      const snap = await snapshotApprovalChain(tx, {
+        module: "UNDERTIME",
+        entityId: row.id,
+        requesterId: ctx.employeeId,
+        tenantId: ctx.tenantId,
+      });
+
+      if (snap.activeSteps === 0) {
+        const approved = await tx.undertimeRequest.update({
+          where: { id: row.id },
+          data: { status: "APPROVED", approvedAt: new Date() },
+        });
+        return approved;
+      }
+
       return row;
     });
 

@@ -152,6 +152,8 @@ enum ApprovalModule {
   DTR
   EXPENSE
   DOCUMENT
+  OT
+  UNDERTIME
 }
 
 enum MovementType {
@@ -2771,6 +2773,9 @@ model OTApplication {
   rejectionReason  String?        @db.Text
   cancelledAt      DateTime?
 
+  /// Active step pointer into the ApprovalStep chain (module = OT).
+  currentStepIndex Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2807,6 +2812,9 @@ model UndertimeRequest {
   rejectedAt      DateTime?
   rejectionReason String?        @db.Text
   cancelledAt     DateTime?
+
+  /// Active step pointer into the ApprovalStep chain (module = UNDERTIME).
+  currentStepIndex Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
