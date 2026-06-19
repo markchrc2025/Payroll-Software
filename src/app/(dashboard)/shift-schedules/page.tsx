@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2, RefreshCw, Clock, Infinity } from "lucide-react";
+import { Plus, RefreshCw, Clock, Infinity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,10 +25,10 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 export default function ShiftSchedulesPage() {
-  const [rows, setRows]       = useState<ApiShiftSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows]           = useState<ApiShiftSchedule[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editRow, setEditRow] = useState<ApiShiftSchedule | null>(null);
+  const [editRow, setEditRow]     = useState<ApiShiftSchedule | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,12 +50,10 @@ export default function ShiftSchedulesPage() {
     setModalOpen(true);
   }
 
-  async function handleDelete(row: ApiShiftSchedule) {
-    if (!confirm(`Delete shift "${row.name}"?`)) return;
-    const res = await fetch(`/api/shifts/${row.id}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("Failed to delete"); return; }
-    toast.success(`"${row.name}" deleted`);
-    load();
+  function typeLabel(type: string) {
+    if (type === "FLEXIBLE") return "Flexible";
+    if (type === "OPEN")     return "Open";
+    return "Fixed";
   }
 
   return (
@@ -72,10 +69,20 @@ export default function ShiftSchedulesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="h-9 text-[13px]"
+          >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
+          <Button
+            size="sm"
+            onClick={openCreate}
+            className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+          >
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Shift
           </Button>
         </div>
@@ -92,7 +99,7 @@ export default function ShiftSchedulesPage() {
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Work Days</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Break</TableHead>
               <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">OT</TableHead>
-              <TableHead className="w-[80px]" />
+              <TableHead className="w-[60px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -112,7 +119,11 @@ export default function ShiftSchedulesPage() {
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
+                <TableRow
+                  key={row.id}
+                  className="hover:bg-[#FAFBFF] cursor-pointer"
+                  onClick={() => openEdit(row)}
+                >
                   <TableCell className="font-medium text-[13.5px] text-[#111827]">
                     <div className="flex flex-col gap-0.5">
                       <span>{row.name}</span>
@@ -124,27 +135,33 @@ export default function ShiftSchedulesPage() {
                       <Badge variant="secondary" className="ml-2 text-xs">Night</Badge>
                     )}
                   </TableCell>
+
                   <TableCell>
-                    <Badge variant="outline">
-                      {row.type === "FLEXIBLE" ? "Flexible" : row.type === "OPEN" ? "Open" : "Fixed"}
-                    </Badge>
+                    <Badge variant="outline">{typeLabel(row.type)}</Badge>
                   </TableCell>
+
                   <TableCell className="font-mono text-[13px] text-[#4A586B]">
-                    {row.type === "OPEN" ? (
-                      <span className="flex items-center gap-1">
-                        <Infinity className="h-3 w-3" /> Open hours
-                      </span>
-                    ) : row.type === "FLEXIBLE" ? (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />{row.requiredHours ?? 8}h req&apos;d
+                    {row.type === "FIXED" ? (
+                      <>
+                        {row.timeIn} – {row.timeOut}
+                        {row.gracePeriodMinutes > 0 && (
+                          <div className="text-[11px] text-emerald-600 mt-0.5">
+                            {row.gracePeriodMinutes}min grace
+                          </div>
+                        )}
+                      </>
+                    ) : row.type === "OPEN" ? (
+                      <span className="flex items-center gap-1 font-sans">
+                        <Infinity className="h-3.5 w-3.5" /> Open
                       </span>
                     ) : (
-                      <>{row.timeIn} – {row.timeOut}</>
-                    )}
-                    {row.gracePeriodMinutes > 0 && (
-                      <div className="text-[11px] text-emerald-600 mt-0.5">{row.gracePeriodMinutes}min grace</div>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {row.requiredHours ?? 8}h req&apos;d
+                      </span>
                     )}
                   </TableCell>
+
                   <TableCell>
                     <div className="flex gap-0.5 flex-wrap">
                       {ALL_DAYS.map((d) => (
@@ -162,35 +179,40 @@ export default function ShiftSchedulesPage() {
                       ))}
                     </div>
                   </TableCell>
+
                   <TableCell className="text-[13px] text-[#6B7A8D]">
                     {row.breakMinutes}m
                     {(row.breakPolicy === "TRACK_ACTUAL" || row.breakPolicy === "PUNCH_IN_OUT") && (
-                      <span className="ml-1.5 text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1 py-0.5 font-medium">Tracked</span>
+                      <span className="ml-1.5 text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1 py-0.5 font-medium">
+                        Tracked
+                      </span>
                     )}
                     {row.breakPolicy === "PAID_BREAK" && (
-                      <span className="ml-1.5 text-[11px] bg-green-50 text-green-700 border border-green-200 rounded px-1 py-0.5 font-medium">Paid</span>
+                      <span className="ml-1.5 text-[11px] bg-green-50 text-green-700 border border-green-200 rounded px-1 py-0.5 font-medium">
+                        Paid
+                      </span>
                     )}
                   </TableCell>
+
                   <TableCell className="text-[13px] text-[#6B7A8D]">
-                    {row.otThresholdMinutes !== null
-                      ? <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 font-medium">Auto &gt;{Math.round(row.otThresholdMinutes / 60)}h</span>
-                      : <span className="text-[#C5CDD7]">Manual</span>
-                    }
+                    {row.otThresholdMinutes !== null ? (
+                      <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 font-medium">
+                        Auto &gt;{Math.round(row.otThresholdMinutes / 60)}h
+                      </span>
+                    ) : (
+                      <span className="text-[#C5CDD7]">Manual</span>
+                    )}
                   </TableCell>
+
                   <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(row)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); openEdit(row); }}
+                      className="text-[12px] text-[#6B7A8D] hover:text-[#2A2420]"
+                    >
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -199,6 +221,7 @@ export default function ShiftSchedulesPage() {
         </Table>
       </div>
 
+      {/* ── Modal ── */}
       <ShiftScheduleFormModal
         mode={editRow ? "edit" : "add"}
         open={modalOpen}
