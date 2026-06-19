@@ -129,6 +129,8 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       id:                  true,
       timeIn:              true,
       timeOut:             true,
+      coreTimeIn:          true,
+      coreTimeOut:         true,
       requiredHours:       true,
       gracePeriodMinutes:  true,
       breakMinutes:        true,
@@ -183,10 +185,12 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         ? {
             timeIn:             shift.timeIn             ?? null,
             timeOut:            shift.timeOut            ?? null,
+            coreTimeIn:         shift.coreTimeIn         ?? null,
+            coreTimeOut:        shift.coreTimeOut        ?? null,
             requiredHours:      shift.requiredHours      ?? null,
             gracePeriodMinutes: shift.gracePeriodMinutes ?? 0,
             breakMinutes:       shift.breakMinutes       ?? 60,
-            breakPolicy:        (shift.breakPolicy ?? "FIXED_DEDUCTION") as "FIXED_DEDUCTION" | "TRACK_ACTUAL",
+            breakPolicy:        shift.breakPolicy        ?? "FIXED_DEDUCTION",
             crossesMidnight:    shift.crossesMidnight    ?? false,
             otThresholdMinutes: shift.otThresholdMinutes ?? null,
           }
