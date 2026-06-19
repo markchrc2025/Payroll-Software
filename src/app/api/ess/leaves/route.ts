@@ -29,6 +29,7 @@ import {
 } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
+import { splitLeaveUnits, resolveOrCreateBalance } from "@/lib/leave/filing";
 
 // ---------------------------------------------------------------------------
 // GET
@@ -85,6 +86,7 @@ const FiledLeaveSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   /** Number of days (or hours if unit=HOURS). */
   amount: z.number().positive().max(365),
+  dayPortion: z.enum(["FULL", "HALF_AM", "HALF_PM"]).default("FULL"),
   reason: z.string().max(500).optional(),
 });
 
@@ -104,10 +106,13 @@ export async function POST(req: NextRequest) {
     return err("Validation failed", 400, parsed.error.flatten());
   }
 
-  const { leaveTypeId, startDate, endDate, amount, reason } = parsed.data;
+  const { leaveTypeId, startDate, endDate, amount, dayPortion, reason } = parsed.data;
 
   if (endDate < startDate) {
     return err("endDate must be on or after startDate", 400);
+  }
+  if (dayPortion !== "FULL" && endDate !== startDate) {
+    return err("Half-day leave must be a single date", 422);
   }
 
   const year = new Date(startDate).getFullYear();
@@ -120,16 +125,12 @@ export async function POST(req: NextRequest) {
       });
       if (!leaveType) return "leave_type_not_found" as const;
 
-      // Check balance
-      const balance = await tx.leaveBalance.findUnique({
-        where: { employeeId_leaveTypeId_year: { employeeId: ctx.employeeId, leaveTypeId, year } },
-      });
-      if (!balance) return "no_balance" as const;
-
-      const available = balance.earned.toNumber() - balance.used.toNumber() - balance.forfeited.toNumber();
-      if (amount > available) {
-        return { error: `Insufficient balance — available: ${available}` };
-      }
+      // Resolve (or create) the balance and split paid vs LWOP. Insufficient
+      // entitlement is filed as Leave-Without-Pay rather than rejected.
+      const balance = await resolveOrCreateBalance(tx, ctx.tenantId, ctx.employeeId, leaveTypeId, year);
+      const { paidUnits, unpaidUnits } = leaveType.isPaid
+        ? splitLeaveUnits(balance.available, amount)
+        : { paidUnits: 0, unpaidUnits: amount };
 
       const txn = await tx.leaveTransaction.create({
         data: {
@@ -139,6 +140,9 @@ export async function POST(req: NextRequest) {
           leaveBalanceId: balance.id,
           type: "USAGE",
           amount,
+          dayPortion,
+          paidUnits,
+          unpaidUnits,
           startDate: new Date(`${startDate}T00:00:00.000Z`),
           endDate: new Date(`${endDate}T00:00:00.000Z`),
           reason,
@@ -151,10 +155,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (result === "leave_type_not_found") return err("Leave type not found", 404);
-    if (result === "no_balance") {
-      return err("No leave balance record found for this year", 422);
-    }
-    if ("error" in result) return err(result.error, 422);
 
     return ok(serializeLeaveTransaction(result), "Leave request filed", 201);
   } catch (e) {

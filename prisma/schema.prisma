@@ -205,6 +205,13 @@ enum LeaveUnit {
   HOURS
 }
 
+/// Which portion of a day a (single-day) leave covers.
+enum LeavePortion {
+  FULL
+  HALF_AM
+  HALF_PM
+}
+
 enum AccrualFrequency {
   MONTHLY
   QUARTERLY
@@ -1743,6 +1750,14 @@ model LeaveTransaction {
   type   LeaveTransactionType
   amount Decimal              @db.Decimal(8, 4)
 
+  /// Which portion of the day the leave covers (single-day partial leaves).
+  dayPortion LeavePortion @default(FULL)
+  /// Units (days/hours) covered by entitlement — these debit the balance and
+  /// mark the DTR as PAID_LEAVE.
+  paidUnits   Decimal @default(0) @db.Decimal(8, 4)
+  /// Units beyond entitlement — Leave-Without-Pay; mark the DTR as UNPAID_LEAVE.
+  unpaidUnits Decimal @default(0) @db.Decimal(8, 4)
+
   startDate      DateTime?
   endDate        DateTime?
   reason         String?
@@ -1761,6 +1776,7 @@ model LeaveTransaction {
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
   employee       Employee        @relation(fields: [employeeId], references: [id])
   leaveType      LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  dtrRecords     DTRRecord[]
 
   @@index([tenantId])
   @@index([employeeId, leaveTypeId])
@@ -2476,6 +2492,11 @@ model DTRRecord {
   /// Night-shift differential minutes (10 PM – 6 AM window).
   nsdMinutes       Int          @default(0)
   hazardMinutes    Int          @default(0)
+  /// Paid-leave minutes credited to this day (from an approved leave). Counts
+  /// toward paid time and suppresses undertime for the covered portion.
+  paidLeaveMinutes Int          @default(0)
+  /// The approved leave that wrote this day's leave status, if any.
+  leaveTransactionId String?
   /// SPECIAL_HOLIDAY | REGULAR_HOLIDAY | null
   holidayType      String?
 
@@ -2515,9 +2536,10 @@ model DTRRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  employee      Employee       @relation(fields: [employeeId], references: [id])
-  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  employee      Employee          @relation(fields: [employeeId], references: [id])
+  shiftSchedule ShiftSchedule?    @relation(fields: [shiftScheduleId], references: [id])
+  leaveTransaction LeaveTransaction? @relation(fields: [leaveTransactionId], references: [id], onDelete: SetNull)
   auditLogs     DTRAuditLog[]
 
   @@unique([tenantId, employeeId, date])

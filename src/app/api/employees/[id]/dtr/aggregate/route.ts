@@ -216,7 +216,8 @@ export async function POST(
 
     for (const r of records) {
       const excused = excusedByDate.get(dateKey(new Date(r.date))) ?? 0;
-      const deductibleUndertime = Math.max(0, r.undertimeMinutes - excused);
+      // Approved undertime and paid-leave coverage both waive the deduction.
+      const deductibleUndertime = Math.max(0, r.undertimeMinutes - excused - r.paidLeaveMinutes);
       acc.lateUndertimeMinutes += r.lateMinutes + deductibleUndertime;
       acc.hazardMinutes        += r.hazardMinutes;
 

@@ -17,6 +17,8 @@ import {
 } from "@/lib/validations/leave";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
+import { splitLeaveUnits, resolveOrCreateBalance } from "@/lib/leave/filing";
+import { finalizeLeaveApproval } from "@/lib/leave/apply-to-dtr";
 
 export async function GET(
   req: NextRequest,
@@ -76,7 +78,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const parsed = fileLeaveRequestSchema.safeParse(body);
   if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
-  const { leaveTypeId, amount, startDate, endDate, reason } = parsed.data;
+  const { leaveTypeId, amount, startDate, endDate, dayPortion, reason } = parsed.data;
 
   const result = await withTenant(auth.tenantId, async (tx) => {
     const employee = await tx.employee.findFirst({
@@ -89,12 +91,12 @@ export async function POST(
     });
     if (!leaveType) return "no_leave_type" as const;
 
-    // Balance must exist for the year of startDate
+    // Resolve (or create) the balance for the year; split into paid + LWOP.
     const year = startDate.getUTCFullYear();
-    const balance = await tx.leaveBalance.findUnique({
-      where: { employeeId_leaveTypeId_year: { employeeId, leaveTypeId, year } },
-    });
-    if (!balance) return "no_balance" as const;
+    const balance = await resolveOrCreateBalance(tx, auth.tenantId, employeeId, leaveTypeId, year);
+    const { paidUnits, unpaidUnits } = leaveType.isPaid
+      ? splitLeaveUnits(balance.available, amount)
+      : { paidUnits: 0, unpaidUnits: amount };
 
     const leaveTransaction = await tx.leaveTransaction.create({
       data: {
@@ -104,6 +106,9 @@ export async function POST(
         leaveBalanceId: balance.id,
         type: "USAGE",
         amount,
+        dayPortion,
+        paidUnits,
+        unpaidUnits,
         startDate,
         endDate,
         reason: reason ?? null,
@@ -121,18 +126,13 @@ export async function POST(
       tenantId: auth.tenantId,
     });
 
-    // No resolvable approvers → auto-approve and debit the balance immediately.
+    // No resolvable approvers → auto-approve, debit paid units, write DTR.
     if (snap.activeSteps === 0) {
-      const [updated] = await Promise.all([
-        tx.leaveTransaction.update({
-          where: { id: leaveTransaction.id },
-          data: { approvalStatus: "APPROVED", approvedAt: new Date() },
-        }),
-        tx.leaveBalance.update({
-          where: { id: balance.id },
-          data: { used: { increment: amount } },
-        }),
-      ]);
+      const updated = await tx.leaveTransaction.update({
+        where: { id: leaveTransaction.id },
+        data: { approvalStatus: "APPROVED", approvedAt: new Date() },
+      });
+      await finalizeLeaveApproval(tx, leaveTransaction.id);
       return updated;
     }
 
@@ -148,8 +148,6 @@ export async function POST(
 
   if (result === "no_employee") return notFound("Employee");
   if (result === "no_leave_type") return notFound("LeaveType");
-  if (result === "no_balance")
-    return err("No leave balance found for this leave type and year", 422);
 
   return ok(serializeLeaveTransaction(result), "Leave request filed", 201);
 }
