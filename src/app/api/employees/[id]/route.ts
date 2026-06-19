@@ -7,11 +7,12 @@
 import type { NextRequest } from "next/server";
 import { StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission } from "@/lib/require-permission";
+import { requirePermission, checkPermission } from "@/lib/require-permission";
 import { centavosToJson, toCentavos } from "@/lib/money";
 import {
   ok,
   err,
+  forbidden,
   notFound,
 } from "@/lib/api-response";
 import { updateEmployeeSchema } from "@/lib/validations/employee";
@@ -88,6 +89,15 @@ export async function PUT(
   const parsed = updateEmployeeSchema.safeParse(body);
   if (!parsed.success)
     return err("Validation failed", 422, parsed.error.flatten());
+
+  // attendanceExempt is a payroll-affecting flag: only roles that also hold
+  // PAYROLL:UPDATE may enable it (in addition to the existing EMPLOYEES:UPDATE).
+  if (parsed.data.attendanceExempt === true && auth.roleId) {
+    const canManagePayroll = await checkPermission(auth.tenantId, auth.roleId, "PAYROLL", "UPDATE");
+    if (!canManagePayroll && auth.systemRole !== "SUPER_ADMIN") {
+      return forbidden();
+    }
+  }
 
   const {
     departmentId,

@@ -1132,6 +1132,10 @@ model Employee {
   /// or employees whose time clock is off). When true, punches are never
   /// flagged outsideGeofence.
   geofenceExempt    Boolean   @default(false)
+  /// Employee receives full pay for every scheduled workday without needing
+  /// time-clock punches or DTR records (e.g. executives, C-level). Leaves and
+  /// public holidays still apply. Only HR/Payroll Admin may enable this.
+  attendanceExempt  Boolean   @default(false)
 
   // Extended employment fields
   placementEffectiveDate DateTime?

@@ -130,7 +130,7 @@ export async function POST(
   const result = await withTenant(auth.tenantId, async (tx) => {
     const employee = await tx.employee.findFirst({
       where: { id: employeeId, tenantId: auth.tenantId },
-      select: { id: true },
+      select: { id: true, attendanceExempt: true },
     });
     if (!employee) return "NOT_FOUND";
 
@@ -234,6 +234,51 @@ export async function POST(
 
     const acc = emptyAcc();
 
+    if (employee.attendanceExempt) {
+      // Calendar-day scan: attendance-exempt employees (executives, C-level) are
+      // assumed present on every scheduled workday without needing punch records.
+      // Leave DTRRecords (written by finalizeLeaveApproval) and holidays still apply.
+      const leaveByDate = new Map<string, typeof records[number]>();
+      for (const r of records) {
+        if (r.dayStatus === "PAID_LEAVE" || r.dayStatus === "UNPAID_LEAVE") {
+          leaveByDate.set(dateKey(new Date(r.date)), r);
+        }
+      }
+
+      const msPerDay = 86_400_000;
+      for (
+        let d = new Date(periodStartDate);
+        d <= periodEndDate;
+        d = new Date(d.getTime() + msPerDay)
+      ) {
+        const dKey    = dateKey(d);
+        const weekday = DOW_TO_WEEKDAY[d.getUTCDay()];
+        if (!workDays.includes(weekday)) continue; // rest day — skip
+
+        const holCats   = holidayMap.get(dKey);
+        const holBucket = holCats ? toHolidayBucket(holCats) : null;
+        const leaveRec  = leaveByDate.get(dKey);
+
+        if (leaveRec?.dayStatus === "UNPAID_LEAVE") {
+          acc.unpaidLeaveDays++;
+          continue;
+        }
+
+        if (holBucket === "LEGAL" || holBucket === "DOUBLE") {
+          const entitled = await isEntitledToHolidayPay(employeeId, d, auth.tenantId, tx);
+          if (!entitled) {
+            acc.unpaidLeaveDays++;
+            continue;
+          }
+          acc.daysWorked++;
+          acc.noWorkRegularHolidayDays++;
+          continue;
+        }
+
+        // Normal workday or special holiday or paid leave — count as worked.
+        acc.daysWorked++;
+      }
+    } else {
     for (const r of records) {
       const excused = excusedByDate.get(dateKey(new Date(r.date))) ?? 0;
       // Approved undertime and paid-leave coverage both waive the deduction.
@@ -328,6 +373,7 @@ export async function POST(
         continue;
       }
     }
+    } // end non-exempt branch
 
     const data = {
       daysWorked:           new Prisma.Decimal(acc.daysWorked).toString(),
@@ -375,7 +421,9 @@ export async function POST(
       nightDiffDoubleHolidayRestDayHours:   minutesToHours(acc.nsdDoubleHolidayRestDayMinutes),
       nightDiffDoubleHolidayRestDayOtHours: minutesToHours(acc.nsdDoubleHolidayRestDayOtMinutes),
 
-      notes: `Aggregated from ${records.length} DTR records`,
+      notes: employee.attendanceExempt
+        ? `Attendance-exempt: calendar-day scan, ${records.length} leave record(s) applied`
+        : `Aggregated from ${records.length} DTR records`,
     };
 
     const existing = await tx.periodInput.findFirst({

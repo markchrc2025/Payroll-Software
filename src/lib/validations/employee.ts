@@ -215,6 +215,7 @@ export const createEmployeeSchema = z.object({
   allowProfileUpdate: z.coerce.boolean().optional().default(false),
   needsTimeClock: z.coerce.boolean().optional().default(true),
   geofenceExempt: z.coerce.boolean().optional().default(false),
+  attendanceExempt: z.coerce.boolean().optional().default(false),
 
   // Extended employment
   placementEffectiveDate: z.coerce.date().optional().nullable(),

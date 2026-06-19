@@ -146,6 +146,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   country: "Philippines",
   needsTimeClock: true,
   geofenceExempt: false,
+  attendanceExempt: false,
   allowProfileUpdate: false,
   directoryRole: "Employee",
   pvEmail: "Employee",
@@ -648,8 +649,9 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <TF control={c} name="hireDate"            label="Date Joined"      type="date" req        errors={e} />
-            <ToggleF control={c} name="needsTimeClock" label="Time Clock Needed"                 span2 />
-            <ToggleF control={c} name="geofenceExempt" label="Geofence Exempt"                   span2 />
+            <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 />
+            <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
+            <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 />
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <div className="col-span-2">
