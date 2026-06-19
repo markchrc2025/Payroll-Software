@@ -97,24 +97,56 @@ function atTime(dateUtcMidnight: Date, h: number, m: number): Date {
   return d;
 }
 
-/** NSD window: 22:00 to 06:00 next day. */
-function nsdOverlapMinutes(from: Date, to: Date): number {
-  let total = 0;
+/** Night-shift-differential window, minutes-from-midnight. Defaults 22:00–06:00. */
+export interface NsdWindow {
+  /** Window start, minutes from midnight (e.g. 1320 = 22:00). */
+  startMin: number;
+  /** Window end, minutes from midnight (e.g. 360 = 06:00). */
+  endMin: number;
+}
+
+const DEFAULT_NSD_WINDOW: NsdWindow = { startMin: 22 * 60, endMin: 6 * 60 };
+
+/**
+ * Overlap of [from, to] with the recurring nightly NSD window. The window may
+ * wrap midnight (startMin > endMin, e.g. 22:00→06:00) or not (startMin < endMin).
+ */
+function nsdOverlapMinutes(from: Date, to: Date, window: NsdWindow = DEFAULT_NSD_WINDOW): number {
   const base = new Date(from);
   base.setUTCHours(0, 0, 0, 0);
+  const at = (offsetMin: number) => base.getTime() + offsetMin * 60_000;
 
-  const nsdSegments: [Date, Date][] = [
-    [atTime(base, 0, 0), atTime(base, 6, 0)],
-    [atTime(base, 22, 0), new Date(atTime(base, 6, 0).getTime() + 86_400_000)],
-  ];
+  const wraps = window.startMin > window.endMin;
+  const segments: [number, number][] = wraps
+    ? [
+        // Tail of the previous night's window that lands on this morning.
+        [at(0), at(window.endMin)],
+        // This night's window, spilling into the next morning.
+        [at(window.startMin), at(1440 + window.endMin)],
+      ]
+    : [
+        [at(window.startMin), at(window.endMin)],
+        [at(1440 + window.startMin), at(1440 + window.endMin)],
+      ];
 
-  for (const [nsdStart, nsdEnd] of nsdSegments) {
-    const start = Math.max(from.getTime(), nsdStart.getTime());
-    const end = Math.min(to.getTime(), nsdEnd.getTime());
+  let total = 0;
+  for (const [segStart, segEnd] of segments) {
+    const start = Math.max(from.getTime(), segStart);
+    const end = Math.min(to.getTime(), segEnd);
     if (end > start) total += Math.round((end - start) / 60_000);
   }
-
   return total;
+}
+
+/** Parse "HH:MM" into minutes-from-midnight. Returns null on malformed input. */
+export function parseWindowMinutes(hhmm: string | null | undefined): number | null {
+  if (!hhmm) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
 }
 
 /** Compute worked minutes from punches using the specified break policy. */
@@ -175,6 +207,7 @@ export function computeDtrFields(
   dateUtcMidnight: Date,
   punches: AttendancePunch[],
   shift: ShiftContext | null,
+  nsdWindow: NsdWindow = DEFAULT_NSD_WINDOW,
 ): DtrComputed {
   const inPunches  = punches.filter((p) => p.punchType === "IN");
   const outPunches = punches.filter((p) => p.punchType === "OUT");
@@ -197,7 +230,7 @@ export function computeDtrFields(
       workedMinutes,
       lateMinutes: 0,
       undertimeMinutes: 0,
-      nsdMinutes: actualOut ? nsdOverlapMinutes(actualIn, actualOut) : 0,
+      nsdMinutes: actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow) : 0,
     };
   }
 
@@ -205,7 +238,7 @@ export function computeDtrFields(
     inPunches, outPunches, actualIn, actualOut,
     shift.breakPolicy, shift.breakMinutes,
   );
-  const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut) : 0;
+  const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow) : 0;
 
   // Auto-OT: flag excess minutes when threshold is configured. Advisory only —
   // this is a "file OT?" hint, never paid without an approved OT application.

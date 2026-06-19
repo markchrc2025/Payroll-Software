@@ -14,7 +14,7 @@
  */
 import { withTenant } from "@/lib/with-tenant";
 import { checkGeofence } from "@/lib/attendance/geofence";
-import { computeDtrFields } from "@/lib/attendance/compute-dtr";
+import { computeDtrFields, parseWindowMinutes } from "@/lib/attendance/compute-dtr";
 import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
@@ -182,6 +182,16 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       select: { punchType: true, punchedAt: true },
     });
 
+    // Resolve the tenant's configurable NSD window (always-on; window only).
+    const tenant = await tx.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: { nsdWindowStart: true, nsdWindowEnd: true },
+    });
+    const nsdWindow = {
+      startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
+      endMin:   parseWindowMinutes(tenant?.nsdWindowEnd)   ?? 6 * 60,
+    };
+
     const computed = computeDtrFields(
       punchDate,
       allPunches.map((p) => ({
@@ -202,6 +212,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             otThresholdMinutes: shift.otThresholdMinutes ?? null,
           }
         : null,
+      nsdWindow,
     );
 
     // 7. Upsert DTRRecord — skip if locked (payroll finalized)
