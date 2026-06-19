@@ -280,8 +280,8 @@ export default function EssLeavesPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="FULL">Full day</SelectItem>
-                  <SelectItem value="HALF_AM">Half day (AM)</SelectItem>
-                  <SelectItem value="HALF_PM">Half day (PM)</SelectItem>
+                  <SelectItem value="HALF_AM">Half day — First half (AM)</SelectItem>
+                  <SelectItem value="HALF_PM">Half day — Second half (PM)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
