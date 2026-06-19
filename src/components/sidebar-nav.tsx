@@ -144,6 +144,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/attendance", label: "Time & Attendance", icon: "time" },
       { href: "/shift-schedules", label: "Shift Schedules", icon: "time" },
       { href: "/ot-applications", label: "OT Applications", icon: "time" },
+      { href: "/undertime-requests", label: "Undertime Requests", icon: "time" },
       { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
       { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
       { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
