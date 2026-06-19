@@ -13,6 +13,37 @@ const WEEKDAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const
 
 const SHIFT_TYPES    = ["FIXED", "FLEXIBLE", "OPEN"] as const;
 const BREAK_POLICIES = ["FIXED_DEDUCTION", "FLOATING", "TRACK_ACTUAL", "PUNCH_IN_OUT", "PAID_BREAK"] as const;
+const OT_BREAK_MODES = ["NONE", "SINGLE", "TIERED"] as const;
+
+/** Per-shift overtime-policy fields shared by create/update. */
+const otPolicyFields = {
+  otRequiresApproval:  z.boolean().default(true),
+  otAutoApprove:       z.boolean().default(false),
+  otBreakMode:         z.enum(OT_BREAK_MODES).default("NONE"),
+  otBreakTriggerHours: z.number().min(0).max(24).optional().nullable(),
+  otBreakBlockHours:   z.number().min(0).max(24).optional().nullable(),
+  otBreakMinutes:      z.number().int().min(0).max(480).optional().nullable(),
+};
+
+/** Validate that the chosen OT break mode has the fields it needs. */
+function refineOtPolicy(
+  data: {
+    otBreakMode?: (typeof OT_BREAK_MODES)[number];
+    otBreakTriggerHours?: number | null;
+    otBreakBlockHours?: number | null;
+    otBreakMinutes?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (data.otBreakMode === "SINGLE") {
+    if (!data.otBreakTriggerHours) ctx.addIssue({ code: "custom", path: ["otBreakTriggerHours"], message: "Trigger hours required for SINGLE mode" });
+    if (!data.otBreakMinutes)      ctx.addIssue({ code: "custom", path: ["otBreakMinutes"],      message: "Break minutes required for SINGLE mode" });
+  }
+  if (data.otBreakMode === "TIERED") {
+    if (!data.otBreakBlockHours) ctx.addIssue({ code: "custom", path: ["otBreakBlockHours"], message: "Block hours required for TIERED mode" });
+    if (!data.otBreakMinutes)    ctx.addIssue({ code: "custom", path: ["otBreakMinutes"],    message: "Break minutes required for TIERED mode" });
+  }
+}
 
 export const createShiftScheduleSchema = z
   .object({
@@ -30,6 +61,7 @@ export const createShiftScheduleSchema = z
     crossesMidnight:    z.boolean().default(false),
     workDays:           z.array(z.enum(WEEKDAY_CODES)).min(1).max(7),
     otThresholdMinutes: z.number().int().min(0).optional().nullable(),
+    ...otPolicyFields,
     isActive:           z.boolean().default(true).optional(),
   })
   .superRefine((data, ctx) => {
@@ -37,6 +69,7 @@ export const createShiftScheduleSchema = z
       if (!data.timeIn)  ctx.addIssue({ code: "custom", path: ["timeIn"],  message: "timeIn is required for FIXED shifts" });
       if (!data.timeOut) ctx.addIssue({ code: "custom", path: ["timeOut"], message: "timeOut is required for FIXED shifts" });
     }
+    refineOtPolicy(data, ctx);
   });
 
 export const updateShiftScheduleSchema = z
@@ -55,7 +88,16 @@ export const updateShiftScheduleSchema = z
     crossesMidnight:    z.boolean().optional(),
     workDays:           z.array(z.enum(WEEKDAY_CODES)).min(1).max(7).optional(),
     otThresholdMinutes: z.number().int().min(0).optional().nullable(),
+    otRequiresApproval:  z.boolean().optional(),
+    otAutoApprove:       z.boolean().optional(),
+    otBreakMode:         z.enum(OT_BREAK_MODES).optional(),
+    otBreakTriggerHours: z.number().min(0).max(24).optional().nullable(),
+    otBreakBlockHours:   z.number().min(0).max(24).optional().nullable(),
+    otBreakMinutes:      z.number().int().min(0).max(480).optional().nullable(),
     isActive:           z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    refineOtPolicy(data, ctx);
   });
 
 export const listShiftSchedulesSchema = z.object({

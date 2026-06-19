@@ -10,6 +10,14 @@ import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { enqueueOtApproved } from "@/lib/jobs/workers";
+import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
+
+const OT_POLICY_SELECT = {
+  otBreakMode:         true,
+  otBreakTriggerHours: true,
+  otBreakBlockHours:   true,
+  otBreakMinutes:      true,
+} as const;
 
 export async function POST(
   req: NextRequest,
@@ -38,8 +46,33 @@ export async function POST(
       },
     });
 
+    // Resolve the employee's effective shift for that date to apply the OT
+    // break-deduction rule (e.g. 9h OT → 8h payable). Priority: effective-dated
+    // assignment → Employee.shiftScheduleId fallback. No shift → no deduction.
+    const otAssignment = await tx.employeeShiftAssignment.findFirst({
+      where: {
+        tenantId:      auth.tenantId,
+        employeeId:    ota.employeeId,
+        effectiveFrom: { lte: ota.date },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: ota.date } }],
+      },
+      orderBy: { effectiveFrom: "desc" },
+      select: { shiftSchedule: { select: OT_POLICY_SELECT } },
+    });
+    let otShift = otAssignment?.shiftSchedule ?? null;
+    if (!otShift) {
+      const emp = await tx.employee.findFirst({
+        where: { id: ota.employeeId, tenantId: auth.tenantId },
+        select: { shiftSchedule: { select: OT_POLICY_SELECT } },
+      });
+      otShift = emp?.shiftSchedule ?? null;
+    }
+
     // Sync DTRRecord.otMinutes — upsert so REST DAY OT creates a record too
-    const otMinutes = Math.round(Number(ota.hours) * 60);
+    const rawOtMinutes = Math.round(Number(ota.hours) * 60);
+    const otMinutes = otShift
+      ? applyOtBreakRule(rawOtMinutes, otShift)
+      : rawOtMinutes;
     await tx.dTRRecord.upsert({
       where: {
         tenantId_employeeId_date: {

@@ -12,10 +12,10 @@
  *  5. Load all AttendanceLogs for that employee+date, compute DTR fields.
  *  6. Upsert DTRRecord (create if missing, update if not locked).
  */
-import type { Prisma } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { checkGeofence } from "@/lib/attendance/geofence";
 import { computeDtrFields } from "@/lib/attendance/compute-dtr";
+import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
 
@@ -137,6 +137,11 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       breakPolicy:         true,
       crossesMidnight:     true,
       otThresholdMinutes:  true,
+      otAutoApprove:       true,
+      otBreakMode:         true,
+      otBreakTriggerHours: true,
+      otBreakBlockHours:   true,
+      otBreakMinutes:      true,
     } as const;
 
     const shiftAssignment = await tx.employeeShiftAssignment.findFirst({
@@ -206,44 +211,84 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
           date:       punchDate,
         },
       },
-      select: { id: true, isLocked: true, otMinutes: true },
+      select: { id: true, isLocked: true },
     });
 
     if (existingDtr?.isLocked) {
       return { ok: false, code: "DTR_LOCKED" };
     }
 
-    const dtrData: Prisma.DTRRecordCreateInput = {
-      tenant:           { connect: { id: input.tenantId } },
-      employee:         { connect: { id: input.employeeId } },
-      date:             punchDate,
-      shiftSchedule:    shift ? { connect: { id: shift.id } } : undefined,
-      dayStatus:        computed.dayStatus,
-      workedMinutes:    computed.workedMinutes,
-      lateMinutes:      computed.lateMinutes,
-      undertimeMinutes: computed.undertimeMinutes,
-      nsdMinutes:       computed.nsdMinutes,
-      otMinutes:        computed.otMinutes ?? 0,
-    };
+    // Overtime is never paid from the threshold alone. The threshold only
+    // *suggests* OT (advisory). Paid OT comes solely from an approved OT
+    // application. When the shift opts into auto-approve, create one here.
+    const suggestedOtMinutes = computed.suggestedOtMinutes ?? 0;
+    let autoApprovedOtMinutes: number | null = null;
+    if (shift?.otAutoApprove && suggestedOtMinutes > 0) {
+      const existingOtApp = await tx.oTApplication.findFirst({
+        where: {
+          tenantId:   input.tenantId,
+          employeeId: input.employeeId,
+          date:       punchDate,
+          status:     { in: ["PENDING", "APPROVED"] },
+        },
+        select: { id: true },
+      });
+      if (!existingOtApp) {
+        const payable = applyOtBreakRule(suggestedOtMinutes, {
+          otBreakMode:         shift.otBreakMode,
+          otBreakTriggerHours: shift.otBreakTriggerHours,
+          otBreakBlockHours:   shift.otBreakBlockHours,
+          otBreakMinutes:      shift.otBreakMinutes,
+        });
+        if (payable > 0) {
+          await tx.oTApplication.create({
+            data: {
+              tenantId:      input.tenantId,
+              employeeId:    input.employeeId,
+              date:          punchDate,
+              hours:         (payable / 60).toFixed(2),
+              justification: "Auto-approved: worked beyond scheduled hours.",
+              status:        "APPROVED",
+              approvedAt:    now,
+            },
+          });
+          autoApprovedOtMinutes = payable;
+        }
+      }
+    }
 
     const dtr = existingDtr
       ? await tx.dTRRecord.update({
           where: { id: existingDtr.id },
           data: {
-            dayStatus:        computed.dayStatus,
-            workedMinutes:    computed.workedMinutes,
-            lateMinutes:      computed.lateMinutes,
-            undertimeMinutes: computed.undertimeMinutes,
-            nsdMinutes:       computed.nsdMinutes,
+            dayStatus:          computed.dayStatus,
+            workedMinutes:      computed.workedMinutes,
+            lateMinutes:        computed.lateMinutes,
+            undertimeMinutes:   computed.undertimeMinutes,
+            nsdMinutes:         computed.nsdMinutes,
+            suggestedOtMinutes,
             ...(shift && { shiftScheduleId: shift.id }),
-            // Auto-flagged OT: only apply when no pre-approved OT exists on this record.
-            ...(computed.otMinutes !== undefined && (existingDtr.otMinutes ?? 0) === 0 && {
-              otMinutes: computed.otMinutes,
-            }),
+            // Paid OT only changes here when this punch just auto-approved it.
+            ...(autoApprovedOtMinutes !== null && { otMinutes: autoApprovedOtMinutes }),
           },
           select: { id: true },
         })
-      : await tx.dTRRecord.create({ data: dtrData, select: { id: true } });
+      : await tx.dTRRecord.create({
+          data: {
+            tenant:             { connect: { id: input.tenantId } },
+            employee:           { connect: { id: input.employeeId } },
+            date:               punchDate,
+            shiftSchedule:      shift ? { connect: { id: shift.id } } : undefined,
+            dayStatus:          computed.dayStatus,
+            workedMinutes:      computed.workedMinutes,
+            lateMinutes:        computed.lateMinutes,
+            undertimeMinutes:   computed.undertimeMinutes,
+            nsdMinutes:         computed.nsdMinutes,
+            suggestedOtMinutes,
+            otMinutes:          autoApprovedOtMinutes ?? 0,
+          },
+          select: { id: true },
+        });
 
     return { ok: true, log, dtr };
   });

@@ -78,6 +78,12 @@ export async function PATCH(
         ...(d.crossesMidnight    !== undefined && { crossesMidnight:    d.crossesMidnight }),
         ...(d.workDays           !== undefined && { workDays:           d.workDays }),
         ...(d.otThresholdMinutes !== undefined && { otThresholdMinutes: d.otThresholdMinutes }),
+        ...(d.otRequiresApproval  !== undefined && { otRequiresApproval:  d.otRequiresApproval }),
+        ...(d.otAutoApprove       !== undefined && { otAutoApprove:       d.otAutoApprove }),
+        ...(d.otBreakMode         !== undefined && { otBreakMode:         d.otBreakMode }),
+        ...(d.otBreakTriggerHours !== undefined && { otBreakTriggerHours: d.otBreakTriggerHours }),
+        ...(d.otBreakBlockHours   !== undefined && { otBreakBlockHours:   d.otBreakBlockHours }),
+        ...(d.otBreakMinutes      !== undefined && { otBreakMinutes:      d.otBreakMinutes }),
         ...(d.isActive           !== undefined && { isActive:           d.isActive }),
       },
     });

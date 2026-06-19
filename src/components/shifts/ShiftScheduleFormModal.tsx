@@ -63,7 +63,12 @@ interface FormState {
   // Work days
   days:        Record<string, boolean>;
   // OT
-  autoOT:      boolean;
+  otAutoApprove:  boolean;
+  otThreshold:    string; // worked-hours threshold for suggestion / auto-approve
+  otBreakMode:    "NONE" | "SINGLE" | "TIERED";
+  otBreakTrigger: string; // hours (SINGLE)
+  otBreakBlock:   string; // hours (TIERED)
+  otBreakMin:     string; // minutes deducted
 }
 
 export interface ApiShiftSchedule {
@@ -82,6 +87,12 @@ export interface ApiShiftSchedule {
   crossesMidnight:     boolean;
   workDays:            string[];
   otThresholdMinutes:  number | null;
+  otRequiresApproval?:  boolean;
+  otAutoApprove?:       boolean;
+  otBreakMode?:         string;
+  otBreakTriggerHours?: number | null;
+  otBreakBlockHours?:   number | null;
+  otBreakMinutes?:      number | null;
   isActive:            boolean;
   _count?:             { employees?: number };
 }
@@ -144,7 +155,12 @@ const DEFAULT_FORM: FormState = {
   breakMin:    "60",
   breakPolicy: "Auto-deduct (Fixed)",
   days:        emptyDays(),
-  autoOT:      false,
+  otAutoApprove:  false,
+  otThreshold:    "8",
+  otBreakMode:    "NONE",
+  otBreakTrigger: "6",
+  otBreakBlock:   "4",
+  otBreakMin:     "60",
 };
 
 function hydrate(row: ApiShiftSchedule): FormState {
@@ -166,7 +182,12 @@ function hydrate(row: ApiShiftSchedule): FormState {
     breakMin:    String(row.breakMinutes),
     breakPolicy: UI_POLICY[row.breakPolicy] ?? "Auto-deduct (Fixed)",
     days,
-    autoOT:      row.otThresholdMinutes !== null,
+    otAutoApprove:  row.otAutoApprove ?? false,
+    otThreshold:    row.otThresholdMinutes != null ? String(row.otThresholdMinutes / 60) : "8",
+    otBreakMode:    (row.otBreakMode as FormState["otBreakMode"]) ?? "NONE",
+    otBreakTrigger: row.otBreakTriggerHours != null ? String(row.otBreakTriggerHours) : "6",
+    otBreakBlock:   row.otBreakBlockHours   != null ? String(row.otBreakBlockHours)   : "4",
+    otBreakMin:     row.otBreakMinutes      != null ? String(row.otBreakMinutes)      : "60",
   };
 }
 
@@ -348,7 +369,15 @@ export function ShiftScheduleFormModal({
       breakPolicy:        API_POLICY[form.breakPolicy],
       crossesMidnight:    form.type === "Fixed" ? form.cross : false,
       workDays,
-      otThresholdMinutes: form.autoOT ? 480 : null,
+      otThresholdMinutes: (parseFloat(form.otThreshold) || 0) > 0
+        ? Math.round(parseFloat(form.otThreshold) * 60)
+        : null,
+      otRequiresApproval: true,
+      otAutoApprove:      form.otAutoApprove,
+      otBreakMode:        form.otBreakMode,
+      otBreakTriggerHours: form.otBreakMode === "SINGLE" ? (parseFloat(form.otBreakTrigger) || null) : null,
+      otBreakBlockHours:   form.otBreakMode === "TIERED" ? (parseFloat(form.otBreakBlock) || null) : null,
+      otBreakMinutes:      form.otBreakMode !== "NONE"    ? (parseInt(form.otBreakMin, 10) || null) : null,
     };
 
     const url    = mode === "edit" && initialData ? `/api/shifts/${initialData.id}` : "/api/shifts";
@@ -867,12 +896,54 @@ export function ShiftScheduleFormModal({
             {/* ── Section: Overtime ── */}
             <SectionDivider icon={<Zap className="size-3.5" />} label="Overtime" />
 
+            {/* Approval is mandatory — OT is never paid from the threshold alone. */}
+            <div
+              className="flex gap-2.5 rounded-[9px] px-3.5 py-2.5 mb-3"
+              style={{ background: "#fbf7e9", borderLeft: "3px solid #E8693A" }}
+            >
+              <span
+                className="flex-none flex items-center justify-center rounded-full text-[11px] font-bold size-4 mt-0.5"
+                style={{ background: "#d9c98a", color: "#6b5800" }}
+              >
+                i
+              </span>
+              <p className="text-[12px]" style={{ color: "#5a4800" }}>
+                Overtime is only paid after an approved OT application. The threshold
+                below just flags worked time as a suggestion.
+              </p>
+            </div>
+
+            {/* Threshold (hours worked before OT is suggested / auto-approved) */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[12.5px] font-medium text-[#2A2420]">
+                Suggest overtime beyond
+              </Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  value={form.otThreshold}
+                  onChange={(e) => set("otThreshold", e.target.value)}
+                  className="pr-[64px]"
+                />
+                <span
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
+                  style={{ color: "#9b9085" }}
+                >
+                  hours
+                </span>
+              </div>
+            </div>
+
+            {/* Auto-approve toggle */}
             <button
               type="button"
-              onClick={() => set("autoOT", !form.autoOT)}
+              onClick={() => set("otAutoApprove", !form.otAutoApprove)}
               className={cn(
-                "w-full flex items-center gap-3 rounded-[12px] border-[1.5px] px-4 py-3 text-left transition-all",
-                form.autoOT
+                "w-full flex items-center gap-3 rounded-[12px] border-[1.5px] px-4 py-3 text-left transition-all mt-3",
+                form.otAutoApprove
                   ? "border-[#E8693A] bg-[#fdeee6]"
                   : "border-[#ECE6DD] bg-white hover:border-[#d0c9c0]"
               )}
@@ -880,8 +951,8 @@ export function ShiftScheduleFormModal({
               <div
                 className="flex-none flex items-center justify-center rounded-[8px] size-9"
                 style={{
-                  background: form.autoOT ? "#E8693A" : "#F6F2EC",
-                  color:      form.autoOT ? "#fff"    : "#6B6259",
+                  background: form.otAutoApprove ? "#E8693A" : "#F6F2EC",
+                  color:      form.otAutoApprove ? "#fff"    : "#6B6259",
                 }}
               >
                 <Zap className="size-4" />
@@ -889,33 +960,98 @@ export function ShiftScheduleFormModal({
               <div className="flex-1 min-w-0">
                 <div
                   className="text-[13px] font-semibold"
-                  style={{ color: form.autoOT ? "#C2552F" : "#2A2420" }}
+                  style={{ color: form.otAutoApprove ? "#C2552F" : "#2A2420" }}
                 >
-                  Auto-detect overtime
+                  Auto-approve overtime beyond schedule
                 </div>
                 <div className="text-[11.5px]" style={{ color: "#9b9085" }}>
-                  {form.autoOT
-                    ? "OT flagged when worked hours exceed 8h — requires approval to pay."
-                    : "Overtime requires a manual OT application."}
+                  {form.otAutoApprove
+                    ? "Worked time past the threshold is auto-approved (break rule still applies)."
+                    : "Employees must file an OT application for approval."}
                 </div>
               </div>
-              {/* Pill toggle */}
               <div
                 className="flex-none relative transition-colors rounded-full"
                 style={{
                   width: 44, height: 25,
-                  background: form.autoOT ? "#E8693A" : "#d0c9c0",
+                  background: form.otAutoApprove ? "#E8693A" : "#d0c9c0",
                 }}
               >
                 <div
                   className="absolute top-[3px] rounded-full bg-white transition-all"
                   style={{
                     width: 19, height: 19,
-                    left: form.autoOT ? "calc(100% - 22px)" : "3px",
+                    left: form.otAutoApprove ? "calc(100% - 22px)" : "3px",
                   }}
                 />
               </div>
             </button>
+
+            {/* OT break-deduction rule */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[12.5px] font-medium text-[#2A2420]">OT break rule</Label>
+                <select
+                  value={form.otBreakMode}
+                  onChange={(e) => set("otBreakMode", e.target.value as FormState["otBreakMode"])}
+                  className="h-8 w-full rounded-lg border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                >
+                  <option value="NONE">None</option>
+                  <option value="SINGLE">Single threshold</option>
+                  <option value="TIERED">Per block (tiered)</option>
+                </select>
+              </div>
+
+              {form.otBreakMode === "SINGLE" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Deduct once OT ≥</Label>
+                  <div className="relative">
+                    <Input
+                      type="number" min={0} max={24} step={0.5}
+                      value={form.otBreakTrigger}
+                      onChange={(e) => set("otBreakTrigger", e.target.value)}
+                      className="pr-[56px]"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>hours</span>
+                  </div>
+                </div>
+              )}
+
+              {form.otBreakMode === "TIERED" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Per block of</Label>
+                  <div className="relative">
+                    <Input
+                      type="number" min={0} max={24} step={0.5}
+                      value={form.otBreakBlock}
+                      onChange={(e) => set("otBreakBlock", e.target.value)}
+                      className="pr-[56px]"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>hours</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {form.otBreakMode !== "NONE" && (
+              <div className="flex flex-col gap-1.5 mt-3">
+                <Label className="text-[12.5px] font-medium text-[#2A2420]">Break deducted</Label>
+                <div className="relative">
+                  <Input
+                    type="number" min={0} max={480}
+                    value={form.otBreakMin}
+                    onChange={(e) => set("otBreakMin", e.target.value)}
+                    className="pr-[72px]"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>minutes</span>
+                </div>
+                <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                  {form.otBreakMode === "SINGLE"
+                    ? `e.g. ${form.otBreakTrigger || "6"}h+ of OT → deduct ${form.otBreakMin || "60"} min once.`
+                    : `e.g. deduct ${form.otBreakMin || "60"} min for every ${form.otBreakBlock || "4"}h of OT.`}
+                </p>
+              </div>
+            )}
 
             {/* Form-level error */}
             {errors._form && (
