@@ -143,6 +143,24 @@ export async function POST(
       },
     });
 
+    // Approved undertime requests EXCUSE that day's undertime (it is not
+    // deducted). Build a date -> excused-minutes map. Only unfiled/unapproved
+    // undertime remains deductible.
+    const approvedUndertime = await tx.undertimeRequest.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        employeeId,
+        status: "APPROVED",
+        date: { gte: periodStartDate, lte: periodEndDate },
+      },
+      select: { date: true, undertimeMinutes: true },
+    });
+    const excusedByDate = new Map<string, number>();
+    for (const u of approvedUndertime) {
+      const k = dateKey(new Date(u.date));
+      excusedByDate.set(k, (excusedByDate.get(k) ?? 0) + u.undertimeMinutes);
+    }
+
     // Build holiday map: dateKey -> [HolidayCategory]
     const yearMonth = periodStartDate.toISOString().slice(0, 7); // YYYY-MM
     const holidays = await getOrSet(
@@ -197,7 +215,9 @@ export async function POST(
     const acc = emptyAcc();
 
     for (const r of records) {
-      acc.lateUndertimeMinutes += r.lateMinutes + r.undertimeMinutes;
+      const excused = excusedByDate.get(dateKey(new Date(r.date))) ?? 0;
+      const deductibleUndertime = Math.max(0, r.undertimeMinutes - excused);
+      acc.lateUndertimeMinutes += r.lateMinutes + deductibleUndertime;
       acc.hazardMinutes        += r.hazardMinutes;
 
       if (r.dayStatus === "ABSENT" || r.dayStatus === "UNPAID_LEAVE") {

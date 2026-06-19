@@ -2757,7 +2757,8 @@ model OTApplication {
 // =============================================================================
 
 /// Employee files an early-departure notification for supervisor approval.
-/// On APPROVED the linked DTRRecord.undertimeMinutes is set.
+/// On APPROVED the day's undertime is EXCUSED — the aggregator subtracts these
+/// minutes from the deductible total, so an approved early-out is not deducted.
 model UndertimeRequest {
   id         String @id @default(cuid())
   tenantId   String
