@@ -388,15 +388,22 @@ enum SeparationReason {
 enum ShiftType {
   FIXED
   FLEXIBLE
+  OPEN
 }
 
 enum BreakPolicy {
   /// System auto-deducts breakMinutes from the total span (firstIN → lastOUT).
   /// Employee does NOT clock out for lunch.
   FIXED_DEDUCTION
+  /// Floating break: employee can take the break at any time; system deducts the fixed amount.
+  FLOATING
   /// System sums only actual paired IN-OUT intervals.
   /// Employee must clock out before lunch and clock back in after.
   TRACK_ACTUAL
+  /// Employee punches in/out for break explicitly.
+  PUNCH_IN_OUT
+  /// Break is paid — no deduction applied.
+  PAID_BREAK
 }
 
 enum DTRStatus {
@@ -2361,8 +2368,12 @@ model ShiftSchedule {
   timeIn       String?
   /// Expected time-out in 24-hour "HH:MM" format. Null for FLEXIBLE shifts.
   timeOut      String?
-  /// Required hours per day for FLEXIBLE shifts (e.g. 8.0). Ignored for FIXED.
+  /// Required hours per day for FLEXIBLE/OPEN shifts (e.g. 8.0). Ignored for FIXED.
   requiredHours        Float?
+  /// Core window start for FLEXIBLE shifts — "HH:MM". Null for FIXED and OPEN.
+  coreTimeIn           String?
+  /// Core window end for FLEXIBLE shifts — "HH:MM". Null for FIXED and OPEN.
+  coreTimeOut          String?
   /// Minutes after expected time-in before tardiness is recorded (0 = strict).
   gracePeriodMinutes   Int     @default(0)
   breakMinutes         Int     @default(60)

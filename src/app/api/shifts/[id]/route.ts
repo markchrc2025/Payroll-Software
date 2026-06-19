@@ -69,6 +69,8 @@ export async function PATCH(
         ...(d.type               !== undefined && { type:               d.type }),
         ...(d.timeIn             !== undefined && { timeIn:             d.timeIn }),
         ...(d.timeOut            !== undefined && { timeOut:            d.timeOut }),
+        ...(d.coreTimeIn         !== undefined && { coreTimeIn:         d.coreTimeIn }),
+        ...(d.coreTimeOut        !== undefined && { coreTimeOut:        d.coreTimeOut }),
         ...(d.requiredHours      !== undefined && { requiredHours:      d.requiredHours }),
         ...(d.gracePeriodMinutes !== undefined && { gracePeriodMinutes: d.gracePeriodMinutes }),
         ...(d.breakMinutes       !== undefined && { breakMinutes:       d.breakMinutes }),
