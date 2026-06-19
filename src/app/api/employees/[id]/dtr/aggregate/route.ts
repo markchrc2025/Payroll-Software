@@ -134,6 +134,26 @@ export async function POST(
     });
     if (!employee) return "NOT_FOUND";
 
+    // Payroll gating: when the tenant requires employee DTR submission, the
+    // period must have a manager-approved DTRSubmission before it can be paid.
+    const dtrConfig = await tx.dTRApprovalConfig.findUnique({
+      where: { tenantId: auth.tenantId },
+      select: { requiresEmployeeSubmission: true },
+    });
+    if (dtrConfig?.requiresEmployeeSubmission) {
+      const approved = await tx.dTRSubmission.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          employeeId,
+          status: "MANAGER_APPROVED",
+          periodStart: { lte: periodEndDate },
+          periodEnd: { gte: periodStartDate },
+        },
+        select: { id: true },
+      });
+      if (!approved) return "NOT_APPROVED";
+    }
+
     const records = await tx.dTRRecord.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -392,5 +412,10 @@ export async function POST(
   });
 
   if (result === "NOT_FOUND") return notFound();
+  if (result === "NOT_APPROVED")
+    return err(
+      "DTR for this period is not manager-approved. Submit and approve the DTR before running payroll.",
+      409,
+    );
   return ok(result, "DTR aggregated into PeriodInput");
 }

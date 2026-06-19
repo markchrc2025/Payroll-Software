@@ -14,6 +14,7 @@ import {
 } from "@/lib/validations/dtr";
 import { enqueueDtrSubmitted } from "@/lib/jobs/workers";
 import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
+import { findSubmissionBlockers, describeBlockers } from "@/lib/dtr/submission-guard";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -92,6 +93,14 @@ export async function POST(req: NextRequest) {
     });
     if (existing) return "DUPLICATE";
 
+    // Block submission while OT / undertime / leave for this period are pending.
+    const blockers = await findSubmissionBlockers(
+      tx, auth.tenantId, d.employeeId, periodStart, periodEnd,
+    );
+    if (blockers.length > 0) {
+      return { blocked: true as const, blockers };
+    }
+
     const submission = await tx.dTRSubmission.create({
       data: {
         tenantId: auth.tenantId,
@@ -134,6 +143,13 @@ export async function POST(req: NextRequest) {
   if (result === "NOT_FOUND_EMP") return err("Employee not found", 404);
   if (result === "DUPLICATE")
     return err("A submission already exists for this employee and period", 409);
+  if (typeof result === "object" && "blocked" in result) {
+    return err(
+      `Resolve all filings before submitting: ${describeBlockers(result.blockers)}.`,
+      409,
+      { blockers: result.blockers },
+    );
+  }
 
   // Enqueue supervisor notification (best-effort)
   void enqueueDtrSubmitted({
