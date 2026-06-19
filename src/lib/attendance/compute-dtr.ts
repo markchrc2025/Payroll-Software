@@ -14,8 +14,13 @@
  *      undertimeMinutes = max(0, expectedOut − actualOut).
  *      workedMinutes    = actualOut − actualIn − breakMinutes (min 0).
  *  - FLEXIBLE shifts (timeIn/timeOut = null):
- *      lateMinutes      = 0 (no fixed start time).
- *      undertimeMinutes = max(0, requiredMinutes − workedMinutes).
+ *      lateMinutes      = max(0, actualIn − (coreTimeIn + grace)) when a core
+ *                         window is defined; 0 when there is no core start.
+ *      undertimeMinutes = max(requiredMinutes − workedMinutes, coreTimeOut − actualOut).
+ *  - Break policies (all five):
+ *      FIXED_DEDUCTION / FLOATING → span − breakMinutes.
+ *      PAID_BREAK                 → span (no deduction).
+ *      TRACK_ACTUAL / PUNCH_IN_OUT → sum of paired IN-OUT intervals.
  *  - Auto-OT: when otThresholdMinutes is set and workedMinutes exceeds it,
  *    otMinutes is flagged automatically (still requires approval to pay).
  *  - nsdMinutes = overlap of [actualIn, actualOut] with 22:00–06:00.
@@ -26,20 +31,35 @@ export interface AttendancePunch {
   punchedAt: Date;
 }
 
+/** Break-handling policy. Mirrors the Prisma `BreakPolicy` enum. */
+export type BreakPolicy =
+  | "FIXED_DEDUCTION"
+  | "FLOATING"
+  | "TRACK_ACTUAL"
+  | "PUNCH_IN_OUT"
+  | "PAID_BREAK";
+
 export interface ShiftContext {
   /** "HH:MM" for FIXED shifts; null for FLEXIBLE (no fixed start). */
   timeIn: string | null;
   /** "HH:MM" for FIXED shifts; null for FLEXIBLE (no fixed end). */
   timeOut: string | null;
+  /** "HH:MM" core-window start for FLEXIBLE shifts; null = no core start. */
+  coreTimeIn: string | null;
+  /** "HH:MM" core-window end for FLEXIBLE shifts; null = no core end. */
+  coreTimeOut: string | null;
   /** Required hours/day for FLEXIBLE shifts (e.g. 8.0). Ignored for FIXED. */
   requiredHours: number | null;
   breakMinutes: number;
   crossesMidnight: boolean;
   /**
-   * FIXED_DEDUCTION (default): auto-deduct breakMinutes from firstIN→lastOUT span.
-   * TRACK_ACTUAL: sum each paired IN-OUT interval; break = time spent clocked out.
+   * How the unpaid break is handled when computing worked minutes:
+   *  - FIXED_DEDUCTION / FLOATING: deduct breakMinutes from the firstIN→lastOUT span.
+   *  - PAID_BREAK: no deduction — the break is paid.
+   *  - TRACK_ACTUAL / PUNCH_IN_OUT: sum each paired IN-OUT interval (employee
+   *    clocks out for the break), so the break is whatever time was clocked out.
    */
-  breakPolicy: "FIXED_DEDUCTION" | "TRACK_ACTUAL";
+  breakPolicy: BreakPolicy;
   /** Minutes after expectedIn before tardiness is recorded. 0 = strict. */
   gracePeriodMinutes: number;
   /** Auto-flag OT when workedMinutes exceeds this. null = manual pre-approval only. */
@@ -99,12 +119,14 @@ function computeWorkedMinutes(
   outPunches: AttendancePunch[],
   actualIn: Date,
   actualOut: Date | null,
-  breakPolicy: "FIXED_DEDUCTION" | "TRACK_ACTUAL",
+  breakPolicy: BreakPolicy,
   breakMinutes: number,
 ): number {
   if (!actualOut) return 0;
 
-  if (breakPolicy === "TRACK_ACTUAL") {
+  // TRACK_ACTUAL / PUNCH_IN_OUT: employee clocks out for the break, so the
+  // break is the time spent clocked out. Sum only paired IN-OUT intervals.
+  if (breakPolicy === "TRACK_ACTUAL" || breakPolicy === "PUNCH_IN_OUT") {
     const sortedIns  = [...inPunches].sort((a, b) => a.punchedAt.getTime() - b.punchedAt.getTime());
     const sortedOuts = [...outPunches].sort((a, b) => a.punchedAt.getTime() - b.punchedAt.getTime());
     let total = 0;
@@ -123,11 +145,15 @@ function computeWorkedMinutes(
     return Math.max(0, total);
   }
 
-  // FIXED_DEDUCTION: span minus fixed break
-  return Math.max(
-    0,
-    Math.round((actualOut.getTime() - actualIn.getTime()) / 60_000 - breakMinutes),
-  );
+  const spanMinutes = Math.round((actualOut.getTime() - actualIn.getTime()) / 60_000);
+
+  // PAID_BREAK: the break is paid, so nothing is deducted from the span.
+  if (breakPolicy === "PAID_BREAK") {
+    return Math.max(0, spanMinutes);
+  }
+
+  // FIXED_DEDUCTION / FLOATING: span minus the fixed break amount.
+  return Math.max(0, spanMinutes - breakMinutes);
 }
 
 // ---------------------------------------------------------------------------
@@ -183,16 +209,48 @@ export function computeDtrFields(
       ? workedMinutes - shift.otThresholdMinutes
       : undefined;
 
-  // ── FLEXIBLE shift: no fixed start/end; measure against requiredHours ──
+  // ── FLEXIBLE shift: no fixed start/end; measure against requiredHours,
+  //    plus an optional core window (coreTimeIn/coreTimeOut) for late/undertime ──
   if (shift.timeIn === null || shift.timeOut === null) {
     const requiredMinutes =
       shift.requiredHours !== null ? Math.round(shift.requiredHours * 60) : 480;
-    const undertimeMinutes = Math.max(0, requiredMinutes - workedMinutes);
+
+    // Late: only when a core start is defined and the employee arrived after it
+    // (plus grace). No core start → flexible arrival, no tardiness.
+    let lateMinutes = 0;
+    if (shift.coreTimeIn) {
+      const { h, m } = parseHHMM(shift.coreTimeIn);
+      const coreStart = atTime(dateUtcMidnight, h, m);
+      const gracePeriodMs = (shift.gracePeriodMinutes ?? 0) * 60_000;
+      lateMinutes = Math.max(
+        0,
+        Math.round((actualIn.getTime() - coreStart.getTime() - gracePeriodMs) / 60_000),
+      );
+    }
+
+    // Undertime: the larger of the required-hours shortfall and (when a core end
+    // is defined) leaving before the core window closes.
+    let undertimeMinutes = Math.max(0, requiredMinutes - workedMinutes);
+    if (shift.coreTimeOut && actualOut) {
+      const { h, m } = parseHHMM(shift.coreTimeOut);
+      let coreEnd = atTime(dateUtcMidnight, h, m);
+      if (shift.crossesMidnight && shift.coreTimeIn) {
+        const { h: ch, m: cm } = parseHHMM(shift.coreTimeIn);
+        if (coreEnd <= atTime(dateUtcMidnight, ch, cm)) {
+          coreEnd = new Date(coreEnd.getTime() + 86_400_000);
+        }
+      }
+      const coreUndertime = Math.max(
+        0,
+        Math.round((coreEnd.getTime() - actualOut.getTime()) / 60_000),
+      );
+      undertimeMinutes = Math.max(undertimeMinutes, coreUndertime);
+    }
 
     return {
       dayStatus: "PRESENT",
       workedMinutes,
-      lateMinutes: 0,
+      lateMinutes,
       undertimeMinutes,
       nsdMinutes,
       ...(otMinutes !== undefined && { otMinutes }),
