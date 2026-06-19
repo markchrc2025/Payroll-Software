@@ -90,6 +90,24 @@ describe("computeDtrFields — break policies", () => {
   });
 });
 
+describe("computeDtrFields — NSD window", () => {
+  it("defaults to the 22:00–06:00 window", () => {
+    // Work 22:00 → 02:00 next day (crosses midnight) = 4h all within NSD.
+    const punches = [punch("IN", 22), { punchType: "OUT" as const, punchedAt: new Date("2026-06-16T02:00:00.000Z") }];
+    const r = computeDtrFields(DATE, punches, null);
+    expect(r.nsdMinutes).toBe(240);
+  });
+
+  it("respects a custom window (21:00–05:00)", () => {
+    // Work 20:00 → 23:00. Default window: 22–23 = 60m. Custom 21:00 start: 21–23 = 120m.
+    const punches = [punch("IN", 20), punch("OUT", 23)];
+    const def = computeDtrFields(DATE, punches, null);
+    expect(def.nsdMinutes).toBe(60);
+    const custom = computeDtrFields(DATE, punches, null, { startMin: 21 * 60, endMin: 5 * 60 });
+    expect(custom.nsdMinutes).toBe(120);
+  });
+});
+
 describe("computeDtrFields — flexible core window", () => {
   it("records late when arriving after coreTimeIn (+ grace)", () => {
     // core 09:00–15:00, arrives 09:30 → 30 min late

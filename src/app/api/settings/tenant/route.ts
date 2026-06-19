@@ -57,6 +57,10 @@ const patchSchema = z.object({
   thirteenthMonthBasis: z
     .enum(["STRICT_DOLE", "INCLUDE_ALLOWANCES"])
     .optional(),
+  // Night-shift differential window (NSD is always computed; only the window
+  // is configurable). HH:MM, 24-hour.
+  nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
+  nsdWindowEnd:   z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
   // Employee ID format — prefix/suffix restricted to URL-safe characters so
   // the Employee ID can be used directly in routes (e.g. /employees/EMP-0001).
   empIdPrefix:      z.string().max(20).regex(/^[A-Za-z0-9._-]*$/, "Only letters, numbers, and . _ - are allowed").optional(),
@@ -91,6 +95,8 @@ export async function GET(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        nsdWindowStart: true,
+        nsdWindowEnd: true,
         empIdPrefix: true,
         empIdIncludeYear: true,
         empIdPadding: true,
@@ -154,6 +160,8 @@ export async function PATCH(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        nsdWindowStart: true,
+        nsdWindowEnd: true,
         empIdPrefix: true,
         empIdIncludeYear: true,
         empIdPadding: true,

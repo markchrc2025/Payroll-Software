@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Save, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type TenantSettings = {
@@ -16,6 +17,8 @@ type TenantSettings = {
   workingDaysDenominator: number;
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
+  nsdWindowStart: string;
+  nsdWindowEnd: string;
 };
 
 const PAYROLL_CYCLE_OPTIONS = [
@@ -48,6 +51,8 @@ export default function PayRulesPage() {
     workingDaysDenominator: 261,
     statutoryCutoffRule: "SECOND_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
+    nsdWindowStart: "22:00",
+    nsdWindowEnd: "06:00",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,6 +69,8 @@ export default function PayRulesPage() {
         workingDaysDenominator: d.workingDaysDenominator,
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
+        nsdWindowStart: d.nsdWindowStart ?? "22:00",
+        nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
       setSettings(loaded);
       setForm(loaded);
@@ -181,6 +188,34 @@ export default function PayRulesPage() {
               value={form.thirteenthMonthBasis}
               onChange={(v) => update("thirteenthMonthBasis", v)}
             />
+          </RuleSection>
+
+          {/* Night-Shift Differential Window */}
+          <RuleSection
+            title="Night-Shift Differential Window"
+            description="NSD is always computed for hours worked in this window (Art. 86). It cannot be turned off — only the window is configurable. The 10% premium is set in Premium Rates."
+          >
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[12.5px] font-medium text-[#111827]">Window start</Label>
+                <Input
+                  type="time"
+                  className="w-36"
+                  value={form.nsdWindowStart}
+                  onChange={(e) => update("nsdWindowStart", e.target.value)}
+                />
+              </div>
+              <span className="pb-2 text-[#6B7A8D]">→</span>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[12.5px] font-medium text-[#111827]">Window end</Label>
+                <Input
+                  type="time"
+                  className="w-36"
+                  value={form.nsdWindowEnd}
+                  onChange={(e) => update("nsdWindowEnd", e.target.value)}
+                />
+              </div>
+            </div>
           </RuleSection>
         </div>
       )}

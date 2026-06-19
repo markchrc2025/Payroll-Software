@@ -592,6 +592,11 @@ model Tenant {
   statutoryCutoffRule    StatutoryCutoffRule  @default(SECOND_CUTOFF)
   thirteenthMonthBasis   ThirteenthMonthBasis @default(STRICT_DOLE)
   defaultDtrApproverId   String?
+  /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
+  /// be turned off); only the window is configurable. The premium multiplier
+  /// lives in PremiumRateConfig (key NSD, DOLE default 0.10).
+  nsdWindowStart         String               @default("22:00")
+  nsdWindowEnd           String               @default("06:00")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
