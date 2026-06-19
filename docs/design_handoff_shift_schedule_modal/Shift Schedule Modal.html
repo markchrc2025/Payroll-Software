@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentire Payroll — Shift Schedule Modal</title>
+<link rel="icon" type="image/svg+xml" href="padmin-assets/sentire-app-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --acc: #E8693A; --acc-press: #C2552F; --acc-soft: #fdeee6;
+    --ink: #2A2420; --muted: #6B6259; --muted-2: #9b9085;
+    --bg: #F6F2EC; --paper: #ffffff; --line: #ECE6DD; --line-2: #f1ece4;
+    --side-1: #2E241C; --side-2: #1f1813;
+    --ok: #4F9373; --danger: #C2402F; --danger-soft: #fbe9e6;
+    --font: "Instrument Sans", system-ui, sans-serif;
+    --body: "Hanken Grotesk", system-ui, sans-serif;
+    --mono: "JetBrains Mono", monospace;
+    --sb-thumb: #d9cfc2; --sb-thumb-hover: #c3b29c; --sb-size: 12px; --sb-inset: 4px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--body); background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  button { font-family: var(--font); cursor: pointer; }
+  ::selection { background: var(--acc-soft); }
+
+  /* ============ dimmed backdrop (page context only) ============ */
+  .bd { position: fixed; inset: 0; overflow: hidden; }
+  .bd-main { padding: 30px 40px; }
+  .bd-crumb { font-size: 12px; color: var(--muted-2); margin: 0 0 12px; font-family: var(--font); font-weight: 500; }
+  .bd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+  .bd-h1 { font-family: var(--font); font-weight: 600; font-size: 29px; letter-spacing: -0.025em; margin: 0 0 5px; color: var(--ink); }
+  .bd-sub { margin: 0; font-size: 13.5px; color: var(--muted); max-width: 520px; }
+  .bd-addbtn { display: inline-flex; align-items: center; gap: 7px; background: var(--acc); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-size: 13.5px; font-weight: 600; flex: none; }
+  .bd-card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .bd-thead, .bd-trow { display: grid; grid-template-columns: 1.7fr 1.1fr 1fr .8fr .8fr; gap: 18px; padding: 14px 22px; align-items: center; }
+  .bd-thead { border-bottom: 1px solid var(--line-2); }
+  .bd-th { font-family: var(--font); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
+  .bd-trow { border-bottom: 1px solid var(--line-2); }
+  .bd-sk { height: 13px; border-radius: 6px; background: #efe9e0; }
+
+  /* ============ scrim ============ */
+  .ov { position: fixed; inset: 0; background: rgba(33,26,21,.46); backdrop-filter: blur(2.5px); display: flex; align-items: center; justify-content: center; padding: 28px; z-index: 50; animation: ov .22s ease; }
+  @keyframes ov { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ====================== REUSABLE MODAL SHELL ====================== */
+  .m { background: var(--paper); border-radius: 18px; width: var(--m-w, 620px); max-width: 100%;
+       max-height: min(760px, calc(100vh - 56px));
+       box-shadow: 0 32px 70px -24px rgba(33,26,21,.55), 0 2px 8px -2px rgba(33,26,21,.18);
+       display: flex; flex-direction: column; overflow: hidden;
+       animation: pop .26s cubic-bezier(.2,.8,.3,1); }
+  @keyframes pop { from { transform: translateY(10px) scale(.985); opacity: .4; } to { transform: none; opacity: 1; } }
+  .m.size-md { --m-w: 620px; }
+
+  .m-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+            padding: 20px 24px 16px; border-bottom: 1px solid transparent; transition: border-color .18s, box-shadow .18s; }
+  .m[data-top="false"] .m-head { border-bottom-color: var(--line); box-shadow: 0 6px 14px -12px rgba(33,26,21,.4); }
+  .m-head-l { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .m-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; flex: none; }
+  .m-head h3 { font-family: var(--font); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; margin: 0; }
+  .m-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+  .m-x { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; transition: background .13s, color .13s; }
+  .m-x:hover { background: #f6f1ea; color: var(--ink); }
+
+  .m-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+              padding: 18px 24px 22px;
+              scrollbar-gutter: stable;
+              scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+  .m-scroll::-webkit-scrollbar { width: var(--sb-size); }
+  .m-scroll::-webkit-scrollbar-track { background: transparent; }
+  .m-scroll::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 99px;
+            border: var(--sb-inset) solid transparent; background-clip: padding-box; min-height: 40px; }
+  .m-scroll::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
+
+  .m-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+            padding: 13px 18px 13px 22px; border-top: 1px solid transparent; background: #fcfaf7; transition: border-color .18s, box-shadow .18s; }
+  .m[data-bottom="false"] .m-foot { border-top-color: var(--line); box-shadow: 0 -6px 14px -12px rgba(33,26,21,.4); }
+  .m-foot-r { display: flex; gap: 10px; flex: none; align-items: center; }
+
+  /* footer live summary chip */
+  .m-foot-summary { display: flex; align-items: center; gap: 10px; min-width: 0; font-family: var(--font); }
+  .m-foot-summary .fs-hours { display: flex; align-items: baseline; gap: 4px; }
+  .m-foot-summary .fs-n { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .m-foot-summary .fs-u { font-size: 11px; font-weight: 600; color: var(--muted-2); }
+  .m-foot-summary .fs-sep { width: 1px; height: 22px; background: var(--line); flex: none; }
+  .m-foot-summary .fs-meta { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+  .m-foot-summary .fs-meta b { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-foot-summary .fs-meta i { font-style: normal; font-size: 11px; color: var(--muted-2); white-space: nowrap; }
+
+  /* ============ shared controls ============ */
+  .flabel { font-family: var(--font); font-weight: 600; font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .req { color: var(--acc); font-weight: 700; }
+  .fhint { font-size: 11.5px; color: var(--muted-2); line-height: 1.4; }
+  .inp { font-family: var(--body); font-size: 13.5px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 0 12px; height: 40px; width: 100%; outline: none; transition: border-color .13s, box-shadow .13s; }
+  .inp::placeholder { color: #b3a99c; }
+  .inp:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  select.inp { appearance: none; cursor: pointer; padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239b9085' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; }
+
+  /* time field with leading clock glyph */
+  .timefld { position: relative; }
+  .timefld svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted-2); pointer-events: none; }
+  .timefld input { padding-left: 38px; font-family: var(--mono); font-size: 13.5px; letter-spacing: .01em; }
+  .timefld input::-webkit-calendar-picker-indicator { opacity: .55; cursor: pointer; }
+
+  .num-suffix { position: relative; }
+  .num-suffix input { padding-right: 56px; }
+  .num-suffix .sfx { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 11.5px; font-weight: 600; color: var(--muted-2); font-family: var(--font); pointer-events: none; }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; white-space: nowrap; border-radius: 10px; padding: 10px 17px; border: 1px solid transparent; transition: background .13s, border-color .13s, transform .12s; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--acc); color: #fff; box-shadow: 0 8px 18px -10px rgba(232,105,58,.75); }
+  .btn-primary:hover { background: var(--acc-press); }
+  .btn-ghost { background: var(--paper); color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { background: #f6f1ea; border-color: #ddd3c6; }
+  .btn-textdanger { background: none; border: none; color: var(--danger); font-size: 13px; font-weight: 600; padding: 8px 6px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-textdanger:hover { background: var(--danger-soft); }
+
+  /* ============ form layout ============ */
+  .fgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fld.s2 { grid-column: 1 / -1; }
+  .fsection { display: flex; align-items: center; gap: 11px; margin: 22px 0 13px; }
+  .fsection:first-child { margin-top: 2px; }
+  .fsection .lbl { font-family: var(--font); font-weight: 700; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--acc-press); white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+  .fsection .lbl svg { color: var(--acc); }
+  .fsection .ln { flex: 1; height: 1px; background: var(--line); }
+
+  /* name + code + color row */
+  .name-row { display: grid; grid-template-columns: 1fr 150px; gap: 14px; }
+  .color-row { display: flex; align-items: center; gap: 9px; height: 40px; }
+  .swatch { width: 26px; height: 26px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; position: relative; transition: transform .1s; }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.is-on { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px currentColor; }
+  .swatch.is-on::after { content: ""; position: absolute; inset: 0; display: flex; }
+
+  /* shift-type cards */
+  .typecards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .typecard { text-align: left; background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; padding: 13px 13px 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color .13s, background .13s, box-shadow .13s; position: relative; }
+  .typecard:hover { border-color: #ddd3c6; }
+  .typecard.is-on { border-color: var(--acc); background: var(--acc-soft); box-shadow: 0 0 0 3px rgba(232,105,58,.1); }
+  .typecard .tc-ic { width: 32px; height: 32px; border-radius: 9px; background: var(--bg); color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background .13s, color .13s; }
+  .typecard.is-on .tc-ic { background: #fff; color: var(--acc); }
+  .typecard b { font-family: var(--font); font-weight: 600; font-size: 13.5px; color: var(--ink); }
+  .typecard span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+
+  /* day toggle pills */
+  .days-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+  .days-presets { display: flex; gap: 6px; }
+  .days-presets button { font-family: var(--font); font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px; transition: color .12s, border-color .12s; }
+  .days-presets button:hover { color: var(--acc-press); border-color: var(--acc); }
+  .daypills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .daypill { flex: 1; min-width: 56px; font-family: var(--font); font-size: 13px; font-weight: 600; height: 42px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--paper); color: var(--muted); transition: all .12s; display: flex; align-items: center; justify-content: center; }
+  .daypill:hover { border-color: #ddd3c6; color: var(--ink); }
+  .daypill.is-on { background: var(--acc); border-color: var(--acc); color: #fff; box-shadow: 0 6px 14px -8px rgba(232,105,58,.7); }
+  .daypill.is-rest { background: var(--bg); }
+
+  /* toggle row card */
+  .togrow { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); transition: border-color .13s, background .13s; }
+  .togrow.is-on { border-color: var(--acc); background: var(--acc-soft); }
+  .togrow + .togrow { margin-top: 10px; }
+  .togrow-ic { width: 34px; height: 34px; border-radius: 9px; background: var(--bg); color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; }
+  .togrow.is-on .togrow-ic { background: #fff; color: var(--acc); }
+  .togrow-txt { flex: 1; min-width: 0; }
+  .togrow-txt b { font-family: var(--font); font-weight: 600; font-size: 13.5px; display: block; }
+  .togrow-txt i { font-style: normal; font-size: 11.5px; color: var(--muted-2); display: block; line-height: 1.35; margin-top: 2px; }
+
+  .pa-toggle { width: 44px; height: 25px; border-radius: 999px; background: #d8cfc2; border: none; padding: 0; position: relative; transition: background .16s; flex: none; }
+  .pa-toggle span { position: absolute; top: 3px; left: 3px; width: 19px; height: 19px; border-radius: 50%; background: #fff; transition: transform .16s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .pa-toggle.is-on { background: var(--acc); } .pa-toggle.is-on span { transform: translateX(19px); }
+
+  /* inline checkbox row (crosses midnight) */
+  .ckrow { display: flex; align-items: center; gap: 10px; margin-top: 4px; cursor: pointer; }
+  .ckrow .ck { appearance: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid #d4c9ba; background: var(--paper); cursor: pointer; position: relative; transition: background .12s, border-color .12s; flex: none; }
+  .ckrow .ck:hover { border-color: var(--acc); }
+  .ckrow .ck:checked { background: var(--acc); border-color: var(--acc); }
+  .ckrow .ck:checked::after { content: ""; position: absolute; left: 6px; top: 2.5px; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(42deg); }
+  .ckrow label { font-size: 13px; color: var(--ink); cursor: pointer; }
+  .ckrow label .mute { color: var(--muted-2); }
+
+  /* info note */
+  .fnote { display: flex; gap: 10px; background: #fbf7e9; border: 1px solid #ece2c0; border-left: 3px solid var(--acc); border-radius: 9px; padding: 10px 13px; margin-top: 12px; }
+  .fnote-ic { width: 17px; height: 17px; border-radius: 50%; background: #d9c98a; color: #6b5a1e; font-family: var(--font); font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; flex: none; margin-top: 1px; }
+  .fnote p { margin: 0; font-size: 12px; line-height: 1.5; color: #6b5d3c; }
+  .fnote p b { font-family: var(--mono); font-weight: 600; color: #5a4d2e; }
+
+  /* edit-mode meta banner */
+  .editmeta { display: flex; align-items: center; gap: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 11px 14px; margin-bottom: 18px; }
+  .editmeta-ic { width: 30px; height: 30px; border-radius: 8px; background: #e9eff7; color: #3e63a0; display: flex; align-items: center; justify-content: center; flex: none; }
+  .editmeta-txt { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .editmeta-txt b { font-family: var(--font); font-weight: 600; color: var(--ink); }
+
+  /* density: compact */
+  .m.compact .m-scroll { padding-top: 14px; padding-bottom: 18px; }
+  .m.compact .inp { height: 36px; }
+  .m.compact .fgrid { gap: 11px; }
+  .m.compact .fsection { margin: 17px 0 10px; }
+  .m.compact .daypill { height: 38px; }
+  .m.compact .typecard { padding: 11px 11px 10px; gap: 6px; }
+  .m.compact .togrow { padding: 11px 13px; }
+
+  @media (max-width: 640px) {
+    .typecards { grid-template-columns: 1fr; }
+    .name-row, .fgrid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "mode": "Add",
+  "shiftType": "Fixed",
+  "density": "comfortable"
+}/*EDITMODE-END*/;
+
+/* ---------- icons ---------- */
+const I = {
+  clock:  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>,
+  edit:   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>,
+  sliders:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>,
+  infinity:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18.18 8A4 4 0 1 0 18 16c1.5 0 2.5-1 3.5-2.5l-7-3C13.5 9 12.5 8 11 8a4 4 0 1 0 .18 8"/></svg>,
+  clockSm:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>,
+  coffee: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/></svg>,
+  cal:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+  zap:    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>,
+  moon:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>,
+  check:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>,
+  trash:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>,
+  users:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>,
+};
+
+const SWATCHES = ["#E8693A", "#3e63a0", "#1f7a4d", "#9a6a12", "#7A5AE0", "#b23b34"];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const TYPES = [
+  { id: "Fixed",    icon: I.clockSm,  title: "Fixed",    desc: "Specific time-in and time-out" },
+  { id: "Flexible", icon: I.sliders,  title: "Flexible", desc: "Core hours, required daily total" },
+  { id: "Open",     icon: I.infinity, title: "Open",     desc: "No set hours — total only" },
+];
+
+/* ---------- presets for Add vs Edit ---------- */
+const PRESET_ADD = {
+  name: "", code: "", color: "#E8693A", type: "Fixed",
+  timeIn: "08:00", timeOut: "17:00", grace: "0", cross: false,
+  coreIn: "10:00", coreOut: "15:00", reqHours: "8",
+  breakMin: "60", breakPolicy: "Auto-deduct (Fixed)",
+  days: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: false, Sun: false },
+  autoOT: false,
+};
+const PRESET_EDIT = {
+  name: "Night Shift", code: "NIGHT-8", color: "#7A5AE0", type: "Fixed",
+  timeIn: "22:00", timeOut: "06:00", grace: "10", cross: true,
+  coreIn: "10:00", coreOut: "15:00", reqHours: "8",
+  breakMin: "45", breakPolicy: "Floating",
+  days: { Mon: false, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false },
+  autoOT: true,
+};
+
+/* ---------- time math ---------- */
+function toMin(t) { const [h, m] = (t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); }
+function fmtHrs(min) {
+  if (min <= 0 || isNaN(min)) return "—";
+  const h = min / 60;
+  return (Math.round(h * 10) / 10).toString();
+}
+function spanMinutes(s) {
+  if (s.type === "Open") return null;
+  if (s.type === "Flexible") return (parseFloat(s.reqHours) || 0) * 60 + (parseInt(s.breakMin) || 0);
+  let span = toMin(s.timeOut) - toMin(s.timeIn);
+  if (s.cross || span <= 0) span += 1440;
+  return span;
+}
+function daySummary(days) {
+  const on = DAYS.filter(d => days[d]);
+  if (on.length === 0) return "No days selected";
+  if (on.length === 7) return "Every day";
+  // contiguous range?
+  const idx = on.map(d => DAYS.indexOf(d)).sort((a, b) => a - b);
+  const contiguous = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+  if (contiguous && on.length > 2) return DAYS[idx[0]] + "–" + DAYS[idx[idx.length - 1]];
+  return on.join(", ");
+}
+
+/* ====================== MODAL SHELL ====================== */
+function Modal({ size, compact, icon, title, subtitle, children, footSummary, actions, onClose }) {
+  const ref = useRef(null);
+  const [edge, setEdge] = useState({ top: true, bottom: true });
+  const measure = useCallback(() => {
+    const el = ref.current; if (!el) return;
+    setEdge({ top: el.scrollTop <= 1, bottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 1 });
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = ref.current; if (!el) return;
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, children]);
+  return (
+    <div className={"m size-" + size + (compact ? " compact" : "")} role="dialog" aria-modal="true"
+         data-top={edge.top} data-bottom={edge.bottom}>
+      <div className="m-head">
+        <div className="m-head-l">
+          <div className="m-ic">{icon}</div>
+          <div style={{ minWidth: 0 }}>
+            <h3>{title}</h3>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+        </div>
+        <button className="m-x" aria-label="Close" onClick={onClose}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div className="m-scroll" ref={ref} onScroll={measure}>{children}</div>
+      <div className="m-foot">
+        <div className="m-foot-summary">{footSummary}</div>
+        <div className="m-foot-r">{actions}</div>
+      </div>
+    </div>
+  );
+}
+
+/* wrapper so footer + body share one state instance */
+function ShiftModal({ mode, typeTweak, compact, onClose }) {
+  const initial = mode === "Edit" ? PRESET_EDIT : PRESET_ADD;
+  const form = useFormState(mode, initial, typeTweak);
+  return (
+    <Modal
+      size="md"
+      compact={compact}
+      icon={mode === "Edit" ? I.edit : I.clock}
+      title={mode === "Edit" ? "Edit Shift Schedule" : "Add Shift Schedule"}
+      subtitle={mode === "Edit"
+        ? "Adjust the working pattern — changes flow to assigned employees."
+        : "Define work hours, breaks and the days this pattern applies."}
+      footSummary={form.footer}
+      onClose={onClose}
+      actions={
+        <React.Fragment>
+          {mode === "Edit" && <button className="btn btn-textdanger" onClick={onClose}>{I.trash} Delete</button>}
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={onClose}>{I.check}{mode === "Edit" ? "Save changes" : "Create shift"}</button>
+        </React.Fragment>
+      }
+    >
+      {form.render}
+    </Modal>
+  );
+}
+
+/* hook: keeps the shift form state and lets the Tweak panel drive shiftType */
+function useFormState(mode, initial, typeTweak) {
+  const [s, setS] = useState(initial);
+  const set = (k, v) => setS(p => ({ ...p, [k]: v }));
+  const setDay = (d) => setS(p => ({ ...p, days: { ...p.days, [d]: !p.days[d] } }));
+  const setPreset = (which) => {
+    if (which === "weekdays") set("days", { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 1, Sat: 0, Sun: 0 });
+    if (which === "all") set("days", { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 1, Sat: 1, Sun: 1 });
+    if (which === "none") set("days", {});
+  };
+  // Tweak panel changes the shift type
+  useEffect(() => { if (typeTweak && typeTweak !== s.type) set("type", typeTweak); }, [typeTweak]);
+
+  const span = spanMinutes(s);
+  const paid = span == null ? null : span - (parseInt(s.breakMin) || 0);
+  const spanTxt = span == null ? null : fmtHrs(span);
+  const paidTxt = paid == null ? "—" : fmtHrs(paid);
+  const rangeTxt = s.type === "Open" ? "Open hours"
+    : s.type === "Flexible" ? "Core " + s.coreIn + "–" + s.coreOut
+    : s.timeIn + " → " + s.timeOut + (s.cross ? " +1" : "");
+
+  const render = (
+    <React.Fragment>
+      {mode === "Edit" && (
+        <div className="editmeta">
+          <span className="editmeta-ic">{I.users}</span>
+          <span className="editmeta-txt"><b>14 employees</b> are assigned to this schedule. Changes apply to their next worked day.</span>
+        </div>
+      )}
+
+      <div className="fsection"><span className="lbl">{I.cal} Schedule</span><div className="ln" /></div>
+      <div className="name-row">
+        <div className="fld">
+          <label className="flabel">Name <span className="req">*</span></label>
+          <input className="inp" value={s.name} placeholder="e.g. Day Shift" onChange={e => set("name", e.target.value)} />
+        </div>
+        <div className="fld">
+          <label className="flabel">Code</label>
+          <input className="inp" value={s.code} placeholder="DAY-8" onChange={e => set("code", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="fsection"><span className="lbl">{I.clockSm} Shift type</span><div className="ln" /></div>
+      <div className="typecards">
+        {TYPES.map(t => (
+          <button key={t.id} type="button" className={"typecard" + (s.type === t.id ? " is-on" : "")} onClick={() => set("type", t.id)}>
+            <span className="tc-ic">{t.icon}</span>
+            <b>{t.title}</b>
+            <span>{t.desc}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="fsection"><span className="lbl">{I.clockSm} Hours</span><div className="ln" /></div>
+      {s.type === "Fixed" && (
+        <React.Fragment>
+          <div className="fgrid">
+            <div className="fld">
+              <label className="flabel">Time in <span className="req">*</span></label>
+              <div className="timefld">{I.clockSm}<input className="inp" type="time" value={s.timeIn} onChange={e => set("timeIn", e.target.value)} /></div>
+            </div>
+            <div className="fld">
+              <label className="flabel">Time out <span className="req">*</span></label>
+              <div className="timefld">{I.clockSm}<input className="inp" type="time" value={s.timeOut} onChange={e => set("timeOut", e.target.value)} /></div>
+            </div>
+            <div className="fld s2">
+              <label className="flabel">Grace period</label>
+              <div className="num-suffix">
+                <input className="inp" type="number" min="0" value={s.grace} onChange={e => set("grace", e.target.value)} />
+                <span className="sfx">minutes</span>
+              </div>
+              <span className="fhint">Allowed lateness before tardiness is recorded. <b style={{ fontFamily: 'var(--mono)' }}>0</b> = strict.</span>
+            </div>
+          </div>
+          <div className="ckrow" onClick={() => set("cross", !s.cross)}>
+            <input type="checkbox" className="ck" checked={s.cross} readOnly />
+            <label>{I.moon}&nbsp; Crosses midnight <span className="mute">— e.g. 22:00–06:00 night shift</span></label>
+          </div>
+        </React.Fragment>
+      )}
+      {s.type === "Flexible" && (
+        <div className="fgrid">
+          <div className="fld">
+            <label className="flabel">Core start</label>
+            <div className="timefld">{I.clockSm}<input className="inp" type="time" value={s.coreIn} onChange={e => set("coreIn", e.target.value)} /></div>
+          </div>
+          <div className="fld">
+            <label className="flabel">Core end</label>
+            <div className="timefld">{I.clockSm}<input className="inp" type="time" value={s.coreOut} onChange={e => set("coreOut", e.target.value)} /></div>
+          </div>
+          <div className="fld s2">
+            <label className="flabel">Required hours / day</label>
+            <div className="num-suffix">
+              <input className="inp" type="number" min="0" step="0.5" value={s.reqHours} onChange={e => set("reqHours", e.target.value)} />
+              <span className="sfx">hours</span>
+            </div>
+            <span className="fhint">Employees may start any time but must be present during core hours and hit the daily total.</span>
+          </div>
+        </div>
+      )}
+      {s.type === "Open" && (
+        <div className="fld">
+          <label className="flabel">Required hours / day</label>
+          <div className="num-suffix">
+            <input className="inp" type="number" min="0" step="0.5" value={s.reqHours} onChange={e => set("reqHours", e.target.value)} />
+            <span className="sfx">hours</span>
+          </div>
+          <span className="fhint">No fixed schedule — only the total worked hours are tracked against the daily target.</span>
+        </div>
+      )}
+
+      <div className="fsection"><span className="lbl">{I.coffee} Break</span><div className="ln" /></div>
+      <div className="fgrid">
+        <div className="fld">
+          <label className="flabel">Break duration</label>
+          <div className="num-suffix">
+            <input className="inp" type="number" min="0" value={s.breakMin} onChange={e => set("breakMin", e.target.value)} />
+            <span className="sfx">minutes</span>
+          </div>
+        </div>
+        <div className="fld">
+          <label className="flabel">Break policy</label>
+          <select className="inp" value={s.breakPolicy} onChange={e => set("breakPolicy", e.target.value)}>
+            <option>Auto-deduct (Fixed)</option>
+            <option>Floating</option>
+            <option>Punch in / out</option>
+            <option>Paid break</option>
+          </select>
+        </div>
+      </div>
+      <div className="fnote">
+        <span className="fnote-ic">i</span>
+        <p>Worked hours = (last clock-out − first clock-in) − <b>{s.breakMin || 0} min</b>{s.breakPolicy === "Paid break" ? " — break is paid, nothing deducted" : ". No lunch punch needed"}.</p>
+      </div>
+
+      <div className="fsection"><span className="lbl">{I.cal} Work days <span className="req">*</span></span><div className="ln" /></div>
+      <div className="days-head">
+        <span className="fhint">{daySummary(s.days)} · {DAYS.filter(d => s.days[d]).length} days / week</span>
+        <div className="days-presets">
+          <button type="button" onClick={() => setPreset("weekdays")}>Weekdays</button>
+          <button type="button" onClick={() => setPreset("all")}>All</button>
+          <button type="button" onClick={() => setPreset("none")}>Clear</button>
+        </div>
+      </div>
+      <div className="daypills">
+        {DAYS.map(d => {
+          const rest = d === "Sat" || d === "Sun";
+          return <button key={d} type="button" className={"daypill" + (s.days[d] ? " is-on" : rest ? " is-rest" : "")} onClick={() => setDay(d)}>{d}</button>;
+        })}
+      </div>
+
+      <div className="fsection"><span className="lbl">{I.zap} Overtime</span><div className="ln" /></div>
+      <div className={"togrow" + (s.autoOT ? " is-on" : "")} onClick={() => set("autoOT", !s.autoOT)}>
+        <span className="togrow-ic">{I.zap}</span>
+        <span className="togrow-txt">
+          <b>Auto-detect overtime</b>
+          <i>{s.autoOT ? "Hours past time-out are flagged for approval automatically." : "Overtime requires a manual OT application — no auto-flagging."}</i>
+        </span>
+        <button type="button" className={"pa-toggle" + (s.autoOT ? " is-on" : "")} aria-pressed={s.autoOT}><span></span></button>
+      </div>
+    </React.Fragment>
+  );
+
+  const footer = (
+    <React.Fragment>
+      <div className="fs-hours">
+        <span className="fs-n">{paidTxt}</span>
+        <span className="fs-u">h paid</span>
+      </div>
+      <div className="fs-sep" />
+      <div className="fs-meta">
+        <b>
+          {rangeTxt}
+        </b>
+        <i>{daySummary(s.days)}</i>
+      </div>
+    </React.Fragment>
+  );
+
+  return { render, footer };
+}
+
+/* ---------- page backdrop (Shift Schedules, dimmed) ---------- */
+function Backdrop() {
+  const rows = [
+    ["62%", "40%", "30%", "26%", "20%"],
+    ["48%", "52%", "34%", "30%", "16%"],
+    ["70%", "38%", "28%", "24%", "22%"],
+    ["54%", "46%", "32%", "28%", "18%"],
+  ];
+  return (
+    <div className="bd" aria-hidden="true">
+      <div className="bd-main">
+        <p className="bd-crumb">Attendance · Shift Schedules</p>
+        <div className="bd-head">
+          <div>
+            <h1 className="bd-h1">Shift Schedules</h1>
+            <p className="bd-sub">Named shift templates that define work hours, break rules and overtime behaviour.</p>
+          </div>
+          <button className="bd-addbtn">+ Add Shift</button>
+        </div>
+        <div className="bd-card">
+          <div className="bd-thead">
+            <div className="bd-th">Name</div><div className="bd-th">Type</div><div className="bd-th">Hours</div><div className="bd-th">Break</div><div className="bd-th">OT</div>
+          </div>
+          {rows.map((r, i) => (
+            <div className="bd-trow" key={i}>
+              {r.map((w, j) => <div className="bd-sk" style={{ width: w }} key={j} />)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [open, setOpen] = useState(true);
+  return (
+    <React.Fragment>
+      <Backdrop />
+      {open && (
+        <div className="ov" onMouseDown={e => { if (e.target.classList.contains("ov")) setOpen(false); }}>
+          <ShiftModal key={t.mode} mode={t.mode} typeTweak={t.shiftType} compact={t.density === "compact"} onClose={() => setOpen(false)} />
+        </div>
+      )}
+      {!open && (
+        <div className="ov" style={{ background: "transparent", backdropFilter: "none" }}>
+          <button className="btn btn-primary" onClick={() => setOpen(true)}>Re-open modal</button>
+        </div>
+      )}
+
+      <TweaksPanel>
+        <TweakSection label="Modal" />
+        <TweakRadio label="Mode" value={t.mode} options={["Add", "Edit"]} onChange={v => setTweak("mode", v)} />
+        <TweakSection label="Shift type" />
+        <TweakRadio label="Type" value={t.shiftType} options={["Fixed", "Flexible", "Open"]} onChange={v => setTweak("shiftType", v)} />
+        <TweakSection label="Density" />
+        <TweakRadio label="Density" value={t.density} options={["comfortable", "compact"]} onChange={v => setTweak("density", v)} />
+      </TweaksPanel>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
