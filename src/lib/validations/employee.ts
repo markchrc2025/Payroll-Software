@@ -214,6 +214,7 @@ export const createEmployeeSchema = z.object({
   religion: z.string().max(100).optional().nullable(),
   allowProfileUpdate: z.coerce.boolean().optional().default(false),
   needsTimeClock: z.coerce.boolean().optional().default(true),
+  geofenceExempt: z.coerce.boolean().optional().default(false),
 
   // Extended employment
   placementEffectiveDate: z.coerce.date().optional().nullable(),

@@ -53,7 +53,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     // 1. Verify employee exists
     const employee = await tx.employee.findFirst({
       where: { id: input.employeeId, tenantId: input.tenantId, deletedAt: null },
-      select: { id: true, branchId: true, shiftScheduleId: true },
+      select: { id: true, branchId: true, shiftScheduleId: true, geofenceExempt: true, needsTimeClock: true },
     });
     if (!employee) return { ok: false, code: "EMPLOYEE_NOT_FOUND" };
 
@@ -82,9 +82,11 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       }
     }
 
-    // 3. Geofence check — only if GPS provided and branch has a geofence
+    // 3. Geofence check — only if GPS provided and branch has a geofence.
+    //    Skipped for exempt employees (field staff / time-clock off).
+    const geofenceExempt = employee.geofenceExempt || employee.needsTimeClock === false;
     let geofenceResult = { outsideGeofence: false, distanceMeters: null as number | null };
-    if (input.latitude != null && input.longitude != null && employee.branchId) {
+    if (!geofenceExempt && input.latitude != null && input.longitude != null && employee.branchId) {
       const geofence = await getOrSet(
         CacheKeys.geofence(input.tenantId, employee.branchId),
         TTL.GEOFENCE,
