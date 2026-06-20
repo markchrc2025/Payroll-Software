@@ -486,8 +486,9 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const watchedDeptId  = form.watch("departmentId");
-  const watchedLevelId = form.watch("levelId");
+  const watchedDeptId          = form.watch("departmentId");
+  const watchedLevelId         = form.watch("levelId");
+  const watchedAttendanceExempt = form.watch("attendanceExempt");
 
   useEffect(() => {
     const currentPosId = form.getValues("positionId");
@@ -498,6 +499,10 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
     const deptMismatch  = pos.departmentId && watchedDeptId && watchedDeptId !== "none" && pos.departmentId !== watchedDeptId;
     if (levelMismatch || deptMismatch) form.setValue("positionId", null);
   }, [watchedDeptId, watchedLevelId, form, positions]);
+
+  useEffect(() => {
+    if (watchedAttendanceExempt) setValue("needsTimeClock", false);
+  }, [watchedAttendanceExempt, setValue]);
 
   async function handlePhotoFile(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
