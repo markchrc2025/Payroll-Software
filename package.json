@@ -11,7 +11,7 @@
     "dev:prewarm": "bash scripts/dev-keepalive.sh prewarm",
     "dev:stop": "bash scripts/dev-keepalive.sh stop",
     "dev:logs": "bash scripts/dev-keepalive.sh logs",
-    "build": "next build",
+    "build": "prisma migrate deploy && next build",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "start": "next start",
