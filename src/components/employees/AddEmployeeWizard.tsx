@@ -472,14 +472,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
 
   const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset, setValue } = form;
 
-  // Read-only Employee ID preview (non-locking, actual ID assigned atomically on save).
-  const [nextIdPreview, setNextIdPreview] = useState<string | null>(null);
-  useEffect(() => {
-    fetch("/api/employees/next-id")
-      .then((r) => r.ok ? r.json() : null)
-      .then((j) => j?.data?.previewId && setNextIdPreview(j.data.previewId))
-      .catch(() => null);
-  }, []);
 
   // Profile photo upload (R2, tenant-namespaced) — wired to the "Change photo" control.
   const photoRef = useRef<HTMLInputElement>(null);
@@ -619,7 +611,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                   className="flex h-10 items-center rounded-md border px-3 font-mono text-[13.5px] font-semibold min-w-[140px]"
                   style={{ borderColor: "#ECE6DD", background: "#F6F2EC", color: "#E8693A" }}
                 >
-                  {nextIdPreview ?? "—"}
+                  {"—"}
                 </div>
                 <span className="text-[11.5px]" style={{ color: "#9b9085" }}>
                   Auto-assigned on save
