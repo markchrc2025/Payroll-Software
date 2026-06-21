@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import type { Control, FieldErrors, Path } from "react-hook-form";
+import type { Control, FieldErrors, Path, UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -332,21 +332,34 @@ function MF({
   );
 }
 
-// Toggle / Switch row
+// Toggle / Switch row.
+// `exclusiveWith` makes this toggle mutually exclusive with another boolean
+// field: turning this one ON forces the partner OFF (and vice-versa, when the
+// partner is wired symmetrically), so both can never be enabled at once.
 function ToggleF({
-  control, name, label, span2,
+  control, name, label, span2, exclusiveWith, setValue,
 }: {
   control: Control<CreateEmployeeInput>;
   name: Path<CreateEmployeeInput>;
   label: string;
   span2?: boolean;
+  exclusiveWith?: Path<CreateEmployeeInput>;
+  setValue?: UseFormSetValue<CreateEmployeeInput>;
 }) {
   return (
     <div className={`flex items-center justify-between rounded-[9px] px-4 py-3 ${span2 ? "col-span-2" : ""}`}
       style={{ background: "#F6F2EC", border: "1px solid #ECE6DD" }}>
       <span className="text-[13.5px]" style={{ color: "#2A2420" }}>{label}</span>
       <Controller control={control} name={name} render={({ field }) => (
-        <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+        <Switch
+          checked={!!field.value}
+          onCheckedChange={(checked) => {
+            field.onChange(checked);
+            if (checked && exclusiveWith && setValue) {
+              setValue(exclusiveWith, false as never, { shouldDirty: true, shouldValidate: true });
+            }
+          }}
+        />
       )} />
     </div>
   );
@@ -480,7 +493,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
 
   const watchedDeptId          = form.watch("departmentId");
   const watchedLevelId         = form.watch("levelId");
-  const watchedAttendanceExempt = form.watch("attendanceExempt");
 
   useEffect(() => {
     const currentPosId = form.getValues("positionId");
@@ -491,10 +503,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
     const deptMismatch  = pos.departmentId && watchedDeptId && watchedDeptId !== "none" && pos.departmentId !== watchedDeptId;
     if (levelMismatch || deptMismatch) form.setValue("positionId", null);
   }, [watchedDeptId, watchedLevelId, form, positions]);
-
-  useEffect(() => {
-    if (watchedAttendanceExempt) setValue("needsTimeClock", false);
-  }, [watchedAttendanceExempt, setValue]);
 
   async function handlePhotoFile(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
@@ -646,9 +654,9 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <TF control={c} name="hireDate"            label="Date Joined"      type="date" req        errors={e} />
-            <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 />
+            <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 exclusiveWith="attendanceExempt" setValue={setValue} />
             <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
-            <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 />
+            <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 exclusiveWith="needsTimeClock" setValue={setValue} />
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
             <div className="col-span-2">
