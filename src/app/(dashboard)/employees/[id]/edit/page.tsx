@@ -75,8 +75,6 @@ export default async function EditEmployeePage({
           philhealthNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "PHILHEALTH")?.number ?? "",
           pagibigNumber: employee.statutoryIds.find((s: { type: string }) => s.type === "PAGIBIG")?.number ?? "",
           gsisMembershipId: employee.statutoryIds.find((s: { type: string }) => s.type === "GSIS")?.number ?? "",
-          taxExempt: false,
-          taxExemptReason: "",
         }
       : undefined,
   };

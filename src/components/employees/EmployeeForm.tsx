@@ -31,8 +31,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -220,8 +218,6 @@ export function EmployeeForm({
         philhealthNumber: "",
         pagibigNumber: "",
         gsisMembershipId: "",
-        taxExempt: false,
-        taxExemptReason: "",
       },
       ...initialData,
     },
@@ -574,46 +570,6 @@ export function EmployeeForm({
               placeholder="Optional"
             />
           </div>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <FormField
-            control={form.control}
-            name={"statutoryIds.taxExempt" as Path<CreateEmployeeInput>}
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start gap-3 rounded-md border p-3">
-                <FormControl>
-                  <Checkbox
-                    checked={!!field.value}
-                    onCheckedChange={(checked: boolean) => field.onChange(checked)}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel>Tax-exempt employee</FormLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Minimum wage earners and certain BIR-exempt cases. Withholding tax will be skipped.
-                  </p>
-                </div>
-              </FormItem>
-            )}
-          />
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <FormField
-            control={form.control}
-            name={"statutoryIds.taxExemptReason" as Path<CreateEmployeeInput>}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tax Exemption Reason</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={2}
-                    placeholder="e.g. Minimum wage earner under RA 9504"
-                    {...field}
-                    value={(field.value as string) ?? ""}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </section>
 
         {/* ─── Actions ─────────────────────────────────────────────────────── */}

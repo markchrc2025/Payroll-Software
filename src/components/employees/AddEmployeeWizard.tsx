@@ -159,7 +159,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   pvFamilyBirthday: "Employee",
   pvAnniversary: "Employee",
   numberOfChildren: 0,
-  workflowId: "",
+  workflowId: null,
   branchId: "",
   jobTypeId: undefined,
   jobStatusId: undefined,
@@ -172,8 +172,6 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
     philhealthNumber: "",
     pagibigNumber: "",
     gsisMembershipId: "",
-    taxExempt: false,
-    taxExemptReason: "",
   },
 };
 
@@ -628,8 +626,8 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <TF control={c} name="firstName"     label="First Name"   placeholder="Juan"       req   errors={e} />
             <TF control={c} name="middleName"    label="Middle Name"  placeholder="Ponce"            errors={e} />
             <TF control={c} name="lastName"      label="Last Name"    placeholder="dela Cruz"  req   span2 errors={e} />
-            <SF control={c} name="gender"        label="Gender"       options={GENDER_OPT}     req   span2 errors={e} />
-            <TF control={c} name="birthDate"     label="Birth Date"   type="date"              req   span2 errors={e} />
+            <SF control={c} name="gender"        label="Gender"       options={GENDER_OPT}     span2 errors={e} />
+            <TF control={c} name="birthDate"     label="Birth Date"   type="date"              span2 errors={e} />
             <SF control={c} name="nationality"   label="Nationality"  options={NATIONS}              span2 errors={e} />
             <TF control={c} name="nationalId"    label="National ID"  placeholder="0000-0000-0000"   errors={e} />
             <TF control={c} name="passportNumber" label="Passport"    placeholder="P0000000A"        errors={e} />
@@ -657,7 +655,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
             <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 exclusiveWith="needsTimeClock" setValue={setValue} />
             <FSec label="Placement" />
-            <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
+            <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" span2 errors={e} />
             <div className="col-span-2">
               <Lbl text="Level" />
               <Controller control={c} name="levelId" render={({ field }) => (
@@ -755,7 +753,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <div className="col-span-2">
               <Lbl text="Approval Workflow" />
               <Controller control={c} name="workflowId" render={({ field }) => (
-                <Select value={field.value ? field.value : "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                <Select value={field.value ? field.value : "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
                   <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
                     <SelectValue placeholder="Use level / tenant default…" />
                   </SelectTrigger>
@@ -819,7 +817,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               )} />
             </div>
             <FSec label="Employment Terms" />
-            <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" req span2 errors={e} />
+            <TF control={c} name="termEffectiveDate" label="Effective Date" type="date" span2 errors={e} />
             <SF control={c} name="jobTypeId"         label="Job Type"     options={jobTypes.map((jt) => ({ value: jt.id, label: jt.name }))}  placeholder="Select job type…"  errors={e} />
             <SF control={c} name="jobStatusId"       label="Job Status"   options={jobStatuses.map((js) => ({ value: js.id, label: js.name }))}  placeholder="Select job status…"  errors={e} />
             <div className="col-span-2">
@@ -845,7 +843,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <FSec label="Salary" />
-            <TF control={c} name="salaryEffectiveDate"  label="Effective Date"    type="date" req span2 errors={e} />
+            <TF control={c} name="salaryEffectiveDate"  label="Effective Date"    type="date" span2 errors={e} />
             <MF control={c} name="basicSalary"          label="Basic Salary"                  req        errors={e} />
             <SF control={c} name="currency"             label="Currency"          options={CURRENCIES} placeholder="PHP" errors={e} />
             <FNote lines={["For hourly rate, you may use Earning."]} />
