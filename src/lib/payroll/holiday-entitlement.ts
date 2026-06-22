@@ -14,6 +14,7 @@
 import type { TenantTx } from "@/lib/with-tenant";
 import type { DTRDayStatus } from "@prisma/client";
 import { expandHolidays } from "@/lib/holidays/recurrence";
+import { holidayAppliesToBranch } from "@/lib/holidays/scope";
 
 const WEEKDAYS_ISO = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 type Weekday = (typeof WEEKDAYS_ISO)[number];
@@ -33,6 +34,7 @@ export async function isEntitledToHolidayPay(
   holidayDate: Date,
   tenantId: string,
   tx: TenantTx,
+  employeeBranchId?: string | null,
 ): Promise<boolean> {
   // 1. Resolve the employee's current shift schedule workDays (rest days = all other days).
   const assignment = await tx.employeeShiftAssignment.findFirst({
@@ -64,14 +66,21 @@ export async function isEntitledToHolidayPay(
         { date: { gte: lookBackStart, lt: holidayDate } },
       ],
     },
-    select: { date: true, recurringAnnually: true, skippedDates: true },
+    select: {
+      date: true,
+      recurringAnnually: true,
+      skippedDates: true,
+      scope: true,
+      branchIds: true,
+    },
   });
   // Expand recurring holidays onto the look-back window so annual holidays are
-  // also skipped when walking back to the last regular working day.
+  // also skipped when walking back to the last regular working day — but only
+  // holidays that actually apply to this employee's branch.
   const holidayDateSet = new Set(
-    expandHolidays(holidayMasters, lookBackStart, holidayDate).map((h) =>
-      toUtcMidnightKey(h.date),
-    ),
+    expandHolidays(holidayMasters, lookBackStart, holidayDate)
+      .filter((h) => holidayAppliesToBranch(h, employeeBranchId))
+      .map((h) => toUtcMidnightKey(h.date)),
   );
 
   // 3. Walk back up to 7 days to find the last qualifying working day.
