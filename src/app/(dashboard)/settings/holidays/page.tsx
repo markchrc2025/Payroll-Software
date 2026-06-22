@@ -306,7 +306,13 @@ export default function HolidayCalendarPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/holidays/${deleteTarget.id}?mode=${deleteMode}`, { method: "DELETE" });
+      // For single-occurrence deletes, tell the API which year to cancel.
+      const occurrenceDate = new Date(deleteTarget.date).toISOString().slice(0, 10);
+      const qs =
+        deleteMode === "single"
+          ? `mode=single&date=${occurrenceDate}`
+          : "mode=permanent";
+      const res = await fetch(`/api/holidays/${deleteTarget.id}?${qs}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       toast.success("Holiday deleted");
       setDeleteOpen(false);

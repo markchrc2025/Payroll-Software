@@ -1,9 +1,9 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/require-permission";
 import { withTenant } from "@/lib/with-tenant";
 import { ok, err, serverError } from "@/lib/api-response";
+import { expandHolidays } from "@/lib/holidays/recurrence";
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -35,42 +35,46 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const yearStr = searchParams.get("year");
   const monthStr = searchParams.get("month");
+  const year = yearStr ? parseInt(yearStr, 10) : NaN;
 
   try {
-    const holidays = await withTenant(ctx.tenantId, (tx) => {
-      // Build date filter
-      const where: Record<string, unknown> = {
-        tenantId: ctx.tenantId,
-        deletedAt: null,
-      };
+    // No year filter → return raw master rows (legacy behavior).
+    if (isNaN(year)) {
+      const holidays = await withTenant(ctx.tenantId, (tx) =>
+        tx.holiday.findMany({
+          where: { tenantId: ctx.tenantId, deletedAt: null },
+          orderBy: { date: "asc" },
+        })
+      );
+      return ok(holidays);
+    }
 
-      if (yearStr) {
-        const year = parseInt(yearStr, 10);
-        if (!isNaN(year)) {
-          const start = new Date(`${year}-01-01T00:00:00.000Z`);
-          const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
-          if (monthStr) {
-            const month = parseInt(monthStr, 10);
-            if (!isNaN(month) && month >= 1 && month <= 12) {
-              const mStart = new Date(Date.UTC(year, month - 1, 1));
-              const mEnd = new Date(Date.UTC(year, month, 1));
-              where.date = { gte: mStart, lt: mEnd };
-            } else {
-              where.date = { gte: start, lt: end };
-            }
-          } else {
-            where.date = { gte: start, lt: end };
-          }
-        }
-      }
+    // Build the requested range (full year, or a single month when provided).
+    const month = monthStr ? parseInt(monthStr, 10) : NaN;
+    const hasMonth = !isNaN(month) && month >= 1 && month <= 12;
+    const rangeStart = hasMonth
+      ? new Date(Date.UTC(year, month - 1, 1))
+      : new Date(Date.UTC(year, 0, 1));
+    const rangeEnd = hasMonth
+      ? new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)) // last day of month
+      : new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
 
-      return tx.holiday.findMany({
-        where: where as Prisma.HolidayWhereInput,
-        orderBy: { date: "asc" },
-      });
-    });
+    // Fetch non-recurring holidays inside the range PLUS every recurring master
+    // (stored in any year); recurring masters are expanded into the range below.
+    const masters = await withTenant(ctx.tenantId, (tx) =>
+      tx.holiday.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          deletedAt: null,
+          OR: [
+            { recurringAnnually: true },
+            { date: { gte: rangeStart, lte: rangeEnd } },
+          ],
+        },
+      })
+    );
 
-    return ok(holidays);
+    return ok(expandHolidays(masters, rangeStart, rangeEnd));
   } catch (e) {
     return serverError(e);
   }
