@@ -714,17 +714,44 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 );
               }} />
             </div>
-            <SF
-              control={c}
-              name="branchId"
-              label="Branch"
-              options={branches.map((b) => ({ value: b.id, label: b.name }))}
-              placeholder="Select branch…"
-              req
-              span2
-              errors={e}
-            />
-            <FNote lines={["Determines which holidays apply to this employee. Holiday pay is resolved per branch at payroll-run time — company-wide holidays apply to everyone; location-specific holidays apply only to the listed branches."]} />
+            {branches.length === 0 ? (
+              <div className="col-span-2">
+                <Lbl text="Branch" req />
+                <div
+                  className="flex gap-3 rounded-[9px] px-4 py-3 text-[12.5px]"
+                  style={{ background: "#FDF3EE", border: "1px solid #f3cdb9", borderLeft: "3px solid #E8693A" }}
+                >
+                  <span
+                    className="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={{ background: "#E8693A" }}
+                  >!</span>
+                  <div className="space-y-1" style={{ color: "#6B6259" }}>
+                    <p>No branches exist yet. A branch is required — it determines which holidays apply to this employee at payroll-run time.</p>
+                    <Link
+                      href="/branches"
+                      className="inline-flex items-center gap-1 font-semibold underline underline-offset-2"
+                      style={{ color: "#E8693A" }}
+                    >
+                      Create a branch first <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <SF
+                  control={c}
+                  name="branchId"
+                  label="Branch"
+                  options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                  placeholder="Select branch…"
+                  req
+                  span2
+                  errors={e}
+                />
+                <FNote lines={["Determines which holidays apply to this employee. Holiday pay is resolved per branch at payroll-run time — company-wide holidays apply to everyone; location-specific holidays apply only to the listed branches."]} />
+              </>
+            )}
             <div className="col-span-2">
               <Lbl text="Approval Workflow" />
               <Controller control={c} name="workflowId" render={({ field }) => (
