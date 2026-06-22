@@ -334,13 +334,12 @@ export default function HolidayCalendarPage() {
     const valid = bulkRows.filter((r) => r.date && r.name.trim());
     if (valid.length === 0) { toast.error("Add at least one holiday with a date and name"); return; }
     setBulkSubmitting(true);
-    let added = 0; let failed = 0;
-    for (const row of valid) {
-      try {
-        const res = await fetch("/api/holidays", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+    try {
+      const res = await fetch("/api/holidays/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rows: valid.map((row) => ({
             name: row.name.trim(),
             category: row.category,
             date: row.date,
@@ -348,20 +347,29 @@ export default function HolidayCalendarPage() {
             scope: "COMPANY_WIDE",
             branchIds: [],
             isTentative: false,
-          }),
-        });
-        if (res.ok) { added++; } else { failed++; }
-      } catch { failed++; }
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.error || "Bulk add failed");
+      }
+      const { data } = await res.json();
+      const created = data?.created ?? 0;
+      const skipped = data?.skipped?.length ?? 0;
+      if (skipped > 0) {
+        toast.success(`${created} added, ${skipped} skipped (already exist).`);
+      } else {
+        toast.success(`${created} holiday(s) added successfully.`);
+      }
+      setBulkOpen(false);
+      setBulkRows([defaultBulkRow(), defaultBulkRow(), defaultBulkRow()]);
+      fetchHolidays();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk add failed");
+    } finally {
+      setBulkSubmitting(false);
     }
-    if (failed > 0) {
-      toast.error(`${added} added, ${failed} failed. Check dates/names.`);
-    } else {
-      toast.success(`${added} holiday(s) added successfully.`);
-    }
-    setBulkOpen(false);
-    setBulkRows([defaultBulkRow(), defaultBulkRow(), defaultBulkRow()]);
-    fetchHolidays();
-    setBulkSubmitting(false);
   }
 
   function HolidayChip({ h }: { h: Holiday }) {
