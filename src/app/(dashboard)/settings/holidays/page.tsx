@@ -519,6 +519,16 @@ export default function HolidayCalendarPage() {
                             <span className="text-[10px] text-[#9AA5B4]">{h.region.split("—")[0].trim()}</span>
                           )}
                         </div>
+                        {h.proclamationReference && (
+                          <p className="text-[10px] text-[#9AA5B4] mt-1 truncate" title={h.proclamationReference}>
+                            {h.proclamationReference}
+                          </p>
+                        )}
+                        {h.notes && (
+                          <p className="text-[10px] text-[#6B7A8D] mt-0.5 line-clamp-2 whitespace-pre-line" title={h.notes}>
+                            {h.notes}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button onClick={() => openEdit(h)} className="p-1 rounded hover:bg-[#F0F2F7] text-[#6B7A8D] transition-colors" title="Edit">
