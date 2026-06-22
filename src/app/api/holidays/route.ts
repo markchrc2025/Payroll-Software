@@ -9,19 +9,36 @@ import { expandHolidays } from "@/lib/holidays/recurrence";
 // Validation schemas
 // ---------------------------------------------------------------------------
 
-const createHolidaySchema = z.object({
-  name: z.string().min(1).max(200),
-  category: z.enum(["LEGAL", "SPECIAL_NON_WORKING", "SPECIAL_ONE_TIME", "AREA_SPECIFIC"]),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
-  recurringAnnually: z.boolean().default(false),
-  scope: z.enum(["COMPANY_WIDE", "BRANCH_SPECIFIC"]).default("COMPANY_WIDE"),
-  branchIds: z.array(z.string()).default([]),
-  region: z.string().max(100).nullable().optional(),
-  provinceCity: z.string().max(200).nullable().optional(),
-  proclamationReference: z.string().max(300).nullable().optional(),
-  notes: z.string().max(2000).nullable().optional(),
-  isTentative: z.boolean().default(false),
-});
+const createHolidaySchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    category: z.enum(["LEGAL", "SPECIAL_NON_WORKING", "SPECIAL_ONE_TIME", "AREA_SPECIFIC"]),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+    recurringAnnually: z.boolean().default(false),
+    scope: z.enum(["COMPANY_WIDE", "BRANCH_SPECIFIC"]).default("COMPANY_WIDE"),
+    branchIds: z.array(z.string()).default([]),
+    region: z.string().max(100).nullable().optional(),
+    provinceCity: z.string().max(200).nullable().optional(),
+    proclamationReference: z.string().max(300).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    isTentative: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.scope === "BRANCH_SPECIFIC" && data.branchIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["branchIds"],
+        message: "Select at least one branch for a branch-specific holiday",
+      });
+    }
+    if (data.category === "AREA_SPECIFIC" && !data.region?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["region"],
+        message: "Region is required for an area-specific holiday",
+      });
+    }
+  });
 
 // ---------------------------------------------------------------------------
 // GET /api/holidays?year=2026&month=6
@@ -102,15 +119,30 @@ export async function POST(req: NextRequest) {
   }
 
   const data = parsed.data;
+  const holidayDate = new Date(`${data.date}T00:00:00.000Z`);
 
   try {
-    const holiday = await withTenant(ctx.tenantId, (tx) =>
-      tx.holiday.create({
+    const result = await withTenant(ctx.tenantId, async (tx) => {
+      // Duplicate guard: block an identical holiday (same date + same name,
+      // case-insensitive) within the tenant. Different holidays on the same
+      // date (e.g. a double holiday, or two regional ones) are still allowed.
+      const dup = await tx.holiday.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          deletedAt: null,
+          date: holidayDate,
+          name: { equals: data.name, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (dup) return { duplicate: true as const };
+
+      const holiday = await tx.holiday.create({
         data: {
           tenantId: ctx.tenantId,
           name: data.name,
           category: data.category,
-          date: new Date(`${data.date}T00:00:00.000Z`),
+          date: holidayDate,
           recurringAnnually: data.recurringAnnually,
           scope: data.scope,
           branchIds: data.branchIds,
@@ -121,10 +153,14 @@ export async function POST(req: NextRequest) {
           isTentative: data.isTentative,
           createdByUserId: ctx.userId,
         },
-      })
-    );
+      });
+      return { duplicate: false as const, holiday };
+    });
 
-    return ok(holiday, "Holiday created", 201);
+    if (result.duplicate)
+      return err(`A holiday named "${data.name}" already exists on ${data.date}`, 409);
+
+    return ok(result.holiday, "Holiday created", 201);
   } catch (e) {
     return serverError(e);
   }
