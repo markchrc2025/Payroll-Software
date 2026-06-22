@@ -22,8 +22,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -38,30 +36,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+  HolidayFormModal,
+  CATEGORY_META,
+  type Holiday,
+  type HolidayCategory,
+  type Branch,
+} from "@/components/holidays/HolidayFormModal";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type HolidayCategory = "LEGAL" | "SPECIAL_NON_WORKING" | "SPECIAL_ONE_TIME" | "AREA_SPECIFIC";
-type HolidayScope = "COMPANY_WIDE" | "BRANCH_SPECIFIC";
-
-interface Holiday {
-  id: string;
-  name: string;
-  category: HolidayCategory;
-  date: string; // ISO string
-  recurringAnnually: boolean;
-  scope: HolidayScope;
-  branchIds: string[];
-  region: string | null;
-  provinceCity: string | null;
-  proclamationReference: string | null;
-  notes: string | null;
-  isTentative: boolean;
-}
 
 interface BulkRow {
   date: string;
@@ -71,80 +57,9 @@ interface BulkRow {
 
 const defaultBulkRow = (): BulkRow => ({ date: "", name: "", category: "LEGAL" });
 
-interface Branch {
-  id: string;
-  name: string;
-  city: string | null;
-  isHeadOffice: boolean;
-}
-
-interface FormState {
-  name: string;
-  category: HolidayCategory;
-  date: string; // YYYY-MM-DD
-  recurringAnnually: boolean;
-  scope: HolidayScope;
-  branchIds: string[];
-  region: string;
-  provinceCity: string;
-  proclamationReference: string;
-  notes: string;
-  isTentative: boolean;
-}
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const CATEGORY_META: Record<
-  HolidayCategory,
-  { label: string; chip: string; badge: string; multiplier: string }
-> = {
-  LEGAL: {
-    label: "Legal Holiday",
-    chip: "bg-red-100 text-red-700 border border-red-200",
-    badge: "bg-red-50 text-red-700 border-red-200",
-    multiplier: "200%",
-  },
-  SPECIAL_NON_WORKING: {
-    label: "Special Non-Working",
-    chip: "bg-amber-100 text-amber-700 border border-amber-200",
-    badge: "bg-amber-50 text-amber-700 border-amber-200",
-    multiplier: "130%",
-  },
-  SPECIAL_ONE_TIME: {
-    label: "Special One-Time",
-    chip: "bg-purple-100 text-purple-700 border border-purple-200",
-    badge: "bg-purple-50 text-purple-700 border-purple-200",
-    multiplier: "130%",
-  },
-  AREA_SPECIFIC: {
-    label: "Area-Specific",
-    chip: "bg-teal-100 text-teal-700 border border-teal-200",
-    badge: "bg-teal-50 text-teal-700 border-teal-200",
-    multiplier: "130%",
-  },
-};
-
-const PH_REGIONS = [
-  "NCR — National Capital Region",
-  "CAR — Cordillera Administrative Region",
-  "Region I — Ilocos Region",
-  "Region II — Cagayan Valley",
-  "Region III — Central Luzon",
-  "Region IV-A — CALABARZON",
-  "Region IV-B — MIMAROPA",
-  "Region V — Bicol Region",
-  "Region VI — Western Visayas",
-  "Region VII — Central Visayas",
-  "Region VIII — Eastern Visayas",
-  "Region IX — Zamboanga Peninsula",
-  "Region X — Northern Mindanao",
-  "Region XI — Davao Region",
-  "Region XII — SOCCSKSARGEN",
-  "Region XIII — Caraga",
-  "BARMM — Bangsamoro Autonomous Region in Muslim Mindanao",
-];
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -155,20 +70,6 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - 1 + i);
-
-const defaultForm = (date = ""): FormState => ({
-  name: "",
-  category: "LEGAL",
-  date,
-  recurringAnnually: false,
-  scope: "COMPANY_WIDE",
-  branchIds: [],
-  region: "",
-  provinceCity: "",
-  proclamationReference: "",
-  notes: "",
-  isTentative: false,
-});
 
 // ---------------------------------------------------------------------------
 // Main Page Component
@@ -181,9 +82,8 @@ export default function HolidayCalendarPage() {
   const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(defaultForm());
-  const [submitting, setSubmitting] = useState(false);
+  const [editTarget, setEditTarget] = useState<Holiday | null>(null);
+  const [addDate, setAddDate] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<Holiday | null>(null);
   const [deleteMode, setDeleteMode] = useState<"single" | "permanent">("permanent");
@@ -245,64 +145,14 @@ export default function HolidayCalendarPage() {
   }
 
   function openAdd(dateStr = "") {
-    setEditingId(null);
-    setForm(defaultForm(dateStr));
+    setEditTarget(null);
+    setAddDate(dateStr);
     setModalOpen(true);
   }
 
   function openEdit(h: Holiday) {
-    setEditingId(h.id);
-    setForm({
-      name: h.name,
-      category: h.category,
-      date: new Date(h.date).toISOString().slice(0, 10),
-      recurringAnnually: h.recurringAnnually,
-      scope: h.scope,
-      branchIds: h.branchIds,
-      region: h.region ?? "",
-      provinceCity: h.provinceCity ?? "",
-      proclamationReference: h.proclamationReference ?? "",
-      notes: h.notes ?? "",
-      isTentative: h.isTentative,
-    });
+    setEditTarget(h);
     setModalOpen(true);
-  }
-
-  const branchRequiredMissing = form.scope === "BRANCH_SPECIFIC" && form.branchIds.length === 0;
-  const regionRequiredMissing = form.category === "AREA_SPECIFIC" && !form.region.trim();
-  const formInvalid = !form.name.trim() || !form.date || branchRequiredMissing || regionRequiredMissing;
-
-  async function handleSubmit() {
-    if (!form.name.trim() || !form.date) { toast.error("Name and date are required"); return; }
-    if (branchRequiredMissing) { toast.error("Select at least one branch for a branch-specific holiday"); return; }
-    if (regionRequiredMissing) { toast.error("Region is required for an area-specific holiday"); return; }
-    setSubmitting(true);
-    try {
-      const payload = {
-        name: form.name.trim(),
-        category: form.category,
-        date: form.date,
-        recurringAnnually: form.recurringAnnually,
-        scope: form.scope,
-        branchIds: form.branchIds,
-        region: form.category === "AREA_SPECIFIC" ? (form.region || null) : null,
-        provinceCity: form.category === "AREA_SPECIFIC" ? (form.provinceCity || null) : null,
-        proclamationReference: form.proclamationReference || null,
-        notes: form.notes || null,
-        isTentative: form.isTentative,
-      };
-      const url = editingId ? `/api/holidays/${editingId}` : "/api/holidays";
-      const method = editingId ? "PATCH" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        throw new Error(j?.error || "Save failed");
-      }
-      toast.success(editingId ? "Holiday updated" : "Holiday created");
-      setModalOpen(false);
-      fetchHolidays();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save holiday"); }
-    finally { setSubmitting(false); }
   }
 
   function openDelete(h: Holiday) {
@@ -562,121 +412,15 @@ export default function HolidayCalendarPage() {
       </div>
 
       {/* Add / Edit Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-lg rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Holiday" : "Add Holiday"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-            <div className="space-y-1.5">
-              <Label>Holiday Name <span className="text-red-500">*</span></Label>
-              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Independence Day" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Category <span className="text-red-500">*</span></Label>
-              <Select value={form.category} onValueChange={(v) => setForm(f => ({ ...f, category: v as HolidayCategory }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>{meta.label} ({meta.multiplier})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Date <span className="text-red-500">*</span></Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox id="recurring" checked={form.recurringAnnually} onCheckedChange={(v) => setForm(f => ({ ...f, recurringAnnually: !!v }))} />
-              <Label htmlFor="recurring" className="cursor-pointer">Recurring annually (same date each year)</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox id="tentative" checked={form.isTentative} onCheckedChange={(v) => setForm(f => ({ ...f, isTentative: !!v }))} />
-              <Label htmlFor="tentative" className="cursor-pointer text-[#6B7A8D]">Tentative date (subject to proclamation)</Label>
-            </div>
-            {form.category === "AREA_SPECIFIC" && (
-              <>
-                <div className="space-y-1.5">
-                  <Label>Region <span className="text-red-500">*</span></Label>
-                  <Select value={form.region} onValueChange={(v) => setForm(f => ({ ...f, region: v ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Select region…" /></SelectTrigger>
-                    <SelectContent>
-                      {PH_REGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {regionRequiredMissing && (
-                    <p className="text-[11px] text-red-500">Region is required for an area-specific holiday.</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Province / City <span className="text-[#9AA5B4] font-normal">(optional)</span></Label>
-                  <Input value={form.provinceCity} onChange={(e) => setForm(f => ({ ...f, provinceCity: e.target.value }))} placeholder="e.g. Makati City" />
-                </div>
-              </>
-            )}
-            <div className="space-y-1.5">
-              <Label>Scope</Label>
-              <div className="flex flex-col gap-1.5">
-                {(["COMPANY_WIDE", "BRANCH_SPECIFIC"] as const).map((s) => (
-                  <label key={s} className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" checked={form.scope === s} onChange={() => setForm(f => ({ ...f, scope: s, branchIds: [] }))} className="accent-[#1E3A5F]" />
-                    <span className="text-[13px]">{s === "COMPANY_WIDE" ? "Company-wide (applies to all branches)" : "Branch-specific"}</span>
-                  </label>
-                ))}
-              </div>
-              {form.scope === "BRANCH_SPECIFIC" && (
-                <div className="mt-2 space-y-1.5">
-                  <Label className="text-[12px] text-[#6B7A8D]">Select branches <span className="text-red-500">*</span></Label>
-                  {branches.length === 0 ? (
-                    <p className="text-[12px] text-[#9AA5B4]">No branches found.</p>
-                  ) : (
-                    <div className="border border-[#E8EBF1] rounded-lg divide-y divide-[#F0F2F7] max-h-40 overflow-y-auto">
-                      {branches.map((b) => (
-                        <label key={b.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-[#F5F9FF]">
-                          <Checkbox
-                            checked={form.branchIds.includes(b.id)}
-                            onCheckedChange={(checked) =>
-                              setForm(f => ({
-                                ...f,
-                                branchIds: checked
-                                  ? [...f.branchIds, b.id]
-                                  : f.branchIds.filter(id => id !== b.id),
-                              }))
-                            }
-                          />
-                          <span className="text-[13px] text-[#374151]">
-                            {b.name}
-                            {b.isHeadOffice && <span className="ml-1.5 text-[10px] text-[#9AA5B4]">(Head Office)</span>}
-                            {b.city && <span className="ml-1 text-[11px] text-[#9AA5B4]">· {b.city}</span>}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  {branchRequiredMissing && (
-                    <p className="text-[11px] text-red-500">Select at least one branch.</p>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Proclamation Reference <span className="text-[#9AA5B4] font-normal">(optional)</span></Label>
-              <Input value={form.proclamationReference} onChange={(e) => setForm(f => ({ ...f, proclamationReference: e.target.value }))} placeholder="e.g. Proclamation No. 368, s. 2023" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Notes <span className="text-[#9AA5B4] font-normal">(optional)</span></Label>
-              <Textarea value={form.notes} onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Additional notes…" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)} disabled={submitting}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting || formInvalid} className="bg-[#1E3A5F] text-white hover:bg-[#16304f]">
-              {submitting ? "Saving…" : "Save Holiday"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HolidayFormModal
+        mode={editTarget ? "edit" : "add"}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onSaved={fetchHolidays}
+        initialData={editTarget ?? undefined}
+        defaultDate={addDate}
+        branches={branches}
+      />
 
       {/* Delete Modal */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
