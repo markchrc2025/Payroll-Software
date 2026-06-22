@@ -268,8 +268,14 @@ export default function HolidayCalendarPage() {
     setModalOpen(true);
   }
 
+  const branchRequiredMissing = form.scope === "BRANCH_SPECIFIC" && form.branchIds.length === 0;
+  const regionRequiredMissing = form.category === "AREA_SPECIFIC" && !form.region.trim();
+  const formInvalid = !form.name.trim() || !form.date || branchRequiredMissing || regionRequiredMissing;
+
   async function handleSubmit() {
     if (!form.name.trim() || !form.date) { toast.error("Name and date are required"); return; }
+    if (branchRequiredMissing) { toast.error("Select at least one branch for a branch-specific holiday"); return; }
+    if (regionRequiredMissing) { toast.error("Region is required for an area-specific holiday"); return; }
     setSubmitting(true);
     try {
       const payload = {
@@ -288,11 +294,14 @@ export default function HolidayCalendarPage() {
       const url = editingId ? `/api/holidays/${editingId}` : "/api/holidays";
       const method = editingId ? "PATCH" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.error || "Save failed");
+      }
       toast.success(editingId ? "Holiday updated" : "Holiday created");
       setModalOpen(false);
       fetchHolidays();
-    } catch { toast.error("Could not save holiday"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save holiday"); }
     finally { setSubmitting(false); }
   }
 
@@ -578,6 +587,9 @@ export default function HolidayCalendarPage() {
                       {PH_REGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {regionRequiredMissing && (
+                    <p className="text-[11px] text-red-500">Region is required for an area-specific holiday.</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Province / City <span className="text-[#9AA5B4] font-normal">(optional)</span></Label>
@@ -624,6 +636,9 @@ export default function HolidayCalendarPage() {
                       ))}
                     </div>
                   )}
+                  {branchRequiredMissing && (
+                    <p className="text-[11px] text-red-500">Select at least one branch.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -638,7 +653,7 @@ export default function HolidayCalendarPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={submitting}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-[#1E3A5F] text-white hover:bg-[#16304f]">
+            <Button onClick={handleSubmit} disabled={submitting || formInvalid} className="bg-[#1E3A5F] text-white hover:bg-[#16304f]">
               {submitting ? "Saving…" : "Save Holiday"}
             </Button>
           </DialogFooter>

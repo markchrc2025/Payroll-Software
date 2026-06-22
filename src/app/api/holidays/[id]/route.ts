@@ -52,13 +52,27 @@ export async function PATCH(
   const data = parsed.data;
 
   try {
-    const updated = await withTenant(ctx.tenantId, async (tx) => {
+    const result = await withTenant(ctx.tenantId, async (tx) => {
       const existing = await tx.holiday.findFirst({
         where: { id, tenantId: ctx.tenantId, deletedAt: null },
       });
-      if (!existing) return null;
+      if (!existing) return { status: "NOT_FOUND" as const };
 
-      return tx.holiday.update({
+      // Validate the EFFECTIVE values (incoming change merged onto existing) so
+      // a partial update can't leave the row in an invalid state.
+      const effScope = data.scope ?? existing.scope;
+      const effBranchIds = data.branchIds ?? (existing.branchIds as string[]);
+      const effCategory = data.category ?? existing.category;
+      const effRegion = data.region !== undefined ? data.region : existing.region;
+
+      if (effScope === "BRANCH_SPECIFIC" && (!effBranchIds || effBranchIds.length === 0)) {
+        return { status: "INVALID" as const, message: "Select at least one branch for a branch-specific holiday" };
+      }
+      if (effCategory === "AREA_SPECIFIC" && !effRegion?.trim()) {
+        return { status: "INVALID" as const, message: "Region is required for an area-specific holiday" };
+      }
+
+      const holiday = await tx.holiday.update({
         where: { id },
         data: {
           ...(data.name !== undefined && { name: data.name }),
@@ -74,10 +88,12 @@ export async function PATCH(
           ...(data.isTentative !== undefined && { isTentative: data.isTentative }),
         },
       });
+      return { status: "OK" as const, holiday };
     });
 
-    if (!updated) return notFound("Holiday");
-    return ok(updated, "Holiday updated");
+    if (result.status === "NOT_FOUND") return notFound("Holiday");
+    if (result.status === "INVALID") return err("Validation failed", 422, result.message);
+    return ok(result.holiday, "Holiday updated");
   } catch (e) {
     return serverError(e);
   }
