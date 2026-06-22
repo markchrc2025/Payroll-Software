@@ -73,7 +73,6 @@ const EMPTY_FORM = {
   toJobTypeId: "",
   toJobStatusId: "",
   toShiftScheduleId: "",
-  toHolidayKey: "",
   toTermStart: "",
   toNextReviewDate: "",
 };
@@ -171,7 +170,6 @@ export function NewMovementDialog({
       if (form.toJobTypeId) body.toJobTypeId = form.toJobTypeId;
       if (form.toJobStatusId) body.toJobStatusId = form.toJobStatusId;
       if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
-      if (form.toHolidayKey) body.toHolidayKey = form.toHolidayKey;
       if (form.toTermStart) body.toTermStart = form.toTermStart;
       if (form.toNextReviewDate) body.toNextReviewDate = form.toNextReviewDate;
     }
@@ -382,10 +380,6 @@ export function NewMovementDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Holiday Key</FieldLabel>
-                  <Input placeholder="e.g. ph-standard" value={form.toHolidayKey} onChange={(e) => set("toHolidayKey", e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Term Start</FieldLabel>

@@ -54,7 +54,6 @@ type Movement = {
   toJobStatusId: string | null;
   toWorkflowId: string | null;
   toShiftScheduleId: string | null;
-  toHolidayKey: string | null;
   toTermStart: string | null;
   toNextReviewDate: string | null;
   createdAt: string;

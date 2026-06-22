@@ -67,7 +67,7 @@ const STEPS = [
 const STEP_TRIGGER_FIELDS: Path<CreateEmployeeInput>[][] = [
   ["firstName", "lastName"],
   [],
-  ["hireDate"],
+  ["hireDate", "branchId"],
   ["basicSalary"],
   [],
   [],
@@ -120,7 +120,6 @@ const SENSE       = ["Normal","Mild","Moderate","Severe"];
 const LIMB        = ["Normal","Limited","None"];
 const PRIVACY     = ["Not Accessible","Employee","Manager"];
 const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
-const HOLIDAYS    = ["DEFAULT","NCR","Regional"];
 const CURRENCIES  = ["PHP","USD","SGD"];
 const PAY_METHODS = ["Cash","Bank transfer","Check","GCash"];
 const BANKS       = ["BDO","BPI","UnionBank","Metrobank","GCash","Other"];
@@ -161,7 +160,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   pvAnniversary: "Employee",
   numberOfChildren: 0,
   workflowId: "",
-  holidayKey: "DEFAULT",
+  branchId: "",
   jobTypeId: undefined,
   jobStatusId: undefined,
   taxClassification: "REGULAR",
@@ -715,20 +714,17 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 );
               }} />
             </div>
-            <div className="col-span-2">
-              <Lbl text="Branch" />
-              <Controller control={c} name="branchId" render={({ field }) => (
-                <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
-                    <SelectValue placeholder="Select branch…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
+            <SF
+              control={c}
+              name="branchId"
+              label="Branch"
+              options={branches.map((b) => ({ value: b.id, label: b.name }))}
+              placeholder="Select branch…"
+              req
+              span2
+              errors={e}
+            />
+            <FNote lines={["Determines which holidays apply to this employee. Holiday pay is resolved per branch at payroll-run time — company-wide holidays apply to everyone; location-specific holidays apply only to the listed branches."]} />
             <div className="col-span-2">
               <Lbl text="Approval Workflow" />
               <Controller control={c} name="workflowId" render={({ field }) => (
@@ -813,7 +809,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
-            <SF control={c} name="holidayKey"        label="Holiday"      options={HOLIDAYS}   placeholder="DEFAULT"    span2 errors={e} />
             <TF control={c} name="contractStartDate" label="Term Start"   type="date"                                   errors={e} />
             <TF control={c} name="contractEndDate"   label="Next Review"  type="date"                                   errors={e} />
           </FGrid>
