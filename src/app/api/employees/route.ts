@@ -140,7 +140,6 @@ export async function POST(req: NextRequest) {
     jobStatusId,
     workflowId,
     shiftScheduleId,
-    holidayKey,
     contractStartDate,
     contractEndDate,
     ...rest
@@ -216,7 +215,6 @@ export async function POST(req: NextRequest) {
         jobTypeId:              jobTypeId              ?? null,
         jobStatusId:            jobStatusId            ?? null,
         shiftScheduleId:        shiftScheduleId        ?? null,
-        holidayKey:             holidayKey             ?? null,
         contractStartDate:      contractStartDate      ?? null,
         contractEndDate:        contractEndDate        ?? null,
       },
@@ -263,7 +261,6 @@ export async function POST(req: NextRequest) {
         jobTypeId:        jobTypeId        ?? null,
         jobStatusId:      jobStatusId      ?? null,
         shiftScheduleId:  shiftScheduleId  ?? null,
-        holidayKey:       holidayKey       ?? null,
         termStart:        contractStartDate ?? null,
         nextReviewDate:   contractEndDate   ?? null,
       },

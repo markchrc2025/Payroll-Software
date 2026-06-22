@@ -185,7 +185,6 @@ export async function POST(
         toJobTypeId:        v.toJobTypeId        ?? null,
         toJobStatusId:      v.toJobStatusId      ?? null,
         toShiftScheduleId:  v.toShiftScheduleId  ?? null,
-        toHolidayKey:       v.toHolidayKey       ?? null,
         toTermStart:        v.toTermStart ? new Date(v.toTermStart) : null,
         toNextReviewDate:   v.toNextReviewDate ? new Date(v.toNextReviewDate) : null,
 

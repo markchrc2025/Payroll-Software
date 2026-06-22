@@ -160,7 +160,7 @@ export const createEmployeeSchema = z.object({
 
   // Employment
   departmentId: z.string().cuid().optional().nullable(),
-  branchId: z.string().cuid().optional().nullable(),
+  branchId: z.string().min(1, "Branch is required"),
   positionId: z.string().cuid().optional().nullable(),
   immediateSupervisorId: z.string().cuid().optional().nullable(),
   managerId: z.string().cuid().optional().nullable(),
@@ -223,7 +223,6 @@ export const createEmployeeSchema = z.object({
   jobStatusId: z.string().cuid().optional().nullable(),
   workflowId: z.string().cuid().optional().nullable(),
   shiftScheduleId: z.string().cuid().optional().nullable(),
-  holidayKey: z.string().max(100).optional().nullable(),
   termEffectiveDate: z.coerce.date().optional().nullable(),
   contractStartDate: z.coerce.date().optional().nullable(),
   contractEndDate: z.coerce.date().optional().nullable(),

@@ -1142,7 +1142,6 @@ model Employee {
   jobTypeId             String?
   jobStatusId           String?
   shiftScheduleId       String?
-  holidayKey            String?
   // Org-chart: when set, this employee reports to a (vacant) position/role
   // rather than to a specific person. Resolved to the incumbent if filled.
   reportsToPositionId   String?
@@ -1405,7 +1404,6 @@ model EmployeeMovement {
   toJobTypeId          String?
   toJobStatusId        String?
   toShiftScheduleId    String?
-  toHolidayKey         String?
   toTermStart          DateTime?
   toNextReviewDate     DateTime?
 
@@ -1480,7 +1478,6 @@ model EmploymentTerm {
   jobTypeId        String?
   jobStatusId      String?
   shiftScheduleId  String?
-  holidayKey       String?
   termStart        DateTime?
   nextReviewDate   DateTime?
   remark           String?

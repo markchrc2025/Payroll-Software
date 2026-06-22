@@ -41,7 +41,6 @@ type TermRecord = {
   jobType:          { id: string; name: string } | null;
   jobStatus:        { id: string; name: string } | null;
   shiftScheduleId:  string | null;
-  holidayKey:       string | null;
   termStart:        string | null;
   nextReviewDate:   string | null;
   remark:           string | null;
@@ -57,14 +56,11 @@ type JobStatusRef = { id: string; name: string };
 // Constants
 // ---------------------------------------------------------------------------
 
-const HOLIDAYS  = ["DEFAULT", "NCR", "Regional"];
-
 const EMPTY_FORM = {
   effectiveDate:    "",
   jobTypeId:        "",
   jobStatusId:      "",
   shiftScheduleId:  "",
-  holidayKey:       "",
   termStart:        "",
   nextReviewDate:   "",
   remark:           "",
@@ -140,7 +136,6 @@ export default function EmploymentTermsPage() {
       jobTypeId:        r.jobTypeId        ?? "",
       jobStatusId:      r.jobStatusId      ?? "",
       shiftScheduleId:  r.shiftScheduleId  ?? "",
-      holidayKey:       r.holidayKey       ?? "",
       termStart:        r.termStart ? r.termStart.slice(0, 10) : "",
       nextReviewDate:   r.nextReviewDate ? r.nextReviewDate.slice(0, 10) : "",
       remark:           r.remark    ?? "",
@@ -161,7 +156,6 @@ export default function EmploymentTermsPage() {
       jobTypeId:        form.jobTypeId        || null,
       jobStatusId:      form.jobStatusId      || null,
       shiftScheduleId:  form.shiftScheduleId  || null,
-      holidayKey:       form.holidayKey       || null,
       termStart:        form.termStart        || null,
       nextReviewDate:   form.nextReviewDate   || null,
       remark:           form.remark           || null,
@@ -210,28 +204,6 @@ export default function EmploymentTermsPage() {
   // ---------------------------------------------------------------------------
 
   const selectedEmp = employees.find((e) => e.id === selectedEmployee);
-
-  function selectField(
-    label: string,
-    field: keyof typeof form,
-    options: string[],
-  ) {
-    return (
-      <div className="space-y-1.5">
-        <Label>{label}</Label>
-        <Select
-          value={(form[field] as string) || "none"}
-          onValueChange={(v) => setForm({ ...form, [field]: v === "none" ? "" : v })}
-        >
-          <SelectTrigger><SelectValue placeholder={`Select ${label.toLowerCase()}…`} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">— None —</SelectItem>
-            {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
 
   function refSelectField(
     label: string,
@@ -304,7 +276,6 @@ export default function EmploymentTermsPage() {
               <TableHead>Job Type</TableHead>
               <TableHead>Job Status</TableHead>
               <TableHead>Shift Schedule</TableHead>
-              <TableHead>Holiday</TableHead>
               <TableHead>Term / Next Review</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
@@ -340,7 +311,6 @@ export default function EmploymentTermsPage() {
                   <TableCell className="text-sm">{r.jobType?.name   ?? "—"}</TableCell>
                   <TableCell className="text-sm">{r.jobStatus?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.shiftSchedule?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{r.holidayKey       ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {r.termStart
                       ? `${r.termStart.slice(0, 10)}${r.nextReviewDate ? ` → ${r.nextReviewDate.slice(0, 10)}` : " →"}`
@@ -404,7 +374,6 @@ export default function EmploymentTermsPage() {
                 </SelectContent>
               </Select>
             </div>
-            {selectField("Holiday",          "holidayKey",       HOLIDAYS)}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
