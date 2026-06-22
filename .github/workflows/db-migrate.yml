@@ -1,0 +1,62 @@
+name: DB Migrate (manual)
+
+# Applies pending Prisma migrations to the production database from a GitHub
+# runner. Needed because the Claude Code sandbox has no network route to the
+# Supabase host (IPv6-only direct endpoint; DB ports blocked by egress policy),
+# whereas GitHub runners can reach the IPv4 session-mode pooler.
+#
+# Requires repo secret MIGRATE_DATABASE_URL = the Supabase **session-mode
+# pooler** connection string (Database → Connection string → "Session pooler").
+# Prisma reads it via DIRECT_DATABASE_URL (see prisma.config.ts), which uses the
+# owner role and bypasses RLS so ALTER TABLE / backfills succeed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only show migration status (do NOT apply)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DIRECT_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard — secret must be set
+        run: |
+          if [ -z "$DIRECT_DATABASE_URL" ]; then
+            echo "::error::Repo secret MIGRATE_DATABASE_URL is not set."
+            exit 1
+          fi
+          echo "Secret present."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Show pending migrations (before)
+        run: npx prisma migrate status || true
+
+      - name: Apply migrations
+        if: ${{ !inputs.dry_run }}
+        run: npx prisma migrate deploy
+
+      - name: Verify status (after)
+        run: npx prisma migrate status
