@@ -41,10 +41,12 @@ export async function GET(
       position: { select: { id: true, title: true, level: true } },
       level: { select: { id: true, name: true } },
       statutoryIds: true,
-      salaryHistory: {
-        where: { endDate: null },
+      // Salary now lives on EmploymentTerm; expose the latest salary-bearing row.
+      employmentTerms: {
+        where: { basicSalaryCents: { not: null } },
         orderBy: { effectiveDate: "desc" },
         take: 1,
+        select: { basicSalaryCents: true, effectiveDate: true },
       },
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
@@ -54,15 +56,16 @@ export async function GET(
 
   // Serialise BigInt centavos for JSON safety.
   // Strip bcrypt hashes — never expose them; use boolean flags instead.
-  const { essPin, kioskPinHash, ...rest } = employee;
+  const { essPin, kioskPinHash, employmentTerms, ...rest } = employee;
   const serialised = {
     ...rest,
     hasEssPin: essPin !== null,
     hasKioskPin: kioskPinHash !== null,
     nontaxableBasicAmountCents: centavosToJson(employee.nontaxableBasicAmountCents),
-    salaryHistory: employee.salaryHistory.map((s) => ({
-      ...s,
-      basicSalaryCents: centavosToJson(s.basicSalaryCents),
+    // Exposed under `salaryHistory` to keep the profile response shape stable.
+    salaryHistory: employmentTerms.map((t) => ({
+      basicSalaryCents: centavosToJson(t.basicSalaryCents!),
+      effectiveDate: t.effectiveDate,
     })),
   };
 

@@ -2,7 +2,7 @@
  * Zod validation schemas for EmployeeMovement workflow.
  */
 import { z } from "zod";
-import { EmploymentStatus, MovementType } from "@prisma/client";
+import { EmploymentStatus, MovementType, SalaryType } from "@prisma/client";
 
 const cuid = z.string().min(1);
 
@@ -22,6 +22,8 @@ export const createMovementSchema = z
     toLevelId: cuid.optional().nullable(),
     /// Pesos as decimal string (e.g. "55000.00") — converted to centavos server-side.
     toBasicSalary: z.string().regex(/^-?\d+(\.\d+)?$/).optional().nullable(),
+    /// New salary basis (MONTHLY | DAILY | WEEKLY). Part of the Employment Terms scope.
+    toSalaryType: z.nativeEnum(SalaryType).optional().nullable(),
     toStatus: z.nativeEnum(EmploymentStatus).optional().nullable(),
 
     // Placement-scope fields
@@ -46,7 +48,8 @@ export const createMovementSchema = z
       }
     };
     const placementFields = ["toPositionId", "toJobTitle", "toLevelId", "toDepartmentId", "toBranchId", "toLineManagerId", "toImmediateSupervisorId", "toWorkflowId"] as const;
-    const termsFields     = ["toJobTypeId", "toJobStatusId", "toShiftScheduleId", "toTermStart", "toNextReviewDate"] as const;
+    // Salary (amount + type) is part of the Employment Terms scope post-merge.
+    const termsFields     = ["toJobTypeId", "toJobStatusId", "toShiftScheduleId", "toTermStart", "toNextReviewDate", "toBasicSalary", "toSalaryType"] as const;
 
     switch (v.movementType) {
       case "DEPARTMENT_TRANSFER":

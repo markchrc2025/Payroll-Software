@@ -1,6 +1,7 @@
 /**
  * Movement workflow effects — applies an APPROVED EmployeeMovement to the
- * Employee record (and salary history when applicable). Runs inside a
+ * Employee record and writes a new effective-dated EmploymentTerm snapshot
+ * (which now carries compensation) when terms or salary change. Runs inside a
  * withTenant() transaction supplied by the caller.
  */
 import type { Prisma, EmployeeMovement } from "@prisma/client";
@@ -8,7 +9,6 @@ import type { Prisma, EmployeeMovement } from "@prisma/client";
 export async function applyMovementEffects(
   tx: Prisma.TransactionClient,
   movement: EmployeeMovement,
-  actorUserId: string,
 ): Promise<void> {
   const data: Prisma.EmployeeUpdateInput = {};
 
@@ -28,36 +28,16 @@ export async function applyMovementEffects(
       data.regularizationDate = movement.effectiveDate;
     }
   }
+  // Keep the denormalised salaryType mirror on the Employee row in sync (used
+  // for list/profile display). The effective-dated source of truth is the
+  // EmploymentTerm snapshot written below.
+  if (movement.toSalaryType != null) data.salaryType = movement.toSalaryType;
 
   if (Object.keys(data).length > 0) {
     await tx.employee.update({ where: { id: movement.employeeId }, data });
   }
 
-  if (movement.toBasicSalaryCents != null) {
-    // Close the currently-open salary row, then open a new one at effectiveDate.
-    await tx.employeeSalary.updateMany({
-      where: { employeeId: movement.employeeId, endDate: null },
-      data: { endDate: movement.effectiveDate },
-    });
-    const emp = await tx.employee.findUniqueOrThrow({
-      where: { id: movement.employeeId },
-      select: { tenantId: true, salaryType: true },
-    });
-    await tx.employeeSalary.create({
-      data: {
-        employeeId: movement.employeeId,
-        tenantId: emp.tenantId,
-        basicSalaryCents: movement.toBasicSalaryCents,
-        salaryType: emp.salaryType,
-        effectiveDate: movement.effectiveDate,
-        reason: movement.reason ?? `Movement ${movement.movementType}`,
-        createdByUserId: actorUserId,
-      },
-    });
-  }
-
   const isPlacement = movement.movementType === "PLACEMENT_CHANGE" || movement.movementType === "COMBINED_CHANGE";
-  const isTerms     = movement.movementType === "TERMS_CHANGE"     || movement.movementType === "COMBINED_CHANGE";
 
   if (isPlacement) {
     await tx.placement.create({
@@ -78,17 +58,43 @@ export async function applyMovementEffects(
     });
   }
 
-  if (isTerms) {
+  // Employment Terms now include compensation (salary amount + type). Any
+  // movement that changes a term OR salary field writes a NEW complete
+  // EmploymentTerm snapshot: unchanged fields are carried forward from the
+  // latest row so "latest effective term" always reflects the full in-force
+  // state the payroll engine reads.
+  const touchesSalary =
+    movement.toBasicSalaryCents != null || movement.toSalaryType != null;
+  const touchesTerms =
+    movement.toJobTypeId != null ||
+    movement.toJobStatusId != null ||
+    movement.toShiftScheduleId != null ||
+    movement.toTermStart != null ||
+    movement.toNextReviewDate != null;
+
+  if (touchesSalary || touchesTerms) {
+    const [latest, emp] = await Promise.all([
+      tx.employmentTerm.findFirst({
+        where: { employeeId: movement.employeeId },
+        orderBy: { effectiveDate: "desc" },
+      }),
+      tx.employee.findUniqueOrThrow({
+        where: { id: movement.employeeId },
+        select: { salaryType: true },
+      }),
+    ]);
     await tx.employmentTerm.create({
       data: {
         tenantId:         movement.tenantId,
         employeeId:       movement.employeeId,
         effectiveDate:    movement.effectiveDate,
-        jobTypeId:        movement.toJobTypeId        ?? null,
-        jobStatusId:      movement.toJobStatusId      ?? null,
-        shiftScheduleId:  movement.toShiftScheduleId  ?? null,
-        termStart:        movement.toTermStart        ?? null,
-        nextReviewDate:   movement.toNextReviewDate   ?? null,
+        jobTypeId:        movement.toJobTypeId        ?? latest?.jobTypeId        ?? null,
+        jobStatusId:      movement.toJobStatusId      ?? latest?.jobStatusId      ?? null,
+        shiftScheduleId:  movement.toShiftScheduleId  ?? latest?.shiftScheduleId  ?? null,
+        termStart:        movement.toTermStart        ?? latest?.termStart        ?? null,
+        nextReviewDate:   movement.toNextReviewDate   ?? latest?.nextReviewDate   ?? null,
+        basicSalaryCents: movement.toBasicSalaryCents ?? latest?.basicSalaryCents ?? null,
+        salaryType:       movement.toSalaryType       ?? latest?.salaryType       ?? emp.salaryType,
         remark:           movement.reason             ?? null,
       },
     });

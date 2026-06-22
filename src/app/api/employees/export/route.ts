@@ -39,8 +39,9 @@ export async function GET(req: NextRequest) {
       department: { select: { name: true } },
       branch: { select: { name: true } },
       level: { select: { name: true } },
-      salaryHistory: {
-        where: { endDate: null },
+      // Salary now lives on EmploymentTerm; take the latest salary-bearing row.
+      employmentTerms: {
+        where: { basicSalaryCents: { not: null } },
         orderBy: { effectiveDate: "desc" },
         take: 1,
         select: { basicSalaryCents: true },
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
       : "",
     pay_frequency: e.payFrequency,
     salary_type: e.salaryType,
-    basic_salary: e.salaryHistory[0]?.basicSalaryCents != null
-      ? fromCentavos(e.salaryHistory[0].basicSalaryCents).toFixed(2)
+    basic_salary: e.employmentTerms[0]?.basicSalaryCents != null
+      ? fromCentavos(e.employmentTerms[0].basicSalaryCents).toFixed(2)
       : "",
     bank_name: e.bankName ?? "",
     bank_account_number: e.bankAccountNumber ?? "",

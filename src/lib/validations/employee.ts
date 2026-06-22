@@ -282,7 +282,10 @@ export const createEmployeeSchema = z.object({
 });
 
 export const updateEmployeeSchema = createEmployeeSchema
-  .omit({ basicSalary: true }) // Salary changes go through EmployeeSalary (effective dating)
+  // Salary amount AND type are effective-dated on EmploymentTerm and change only
+  // through movements — never via a plain profile edit (which would silently
+  // desync the value the payroll engine reads).
+  .omit({ basicSalary: true, salaryType: true })
   .partial()
   .extend({
     employmentStatus: z.nativeEnum(EmploymentStatus).optional(),

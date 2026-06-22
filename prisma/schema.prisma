@@ -1345,6 +1345,10 @@ model EmployeeDocument {
 // All monetary amounts stored as BigInt centavos.
 // =============================================================================
 
+/// DEPRECATED — salary now lives on EmploymentTerm (merged). This table is no
+/// longer written or read by application code; it is retained only to preserve
+/// historical rows and to allow rollback. A follow-up migration may drop it
+/// once the merge is verified in production.
 model EmployeeSalary {
   id         String @id @default(cuid())
   employeeId String
@@ -1390,6 +1394,8 @@ model EmployeeMovement {
   toLevelId            String?
   fromBasicSalaryCents BigInt?
   toBasicSalaryCents   BigInt?
+  fromSalaryType       SalaryType?
+  toSalaryType         SalaryType?
   fromStatus           EmploymentStatus?
   toStatus             EmploymentStatus?
 
@@ -1480,6 +1486,16 @@ model EmploymentTerm {
   shiftScheduleId  String?
   termStart        DateTime?
   nextReviewDate   DateTime?
+
+  /// Compensation is part of the employment terms record (merged from the
+  /// former EmployeeSalary table). Every EmploymentTerm row is a COMPLETE
+  /// snapshot — term-creating paths carry these forward so the latest
+  /// effective row always reflects the in-force salary. The payroll engine
+  /// sources pay from the latest effective row whose basicSalaryCents is set.
+  /// All monetary amounts stored as BigInt centavos.
+  basicSalaryCents BigInt?
+  salaryType       SalaryType?
+
   remark           String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
