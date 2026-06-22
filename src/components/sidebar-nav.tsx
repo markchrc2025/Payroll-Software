@@ -182,7 +182,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/payroll", label: "Payroll Runs", icon: "payruns" },
       { href: "/pay-components", label: "Pay Components", icon: "components" },
       { href: "/loans", label: "Loans", icon: "loans" },
-      { href: "/bank-files", label: "Bank Files", icon: "bankfiles" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
