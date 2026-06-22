@@ -77,7 +77,7 @@ export async function POST(
           approvedAt: new Date(),
         },
       });
-      await applyMovementEffects(tx, updated, auth.userId);
+      await applyMovementEffects(tx, updated);
 
       await tx.auditLog.create({
         data: {

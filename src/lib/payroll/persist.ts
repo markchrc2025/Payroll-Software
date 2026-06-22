@@ -249,8 +249,11 @@ async function loadActiveEmployees(
     },
     include: {
       branch: { include: { workLocation: true } },
-      salaryHistory: {
-        where: { effectiveDate: { lte: periodEnd } },
+      // Salary lives on EmploymentTerm (merged). Take the latest effective row
+      // that actually carries a salary — every term row is a complete snapshot,
+      // so this is the in-force compensation as of the period.
+      employmentTerms: {
+        where: { effectiveDate: { lte: periodEnd }, basicSalaryCents: { not: null } },
         orderBy: { effectiveDate: "desc" },
         take: 1,
       },
@@ -273,8 +276,14 @@ async function buildComputeInputForEmployee(
   rules: ComputeStatutoryRules,
   multiplierConfig?: ComputeMultiplierConfig,
 ): Promise<ComputeInput | null> {
-  const salary = employee.salaryHistory[0];
-  if (!salary) return null; // No effective salary → skip
+  const term = employee.employmentTerms[0];
+  if (!term || term.basicSalaryCents == null || term.salaryType == null) {
+    return null; // No effective salary → skip
+  }
+  const salary = {
+    basicSalaryCents: term.basicSalaryCents,
+    salaryType: term.salaryType,
+  };
 
   const region =
     employee.branch?.workLocation?.region ?? employee.region ?? null;
@@ -670,7 +679,8 @@ export async function createDraftRun(input: CreateDraftRunInput) {
 
       // FINAL_PAY: inject leave cash-out, prorated 13th, separation pay, CY priors.
       if ((input.runType ?? "REGULAR") === "FINAL_PAY") {
-        const salary = e.salaryHistory[0]!;
+        const term = e.employmentTerms[0]!;
+        const salary = { basicSalaryCents: term.basicSalaryCents!, salaryType: term.salaryType! };
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,
@@ -796,7 +806,8 @@ export async function recomputeRun(tenantId: string, bookId: string) {
 
       // FINAL_PAY: re-inject from stored separationReason.
       if (book.runType === "FINAL_PAY") {
-        const salary = e.salaryHistory[0]!;
+        const term = e.employmentTerms[0]!;
+        const salary = { basicSalaryCents: term.basicSalaryCents!, salaryType: term.salaryType! };
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,
@@ -1120,7 +1131,8 @@ export async function processRun(tenantId: string, bookId: string) {
       }
 
       if (book.runType === "FINAL_PAY") {
-        const salary = e.salaryHistory[0]!;
+        const term = e.employmentTerms[0]!;
+        const salary = { basicSalaryCents: term.basicSalaryCents!, salaryType: term.salaryType! };
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,

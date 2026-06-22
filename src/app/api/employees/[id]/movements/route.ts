@@ -57,8 +57,9 @@ export async function POST(
     const emp = await tx.employee.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
       include: {
-        salaryHistory: {
-          where: { endDate: null },
+        // Current salary now lives on EmploymentTerm (latest salary-bearing row).
+        employmentTerms: {
+          where: { basicSalaryCents: { not: null } },
           orderBy: { effectiveDate: "desc" },
           take: 1,
           select: { basicSalaryCents: true },
@@ -150,7 +151,7 @@ export async function POST(
       if (!x) return { error: "toWorkflowId not found in your tenant" as const };
     }
 
-    const currentBasic = emp.salaryHistory[0]?.basicSalaryCents ?? null;
+    const currentBasic = emp.employmentTerms[0]?.basicSalaryCents ?? null;
 
     const movement = await tx.employeeMovement.create({
       data: {
@@ -174,6 +175,8 @@ export async function POST(
         toLevelId: v.toLevelId ?? null,
         fromBasicSalaryCents: currentBasic,
         toBasicSalaryCents,
+        fromSalaryType: emp.salaryType,
+        toSalaryType: v.toSalaryType ?? null,
         fromStatus: emp.employmentStatus,
         toStatus: v.toStatus ?? null,
 

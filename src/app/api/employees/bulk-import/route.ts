@@ -160,15 +160,16 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      await tx.employeeSalary.create({
+      // Opening employment term carries the imported compensation
+      // (salary is part of EmploymentTerm post-merge).
+      await tx.employmentTerm.create({
         data: {
-          employeeId: emp.id,
           tenantId: auth.tenantId,
+          employeeId: emp.id,
+          effectiveDate: hireDate,
           basicSalaryCents: toCentavos(d.basic_salary),
           salaryType: d.salary_type,
-          effectiveDate: hireDate,
-          reason: "CSV bulk import",
-          createdByUserId: auth.userId,
+          remark: "CSV bulk import",
         },
       });
     }

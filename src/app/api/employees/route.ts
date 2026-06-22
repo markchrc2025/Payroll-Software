@@ -82,8 +82,9 @@ export async function GET(req: NextRequest) {
         department: { select: { id: true, name: true } },
         branch: { select: { id: true, name: true } },
         position: { select: { id: true, title: true, level: true } },
-        salaryHistory: {
-          where: { endDate: null },
+        // Salary now lives on EmploymentTerm; take the latest salary-bearing row.
+        employmentTerms: {
+          where: { basicSalaryCents: { not: null } },
           orderBy: { effectiveDate: "desc" },
           take: 1,
           select: { basicSalaryCents: true, effectiveDate: true },
@@ -93,12 +94,14 @@ export async function GET(req: NextRequest) {
     tx.employee.count({ where }),
   ]));
 
-  // Serialise BigInt centavos to string for JSON safety.
-  const serialised = employees.map((e) => ({
+  // Serialise BigInt centavos to string for JSON safety. The latest
+  // salary-bearing EmploymentTerm is exposed under `salaryHistory` to keep the
+  // existing list/table response shape stable.
+  const serialised = employees.map(({ employmentTerms, ...e }) => ({
     ...e,
-    salaryHistory: e.salaryHistory.map((s) => ({
-      ...s,
-      basicSalaryCents: centavosToJson(s.basicSalaryCents),
+    salaryHistory: employmentTerms.map((t) => ({
+      basicSalaryCents: centavosToJson(t.basicSalaryCents!),
+      effectiveDate: t.effectiveDate,
     })),
   }));
 
@@ -220,19 +223,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Opening salary record (effective from hire date)
-    await tx.employeeSalary.create({
-      data: {
-        employeeId: emp.id,
-        tenantId: auth.tenantId,
-        basicSalaryCents: toCentavos(basicSalary),
-        salaryType: emp.salaryType,
-        effectiveDate: hireDate,
-        reason: "Initial hire",
-        createdByUserId: auth.userId,
-      },
-    });
-
     // Initial placement record (if wizard supplied placement data)
     const placementDate = placementEffectiveDate ?? hireDate;
     await tx.placement.create({
@@ -251,7 +241,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Initial employment term record (if wizard supplied term data)
+    // Initial employment term record — carries the opening compensation
+    // (salary is part of EmploymentTerm post-merge). This is the hire-time
+    // snapshot the payroll engine reads as the in-force salary.
     const termDate = termEffectiveDate ?? hireDate;
     await tx.employmentTerm.create({
       data: {
@@ -263,6 +255,8 @@ export async function POST(req: NextRequest) {
         shiftScheduleId:  shiftScheduleId  ?? null,
         termStart:        contractStartDate ?? null,
         nextReviewDate:   contractEndDate   ?? null,
+        basicSalaryCents: toCentavos(basicSalary),
+        salaryType:       emp.salaryType,
       },
     });
 

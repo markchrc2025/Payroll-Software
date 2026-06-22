@@ -467,12 +467,17 @@ export function EmployeeForm({
               label="Pay Frequency *"
               options={PAY_FREQUENCY_OPTIONS}
             />
-            <SelectField
-              control={ctrl}
-              name="salaryType"
-              label="Salary Type *"
-              options={SALARY_TYPE_OPTIONS}
-            />
+            {/* Salary type & amount are set at hire; later changes flow through
+                movements (effective-dated on EmploymentTerm), so both are
+                create-only here to avoid silently desyncing payroll. */}
+            {mode === "create" && (
+              <SelectField
+                control={ctrl}
+                name="salaryType"
+                label="Salary Type *"
+                options={SALARY_TYPE_OPTIONS}
+              />
+            )}
             {mode === "create" && (
               <TextField
                 control={ctrl}

@@ -56,6 +56,12 @@ const MOVEMENT_SCOPES = [
   { value: "COMBINED_CHANGE", label: "Both (Placement + Employment Terms)" },
 ];
 
+const SALARY_TYPES = [
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "DAILY", label: "Daily" },
+  { value: "WEEKLY", label: "Weekly" },
+];
+
 const EMPTY_FORM = {
   employeeId: "",
   scope: "PLACEMENT_CHANGE",
@@ -69,12 +75,14 @@ const EMPTY_FORM = {
   toLineManagerId: "",
   toImmediateSupervisorId: "",
   toWorkflowId: "",
-  // Terms fields
+  // Terms fields (salary is part of the employment terms scope)
   toJobTypeId: "",
   toJobStatusId: "",
   toShiftScheduleId: "",
   toTermStart: "",
   toNextReviewDate: "",
+  toBasicSalary: "",
+  toSalaryType: "",
 };
 
 function SectionDivider({ label }: { label: string }) {
@@ -172,6 +180,8 @@ export function NewMovementDialog({
       if (form.toShiftScheduleId) body.toShiftScheduleId = form.toShiftScheduleId;
       if (form.toTermStart) body.toTermStart = form.toTermStart;
       if (form.toNextReviewDate) body.toNextReviewDate = form.toNextReviewDate;
+      if (form.toBasicSalary) body.toBasicSalary = form.toBasicSalary;
+      if (form.toSalaryType) body.toSalaryType = form.toSalaryType;
     }
     return body;
   }
@@ -388,6 +398,31 @@ export function NewMovementDialog({
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Next Review</FieldLabel>
                   <Input type="date" value={form.toNextReviewDate} onChange={(e) => set("toNextReviewDate", e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Basic Salary (₱)</FieldLabel>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 35000.00"
+                    value={form.toBasicSalary}
+                    onChange={(e) => set("toBasicSalary", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Salary Type</FieldLabel>
+                  <Select value={form.toSalaryType} onValueChange={(v) => set("toSalaryType", v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select salary type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SALARY_TYPES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}
