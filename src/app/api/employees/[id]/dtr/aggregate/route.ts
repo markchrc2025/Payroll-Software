@@ -16,6 +16,7 @@ import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { aggregateDtrSchema } from "@/lib/validations/dtr";
 import { isEntitledToHolidayPay } from "@/lib/payroll/holiday-entitlement";
 import { expandHolidays } from "@/lib/holidays/recurrence";
+import { holidayAppliesToBranch } from "@/lib/holidays/scope";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
 
@@ -131,7 +132,7 @@ export async function POST(
   const result = await withTenant(auth.tenantId, async (tx) => {
     const employee = await tx.employee.findFirst({
       where: { id: employeeId, tenantId: auth.tenantId },
-      select: { id: true, attendanceExempt: true },
+      select: { id: true, attendanceExempt: true, branchId: true },
     });
     if (!employee) return "NOT_FOUND";
 
@@ -205,10 +206,16 @@ export async function POST(
             category: true,
             recurringAnnually: true,
             skippedDates: true,
+            scope: true,
+            branchIds: true,
           },
         }),
     );
-    const holidays = expandHolidays(holidayMasters, periodStartDate, periodEndDate);
+    // Expand recurring masters, then keep only holidays that apply to THIS
+    // employee's branch (company-wide always applies; branch-specific only when
+    // the employee's branch is listed).
+    const holidays = expandHolidays(holidayMasters, periodStartDate, periodEndDate)
+      .filter((h) => holidayAppliesToBranch(h, employee.branchId));
     const holidayMap = new Map<string, HolidayCategory[]>();
     for (const h of holidays) {
       const k = dateKey(h.date);
@@ -278,7 +285,7 @@ export async function POST(
         }
 
         if (holBucket === "LEGAL" || holBucket === "DOUBLE") {
-          const entitled = await isEntitledToHolidayPay(employeeId, d, auth.tenantId, tx);
+          const entitled = await isEntitledToHolidayPay(employeeId, d, auth.tenantId, tx, employee.branchId);
           if (!entitled) {
             acc.unpaidLeaveDays++;
             continue;
@@ -315,6 +322,7 @@ export async function POST(
           new Date(r.date),
           auth.tenantId,
           tx,
+          employee.branchId,
         );
 
         if (!entitled) {
