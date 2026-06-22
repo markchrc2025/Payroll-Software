@@ -127,7 +127,10 @@ const DIR_ROLES   = ["Guest","Employee","Manager","Admin"];
 
 const GENDER_OPT   = [{ value:"FEMALE",label:"Female"},{value:"MALE",label:"Male"},{value:"OTHER",label:"Other"}];
 const CIVIL_OPT    = [{ value:"SINGLE",label:"Single"},{value:"MARRIED",label:"Married"},{value:"WIDOWED",label:"Widowed"},{value:"LEGALLY_SEPARATED",label:"Separated"}];
-const PAY_FREQ_OPT = [{ value:"MONTHLY",label:"Monthly"},{value:"SEMI_MONTHLY",label:"Semi-monthly"},{value:"WEEKLY",label:"Weekly"},{value:"DAILY",label:"Daily"}];
+const PAY_FREQ_OPT   = [{ value:"MONTHLY",label:"Monthly"},{value:"SEMI_MONTHLY",label:"Semi-monthly"},{value:"WEEKLY",label:"Weekly"},{value:"DAILY",label:"Daily"}];
+const EMP_TYPE_OPT   = [{value:"FULL_TIME",label:"Full-Time"},{value:"PART_TIME",label:"Part-Time"},{value:"CASUAL",label:"Casual"}];
+const EMP_STATUS_OPT = [{value:"PROBATIONARY",label:"Probationary"},{value:"REGULAR",label:"Regular"},{value:"CONTRACTUAL",label:"Contractual"},{value:"PROJECT_BASED",label:"Project-Based"},{value:"RESIGNED",label:"Resigned"},{value:"TERMINATED",label:"Terminated"},{value:"RETIRED",label:"Retired"}];
+const SAL_TYPE_OPT   = [{value:"MONTHLY",label:"Monthly"},{value:"DAILY",label:"Daily Rate"},{value:"WEEKLY",label:"Weekly Rate"}];
 
 // ─── Default values ───────────────────────────────────────────────────────────
 
@@ -650,7 +653,10 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
       case 2: // Job
         return (
           <FGrid>
-            <TF control={c} name="hireDate"            label="Date Joined"      type="date" req        errors={e} />
+            <TF control={c} name="hireDate"              label="Date Joined"         type="date" req      errors={e} />
+            <SF control={c} name="employmentType"         label="Employment Type"     options={EMP_TYPE_OPT}   req errors={e} />
+            <SF control={c} name="employmentStatus"       label="Employment Status"   options={EMP_STATUS_OPT} req errors={e} />
+            <TF control={c} name="regularizationDate"     label="Regularization Date" type="date"              errors={e} />
             <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 exclusiveWith="attendanceExempt" setValue={setValue} />
             <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
             <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 exclusiveWith="needsTimeClock" setValue={setValue} />
@@ -845,7 +851,8 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <FSec label="Salary" />
             <TF control={c} name="salaryEffectiveDate"  label="Effective Date"    type="date" span2 errors={e} />
             <MF control={c} name="basicSalary"          label="Basic Salary"                  req        errors={e} />
-            <SF control={c} name="currency"             label="Currency"          options={CURRENCIES} placeholder="PHP" errors={e} />
+            <SF control={c} name="salaryType"           label="Salary Type"       options={SAL_TYPE_OPT} placeholder="Monthly"    errors={e} />
+            <SF control={c} name="currency"             label="Currency"          options={CURRENCIES}   placeholder="PHP"        errors={e} />
             <FNote lines={["For hourly rate, you may use Earning."]} />
             <TF control={c} name="nextSalaryReviewDate" label="Next Review Date"  type="date"      span2 errors={e} />
             <FSec label="Payment" />
@@ -881,19 +888,22 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <FSec label="Web" />
-            <TF control={c} name="workEmail"    label="Email (Employee Web Account)" type="email" placeholder="name@email.com" span2 errors={e} />
-            <TF control={c} name="blogUrl"      label="Blog / Homepage"              placeholder="https://"                    span2 errors={e} />
+            <TF control={c} name="workEmail"     label="Email (Employee Web Account)" type="email" placeholder="name@email.com" span2 errors={e} />
+            <TF control={c} name="personalEmail" label="Personal Email"               type="email" placeholder="name@gmail.com"  span2 errors={e} />
+            <TF control={c} name="blogUrl"       label="Blog / Homepage"              placeholder="https://"                     span2 errors={e} />
             <FSec label="Phone" />
-            <TF control={c} name="officePhone"  label="Office Phone"  type="tel" placeholder="+63 2 0000 0000"   span2 errors={e} />
-            <TF control={c} name="mobileNumber" label="Mobile Phone"  type="tel" placeholder="+63 9XX XXX XXXX"  span2 errors={e} />
-            <TF control={c} name="housePhone"   label="House Phone"   type="tel" placeholder="+63 2 0000 0000"   span2 errors={e} />
+            <TF control={c} name="officePhone"   label="Office Phone"   type="tel" placeholder="+63 2 0000 0000"   span2 errors={e} />
+            <TF control={c} name="mobileNumber"  label="Mobile Phone"   type="tel" placeholder="+63 9XX XXX XXXX"  span2 errors={e} />
+            <TF control={c} name="housePhone"    label="House Phone"    type="tel" placeholder="+63 2 0000 0000"   span2 errors={e} />
+            <TF control={c} name="phoneNumber"   label="Alt / Landline" type="tel" placeholder="+63 2 0000 0000"   span2 errors={e} />
             <FSec label="Address" />
-            <TF control={c} name="addressLine1" label="Address 1"     placeholder="House no., street"    span2 errors={e} />
-            <TF control={c} name="addressLine2" label="Address 2"     placeholder="Barangay, district"   span2 errors={e} />
-            <TF control={c} name="city"         label="City"          placeholder="City"                       errors={e} />
-            <TF control={c} name="postcode"     label="Postcode"      placeholder="0000"                       errors={e} />
-            <TF control={c} name="province"     label="State/Province" placeholder="Province"                  errors={e} />
-            <SF control={c} name="country"      label="Country/Region" options={NATIONS} placeholder="Philippines" errors={e} />
+            <TF control={c} name="addressLine1"  label="Address 1"      placeholder="House no., street"   span2 errors={e} />
+            <TF control={c} name="addressLine2"  label="Address 2"      placeholder="Barangay, district"  span2 errors={e} />
+            <TF control={c} name="city"          label="City"           placeholder="City"                      errors={e} />
+            <TF control={c} name="postcode"      label="Postcode"       placeholder="0000"                      errors={e} />
+            <TF control={c} name="province"      label="State/Province" placeholder="Province"                  errors={e} />
+            <TF control={c} name="region"        label="Region"         placeholder="NCR"                       errors={e} />
+            <SF control={c} name="country"       label="Country/Region" options={NATIONS} placeholder="Philippines" span2 errors={e} />
           </FGrid>
         );
 
