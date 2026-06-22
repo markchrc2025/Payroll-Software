@@ -13,6 +13,7 @@
  */
 import type { TenantTx } from "@/lib/with-tenant";
 import type { DTRDayStatus } from "@prisma/client";
+import { expandHolidays } from "@/lib/holidays/recurrence";
 
 const WEEKDAYS_ISO = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 type Weekday = (typeof WEEKDAYS_ISO)[number];
@@ -54,16 +55,23 @@ export async function isEntitledToHolidayPay(
   const lookBackStart = new Date(holidayDate);
   lookBackStart.setDate(lookBackStart.getDate() - 7);
 
-  const holidaysInWindow = await tx.holiday.findMany({
+  const holidayMasters = await tx.holiday.findMany({
     where: {
       tenantId,
-      date: { gte: lookBackStart, lt: holidayDate },
       deletedAt: null,
+      OR: [
+        { recurringAnnually: true },
+        { date: { gte: lookBackStart, lt: holidayDate } },
+      ],
     },
-    select: { date: true },
+    select: { date: true, recurringAnnually: true, skippedDates: true },
   });
+  // Expand recurring holidays onto the look-back window so annual holidays are
+  // also skipped when walking back to the last regular working day.
   const holidayDateSet = new Set(
-    holidaysInWindow.map((h) => toUtcMidnightKey(h.date)),
+    expandHolidays(holidayMasters, lookBackStart, holidayDate).map((h) =>
+      toUtcMidnightKey(h.date),
+    ),
   );
 
   // 3. Walk back up to 7 days to find the last qualifying working day.

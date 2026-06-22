@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/require-permission";
 import { withTenant } from "@/lib/with-tenant";
 import { ok, err, notFound, serverError } from "@/lib/api-response";
+import { toSkipSet, utcDateKey } from "@/lib/holidays/recurrence";
 
 // ---------------------------------------------------------------------------
 // Validation schema for PATCH (all fields optional)
@@ -83,9 +84,10 @@ export async function PATCH(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/holidays/[id]?mode=single|permanent
-//   mode=single     → soft-delete this year's occurrence only (for recurring)
-//   mode=permanent  → hard soft-delete the master record (default)
+// DELETE /api/holidays/[id]?mode=single|permanent&date=YYYY-MM-DD
+//   mode=single     → cancel this year's occurrence only (recurring holidays):
+//                     append `date` to skippedDates, keep the master recurring.
+//   mode=permanent  → soft-delete the master record entirely (default).
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
@@ -99,6 +101,7 @@ export async function DELETE(
   const { id } = await params;
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get("mode") ?? "permanent";
+  const dateParam = searchParams.get("date"); // occurrence date for mode=single
 
   try {
     const deleted = await withTenant(ctx.tenantId, async (tx) => {
@@ -108,12 +111,17 @@ export async function DELETE(
       if (!existing) return null;
 
       if (mode === "single" && existing.recurringAnnually) {
-        // For single-year deletion of a recurring holiday: soft-delete so the
-        // record stays for history but the engine skips it (deletedAt set).
-        // The UI can re-create the next occurrence manually or via seed.
+        // Cancel only the chosen year's occurrence by adding it to skippedDates.
+        // The expansion logic skips this date but keeps every other year.
+        const dateToSkip =
+          dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+            ? dateParam
+            : utcDateKey(existing.date);
+        const next = toSkipSet(existing.skippedDates);
+        next.add(dateToSkip);
         return tx.holiday.update({
           where: { id },
-          data: { deletedAt: new Date() },
+          data: { skippedDates: Array.from(next) },
         });
       }
 

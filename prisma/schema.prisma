@@ -3095,6 +3095,11 @@ model Holiday {
   /// When true, the holiday recurs every year on the same month+day.
   recurringAnnually Boolean @default(false)
 
+  /// For recurring holidays: JSON array of "YYYY-MM-DD" strings whose specific
+  /// yearly occurrence has been cancelled ("delete this year only"). The master
+  /// row keeps recurring for every other year.
+  skippedDates Json @default("[]")
+
   scope    HolidayScope @default(COMPANY_WIDE)
   /// Non-empty only when scope = BRANCH_SPECIFIC. Array of Branch IDs.
   branchIds Json @default("[]")
