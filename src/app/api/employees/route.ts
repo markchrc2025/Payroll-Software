@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
         departmentId:  departmentId  ?? null,
         branchId:      branchId      ?? null,
         levelId:       levelId       ?? null,
-        workflowId:    workflowId    ?? null,
+        workflowId:    workflowId    || null,
       },
     });
 

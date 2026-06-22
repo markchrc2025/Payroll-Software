@@ -114,8 +114,6 @@ export const statutoryIdsSchema = z.object({
     .nullable()
     .or(z.literal("")),
   gsisMembershipId: optionalString(50),
-  taxExempt: z.coerce.boolean().optional().default(false),
-  taxExemptReason: optionalString(255),
 });
 
 export type StatutoryIdsInput = z.infer<typeof statutoryIdsSchema>;
