@@ -129,7 +129,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/leave", label: "Leave", icon: "leave" },
       { href: "/settings/leave-policies", label: "Leave Policies", icon: "policies" },
-      { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
       { href: "#soon-leave-planner", label: "Planner", icon: "leave", comingSoon: true },
       { href: "#soon-leave-schedule", label: "Schedule", icon: "time", comingSoon: true },
       { href: "#soon-leave-review", label: "Review", icon: "requests", comingSoon: true },
