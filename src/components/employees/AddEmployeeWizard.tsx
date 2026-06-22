@@ -128,8 +128,6 @@ const DIR_ROLES   = ["Guest","Employee","Manager","Admin"];
 const GENDER_OPT   = [{ value:"FEMALE",label:"Female"},{value:"MALE",label:"Male"},{value:"OTHER",label:"Other"}];
 const CIVIL_OPT    = [{ value:"SINGLE",label:"Single"},{value:"MARRIED",label:"Married"},{value:"WIDOWED",label:"Widowed"},{value:"LEGALLY_SEPARATED",label:"Separated"}];
 const PAY_FREQ_OPT   = [{ value:"MONTHLY",label:"Monthly"},{value:"SEMI_MONTHLY",label:"Semi-monthly"},{value:"WEEKLY",label:"Weekly"},{value:"DAILY",label:"Daily"}];
-const EMP_TYPE_OPT   = [{value:"FULL_TIME",label:"Full-Time"},{value:"PART_TIME",label:"Part-Time"},{value:"CASUAL",label:"Casual"}];
-const EMP_STATUS_OPT = [{value:"PROBATIONARY",label:"Probationary"},{value:"REGULAR",label:"Regular"},{value:"CONTRACTUAL",label:"Contractual"},{value:"PROJECT_BASED",label:"Project-Based"},{value:"RESIGNED",label:"Resigned"},{value:"TERMINATED",label:"Terminated"},{value:"RETIRED",label:"Retired"}];
 const SAL_TYPE_OPT   = [{value:"MONTHLY",label:"Monthly"},{value:"DAILY",label:"Daily Rate"},{value:"WEEKLY",label:"Weekly Rate"}];
 
 // ─── Default values ───────────────────────────────────────────────────────────
@@ -654,8 +652,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <TF control={c} name="hireDate"              label="Date Joined"         type="date" req      errors={e} />
-            <SF control={c} name="employmentType"         label="Employment Type"     options={EMP_TYPE_OPT}   req errors={e} />
-            <SF control={c} name="employmentStatus"       label="Employment Status"   options={EMP_STATUS_OPT} req errors={e} />
             <TF control={c} name="regularizationDate"     label="Regularization Date" type="date"              errors={e} />
             <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 exclusiveWith="attendanceExempt" setValue={setValue} />
             <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
