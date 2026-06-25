@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
-import { err, notFound, ok } from "@/lib/api-response";
+import { err, forbidden, notFound, ok } from "@/lib/api-response";
 
 const bodySchema = z.object({ note: z.string().optional() }).optional();
 
@@ -35,7 +35,7 @@ export async function POST(
   const result = await withTenant(auth.tenantId, async (tx) => {
     const submission = await tx.dTRSubmission.findFirst({
       where: { id, tenantId: auth.tenantId },
-      select: { id: true, status: true, currentStepIndex: true },
+      select: { id: true, status: true, currentStepIndex: true, employeeId: true },
     });
     if (!submission) return "not_found" as const;
     if (submission.status === "MANAGER_APPROVED") return submission;
@@ -48,6 +48,9 @@ export async function POST(
           select: { id: true },
         })
       : null;
+
+    if (actorEmployee?.id && actorEmployee.id === submission.employeeId)
+      return "self" as const;
 
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "DTR", entityId: id },
@@ -112,6 +115,8 @@ export async function POST(
   });
 
   if (result === "not_found") return notFound("DTR submission");
+  if (result === "self")
+    return forbidden("You cannot approve your own DTR submission");
   if (result === "returned")
     return err("Submission was returned and cannot be approved", 409);
   if (result === "no_pending")

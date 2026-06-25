@@ -13,7 +13,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { requirePermission, checkPermission } from "@/lib/require-permission";
-import { ok, err, notFound } from "@/lib/api-response";
+import { ok, err, notFound, forbidden } from "@/lib/api-response";
 import { enqueueOtApproved } from "@/lib/jobs/workers";
 import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
 
@@ -47,6 +47,13 @@ export async function POST(
     if (ota.status === "REJECTED" || ota.status === "CANCELLED")
       return { terminal: true as const, status: ota.status };
 
+    const callerEmployee = await tx.employee.findFirst({
+      where: { userId: auth.userId, tenantId: auth.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (callerEmployee?.id && callerEmployee.id === ota.employeeId)
+      return { self: true as const };
+
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "OT", entityId: id },
       orderBy: { stepIndex: "asc" },
@@ -60,10 +67,6 @@ export async function POST(
 
       if (!currentStep) return { terminal: true as const, status: ota.status };
 
-      const callerEmployee = await tx.employee.findFirst({
-        where: { userId: auth.userId, tenantId: auth.tenantId, deletedAt: null },
-        select: { id: true },
-      });
       const isAssignedApprover = callerEmployee?.id === currentStep.approverEmployeeId;
       const isOverride =
         auth.systemRole === "SUPER_ADMIN" ||
@@ -115,6 +118,8 @@ export async function POST(
   });
 
   if ("notFound" in result && result.notFound) return notFound("OT application not found");
+  if ("self" in result && result.self)
+    return forbidden("You cannot approve your own OT application");
   if ("terminal" in result && result.terminal)
     return err(`Cannot approve a ${result.status} application`, 409);
   if ("forbidden" in result && result.forbidden)
