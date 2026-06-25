@@ -7,6 +7,7 @@ import type { NextRequest } from "next/server";
 import { Prisma, StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
+import { hmac } from "@/lib/crypto";
 import { toCentavos, centavosToJson } from "@/lib/money";
 import {
   ok,
@@ -194,6 +195,24 @@ export async function POST(req: NextRequest) {
       if (!wf) return { error: "Approval workflow not found in your tenant" as const };
     }
 
+    // Reject duplicate statutory IDs within the tenant (HMAC match — never
+    // exposes ciphertext). Runs before any write so a conflict leaves no record.
+    const statutoryDupRows: { type: StatutoryIdType; value: string | null }[] = [
+      { type: StatutoryIdType.TIN, value: emptyToNull(statutoryIds?.tinNumber) },
+      { type: StatutoryIdType.SSS, value: emptyToNull(statutoryIds?.sssNumber) },
+      { type: StatutoryIdType.PHILHEALTH, value: emptyToNull(statutoryIds?.philhealthNumber) },
+      { type: StatutoryIdType.PAGIBIG, value: emptyToNull(statutoryIds?.pagibigNumber) },
+      { type: StatutoryIdType.GSIS, value: emptyToNull(statutoryIds?.gsisMembershipId) },
+    ];
+    for (const r of statutoryDupRows) {
+      if (r.value == null) continue;
+      const dup = await tx.statutoryId.findFirst({
+        where: { tenantId: auth.tenantId, type: r.type, numberHmac: hmac(r.value) },
+        select: { id: true },
+      });
+      if (dup) return { conflict: `Another employee already has this ${r.type} number.` };
+    }
+
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
 
@@ -296,6 +315,7 @@ export async function POST(req: NextRequest) {
     return { employee: emp };
   });
 
+  if ("conflict" in result) return err(result.conflict ?? "Duplicate statutory ID", 409);
   if ("error" in result && result.error) return err(result.error, 404);
 
   void writeAuditLog({
