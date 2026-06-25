@@ -61,6 +61,10 @@ const patchSchema = z.object({
   // is configurable). HH:MM, 24-hour.
   nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
   nsdWindowEnd:   z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
+  // Timekeeping timezone: company IANA tz + whether DTR follows company or
+  // each employee's own timezone.
+  timezone:                z.string().min(1).max(64).optional(),
+  timekeepingTimezoneMode: z.enum(["COMPANY", "EMPLOYEE"]).optional(),
   // Employee ID format — prefix/suffix restricted to URL-safe characters so
   // the Employee ID can be used directly in routes (e.g. /employees/EMP-0001).
   empIdPrefix:      z.string().max(20).regex(/^[A-Za-z0-9._-]*$/, "Only letters, numbers, and . _ - are allowed").optional(),
@@ -97,6 +101,8 @@ export async function GET(req: NextRequest) {
         thirteenthMonthBasis: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
+        timezone: true,
+        timekeepingTimezoneMode: true,
         empIdPrefix: true,
         empIdIncludeYear: true,
         empIdPadding: true,
@@ -162,6 +168,8 @@ export async function PATCH(req: NextRequest) {
         thirteenthMonthBasis: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
+        timezone: true,
+        timekeepingTimezoneMode: true,
         empIdPrefix: true,
         empIdIncludeYear: true,
         empIdPadding: true,
