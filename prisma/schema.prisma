@@ -258,6 +258,13 @@ enum ThirteenthMonthBasis {
   INCLUDE_ALLOWANCES
 }
 
+/// Whether timekeeping (business day, NSD window, late/UT) follows the company
+/// timezone or each employee's own timezone.
+enum TimekeepingTimezoneMode {
+  COMPANY
+  EMPLOYEE
+}
+
 /// Audit log target kinds — kept open via String for forward-compat.
 enum AuditAction {
   CREATE
@@ -599,6 +606,12 @@ model Tenant {
   /// lives in PremiumRateConfig (key NSD, DOLE default 0.10).
   nsdWindowStart         String               @default("22:00")
   nsdWindowEnd           String               @default("06:00")
+  /// IANA timezone for company-wide timekeeping (default derived from country
+  /// at creation). Anchors business-day boundaries, the NSD window and the
+  /// statutory month-end for this tenant.
+  timezone                String                  @default("Asia/Manila")
+  /// Whether DTR/attendance follows the company timezone or each employee's own.
+  timekeepingTimezoneMode TimekeepingTimezoneMode @default(COMPANY)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1104,6 +1117,9 @@ model Employee {
   salaryType        SalaryType   @default(MONTHLY)
   standardWorkHours Decimal      @default(8) @db.Decimal(4, 2)
   standardWorkDays  Decimal      @default(22) @db.Decimal(4, 2)
+  /// Optional IANA timezone override; used only when the tenant's
+  /// timekeepingTimezoneMode is EMPLOYEE (otherwise inherits company tz).
+  timezone          String?
 
   // Tax
   taxClassification          TaxClassification @default(REGULAR)

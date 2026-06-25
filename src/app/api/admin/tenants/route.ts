@@ -13,6 +13,7 @@ import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { writeCentralAudit, logSubscriptionEvent } from "@/lib/central/audit";
 import { tenantMrrPesos, computeHealthScore } from "@/lib/central/metrics";
+import { countryToTimezone } from "@/lib/time/country-timezone";
 import { z } from "zod";
 
 const createTenantSchema = z.object({
@@ -32,6 +33,7 @@ const createTenantSchema = z.object({
   address: z.string().max(300).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
   province: z.string().max(100).optional().nullable(),
+  country: z.string().max(100).optional().nullable(),
   zipCode: z.string().max(10).optional().nullable(),
   contactEmail: z.string().email().optional().nullable(),
   contactPhone: z.string().max(30).optional().nullable(),
@@ -142,6 +144,8 @@ export async function POST(req: NextRequest) {
         city: city ?? null,
         province: province ?? null,
         zipCode: zipCode ?? null,
+        country: tenantData.country ?? "Philippines",
+        timezone: countryToTimezone(tenantData.country ?? "Philippines"),
         contactEmail: contactEmail ?? null,
         contactPhone: contactPhone ?? null,
         ...(trialEndsAt ? { trialEndsAt: new Date(trialEndsAt) } : {}),
