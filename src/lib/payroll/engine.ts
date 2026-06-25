@@ -71,6 +71,16 @@ function timesUnits(centavos: bigint, units: number): bigint {
   return BigInt(Math.round(Number(centavos) * units));
 }
 
+/**
+ * Pay/deduction for a whole number of minutes at an hourly centavo rate
+ * (HALF-UP). Multiplies by minutes *before* dividing by 60 so a non-whole-hour
+ * value (e.g. 10 min = 0.1666…h) isn't passed through a pre-divided float.
+ */
+function timesMinutes(hourlyCentavos: bigint, minutes: number): bigint {
+  if (minutes === 0) return 0n;
+  return BigInt(Math.round((Number(hourlyCentavos) * minutes) / 60));
+}
+
 function clampNonNegative(v: bigint): bigint {
   return v < 0n ? 0n : v;
 }
@@ -581,9 +591,9 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   // -- Steps 1–4: back pay + premiums + pay components (same as REGULAR) ----
   const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
 
-  const lateUndertimeDeductionCents = timesUnits(
+  const lateUndertimeDeductionCents = timesMinutes(
     hourlyRateCents,
-    periodInput.lateUndertimeMinutes / 60,
+    periodInput.lateUndertimeMinutes,
   );
 
   const mFP = resolveMultipliers(input.multiplierConfig);
@@ -882,9 +892,9 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // -- Step 2: late / undertime ---------------------------------------------
   // Deduction = hourlyRate × (minutes / 60), rounded HALF-UP at the end.
   // (Do NOT round the per-minute rate first — that loses the half-centavo.)
-  const lateUndertimeDeductionCents = timesUnits(
+  const lateUndertimeDeductionCents = timesMinutes(
     hourlyRateCents,
-    periodInput.lateUndertimeMinutes / 60,
+    periodInput.lateUndertimeMinutes,
   );
 
   // -- Step 3: premium pay — full §4.3 stacking matrix ---------------------
