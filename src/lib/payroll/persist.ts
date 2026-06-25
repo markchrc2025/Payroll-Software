@@ -22,6 +22,7 @@ import type {
   SeparationReason,
 } from "@prisma/client";
 import { computeSheet } from "./engine";
+import { multiply } from "@/lib/money";
 import type {
   ComputeInput,
   ComputeLoan,
@@ -529,7 +530,8 @@ async function computeFinalPayInputsForEmployee(
       Number(lb.forfeited) -
       Number(lb.convertedToCash);
     if (available > 0) {
-      leaveCashOutCents += BigInt(Math.round(available * Number(dailyRateCents)));
+      // HALF-UP BigInt arithmetic — never multiply money through JS floats.
+      leaveCashOutCents += multiply(dailyRateCents, available);
     }
   }
 
@@ -541,7 +543,7 @@ async function computeFinalPayInputsForEmployee(
     if (rate > 0) {
       const lastDay = employee.lastWorkingDate ?? periodEnd;
       const yearsOfService = computeYearsOfService(employee.hireDate, lastDay);
-      const rawPay = BigInt(Math.round(yearsOfService * rate * Number(monthlySalaryCents)));
+      const rawPay = multiply(monthlySalaryCents, yearsOfService * rate);
       // DOLE minimum: not less than 1 month salary.
       separationPayCents =
         rawPay < monthlySalaryCents ? monthlySalaryCents : rawPay;
