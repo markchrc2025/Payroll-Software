@@ -74,6 +74,8 @@ export interface DtrComputed {
   lateMinutes: number;
   undertimeMinutes: number;
   nsdMinutes: number;
+  /** True when there's a clock-in but no clock-out (forgotten OUT). */
+  missingOut?: boolean;
   /**
    * Advisory only: worked minutes beyond the shift OT threshold. NEVER paid —
    * payable OT comes only from an approved OT application. Callers persist this
@@ -244,6 +246,7 @@ export function computeDtrFields(
       lateMinutes: 0,
       undertimeMinutes: 0,
       nsdMinutes: actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow, timezone) : 0,
+      missingOut: !hasOut,
     };
   }
 
@@ -304,6 +307,7 @@ export function computeDtrFields(
       lateMinutes,
       undertimeMinutes,
       nsdMinutes,
+      missingOut: !hasOut,
       ...(suggestedOtMinutes !== undefined && { suggestedOtMinutes }),
     };
   }
@@ -333,6 +337,7 @@ export function computeDtrFields(
     lateMinutes,
     undertimeMinutes,
     nsdMinutes,
+    missingOut: !hasOut,
     ...(suggestedOtMinutes !== undefined && { suggestedOtMinutes }),
   };
 }

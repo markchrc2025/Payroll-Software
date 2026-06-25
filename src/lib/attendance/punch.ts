@@ -296,6 +296,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             undertimeMinutes:   computed.undertimeMinutes,
             nsdMinutes:         computed.nsdMinutes,
             suggestedOtMinutes,
+            hasMissingPunch:    computed.missingOut ?? false,
             ...(shift && { shiftScheduleId: shift.id }),
             // Paid OT only changes here when this punch just auto-approved it.
             ...(autoApprovedOtMinutes !== null && { otMinutes: autoApprovedOtMinutes }),
@@ -314,6 +315,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             undertimeMinutes:   computed.undertimeMinutes,
             nsdMinutes:         computed.nsdMinutes,
             suggestedOtMinutes,
+            hasMissingPunch:    computed.missingOut ?? false,
             otMinutes:          autoApprovedOtMinutes ?? 0,
           },
           select: { id: true },
