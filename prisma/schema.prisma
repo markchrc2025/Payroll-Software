@@ -2326,6 +2326,8 @@ model PayrollSheet {
   // -- Step 10/11: Add-backs and deductions ---------------------------------
   nontaxableAdditionsCents BigInt @default(0)
   loanDeductionsCents      BigInt @default(0)
+  /// DEDUCTION-kind payroll adjustments applied this run (subtracted from net).
+  adjustmentDeductionsCents BigInt @default(0)
 
   // -- Step 12: Final --------------------------------------------------------
   netPayCents BigInt @default(0)
