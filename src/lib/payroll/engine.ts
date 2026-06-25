@@ -134,13 +134,16 @@ function resolveMultipliers(config?: ComputeMultiplierConfig): ResolvedMultiplie
 /**
  * Returns true if statutory contributions should be deducted for this period.
  * MONTHLY-cycle runs always deduct. SEMI_MONTHLY runs deduct on the cutoff
- * designated by tenant's `statutoryCutoffRule`. WEEKLY/DAILY treated as
- * MONTHLY (deduct every run) — proper monthly aggregation is deferred.
+ * designated by tenant's `statutoryCutoffRule`. WEEKLY/DAILY use a month-end
+ * anchor: the full monthly contribution is deducted exactly once per calendar
+ * month, on the run whose period contains that month's last day (so a weekly
+ * employee is no longer charged a full month on every run).
  */
 export function isStatutoryDeducted(
   cycle: PayFrequency,
   rule: "FIRST_CUTOFF" | "SECOND_CUTOFF",
   periodEnd: Date,
+  periodStart?: Date,
 ): boolean {
   if (cycle === "MONTHLY") return true;
   if (cycle === "SEMI_MONTHLY") {
@@ -149,9 +152,14 @@ export function isStatutoryDeducted(
     // SECOND_CUTOFF: any period ending on/after the 16th counts.
     return day >= 16;
   }
-  // WEEKLY / DAILY — out of strict D3 scope; default to deducted so totals
-  // don't silently zero out. Document for later.
-  return true;
+  // WEEKLY / DAILY: deduct once per calendar month, on the run whose period
+  // contains the last day of a month. Period dates are calendar-dates (the
+  // company jurisdiction), so month boundaries are taken from them directly.
+  const start = periodStart ?? periodEnd;
+  const lastDayOf = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  const inPeriod = (d: Date) => start <= d && d <= periodEnd;
+  return inPeriod(lastDayOf(start)) || inPeriod(lastDayOf(periodEnd));
 }
 
 // ---------------------------------------------------------------------------
@@ -675,7 +683,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   const deducted =
     input.overrideStatutoryDeducted !== undefined
       ? input.overrideStatutoryDeducted
-      : isStatutoryDeducted(period.cycle, tenant.statutoryCutoffRule, period.end);
+      : isStatutoryDeducted(period.cycle, tenant.statutoryCutoffRule, period.end, period.start);
 
   const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
   const phic = computePhilHealth(rules.philHealth, rates.monthlyEquivalentCents);
@@ -990,6 +998,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
           period.cycle,
           tenant.statutoryCutoffRule,
           period.end,
+          period.start,
         );
 
   const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);

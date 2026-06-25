@@ -379,6 +379,29 @@ describe("§6.4 Statutory cutoff timing", () => {
     const { isStatutoryDeducted } = await import("@/lib/payroll/engine");
     expect(isStatutoryDeducted("SEMI_MONTHLY", "FIRST_CUTOFF", new Date("2026-01-31"))).toBe(false);
   });
+
+  it("WEEKLY: deducts once per month — only the week containing month-end", async () => {
+    const { isStatutoryDeducted } = await import("@/lib/payroll/engine");
+    const wk = (start: string, end: string) =>
+      isStatutoryDeducted("WEEKLY", "SECOND_CUTOFF", new Date(end), new Date(start));
+    // Jan 2026 weekly periods (Sun–Sat-ish). Only the week containing Jan 31 deducts.
+    expect(wk("2026-01-04", "2026-01-10")).toBe(false);
+    expect(wk("2026-01-11", "2026-01-17")).toBe(false);
+    expect(wk("2026-01-25", "2026-01-31")).toBe(true);  // contains Jan 31
+    // A week spanning Jan→Feb deducts for January (contains Jan 31)...
+    expect(wk("2026-01-28", "2026-02-03")).toBe(true);
+    // ...and the next February weeks don't deduct again until Feb month-end.
+    expect(wk("2026-02-04", "2026-02-10")).toBe(false);
+    expect(wk("2026-02-22", "2026-02-28")).toBe(true);  // contains Feb 28 (2026 non-leap)
+  });
+
+  it("DAILY: deducts only on the last day of the month", async () => {
+    const { isStatutoryDeducted } = await import("@/lib/payroll/engine");
+    const day = (d: string) => isStatutoryDeducted("DAILY", "SECOND_CUTOFF", new Date(d), new Date(d));
+    expect(day("2026-01-15")).toBe(false);
+    expect(day("2026-01-30")).toBe(false);
+    expect(day("2026-01-31")).toBe(true);
+  });
 });
 
 // ===========================================================================
