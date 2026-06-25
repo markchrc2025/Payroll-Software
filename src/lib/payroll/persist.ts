@@ -587,6 +587,16 @@ async function computeFinalPayInputsForEmployee(
 // Public: create draft run
 // ---------------------------------------------------------------------------
 
+/** True when a Prisma error is a unique-constraint (P2002) violation. */
+function isDuplicatePeriod(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code?: unknown }).code === "P2002"
+  );
+}
+
 export async function createDraftRun(input: CreateDraftRunInput) {
   return withTenant(input.tenantId, async (tx) => {
     // 1. Verify no duplicate.
@@ -627,20 +637,30 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         ? Object.fromEntries(premiumRateRows.map((r) => [r.multiplierKey, Number(r.rate)]))
         : {};
 
-    // 3. Create the book.
-    const book = await tx.payrollBook.create({
-      data: {
-        tenantId: input.tenantId,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        cycle: input.cycle,
-        runType: input.runType ?? "REGULAR",
-        notes: input.notes ?? null,
-        createdByUserId: input.createdByUserId ?? null,
-        skipStatutory: input.skipStatutory ?? false,
-        separationReason: input.separationReason ?? null,
-      },
-    });
+    // 3. Create the book. The unique index is the real race guard — two
+    //    concurrent creates can both pass the findUnique check above, so map
+    //    the resulting P2002 to a 409 conflict.
+    const book = await tx.payrollBook
+      .create({
+        data: {
+          tenantId: input.tenantId,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          cycle: input.cycle,
+          runType: input.runType ?? "REGULAR",
+          notes: input.notes ?? null,
+          createdByUserId: input.createdByUserId ?? null,
+          skipStatutory: input.skipStatutory ?? false,
+          separationReason: input.separationReason ?? null,
+        },
+      })
+      .catch((e) => {
+        if (isDuplicatePeriod(e))
+          throw new PayrollRunConflictError(
+            "A payroll run already exists for this period.",
+          );
+        throw e;
+      });
 
     // 4. Fan out engine across active employees.
     const allEmployees = await loadActiveEmployees(
@@ -1057,20 +1077,28 @@ export async function queueRun(input: CreateDraftRunInput) {
       );
     }
 
-    return tx.payrollBook.create({
-      data: {
-        tenantId: input.tenantId,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        cycle: input.cycle,
-        runType: input.runType ?? "REGULAR",
-        notes: input.notes ?? null,
-        createdByUserId: input.createdByUserId ?? null,
-        skipStatutory: input.skipStatutory ?? false,
-        separationReason: input.separationReason ?? null,
-        status: "PROCESSING",
-      },
-    });
+    return tx.payrollBook
+      .create({
+        data: {
+          tenantId: input.tenantId,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          cycle: input.cycle,
+          runType: input.runType ?? "REGULAR",
+          notes: input.notes ?? null,
+          createdByUserId: input.createdByUserId ?? null,
+          skipStatutory: input.skipStatutory ?? false,
+          separationReason: input.separationReason ?? null,
+          status: "PROCESSING",
+        },
+      })
+      .catch((e) => {
+        if (isDuplicatePeriod(e))
+          throw new PayrollRunConflictError(
+            "A payroll run already exists for this period.",
+          );
+        throw e;
+      });
   });
 }
 
