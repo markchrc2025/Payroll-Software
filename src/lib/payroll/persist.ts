@@ -744,6 +744,9 @@ export async function createDraftRun(input: CreateDraftRunInput) {
 
 export async function recomputeRun(tenantId: string, bookId: string) {
   return withTenant(tenantId, async (tx) => {
+    // Lock the book row for the duration of the tx so concurrent
+    // recompute/finalize calls serialize instead of racing.
+    await tx.$queryRaw`SELECT id FROM "PayrollBook" WHERE id = ${bookId} AND "tenantId" = ${tenantId} FOR UPDATE`;
     const book = await tx.payrollBook.findUnique({ where: { id: bookId } });
     if (!book) throw new PayrollRunNotFoundError(bookId);
     if (book.status !== "DRAFT") {
@@ -884,6 +887,9 @@ export async function finalizeRun(
   userId: string | null,
 ) {
   return withTenant(tenantId, async (tx) => {
+    // Lock the book row for the duration of the tx so two concurrent finalize
+    // calls cannot both read DRAFT and double-debit loan balances.
+    await tx.$queryRaw`SELECT id FROM "PayrollBook" WHERE id = ${bookId} AND "tenantId" = ${tenantId} FOR UPDATE`;
     const book = await tx.payrollBook.findUnique({
       where: { id: bookId },
       include: { sheets: true },
