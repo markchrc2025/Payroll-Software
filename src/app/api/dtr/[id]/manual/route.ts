@@ -12,6 +12,13 @@ import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { err, notFound, ok } from "@/lib/api-response";
 import { manualTimeOverrideSchema } from "@/lib/validations/dtr";
+import {
+  computeDtrFields,
+  parseWindowMinutes,
+  type AttendancePunch,
+  type ShiftContext,
+} from "@/lib/attendance/compute-dtr";
+import { resolveTimezone } from "@/lib/time/zone";
 
 export async function PATCH(
   req: NextRequest,
@@ -38,6 +45,9 @@ export async function PATCH(
       select: {
         id: true,
         isLocked: true,
+        employeeId: true,
+        date: true,
+        shiftScheduleId: true,
         officialTimeIn: true,
         officialTimeOut: true,
         manualTimeIn: true,
@@ -88,6 +98,61 @@ export async function PATCH(
     const effectiveTimeIn = newManualTimeIn ?? record.officialTimeIn ?? null;
     const effectiveTimeOut = newManualTimeOut ?? record.officialTimeOut ?? null;
 
+    // Recompute DTR metrics from the corrected effective times so the override
+    // actually flows into payroll (worked/late/undertime/NSD).
+    const tenant = await tx.tenant.findUnique({
+      where: { id: auth.tenantId },
+      select: {
+        timezone: true,
+        timekeepingTimezoneMode: true,
+        nsdWindowStart: true,
+        nsdWindowEnd: true,
+      },
+    });
+    const empTz = await tx.employee.findFirst({
+      where: { id: record.employeeId, tenantId: auth.tenantId },
+      select: { timezone: true },
+    });
+    const tz = resolveTimezone(
+      {
+        timezone: tenant?.timezone ?? "Asia/Manila",
+        timekeepingTimezoneMode: tenant?.timekeepingTimezoneMode ?? "COMPANY",
+      },
+      { timezone: empTz?.timezone ?? null },
+    );
+    const nsdWindow = {
+      startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
+      endMin: parseWindowMinutes(tenant?.nsdWindowEnd) ?? 6 * 60,
+    };
+    const shiftRow = record.shiftScheduleId
+      ? await tx.shiftSchedule.findFirst({
+          where: { id: record.shiftScheduleId, tenantId: auth.tenantId },
+          select: {
+            timeIn: true, timeOut: true, coreTimeIn: true, coreTimeOut: true,
+            requiredHours: true, gracePeriodMinutes: true, breakMinutes: true,
+            breakPolicy: true, crossesMidnight: true, otThresholdMinutes: true,
+          },
+        })
+      : null;
+    const shiftCtx: ShiftContext | null = shiftRow
+      ? {
+          timeIn: shiftRow.timeIn ?? null,
+          timeOut: shiftRow.timeOut ?? null,
+          coreTimeIn: shiftRow.coreTimeIn ?? null,
+          coreTimeOut: shiftRow.coreTimeOut ?? null,
+          requiredHours: shiftRow.requiredHours != null ? Number(shiftRow.requiredHours) : null,
+          gracePeriodMinutes: shiftRow.gracePeriodMinutes ?? 0,
+          breakMinutes: shiftRow.breakMinutes ?? 60,
+          breakPolicy: shiftRow.breakPolicy ?? "FIXED_DEDUCTION",
+          crossesMidnight: shiftRow.crossesMidnight ?? false,
+          otThresholdMinutes: shiftRow.otThresholdMinutes ?? null,
+        }
+      : null;
+    const punches: AttendancePunch[] = [];
+    if (effectiveTimeIn) punches.push({ punchType: "IN", punchedAt: effectiveTimeIn });
+    if (effectiveTimeOut) punches.push({ punchType: "OUT", punchedAt: effectiveTimeOut });
+    const computed = computeDtrFields(record.date, punches, shiftCtx, nsdWindow, tz);
+
     // Update the DTRRecord
     const updated = await tx.dTRRecord.update({
       where: { id },
@@ -100,6 +165,11 @@ export async function PATCH(
         manualUpdatedAt: new Date(),
         effectiveTimeIn,
         effectiveTimeOut,
+        workedMinutes: computed.workedMinutes,
+        lateMinutes: computed.lateMinutes,
+        undertimeMinutes: computed.undertimeMinutes,
+        nsdMinutes: computed.nsdMinutes,
+        suggestedOtMinutes: computed.suggestedOtMinutes ?? 0,
       },
     });
 
