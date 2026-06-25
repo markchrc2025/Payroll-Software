@@ -266,6 +266,18 @@ describe("§3 Tardiness / Undertime deductions", () => {
     expect(result.lateUndertimeDeductionCents).toBe(25_862n);
   });
 
+  it("late 10 min → integer minute math, no float drift = 2,874 centavos", () => {
+    // (17241 × 10) / 60 = 172410/60 = 2873.5 → HALF-UP = 2874.
+    // The old `minutes/60` float path (0.1666…) rounded down to 2873.
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 3_000_000n,
+      periodInput: { daysWorked: 0, lateUndertimeMinutes: 10 },
+      overrideStatutoryDeducted: false,
+    }));
+    expect(result.lateUndertimeDeductionCents).toBe(2_874n);
+  });
+
   it("0 minutes late/undertime → ₱0 deduction", () => {
     // Source: Engine_Test_Spec.md §3 row 3
     const result = computeSheet(makeInput({
