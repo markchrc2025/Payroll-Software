@@ -160,3 +160,40 @@ describe("computeDtrFields — flexible core window", () => {
     expect(r.undertimeMinutes).toBe(60);
   });
 });
+
+describe("computeDtrFields — timezone anchoring (Asia/Manila, UTC+8)", () => {
+  const PH = "Asia/Manila";
+  // The local PH calendar day, as UTC-midnight of that local day.
+  const PH_DAY = new Date("2026-06-15T00:00:00.000Z");
+  // PH has no DST: a PH wall-clock hour maps to UTC hour − 8.
+  const phPunch = (type: "IN" | "OUT", phHour: number, phMin = 0): AttendancePunch => ({
+    punchType: type,
+    punchedAt: new Date(Date.UTC(2026, 5, 15, phHour - 8, phMin)),
+  });
+
+  it("computes late against the PH-local expected time-in", () => {
+    // Shift 08:00–17:00 PHT; clock in 08:30 PHT, out 17:00 PHT.
+    const r = computeDtrFields(
+      PH_DAY,
+      [phPunch("IN", 8, 30), phPunch("OUT", 17)],
+      fixedShift(),
+      undefined,
+      PH,
+    );
+    expect(r.lateMinutes).toBe(30);
+    expect(r.undertimeMinutes).toBe(0);
+    expect(r.workedMinutes).toBe(510 - 60); // 8.5h span − 60m break
+  });
+
+  it("counts NSD overlap using the PH-local 22:00–06:00 window", () => {
+    // Work 20:00 → 24:00 PHT → 2h inside the 22:00–06:00 NSD window.
+    const r = computeDtrFields(
+      PH_DAY,
+      [phPunch("IN", 20), phPunch("OUT", 24)],
+      fixedShift({ timeIn: "20:00", timeOut: "24:00", crossesMidnight: true, breakMinutes: 0 }),
+      undefined,
+      PH,
+    );
+    expect(r.nsdMinutes).toBe(120);
+  });
+});

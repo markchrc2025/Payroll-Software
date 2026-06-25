@@ -15,6 +15,7 @@
 import { withTenant } from "@/lib/with-tenant";
 import { checkGeofence } from "@/lib/attendance/geofence";
 import { computeDtrFields, parseWindowMinutes } from "@/lib/attendance/compute-dtr";
+import { resolveTimezone, localDay, atLocalWallClock } from "@/lib/time/zone";
 import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
@@ -45,17 +46,35 @@ export type PunchResult =
  */
 export async function executePunch(input: PunchInput): Promise<PunchResult> {
   const now = new Date();
-  // Calendar date in UTC midnight for the punch
-  const punchDate = new Date(now);
-  punchDate.setUTCHours(0, 0, 0, 0);
 
   return withTenant(input.tenantId, async (tx) => {
     // 1. Verify employee exists
     const employee = await tx.employee.findFirst({
       where: { id: input.employeeId, tenantId: input.tenantId, deletedAt: null },
-      select: { id: true, branchId: true, shiftScheduleId: true, geofenceExempt: true, needsTimeClock: true },
+      select: { id: true, branchId: true, shiftScheduleId: true, geofenceExempt: true, needsTimeClock: true, timezone: true },
     });
     if (!employee) return { ok: false, code: "EMPLOYEE_NOT_FOUND" };
+
+    // Resolve the timekeeping timezone (company- or employee-scoped) + NSD
+    // window once for this tenant/employee.
+    const tenant = await tx.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: {
+        timezone: true,
+        timekeepingTimezoneMode: true,
+        nsdWindowStart: true,
+        nsdWindowEnd: true,
+      },
+    });
+    const tz = resolveTimezone(
+      {
+        timezone: tenant?.timezone ?? "Asia/Manila",
+        timekeepingTimezoneMode: tenant?.timekeepingTimezoneMode ?? "COMPANY",
+      },
+      { timezone: employee.timezone },
+    );
+    // Calendar date (local to tz) for the punch, as UTC midnight of the local day.
+    const punchDate = localDay(now, tz);
 
     // 2. Consent check — if selfie or GPS provided, employee must have granted consent
     if (input.selfieKey || input.selfieData || (input.latitude != null && input.longitude != null)) {
@@ -170,9 +189,9 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       });
     }
 
-    // 6. Load all punches for this employee on this calendar date
-    const dayStart = new Date(punchDate);
-    const dayEnd   = new Date(punchDate.getTime() + 86_400_000);
+    // 6. Load all punches for this employee on this (local) calendar date
+    const dayStart = atLocalWallClock(punchDate, "00:00", tz);
+    const dayEnd   = new Date(dayStart.getTime() + 86_400_000);
     const allPunches = await tx.attendanceLog.findMany({
       where: {
         tenantId:  input.tenantId,
@@ -182,11 +201,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       select: { punchType: true, punchedAt: true },
     });
 
-    // Resolve the tenant's configurable NSD window (always-on; window only).
-    const tenant = await tx.tenant.findUnique({
-      where: { id: input.tenantId },
-      select: { nsdWindowStart: true, nsdWindowEnd: true },
-    });
+    // Tenant's configurable NSD window (always-on; window only).
     const nsdWindow = {
       startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
       endMin:   parseWindowMinutes(tenant?.nsdWindowEnd)   ?? 6 * 60,
@@ -213,6 +228,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
           }
         : null,
       nsdWindow,
+      tz,
     );
 
     // 7. Upsert DTRRecord — skip if locked (payroll finalized)
