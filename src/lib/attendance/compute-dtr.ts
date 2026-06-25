@@ -26,6 +26,8 @@
  *  - nsdMinutes = overlap of [actualIn, actualOut] with 22:00–06:00.
  */
 
+import { zonedTimeToUtc, atLocalWallClock, localDay } from "@/lib/time/zone";
+
 export interface AttendancePunch {
   punchType: "IN" | "OUT";
   punchedAt: Date;
@@ -90,11 +92,17 @@ function parseHHMM(s: string): { h: number; m: number } {
   return { h, m };
 }
 
-/** Set hours/minutes on a Date, preserving the date part (UTC). */
-function atTime(dateUtcMidnight: Date, h: number, m: number): Date {
-  const d = new Date(dateUtcMidnight);
-  d.setUTCHours(h, m, 0, 0);
-  return d;
+/** Wall-clock time (h:m) on the local calendar day represented by
+ *  `dateUtcMidnight`, resolved to a UTC instant in `tz`. */
+function atTime(dateUtcMidnight: Date, h: number, m: number, tz: string): Date {
+  return zonedTimeToUtc(
+    dateUtcMidnight.getUTCFullYear(),
+    dateUtcMidnight.getUTCMonth() + 1,
+    dateUtcMidnight.getUTCDate(),
+    h,
+    m,
+    tz,
+  );
 }
 
 /** Night-shift-differential window, minutes-from-midnight. Defaults 22:00–06:00. */
@@ -111,9 +119,13 @@ const DEFAULT_NSD_WINDOW: NsdWindow = { startMin: 22 * 60, endMin: 6 * 60 };
  * Overlap of [from, to] with the recurring nightly NSD window. The window may
  * wrap midnight (startMin > endMin, e.g. 22:00→06:00) or not (startMin < endMin).
  */
-function nsdOverlapMinutes(from: Date, to: Date, window: NsdWindow = DEFAULT_NSD_WINDOW): number {
-  const base = new Date(from);
-  base.setUTCHours(0, 0, 0, 0);
+function nsdOverlapMinutes(
+  from: Date,
+  to: Date,
+  window: NsdWindow = DEFAULT_NSD_WINDOW,
+  tz = "UTC",
+): number {
+  const base = atLocalWallClock(localDay(from, tz), "00:00", tz);
   const at = (offsetMin: number) => base.getTime() + offsetMin * 60_000;
 
   const wraps = window.startMin > window.endMin;
@@ -208,6 +220,7 @@ export function computeDtrFields(
   punches: AttendancePunch[],
   shift: ShiftContext | null,
   nsdWindow: NsdWindow = DEFAULT_NSD_WINDOW,
+  timezone = "UTC",
 ): DtrComputed {
   const inPunches  = punches.filter((p) => p.punchType === "IN");
   const outPunches = punches.filter((p) => p.punchType === "OUT");
@@ -230,7 +243,7 @@ export function computeDtrFields(
       workedMinutes,
       lateMinutes: 0,
       undertimeMinutes: 0,
-      nsdMinutes: actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow) : 0,
+      nsdMinutes: actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow, timezone) : 0,
     };
   }
 
@@ -238,7 +251,7 @@ export function computeDtrFields(
     inPunches, outPunches, actualIn, actualOut,
     shift.breakPolicy, shift.breakMinutes,
   );
-  const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow) : 0;
+  const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow, timezone) : 0;
 
   // Auto-OT: flag excess minutes when threshold is configured. Advisory only —
   // this is a "file OT?" hint, never paid without an approved OT application.
@@ -258,7 +271,7 @@ export function computeDtrFields(
     let lateMinutes = 0;
     if (shift.coreTimeIn) {
       const { h, m } = parseHHMM(shift.coreTimeIn);
-      const coreStart = atTime(dateUtcMidnight, h, m);
+      const coreStart = atTime(dateUtcMidnight, h, m, timezone);
       const gracePeriodMs = (shift.gracePeriodMinutes ?? 0) * 60_000;
       lateMinutes = Math.max(
         0,
@@ -271,10 +284,10 @@ export function computeDtrFields(
     let undertimeMinutes = Math.max(0, requiredMinutes - workedMinutes);
     if (shift.coreTimeOut && actualOut) {
       const { h, m } = parseHHMM(shift.coreTimeOut);
-      let coreEnd = atTime(dateUtcMidnight, h, m);
+      let coreEnd = atTime(dateUtcMidnight, h, m, timezone);
       if (shift.crossesMidnight && shift.coreTimeIn) {
         const { h: ch, m: cm } = parseHHMM(shift.coreTimeIn);
-        if (coreEnd <= atTime(dateUtcMidnight, ch, cm)) {
+        if (coreEnd <= atTime(dateUtcMidnight, ch, cm, timezone)) {
           coreEnd = new Date(coreEnd.getTime() + 86_400_000);
         }
       }
@@ -298,8 +311,8 @@ export function computeDtrFields(
   // ── FIXED shift: expected time-in/out with grace period ──
   const { h: inH, m: inM }   = parseHHMM(shift.timeIn);
   const { h: outH, m: outM } = parseHHMM(shift.timeOut);
-  const expectedIn  = atTime(dateUtcMidnight, inH, inM);
-  let   expectedOut = atTime(dateUtcMidnight, outH, outM);
+  const expectedIn  = atTime(dateUtcMidnight, inH, inM, timezone);
+  let   expectedOut = atTime(dateUtcMidnight, outH, outM, timezone);
   if (shift.crossesMidnight && expectedOut <= expectedIn) {
     expectedOut = new Date(expectedOut.getTime() + 86_400_000);
   }
