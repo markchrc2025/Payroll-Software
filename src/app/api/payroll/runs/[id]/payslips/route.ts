@@ -8,13 +8,12 @@
  * Response: { data: Payslip[] }
  */
 import type { NextRequest } from "next/server";
-import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import {
   err,
   notFound,
   ok,
   serverError,
-  unauthorized,
 } from "@/lib/api-response";
 import { getRun, PayrollRunNotFoundError } from "@/lib/payroll/persist";
 import { withTenant } from "@/lib/with-tenant";
@@ -24,8 +23,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "PAYROLL", "READ");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
   const { id } = await params;
 
   try {
