@@ -7,7 +7,9 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
-import { err, ok, paginated, unauthorized } from "@/lib/api-response";
+import { checkPermission } from "@/lib/require-permission";
+import { isSelfAction } from "@/lib/authz/self-approval";
+import { err, forbidden, ok, paginated, unauthorized } from "@/lib/api-response";
 import {
   createDtrSubmissionSchema,
   listDtrSubmissionsSchema,
@@ -71,6 +73,15 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
 
   const result = await withTenant(auth.tenantId, async (tx) => {
+    // Authz: caller must be the employee themselves (ESS) or hold TIMESHEETS:APPROVE.
+    const isSelf = await isSelfAction(tx, auth.tenantId, auth.userId, d.employeeId);
+    const isApprover =
+      auth.systemRole === "SUPER_ADMIN" ||
+      (auth.roleId
+        ? await checkPermission(auth.tenantId, auth.roleId, "TIMESHEETS", "APPROVE")
+        : false);
+    if (!isSelf && !isApprover) return "FORBIDDEN";
+
     // Validate employee belongs to tenant
     const employee = await tx.employee.findFirst({
       where: { id: d.employeeId, tenantId: auth.tenantId, deletedAt: null },
@@ -140,6 +151,8 @@ export async function POST(req: NextRequest) {
     return submission;
   });
 
+  if (result === "FORBIDDEN")
+    return forbidden("You can only submit your own DTR unless you have approval rights");
   if (result === "NOT_FOUND_EMP") return err("Employee not found", 404);
   if (result === "DUPLICATE")
     return err("A submission already exists for this employee and period", 409);
