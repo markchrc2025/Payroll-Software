@@ -6,8 +6,10 @@
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
+import { requirePermission } from "@/lib/require-permission";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { updateDtrRecordSchema } from "@/lib/validations/dtr";
+import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 export async function GET(
   req: NextRequest,
@@ -30,8 +32,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthContext(req);
-  if (!auth) return unauthorized();
+  const guard = await requirePermission(req, "TIMESHEETS", "UPDATE");
+  if (guard instanceof Response) return guard;
+  const { ctx: auth } = guard;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);
@@ -42,10 +45,11 @@ export async function PATCH(
   const updated = await withTenant(auth.tenantId, async (tx) => {
     const existing = await tx.dTRRecord.findFirst({
       where: { id, tenantId: auth.tenantId },
-      select: { id: true, isLocked: true },
+      select: { id: true, isLocked: true, approvalStatus: true },
     });
     if (!existing) return null;
     if (existing.isLocked) return "LOCKED";
+    if (existing.approvalStatus === "APPROVED") return "APPROVED";
 
     return tx.dTRRecord.update({
       where: { id },
@@ -76,5 +80,18 @@ export async function PATCH(
 
   if (!updated) return notFound();
   if (updated === "LOCKED") return err("DTR record is locked", 409);
+  if (updated === "APPROVED")
+    return err("Cannot edit an approved DTR record", 409);
+
+  await writeAuditLog({
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    action: "UPDATE",
+    entity: "DTRRecord",
+    entityId: id,
+    changes: d as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+  });
+
   return ok(updated);
 }
