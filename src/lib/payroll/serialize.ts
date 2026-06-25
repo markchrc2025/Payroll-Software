@@ -95,6 +95,7 @@ export function serializePayrollSheet<T extends PayrollSheet>(s: T) {
     withholdingTaxCents: centavosToJson(s.withholdingTaxCents)!,
     nontaxableAdditionsCents: centavosToJson(s.nontaxableAdditionsCents)!,
     loanDeductionsCents: centavosToJson(s.loanDeductionsCents)!,
+    adjustmentDeductionsCents: centavosToJson(s.adjustmentDeductionsCents)!,
     netPayCents: centavosToJson(s.netPayCents)!,
   };
 }

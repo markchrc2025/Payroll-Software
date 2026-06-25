@@ -377,6 +377,7 @@ function resultToSheetCreate(
     withholdingTaxCents: r.withholdingTaxCents,
     nontaxableAdditionsCents: r.nontaxableAdditionsCents,
     loanDeductionsCents: r.loanDeductionsCents,
+    adjustmentDeductionsCents: r.adjustmentDeductionsCents,
     netPayCents: r.netPayCents,
     payComponentsApplied:
       r.payComponentsApplied as unknown as Prisma.InputJsonValue,
