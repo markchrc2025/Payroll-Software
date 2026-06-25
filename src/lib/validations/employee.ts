@@ -133,6 +133,9 @@ export const createEmployeeSchema = z.object({
   gender: z.nativeEnum(Gender).optional().nullable(),
   civilStatus: z.nativeEnum(CivilStatus).optional().nullable(),
   nationality: z.string().max(100).optional().nullable(),
+  // IANA timezone override for timekeeping; applies only when the tenant's
+  // timekeepingTimezoneMode is EMPLOYEE (otherwise the company timezone is used).
+  timezone: z.string().max(64).optional().nullable(),
 
   // R2 object key for an uploaded profile photo (set via /api/employees/photo/presign)
   photoKey: z.string().max(500).optional().nullable(),
