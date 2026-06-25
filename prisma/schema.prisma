@@ -2538,6 +2538,9 @@ model DTRRecord {
   /// Night-shift differential minutes (10 PM – 6 AM window).
   nsdMinutes       Int          @default(0)
   hazardMinutes    Int          @default(0)
+  /// True when the day has a clock-in but no clock-out (forgotten OUT). Flags
+  /// the record for HR instead of silently reading as a zero-hour present day.
+  hasMissingPunch  Boolean      @default(false)
   /// Paid-leave minutes credited to this day (from an approved leave). Counts
   /// toward paid time and suppresses undertime for the covered portion.
   paidLeaveMinutes Int          @default(0)

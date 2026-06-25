@@ -161,6 +161,20 @@ describe("computeDtrFields — flexible core window", () => {
   });
 });
 
+describe("computeDtrFields — missing clock-out flag", () => {
+  it("flags missingOut when there is an IN but no OUT", () => {
+    const r = computeDtrFields(DATE, [punch("IN", 8)], fixedShift());
+    expect(r.missingOut).toBe(true);
+    expect(r.workedMinutes).toBe(0);
+    expect(r.dayStatus).toBe("PRESENT");
+  });
+
+  it("does not flag missingOut for a complete IN/OUT day", () => {
+    const r = computeDtrFields(DATE, [punch("IN", 8), punch("OUT", 17)], fixedShift());
+    expect(r.missingOut).toBe(false);
+  });
+});
+
 describe("computeDtrFields — timezone anchoring (Asia/Manila, UTC+8)", () => {
   const PH = "Asia/Manila";
   // The local PH calendar day, as UTC-midnight of that local day.
