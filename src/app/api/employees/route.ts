@@ -6,13 +6,14 @@
 import type { NextRequest } from "next/server";
 import { Prisma, StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission } from "@/lib/require-permission";
+import { requirePermission, checkPermission } from "@/lib/require-permission";
 import { hmac } from "@/lib/crypto";
 import { toCentavos, centavosToJson } from "@/lib/money";
 import {
   ok,
   paginated,
   err,
+  forbidden,
 } from "@/lib/api-response";
 import {
   createEmployeeSchema,
@@ -123,6 +124,18 @@ export async function POST(req: NextRequest) {
 
   const parsed = createEmployeeSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
+
+  // attendanceExempt is payroll-affecting (full pay without time records): only
+  // roles with PAYROLL:UPDATE (or SUPER_ADMIN) may enable it at create time,
+  // mirroring the PUT route guard.
+  if (parsed.data.attendanceExempt === true) {
+    const canManagePayroll = auth.roleId
+      ? await checkPermission(auth.tenantId, auth.roleId, "PAYROLL", "UPDATE")
+      : false;
+    if (!canManagePayroll && auth.systemRole !== "SUPER_ADMIN") {
+      return forbidden("Enabling attendanceExempt requires PAYROLL:UPDATE");
+    }
+  }
 
   const {
     basicSalary,
