@@ -690,16 +690,17 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   // The excess is added to gross taxable income (accounted for below).
 
   // -- Step 8: statutory (cutoff rule applies; skipStatutory via override) --
-  // Skip statutory when there were no contributory earnings this period
-  // (same principle as the REGULAR path — no base, no EE/ER contribution).
-  const periodEarningsCents =
-    grossCompensationCents +
-    buckets.nontaxableAdditionsCents +
-    separationPayNonTaxable +
-    adjs.nontaxableAdditionsCents +
-    p13th;
+  // Statutory base is CONTRIBUTORY compensation (wages for work) only. Terminal
+  // benefits are NOT part of the SSS/PhilHealth/Pag-IBIG base, so a final pay
+  // consisting solely of separation pay / leave cash-out / prorated 13th month
+  // carries no contributions. grossCompensationCents folds in leaveCashOut and
+  // taxable separation pay, so subtract them back out; non-taxable separation
+  // pay, p13th and reimbursements were never in gross. Zero contributory gross
+  // → skip statutory (both EE and ER).
+  const contributoryGrossCents =
+    grossCompensationCents - leaveCashOutCents - separationPayTaxable;
   const deducted =
-    periodEarningsCents <= 0n
+    contributoryGrossCents <= 0n
       ? false
       : input.overrideStatutoryDeducted !== undefined
         ? input.overrideStatutoryDeducted

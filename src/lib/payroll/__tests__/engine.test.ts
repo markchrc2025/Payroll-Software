@@ -1365,10 +1365,10 @@ describe("DEF-2 zero-earnings gate — FINAL_PAY path", () => {
     expect(result.netPayCents >= 0n).toBe(true);
   });
 
-  it("FINAL_PAY with separation pay only → statutory still applies (intended; gate does not fire)", () => {
-    // periodEarningsCents includes separationPayNonTaxable, so a separation-pay-
-    // only final pay is NOT treated as zero-earning. (Narrowing the contributory
-    // base to exclude separation pay is a separate, documented follow-up.)
+  it("FINAL_PAY with separation pay + leave cash-out only → NO statutory (non-contributory base)", () => {
+    // Separation pay and leave cash-out are terminal benefits, not compensation
+    // for work — they are not part of the SSS/PhilHealth/Pag-IBIG base. With no
+    // contributory wages this run, statutory is skipped (EE and ER).
     const result = computeSheet({
       ...makeInput({
         salaryType: "MONTHLY",
@@ -1376,8 +1376,34 @@ describe("DEF-2 zero-earnings gate — FINAL_PAY path", () => {
         periodInput: { daysWorked: 0 },
         overrideStatutoryDeducted: true,
       }),
-      finalPayInputs: { ...noFinalPay, separationPayCents: 5_000_000n, isSeparationPayTaxable: false },
+      finalPayInputs: {
+        ...noFinalPay,
+        separationPayCents: 15_000_000n,
+        isSeparationPayTaxable: false,
+        leaveCashOutCents: 1_000_000n,
+      },
+    });
+    expect(result.sssEeCents).toBe(0n);
+    expect(result.philhealthEeCents).toBe(0n);
+    expect(result.pagibigEeCents).toBe(0n);
+    expect(result.sssErCents).toBe(0n);
+  });
+
+  it("FINAL_PAY with last-cutoff wages + separation pay → statutory applies (on the wage portion)", () => {
+    // Genuine wages were earned this run (daysWorked > 0), so the contributory
+    // base is positive and statutory applies — even though separation pay is
+    // also paid out.
+    const result = computeSheet({
+      ...makeInput({
+        salaryType: "MONTHLY",
+        basicSalaryCents: 4_500_000n,
+        periodInput: { daysWorked: 11 },
+        overrideStatutoryDeducted: true,
+      }),
+      finalPayInputs: { ...noFinalPay, separationPayCents: 15_000_000n, isSeparationPayTaxable: false },
     });
     expect(result.sssEeCents > 0n).toBe(true);
+    expect(result.philhealthEeCents > 0n).toBe(true);
+    expect(result.pagibigEeCents > 0n).toBe(true);
   });
 });
