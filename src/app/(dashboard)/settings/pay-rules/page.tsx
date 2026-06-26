@@ -10,6 +10,7 @@ import { Save, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type TenantSettings = {
@@ -18,6 +19,7 @@ type TenantSettings = {
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
   maxDeductionPctOfGross: number;
+  allowNegativeFinalPay: boolean;
   nsdWindowStart: string;
   nsdWindowEnd: string;
 };
@@ -53,6 +55,7 @@ export default function PayRulesPage() {
     statutoryCutoffRule: "SECOND_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
     maxDeductionPctOfGross: 50,
+    allowNegativeFinalPay: true,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
   });
@@ -72,6 +75,7 @@ export default function PayRulesPage() {
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
+        allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
@@ -224,6 +228,28 @@ export default function PayRulesPage() {
                   settlements on separation are exempt from this limit.
                 </p>
               </div>
+            </div>
+          </RuleSection>
+
+          {/* Allow negative final pay toggle */}
+          <RuleSection
+            title="Allow Negative Final Pay"
+            description="Regular and 13th-month runs are always floored at zero — loan installments are automatically deferred (and carried forward) so net pay can never go negative. Final-pay settlements on separation are the exception: charges against an employee's last pay (e.g. unreturned assets, outstanding loan balances) may legitimately make it negative."
+          >
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-[#E8EBF1] bg-white px-4 py-3">
+              <div>
+                <p className="text-[13.5px] font-medium text-[#111827]">
+                  Permit negative net on final pay
+                </p>
+                <p className="text-[12px] text-[#6B7A8D] mt-0.5">
+                  Turn off to also floor final-pay runs at zero (deferring any
+                  loan balance instead of collecting it from the last pay).
+                </p>
+              </div>
+              <Switch
+                checked={form.allowNegativeFinalPay}
+                onCheckedChange={(v) => update("allowNegativeFinalPay", v)}
+              />
             </div>
           </RuleSection>
 

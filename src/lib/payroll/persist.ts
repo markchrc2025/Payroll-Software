@@ -625,6 +625,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        allowNegativeFinalPay: true,
       },
     });
     const rules = await resolveAllRules(tx, input.tenantId, input.periodEnd);
@@ -783,6 +784,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        allowNegativeFinalPay: true,
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
@@ -1124,6 +1126,7 @@ export async function processRun(tenantId: string, bookId: string) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        allowNegativeFinalPay: true,
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
