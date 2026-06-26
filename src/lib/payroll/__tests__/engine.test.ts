@@ -1280,3 +1280,56 @@ describe("§AE1 Compound premium stacking matrix (Phase AE1)", () => {
     expect(result.restDayPayCents).toBe(13_000n);
   });
 });
+
+// ===========================================================================
+// DEF-2 — statutory must not be deducted on zero earnings (no negative net)
+// ===========================================================================
+describe("DEF-2 zero-earnings statutory gate", () => {
+  it("zero earnings → no statutory (EE & ER) and net pay is 0, not negative", () => {
+    // ₱45,000/mo salary (positive MSC basis), but 0 worked days and no other
+    // pay. overrideStatutoryDeducted: true forces the pre-fix bug trigger
+    // (statutory would otherwise be computed on the salary-derived MSC).
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 0 },
+      overrideStatutoryDeducted: true,
+    }));
+    expect(result.sssEeCents).toBe(0n);
+    expect(result.philhealthEeCents).toBe(0n);
+    expect(result.pagibigEeCents).toBe(0n);
+    expect(result.sssErCents).toBe(0n);
+    expect(result.philhealthErCents).toBe(0n);
+    expect(result.pagibigErCents).toBe(0n);
+    expect(result.netPayCents).toBe(0n);
+    expect(result.netPayCents >= 0n).toBe(true);
+  });
+
+  it("non-taxable reimbursement only → NOT treated as zero-earning", () => {
+    // Gross taxable is 0 but the employee received a non-taxable addition, so
+    // periodEarnings > 0: statutory still applies (gate does not fire) and net
+    // stays non-negative.
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 0 },
+      adjustments: [{ id: "reimb", kind: "ADDITION", amountCents: 500_000n, isTaxable: false, reason: "Reimbursement" }],
+      overrideStatutoryDeducted: true,
+    }));
+    expect(result.sssEeCents > 0n).toBe(true);
+    expect(result.netPayCents >= 0n).toBe(true);
+  });
+
+  it("positive earnings unchanged → gate does not fire (no regression)", () => {
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 22 },
+      overrideStatutoryDeducted: true,
+    }));
+    expect(result.sssEeCents > 0n).toBe(true);
+    expect(result.philhealthEeCents > 0n).toBe(true);
+    expect(result.pagibigEeCents > 0n).toBe(true);
+    expect(result.netPayCents > 0n).toBe(true);
+  });
+});
