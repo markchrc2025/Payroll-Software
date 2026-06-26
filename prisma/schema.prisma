@@ -604,6 +604,12 @@ model Tenant {
   /// deductions may consume. New loans that would breach this are blocked
   /// ("no negative pay" policy). Default 50.
   maxDeductionPctOfGross Int                  @default(50)
+  /// "No negative pay" run-time floor: in REGULAR/YEAR_END runs, loan
+  /// installments are deferred (carried in the loan balance) so net pay never
+  /// drops below zero. FINAL_PAY is exempt by default — terminal charges
+  /// against a separating employee's last pay may legitimately make it
+  /// negative. Set false to also floor FINAL_PAY. Default true.
+  allowNegativeFinalPay  Boolean              @default(true)
   defaultDtrApproverId   String?
   /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
   /// be turned off); only the window is configurable. The premium multiplier

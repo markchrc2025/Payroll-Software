@@ -60,6 +60,9 @@ const patchSchema = z.object({
   // "No negative pay" safeguard: max % of monthly gross that statutory + loan
   // deductions may consume. New loans breaching this are blocked at creation.
   maxDeductionPctOfGross: z.number().int().min(1).max(100).optional(),
+  // Whether FINAL_PAY runs may go negative (terminal charges on separation).
+  // REGULAR/YEAR_END runs are always floored regardless of this flag.
+  allowNegativeFinalPay: z.boolean().optional(),
   // Night-shift differential window (NSD is always computed; only the window
   // is configurable). HH:MM, 24-hour.
   nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
@@ -103,6 +106,7 @@ export async function GET(req: NextRequest) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         maxDeductionPctOfGross: true,
+        allowNegativeFinalPay: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
@@ -171,6 +175,7 @@ export async function PATCH(req: NextRequest) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         maxDeductionPctOfGross: true,
+        allowNegativeFinalPay: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,

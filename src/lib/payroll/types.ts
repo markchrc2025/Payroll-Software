@@ -50,6 +50,12 @@ export interface ComputeTenantSnapshot {
   workingDaysDenominator: number;
   statutoryCutoffRule: StatutoryCutoffRule;
   thirteenthMonthBasis: ThirteenthMonthBasis;
+  /**
+   * When true (default), FINAL_PAY runs are exempt from the net-pay floor —
+   * terminal charges against a separating employee's last pay may legitimately
+   * make it negative. REGULAR/YEAR_END runs are always floored regardless.
+   */
+  allowNegativeFinalPay: boolean;
 }
 
 export interface ComputePeriodInputSnapshot {
@@ -386,6 +392,13 @@ export interface ComputeResult {
   // Step 10/11
   nontaxableAdditionsCents: bigint;
   loanDeductionsCents: bigint;
+  /**
+   * Loan installment that was scheduled this period but DEFERRED by the
+   * net-pay floor (carried forward in the loan balance). 0 when nothing was
+   * deferred. Audit/UI signal that an employee's loan amortisation was paused
+   * to keep net pay non-negative.
+   */
+  loanDeferredCents: bigint;
   adjustmentDeductionsCents: bigint;
 
   // Step 12

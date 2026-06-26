@@ -85,6 +85,63 @@ function clampNonNegative(v: bigint): bigint {
   return v < 0n ? 0n : v;
 }
 
+/**
+ * Apply loan installments, never deducting more than the outstanding balance.
+ *
+ * "No negative pay" floor: when `maxDeductibleCents` is a bigint, the TOTAL
+ * loan deduction is capped at that amount (the net pay available before loans).
+ * Loans are applied in array order; the boundary loan is partially paid and any
+ * remaining loans are fully deferred. Deferred amounts are NOT lost — the loan
+ * balance is only reduced by what was actually paid (see `balanceAfterCents`),
+ * so the unpaid portion carries to the next period when finalize decrements
+ * balances by the applied amount.
+ *
+ * Pass `maxDeductibleCents = null` to disable the floor (unbounded deductions,
+ * e.g. FINAL_PAY when negative final pay is allowed).
+ */
+function applyLoanDeductions(
+  loans: ComputeInput["loans"],
+  maxDeductibleCents: bigint | null,
+): {
+  loanPaymentsApplied: AppliedLoanPayment[];
+  loanDeductionsCents: bigint;
+  loanDeferredCents: bigint;
+} {
+  const loanPaymentsApplied: AppliedLoanPayment[] = [];
+  let loanDeductionsCents = 0n;
+  let loanDeferredCents = 0n;
+  let remaining = maxDeductibleCents; // null ⇒ unbounded
+
+  for (const loan of loans) {
+    // Never deduct more than the outstanding balance.
+    const scheduled =
+      loan.installmentCents > loan.balanceCents
+        ? loan.balanceCents
+        : loan.installmentCents;
+    if (scheduled <= 0n) continue;
+
+    let amount = scheduled;
+    if (remaining !== null && remaining < scheduled) {
+      amount = remaining > 0n ? remaining : 0n;
+    }
+
+    if (amount > 0n) {
+      loanPaymentsApplied.push({
+        loanId: loan.id,
+        loanType: loan.loanType,
+        amountCents: amount.toString(),
+        balanceBeforeCents: loan.balanceCents.toString(),
+        balanceAfterCents: (loan.balanceCents - amount).toString(),
+      });
+      loanDeductionsCents += amount;
+      if (remaining !== null) remaining -= amount;
+    }
+    loanDeferredCents += scheduled - amount;
+  }
+
+  return { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents };
+}
+
 // ---------------------------------------------------------------------------
 // Premium multiplier resolution — DOLE floors + tenant overrides
 // ---------------------------------------------------------------------------
@@ -474,35 +531,22 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
     };
   }
 
-  // Loans.
-  const loanPaymentsApplied: AppliedLoanPayment[] = [];
-  let loanDeductionsCents = 0n;
-  for (const loan of loans) {
-    const amount =
-      loan.installmentCents > loan.balanceCents
-        ? loan.balanceCents
-        : loan.installmentCents;
-    if (amount <= 0n) continue;
-    loanPaymentsApplied.push({
-      loanId: loan.id,
-      loanType: loan.loanType,
-      amountCents: amount.toString(),
-      balanceBeforeCents: loan.balanceCents.toString(),
-      balanceAfterCents: (loan.balanceCents - amount).toString(),
-    });
-    loanDeductionsCents += amount;
-  }
-
   const grossCompensationCents = thirteenthMonth + adjs.taxableAdditionsCents;
   const nontaxableAdditionsCents = adjs.nontaxableAdditionsCents;
   const adjustmentDeductionsCents = adjs.deductionsCents;
 
-  const netPayCents =
+  // Loans — "no negative pay" floor: cap total loan deductions at the net
+  // available before loans so 13th-month net never goes below zero. Deferred
+  // installments carry forward in the loan balance (YEAR_END is always floored).
+  const preLoanNetCents =
     grossCompensationCents -
     withholdingTaxCents +
     nontaxableAdditionsCents -
-    loanDeductionsCents -
     adjustmentDeductionsCents;
+  const { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents } =
+    applyLoanDeductions(loans, clampNonNegative(preLoanNetCents));
+
+  const netPayCents = preLoanNetCents - loanDeductionsCents;
 
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted: false,
@@ -549,6 +593,7 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
 
     nontaxableAdditionsCents,
     loanDeductionsCents,
+    loanDeferredCents,
     adjustmentDeductionsCents,
 
     netPayCents,
@@ -760,35 +805,27 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   const nontaxableAdditionsCents =
     buckets.nontaxableAdditionsCents + separationPayNonTaxable + adjs.nontaxableAdditionsCents;
 
-  // -- Step 11: loans -------------------------------------------------------
-  const loanPaymentsApplied: AppliedLoanPayment[] = [];
-  let loanDeductionsCents = 0n;
-  for (const loan of loans) {
-    const amount =
-      loan.installmentCents > loan.balanceCents
-        ? loan.balanceCents
-        : loan.installmentCents;
-    if (amount <= 0n) continue;
-    loanPaymentsApplied.push({
-      loanId: loan.id,
-      loanType: loan.loanType,
-      amountCents: amount.toString(),
-      balanceBeforeCents: loan.balanceCents.toString(),
-      balanceAfterCents: (loan.balanceCents - amount).toString(),
-    });
-    loanDeductionsCents += amount;
-  }
-
   const adjustmentDeductionsCents = adjs.deductionsCents;
 
-  // -- Step 12: net pay -----------------------------------------------------
-  const netPayCents =
+  // -- Step 11: loans -------------------------------------------------------
+  // Net available before loans. FINAL_PAY is EXEMPT from the floor by default
+  // (allowNegativeFinalPay) — terminal charges against a separating employee's
+  // last pay may legitimately make it negative. When the tenant turns the
+  // exemption off, the same floor as REGULAR runs applies.
+  const preLoanNetCents =
     grossCompensationCents -
     mandatoryEeContribs -
     withholdingTaxCents +
     nontaxableAdditionsCents -
-    loanDeductionsCents -
     adjustmentDeductionsCents;
+  const { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents } =
+    applyLoanDeductions(
+      loans,
+      tenant.allowNegativeFinalPay ? null : clampNonNegative(preLoanNetCents),
+    );
+
+  // -- Step 12: net pay -----------------------------------------------------
+  const netPayCents = preLoanNetCents - loanDeductionsCents;
 
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted,
@@ -858,6 +895,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
 
     nontaxableAdditionsCents,
     loanDeductionsCents,
+    loanDeferredCents,
     adjustmentDeductionsCents,
 
     netPayCents,
@@ -1101,36 +1139,23 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     adjs.nontaxableAdditionsCents +
     claims.nontaxableAdditionsCents;
 
-  // -- Step 11: loans --------------------------------------------------------
-  const loanPaymentsApplied: AppliedLoanPayment[] = [];
-  let loanDeductionsCents = 0n;
-  for (const loan of loans) {
-    // Don't deduct more than the outstanding balance.
-    const amount =
-      loan.installmentCents > loan.balanceCents
-        ? loan.balanceCents
-        : loan.installmentCents;
-    if (amount <= 0n) continue;
-    loanPaymentsApplied.push({
-      loanId: loan.id,
-      loanType: loan.loanType,
-      amountCents: amount.toString(),
-      balanceBeforeCents: loan.balanceCents.toString(),
-      balanceAfterCents: (loan.balanceCents - amount).toString(),
-    });
-    loanDeductionsCents += amount;
-  }
-
   const adjustmentDeductionsCents = adjs.deductionsCents;
 
-  // -- Step 12: net pay ------------------------------------------------------
-  const netPayCents =
+  // -- Step 11: loans --------------------------------------------------------
+  // "No negative pay" floor: cap total loan deductions at the net available
+  // before loans so net pay never goes below zero. Any deferred installment
+  // carries forward in the loan balance (REGULAR runs are always floored).
+  const preLoanNetCents =
     grossCompensationCents -
     mandatoryEeContribs -
     withholdingTaxCents +
     nontaxableAdditionsCents -
-    loanDeductionsCents -
     adjustmentDeductionsCents;
+  const { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents } =
+    applyLoanDeductions(loans, clampNonNegative(preLoanNetCents));
+
+  // -- Step 12: net pay ------------------------------------------------------
+  const netPayCents = preLoanNetCents - loanDeductionsCents;
 
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted,
@@ -1189,6 +1214,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
 
     nontaxableAdditionsCents,
     loanDeductionsCents,
+    loanDeferredCents,
     adjustmentDeductionsCents,
 
     netPayCents,

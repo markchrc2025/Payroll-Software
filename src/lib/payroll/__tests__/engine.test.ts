@@ -130,6 +130,7 @@ function makeInput(overrides: {
   overrideStatutoryDeducted?: boolean;
   thirteenthMonthCents?: bigint;
   statutoryCutoffRule?: "FIRST_CUTOFF" | "SECOND_CUTOFF";
+  allowNegativeFinalPay?: boolean;
   multiplierConfig?: ComputeMultiplierConfig;
 }): ComputeInput {
   const salaryType = overrides.salaryType ?? "DAILY";
@@ -152,6 +153,7 @@ function makeInput(overrides: {
       workingDaysDenominator: overrides.workingDaysDenominator ?? 261,
       statutoryCutoffRule: overrides.statutoryCutoffRule ?? "SECOND_CUTOFF",
       thirteenthMonthBasis: "STRICT_DOLE",
+      allowNegativeFinalPay: overrides.allowNegativeFinalPay ?? true,
     },
     period: {
       start: new Date("2026-01-01"),
@@ -1405,5 +1407,123 @@ describe("DEF-2 zero-earnings gate — FINAL_PAY path", () => {
     expect(result.sssEeCents > 0n).toBe(true);
     expect(result.philhealthEeCents > 0n).toBe(true);
     expect(result.pagibigEeCents > 0n).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Phase 2 — "no negative pay" run-time floor (loan deferral + carryover)
+// ===========================================================================
+describe("Net-pay floor — loan deferral keeps net ≥ 0 (REGULAR)", () => {
+  it("defers the loan installment so net pay is floored at 0, never negative", () => {
+    // ₱45,000/mo, but only 1 day worked → tiny gross. A ₱5,000 loan installment
+    // would push net negative; the floor caps the loan deduction at the net
+    // available before loans.
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 1 },
+      overrideStatutoryDeducted: false, // isolate the loan-vs-gross floor
+      loans: [{ id: "L1", loanType: "COMPANY", installmentCents: 5_000_000n, balanceCents: 5_000_000n }],
+    }));
+    expect(result.netPayCents).toBe(0n);
+    expect(result.netPayCents >= 0n).toBe(true);
+    // Only the affordable slice of the installment was applied; the rest deferred.
+    expect(result.loanDeductionsCents).toBeLessThan(5_000_000n);
+    expect(result.loanDeferredCents).toBe(5_000_000n - result.loanDeductionsCents);
+    expect(result.loanDeductionsCents + result.loanDeferredCents).toBe(5_000_000n);
+  });
+
+  it("carries the deferred amount forward via balanceAfterCents", () => {
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 1 },
+      overrideStatutoryDeducted: false,
+      loans: [{ id: "L1", loanType: "COMPANY", installmentCents: 5_000_000n, balanceCents: 5_000_000n }],
+    }));
+    const applied = result.loanPaymentsApplied[0]!;
+    // Balance only drops by what was actually paid → unpaid portion carries.
+    expect(BigInt(applied.balanceAfterCents)).toBe(5_000_000n - BigInt(applied.amountCents));
+    expect(BigInt(applied.balanceAfterCents)).toBeGreaterThan(0n);
+  });
+
+  it("does not defer when the full installment fits within net", () => {
+    // Full month worked → ample gross; a small loan is fully collected.
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 22 },
+      overrideStatutoryDeducted: false,
+      loans: [{ id: "L1", loanType: "COMPANY", installmentCents: 100_000n, balanceCents: 100_000n }],
+    }));
+    expect(result.loanDeductionsCents).toBe(100_000n);
+    expect(result.loanDeferredCents).toBe(0n);
+    expect(result.netPayCents > 0n).toBe(true);
+  });
+
+  it("partially pays the boundary loan and fully defers later loans", () => {
+    // 1 day worked → small net. Two ₱5,000 loans: the first is partially paid up
+    // to the available net; the second is fully deferred. Net floored at 0.
+    const result = computeSheet(makeInput({
+      salaryType: "MONTHLY",
+      basicSalaryCents: 4_500_000n,
+      periodInput: { daysWorked: 1 },
+      overrideStatutoryDeducted: false,
+      loans: [
+        { id: "L1", loanType: "COMPANY", installmentCents: 5_000_000n, balanceCents: 5_000_000n },
+        { id: "L2", loanType: "CASH_ADVANCE", installmentCents: 5_000_000n, balanceCents: 5_000_000n },
+      ],
+    }));
+    expect(result.netPayCents).toBe(0n);
+    // Only the first loan got any payment; the second was fully deferred.
+    expect(result.loanPaymentsApplied.length).toBe(1);
+    expect(result.loanPaymentsApplied[0]!.loanId).toBe("L1");
+    expect(result.loanDeferredCents).toBe(10_000_000n - result.loanDeductionsCents);
+  });
+});
+
+describe("Net-pay floor — FINAL_PAY exemption (allowNegativeFinalPay)", () => {
+  const noFinalPay = {
+    proratedThirteenthMonthCents: 0n,
+    leaveCashOutCents: 0n,
+    separationPayCents: 0n,
+    isSeparationPayTaxable: false,
+    cyPriorTaxableIncomeCents: 0n,
+    cyPriorWithholdingTaxCents: 0n,
+  };
+
+  it("allows negative final pay by default (terminal charges) — loan fully collected", () => {
+    // Tiny final wages, large outstanding loan. With the exemption ON (default),
+    // the full installment is collected and final pay goes negative.
+    const result = computeSheet({
+      ...makeInput({
+        salaryType: "MONTHLY",
+        basicSalaryCents: 4_500_000n,
+        periodInput: { daysWorked: 1 },
+        overrideStatutoryDeducted: false,
+        allowNegativeFinalPay: true,
+        loans: [{ id: "L1", loanType: "COMPANY", installmentCents: 5_000_000n, balanceCents: 5_000_000n }],
+      }),
+      finalPayInputs: { ...noFinalPay },
+    });
+    expect(result.loanDeductionsCents).toBe(5_000_000n);
+    expect(result.loanDeferredCents).toBe(0n);
+    expect(result.netPayCents < 0n).toBe(true);
+  });
+
+  it("floors final pay when the exemption is turned off", () => {
+    const result = computeSheet({
+      ...makeInput({
+        salaryType: "MONTHLY",
+        basicSalaryCents: 4_500_000n,
+        periodInput: { daysWorked: 1 },
+        overrideStatutoryDeducted: false,
+        allowNegativeFinalPay: false,
+        loans: [{ id: "L1", loanType: "COMPANY", installmentCents: 5_000_000n, balanceCents: 5_000_000n }],
+      }),
+      finalPayInputs: { ...noFinalPay },
+    });
+    expect(result.netPayCents).toBe(0n);
+    expect(result.loanDeferredCents > 0n).toBe(true);
   });
 });
