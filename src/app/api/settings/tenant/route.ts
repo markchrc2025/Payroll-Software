@@ -57,6 +57,9 @@ const patchSchema = z.object({
   thirteenthMonthBasis: z
     .enum(["STRICT_DOLE", "INCLUDE_ALLOWANCES"])
     .optional(),
+  // "No negative pay" safeguard: max % of monthly gross that statutory + loan
+  // deductions may consume. New loans breaching this are blocked at creation.
+  maxDeductionPctOfGross: z.number().int().min(1).max(100).optional(),
   // Night-shift differential window (NSD is always computed; only the window
   // is configurable). HH:MM, 24-hour.
   nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
@@ -99,6 +102,7 @@ export async function GET(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        maxDeductionPctOfGross: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
@@ -166,6 +170,7 @@ export async function PATCH(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        maxDeductionPctOfGross: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,

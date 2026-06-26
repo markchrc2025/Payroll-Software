@@ -600,6 +600,10 @@ model Tenant {
   workingDaysDenominator Int                  @default(261)
   statutoryCutoffRule    StatutoryCutoffRule  @default(SECOND_CUTOFF)
   thirteenthMonthBasis   ThirteenthMonthBasis @default(STRICT_DOLE)
+  /// Payroll safeguard: max % of monthly gross that statutory + loan/recurring
+  /// deductions may consume. New loans that would breach this are blocked
+  /// ("no negative pay" policy). Default 50.
+  maxDeductionPctOfGross Int                  @default(50)
   defaultDtrApproverId   String?
   /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
   /// be turned off); only the window is configurable. The premium multiplier

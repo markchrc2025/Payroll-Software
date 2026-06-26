@@ -182,7 +182,7 @@ function toComputeLoan(l: Loan): ComputeLoan {
 // Statutory rule resolution (cached per call)
 // ---------------------------------------------------------------------------
 
-async function resolveAllRules(
+export async function resolveAllRules(
   tx: TenantTx,
   tenantId: string,
   asOf: Date,

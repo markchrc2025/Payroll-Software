@@ -17,6 +17,7 @@ type TenantSettings = {
   workingDaysDenominator: number;
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
+  maxDeductionPctOfGross: number;
   nsdWindowStart: string;
   nsdWindowEnd: string;
 };
@@ -51,6 +52,7 @@ export default function PayRulesPage() {
     workingDaysDenominator: 261,
     statutoryCutoffRule: "SECOND_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
+    maxDeductionPctOfGross: 50,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
   });
@@ -69,6 +71,7 @@ export default function PayRulesPage() {
         workingDaysDenominator: d.workingDaysDenominator,
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
+        maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
@@ -188,6 +191,40 @@ export default function PayRulesPage() {
               value={form.thirteenthMonthBasis}
               onChange={(v) => update("thirteenthMonthBasis", v)}
             />
+          </RuleSection>
+
+          {/* Deduction Cap — "no negative pay" safeguard */}
+          <RuleSection
+            title="Maximum Deduction Limit"
+            description="No-negative-pay safeguard. The combined SSS, PhilHealth, Pag-IBIG, and loan deductions may not exceed this share of an employee's monthly gross. A new loan that would breach the limit is blocked when it is added."
+          >
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[12.5px] font-medium text-[#111827]">
+                  Cap (% of monthly gross)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-28"
+                    value={form.maxDeductionPctOfGross}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) {
+                        update("maxDeductionPctOfGross", Math.min(100, Math.max(1, Math.round(n))));
+                      }
+                    }}
+                  />
+                  <span className="text-[13px] text-[#6B7A8D]">%</span>
+                </div>
+                <p className="text-[12px] text-[#6B7A8D]">
+                  Common practice caps total deductions at 50% of gross. Final-pay
+                  settlements on separation are exempt from this limit.
+                </p>
+              </div>
+            </div>
           </RuleSection>
 
           {/* Night-Shift Differential Window */}
