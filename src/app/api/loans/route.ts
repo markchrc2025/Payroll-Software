@@ -8,12 +8,13 @@ import type { Prisma } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { err, notFound, ok, paginated, unauthorized } from "@/lib/api-response";
-import { toCentavos } from "@/lib/money";
+import { toCentavos, formatCentavos } from "@/lib/money";
 import {
   createLoanSchema,
   listLoansSchema,
 } from "@/lib/validations/pay-component";
 import { serializeLoan } from "@/lib/payroll/serialize";
+import { checkDeductionCap } from "@/lib/payroll/deduction-cap";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
@@ -64,14 +65,32 @@ export async function POST(req: NextRequest) {
     return err("principal and installment must be > 0", 422);
   }
 
-  const created = await withTenant(auth.tenantId, async (tx) => {
+  const result = await withTenant(auth.tenantId, async (tx) => {
     const employee = await tx.employee.findFirst({
       where: { id: d.employeeId, tenantId: auth.tenantId },
       select: { id: true },
     });
-    if (!employee) return null;
+    if (!employee) return { kind: "not_found" as const };
 
-    return tx.loan.create({
+    // "No negative pay" safeguard: block a loan whose installment would push
+    // the employee's statutory + loan deductions past the tenant's cap.
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: auth.tenantId },
+      select: { maxDeductionPctOfGross: true },
+    });
+    const cap = await checkDeductionCap(
+      tx,
+      auth.tenantId,
+      d.employeeId,
+      installmentCents,
+      tenant.maxDeductionPctOfGross,
+      d.startDate,
+    );
+    if (cap && !cap.withinCap) {
+      return { kind: "over_cap" as const, cap };
+    }
+
+    const loan = await tx.loan.create({
       data: {
         tenantId: auth.tenantId,
         employeeId: d.employeeId,
@@ -84,9 +103,27 @@ export async function POST(req: NextRequest) {
         notes: d.notes ?? null,
       },
     });
+    return { kind: "created" as const, loan };
   });
 
-  if (!created) return notFound("Employee");
+  if (result.kind === "not_found") return notFound("Employee");
+  if (result.kind === "over_cap") {
+    const { cap } = result;
+    return err(
+      `This loan would exceed the deduction limit of ${cap.maxPct}% of monthly gross. ` +
+        `Remaining installment capacity is ₱${formatCentavos(cap.remainingPerPeriodCents)} per pay period. ` +
+        `Reduce the installment or settle existing loans before adding this one.`,
+      422,
+      {
+        maxPct: cap.maxPct,
+        monthlyGrossCents: cap.monthlyGrossCents.toString(),
+        monthlyStatutoryCents: cap.monthlyStatutoryCents.toString(),
+        capCents: cap.capCents.toString(),
+        remainingPerPeriodCents: cap.remainingPerPeriodCents.toString(),
+      },
+    );
+  }
+  const created = result.loan;
   void writeAuditLog({
     tenantId: auth.tenantId,
     actorUserId: auth.userId,
