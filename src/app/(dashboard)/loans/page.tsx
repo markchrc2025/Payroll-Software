@@ -64,6 +64,17 @@ type Employee = {
   lastName: string;
 };
 
+type Capacity =
+  | { enforced: false; maxPct: number }
+  | {
+      enforced: true;
+      maxPct: number;
+      monthlyGrossCents: string;
+      monthlyStatutoryCents: string;
+      capCents: string;
+      remainingPerPeriodCents: string;
+    };
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -136,6 +147,11 @@ export default function LoansPage() {
   const [editForm, setEditForm] = useState({ referenceNumber: "", installment: "", notes: "" });
   const [saving, setSaving] = useState(false);
 
+  // Deduction-cap capacity for the selected employee ("no negative pay"
+  // safeguard, shown proactively in the create form).
+  const [capacity, setCapacity] = useState<Capacity | null>(null);
+  const [capacityLoading, setCapacityLoading] = useState(false);
+
   // Cancel dialog
   const [cancelTarget, setCancelTarget] = useState<Loan | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -162,8 +178,35 @@ export default function LoansPage() {
     setLoading(false);
   }, [filterStatus, filterType]);
 
+  const loadCapacity = useCallback(async (employeeId: string, asOf: string) => {
+    if (!employeeId) { setCapacity(null); return; }
+    setCapacityLoading(true);
+    try {
+      const params = new URLSearchParams({ employeeId });
+      if (asOf) params.set("asOf", asOf);
+      const res = await fetch(`/api/loans/capacity?${params}`);
+      const json = await res.json();
+      // Fail open: if the probe errors, don't block — the API still enforces.
+      setCapacity(res.ok ? (json.data as Capacity) : null);
+    } catch {
+      setCapacity(null);
+    } finally {
+      setCapacityLoading(false);
+    }
+  }, []);
+
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
   useEffect(() => { loadLoans(); }, [loadLoans]);
+
+  // Refresh remaining capacity whenever the create form's employee or start
+  // date changes (skip in edit mode — the cap is a create-time guard).
+  useEffect(() => {
+    if (sheetOpen && !editing && form.employeeId) {
+      loadCapacity(form.employeeId, form.startDate);
+    } else {
+      setCapacity(null);
+    }
+  }, [sheetOpen, editing, form.employeeId, form.startDate, loadCapacity]);
 
   // ---------------------------------------------------------------------------
   // Sheet helpers
@@ -260,6 +303,19 @@ export default function LoansPage() {
     if (!e) return id;
     return `${e.lastName}, ${e.firstName} (${e.employeeNumber})`;
   }
+
+  // Proposed installment in centavos, and whether it breaches the cap.
+  const installmentCents = (() => {
+    const n = parseFloat(form.installment);
+    return isNaN(n) ? 0 : Math.round(n * 100);
+  })();
+  const remainingCents =
+    capacity?.enforced ? Number(capacity.remainingPerPeriodCents) : null;
+  const overCapacity =
+    capacity?.enforced === true &&
+    installmentCents > 0 &&
+    remainingCents !== null &&
+    installmentCents > remainingCents;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -455,9 +511,50 @@ export default function LoansPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Installment (₱) <span className="text-destructive">*</span></Label>
-                  <Input type="number" min="0" step="0.01" placeholder="500.00" value={form.installment} onChange={(e) => setForm({ ...form, installment: e.target.value })} />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="500.00"
+                    value={form.installment}
+                    onChange={(e) => setForm({ ...form, installment: e.target.value })}
+                    aria-invalid={overCapacity}
+                    className={overCapacity ? "border-destructive focus-visible:ring-destructive" : ""}
+                  />
                 </div>
               </div>
+
+              {/* Deduction-cap capacity hint ("no negative pay" safeguard) */}
+              {form.employeeId && (
+                <div
+                  className={`rounded-md border px-3 py-2.5 text-xs ${
+                    overCapacity
+                      ? "border-destructive/40 bg-destructive/5 text-destructive"
+                      : "border-border bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  {capacityLoading ? (
+                    "Checking available capacity…"
+                  ) : !capacity ? (
+                    "Couldn’t check capacity — the limit will still be enforced on save."
+                  ) : !capacity.enforced ? (
+                    "No active salary on file yet — the deduction limit isn’t enforced for this employee."
+                  ) : (
+                    <>
+                      <span className="font-medium">
+                        Available capacity: {formatPeso(capacity.remainingPerPeriodCents)} per pay period
+                      </span>{" "}
+                      (limit {capacity.maxPct}% of monthly gross, after statutory and existing loans).
+                      {overCapacity && (
+                        <div className="mt-1 font-medium">
+                          This installment exceeds the remaining capacity. Lower it to{" "}
+                          {formatPeso(capacity.remainingPerPeriodCents)} or less, or settle existing loans first.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Start Date <span className="text-destructive">*</span></Label>
                 <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
@@ -471,7 +568,7 @@ export default function LoansPage() {
                 <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button className="flex-1" onClick={handleCreate} disabled={saving}>
+                <Button className="flex-1" onClick={handleCreate} disabled={saving || overCapacity}>
                   {saving ? "Creating…" : "Create Loan"}
                 </Button>
                 <Button variant="outline" className="flex-1" onClick={() => setSheetOpen(false)}>Cancel</Button>
