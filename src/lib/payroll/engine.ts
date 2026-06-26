@@ -792,9 +792,9 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted,
     bases: {
-      sssMscCents: sss.msc.toString(),
-      philHealthMscCents: phic.msc.toString(),
-      pagibigMfsCents: hdmf.mfs.toString(),
+      sssMscCents: (deducted ? sss.msc : 0n).toString(),
+      philHealthMscCents: (deducted ? phic.msc : 0n).toString(),
+      pagibigMfsCents: (deducted ? hdmf.mfs : 0n).toString(),
     },
     sss: {
       eeRegularCents: (deducted ? sss.breakdown.eeRegular : 0n).toString(),
@@ -1134,9 +1134,9 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const statutoryBreakdown: StatutoryBreakdown = {
     deducted,
     bases: {
-      sssMscCents: sss.msc.toString(),
-      philHealthMscCents: phic.msc.toString(),
-      pagibigMfsCents: hdmf.mfs.toString(),
+      sssMscCents: (deducted ? sss.msc : 0n).toString(),
+      philHealthMscCents: (deducted ? phic.msc : 0n).toString(),
+      pagibigMfsCents: (deducted ? hdmf.mfs : 0n).toString(),
     },
     sss: {
       eeRegularCents: (deducted ? sss.breakdown.eeRegular : 0n).toString(),

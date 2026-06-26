@@ -1333,3 +1333,51 @@ describe("DEF-2 zero-earnings statutory gate", () => {
     expect(result.netPayCents > 0n).toBe(true);
   });
 });
+
+// ===========================================================================
+// DEF-2 (FINAL_PAY path) — zero-earnings gate + separation-pay behavior
+// ===========================================================================
+describe("DEF-2 zero-earnings gate — FINAL_PAY path", () => {
+  const noFinalPay = {
+    proratedThirteenthMonthCents: 0n,
+    leaveCashOutCents: 0n,
+    separationPayCents: 0n,
+    isSeparationPayTaxable: false,
+    cyPriorTaxableIncomeCents: 0n,
+    cyPriorWithholdingTaxCents: 0n,
+  };
+
+  it("FINAL_PAY with zero earnings → no statutory and net is 0, not negative", () => {
+    const result = computeSheet({
+      ...makeInput({
+        salaryType: "MONTHLY",
+        basicSalaryCents: 4_500_000n,
+        periodInput: { daysWorked: 0 },
+        overrideStatutoryDeducted: true,
+      }),
+      finalPayInputs: { ...noFinalPay },
+    });
+    expect(result.sssEeCents).toBe(0n);
+    expect(result.philhealthEeCents).toBe(0n);
+    expect(result.pagibigEeCents).toBe(0n);
+    expect(result.sssErCents).toBe(0n);
+    expect(result.netPayCents).toBe(0n);
+    expect(result.netPayCents >= 0n).toBe(true);
+  });
+
+  it("FINAL_PAY with separation pay only → statutory still applies (intended; gate does not fire)", () => {
+    // periodEarningsCents includes separationPayNonTaxable, so a separation-pay-
+    // only final pay is NOT treated as zero-earning. (Narrowing the contributory
+    // base to exclude separation pay is a separate, documented follow-up.)
+    const result = computeSheet({
+      ...makeInput({
+        salaryType: "MONTHLY",
+        basicSalaryCents: 4_500_000n,
+        periodInput: { daysWorked: 0 },
+        overrideStatutoryDeducted: true,
+      }),
+      finalPayInputs: { ...noFinalPay, separationPayCents: 5_000_000n, isSeparationPayTaxable: false },
+    });
+    expect(result.sssEeCents > 0n).toBe(true);
+  });
+});
