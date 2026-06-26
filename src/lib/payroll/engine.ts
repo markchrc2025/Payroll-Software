@@ -690,10 +690,20 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   // The excess is added to gross taxable income (accounted for below).
 
   // -- Step 8: statutory (cutoff rule applies; skipStatutory via override) --
+  // Skip statutory when there were no contributory earnings this period
+  // (same principle as the REGULAR path — no base, no EE/ER contribution).
+  const periodEarningsCents =
+    grossCompensationCents +
+    buckets.nontaxableAdditionsCents +
+    separationPayNonTaxable +
+    adjs.nontaxableAdditionsCents +
+    p13th;
   const deducted =
-    input.overrideStatutoryDeducted !== undefined
-      ? input.overrideStatutoryDeducted
-      : isStatutoryDeducted(period.cycle, tenant.statutoryCutoffRule, period.end, period.start);
+    periodEarningsCents <= 0n
+      ? false
+      : input.overrideStatutoryDeducted !== undefined
+        ? input.overrideStatutoryDeducted
+        : isStatutoryDeducted(period.cycle, tenant.statutoryCutoffRule, period.end, period.start);
 
   const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
   const phic = computePhilHealth(rules.philHealth, rates.monthlyEquivalentCents);
@@ -1001,15 +1011,26 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const nontaxableBasicCents = employee.nontaxableBasicAmountCents;
 
   // -- Step 8: statutory contributions (computed early — needed for non-tax) -
+  // Skip statutory entirely when the employee earned nothing this period.
+  // Contributions are based on compensation actually earned, so with a zero
+  // base there is no EE or ER contribution — prevents negative net pay from
+  // deducting contributions when there was no pay to deduct from.
+  const periodEarningsCents =
+    grossCompensationCents +
+    buckets.nontaxableAdditionsCents +
+    adjs.nontaxableAdditionsCents +
+    claims.nontaxableAdditionsCents;
   const deducted =
-    input.overrideStatutoryDeducted !== undefined
-      ? input.overrideStatutoryDeducted
-      : isStatutoryDeducted(
-          period.cycle,
-          tenant.statutoryCutoffRule,
-          period.end,
-          period.start,
-        );
+    periodEarningsCents <= 0n
+      ? false
+      : input.overrideStatutoryDeducted !== undefined
+        ? input.overrideStatutoryDeducted
+        : isStatutoryDeducted(
+            period.cycle,
+            tenant.statutoryCutoffRule,
+            period.end,
+            period.start,
+          );
 
   const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
   const phic = computePhilHealth(
