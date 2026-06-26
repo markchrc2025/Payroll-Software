@@ -340,7 +340,18 @@ export async function POST(req: NextRequest) {
     ipAddress: getClientIp(req),
   });
 
-  return ok(result.employee, "Employee created successfully", 201);
+  return ok(
+    {
+      ...result.employee,
+      // Employee.nontaxableBasicAmountCents is BigInt — serialize it so the
+      // success response doesn't throw "Do not know how to serialize a BigInt".
+      nontaxableBasicAmountCents: centavosToJson(
+        result.employee.nontaxableBasicAmountCents,
+      ),
+    },
+    "Employee created successfully",
+    201,
+  );
 }
 
 /** Convert empty / undefined strings to null for DB storage. */
