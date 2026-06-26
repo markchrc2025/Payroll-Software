@@ -229,6 +229,12 @@ export async function POST(req: NextRequest) {
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
 
+    // The employment term's effective date doubles as the contract "term start"
+    // at hire — the two coincide on day one, so we no longer collect Term Start
+    // separately in the wizard. It stays editable later via the Employment Terms
+    // screen / movements when a different contract anchor is needed.
+    const termDate = termEffectiveDate ?? hireDate;
+
     const emp = await tx.employee.create({
       data: {
         ...rest,
@@ -250,7 +256,7 @@ export async function POST(req: NextRequest) {
         jobTypeId:              jobTypeId              ?? null,
         jobStatusId:            jobStatusId            ?? null,
         shiftScheduleId:        shiftScheduleId        ?? null,
-        contractStartDate:      contractStartDate      ?? null,
+        contractStartDate:      contractStartDate      ?? termDate,
         contractEndDate:        contractEndDate        ?? null,
       },
     });
@@ -276,7 +282,6 @@ export async function POST(req: NextRequest) {
     // Initial employment term record — carries the opening compensation
     // (salary is part of EmploymentTerm post-merge). This is the hire-time
     // snapshot the payroll engine reads as the in-force salary.
-    const termDate = termEffectiveDate ?? hireDate;
     await tx.employmentTerm.create({
       data: {
         tenantId:         auth.tenantId,
@@ -285,7 +290,7 @@ export async function POST(req: NextRequest) {
         jobTypeId:        jobTypeId        ?? null,
         jobStatusId:      jobStatusId      ?? null,
         shiftScheduleId:  shiftScheduleId  ?? null,
-        termStart:        contractStartDate ?? null,
+        termStart:        contractStartDate ?? termDate,
         nextReviewDate:   contractEndDate   ?? null,
         basicSalaryCents: toCentavos(basicSalary),
         salaryType:       emp.salaryType,

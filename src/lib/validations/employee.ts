@@ -231,7 +231,6 @@ export const createEmployeeSchema = z.object({
   // Salary metadata
   salaryEffectiveDate: z.coerce.date().optional().nullable(),
   currency: z.string().max(10).optional().default("PHP"),
-  nextSalaryReviewDate: z.coerce.date().optional().nullable(),
   payMethod: z.string().max(50).optional().nullable(),
 
   // Extended contact

@@ -836,8 +836,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Select>
               )} />
             </div>
-            <TF control={c} name="contractStartDate" label="Term Start"   type="date"                                   errors={e} />
-            <TF control={c} name="contractEndDate"   label="Next Review"  type="date"                                   errors={e} />
+            <TF control={c} name="contractEndDate"   label="Next Review"  type="date" span2                             errors={e} />
           </FGrid>
         );
 
@@ -850,7 +849,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <SF control={c} name="salaryType"           label="Salary Type"       options={SAL_TYPE_OPT} placeholder="Monthly"    errors={e} />
             <SF control={c} name="currency"             label="Currency"          options={CURRENCIES}   placeholder="PHP"        errors={e} />
             <FNote lines={["For hourly rate, you may use Earning."]} />
-            <TF control={c} name="nextSalaryReviewDate" label="Next Review Date"  type="date"      span2 errors={e} />
             <FSec label="Payment" />
             <SF control={c} name="bankName"             label="Bank"              options={BANKS}       placeholder="Select…"       errors={e} />
             <TF control={c} name="bankAccountNumber"    label="Bank Account"                            placeholder="0000 0000 0000" errors={e} />
