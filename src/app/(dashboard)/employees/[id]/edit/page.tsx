@@ -9,7 +9,6 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { AddEmployeeWizard } from "@/components/employees/AddEmployeeWizard";
-import { EssPinCard } from "@/components/employees/EssPinCard";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -117,6 +116,8 @@ export default async function EditEmployeePage({
       <AddEmployeeWizard
         mode="edit"
         employeeId={String(emp.id)}
+        employeeNumber={String(emp.employeeNumber ?? "")}
+        hasEssPin={!!emp.hasEssPin}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         initialData={initialData as any}
         departments={departments as { id: string; name: string }[]}
@@ -129,8 +130,6 @@ export default async function EditEmployeePage({
         workflows={workflows as { id: string; code: string; description: string | null }[]}
         employees={empList as { id: string; firstName: string; lastName: string; employeeNumber: string }[]}
       />
-
-      <EssPinCard employeeId={String(emp.id)} hasPin={!!emp.hasEssPin} />
     </div>
   );
 }
