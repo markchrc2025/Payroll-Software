@@ -6,17 +6,20 @@
  * so a missing ENCRYPTION_KEY is caught here rather than on the first save.
  */
 import { NextResponse } from "next/server";
-import { checkCriticalEnv } from "@/lib/env-check";
+import { checkCriticalEnv, checkEnvWarnings } from "@/lib/env-check";
 
 export const dynamic = "force-dynamic";
 
 export function GET() {
   const problems = checkCriticalEnv();
+  const warnings = checkEnvWarnings();
   if (problems.length === 0) {
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json(
+      warnings.length === 0 ? { status: "ok" } : { status: "ok", warnings },
+    );
   }
   return NextResponse.json(
-    { status: "degraded", problems },
+    { status: "degraded", problems, ...(warnings.length ? { warnings } : {}) },
     { status: 503 },
   );
 }
