@@ -76,6 +76,15 @@ const STEP_TRIGGER_FIELDS: Path<CreateEmployeeInput>[][] = [
   [],
 ];
 
+// Plain-language labels for the validation toast (falls back to the raw key).
+const FIELD_LABELS: Record<string, string> = {
+  firstName: "First name",
+  lastName: "Last name",
+  branchId: "Branch",
+  hireDate: "Hire date",
+  basicSalary: "Basic salary",
+};
+
 // ─── Option constants ─────────────────────────────────────────────────────────
 
 // Philippines first, then the rest alphabetically, with a catch-all at the end.
@@ -401,14 +410,13 @@ function VerticalStepper({
       {STEPS.map((s, i) => {
         const isDone = doneSteps.has(i);
         const isCur  = i === currentStep;
-        const isFut  = i > currentStep && !isDone;
         return (
+          // Any section is freely reachable — the admin isn't forced through
+          // steps 1→9 in order; they can jump straight to the fields they need.
           <button key={i} type="button"
-            disabled={isFut}
-            onClick={() => isDone && onGoTo(i)}
+            onClick={() => onGoTo(i)}
             className={[
-              "flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors",
-              isFut ? "opacity-40 cursor-default" : isDone ? "cursor-pointer" : "cursor-default",
+              "flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-[#faf6f0]",
             ].join(" ")}
             style={isCur ? { background: "#fdeee6" } : undefined}
           >
@@ -530,22 +538,26 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   }
 
   // Surfaces validation failures instead of letting handleSubmit silently no-op
-  // (RHF won't call onSubmit if any field on ANY step is invalid). Jumps to the
-  // earliest step that owns an invalid field and names what needs fixing.
+  // (RHF won't call onSubmit if any field is invalid). Jumps to the earliest
+  // step that owns an invalid field and names — in plain language — what's
+  // missing, so the admin can Save from any step and be told what to fix.
   function onInvalid(formErrors: FieldErrors<CreateEmployeeInput>) {
     const names = Object.keys(formErrors);
     const stepIdx = STEP_TRIGGER_FIELDS.findIndex((fs) =>
       fs.some((f) => names.includes(f as string)),
     );
     if (stepIdx >= 0) setStep(stepIdx);
-    const labels = names
-      .slice(0, 6)
-      .map((k) => {
-        const msg = getErr(formErrors, k);
-        return msg ? `${k}: ${msg}` : k;
-      });
+    const labels = names.slice(0, 6).map((k) => {
+      const friendly = FIELD_LABELS[k] ?? k;
+      const msg = getErr(formErrors, k);
+      // Skip the field name when the message already restates it (e.g.
+      // "Branch is required"); otherwise prefix with the friendly label.
+      return msg && !msg.toLowerCase().includes(friendly.toLowerCase())
+        ? `${friendly}: ${msg}`
+        : (msg ?? `${friendly} is required`);
+    });
     toast.error(
-      `Can't save yet — please review: ${labels.join("; ")}` +
+      `Can't save yet — please complete: ${labels.join("; ")}` +
         (names.length > 6 ? ` (+${names.length - 6} more)` : ""),
     );
   }
@@ -1039,17 +1051,17 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Link href="/employees">
                 <Button type="button" variant="ghost" size="sm">Cancel</Button>
               </Link>
-              {isLast ? (
-                <Button type="submit" size="sm" disabled={isSubmitting}
-                  style={{ background: "#E8693A", color: "#fff" }}>
-                  {isSubmitting ? "Saving…" : "Save employee"}
-                </Button>
-              ) : (
-                <Button type="button" size="sm" onClick={handleContinue}
-                  style={{ background: "#E8693A", color: "#fff" }}>
+              {/* Continue is just optional step-by-step navigation; the HR admin
+                  can Save from ANY step once the required fields are filled. */}
+              {!isLast && (
+                <Button type="button" variant="outline" size="sm" onClick={handleContinue}>
                   Continue
                 </Button>
               )}
+              <Button type="submit" size="sm" disabled={isSubmitting}
+                style={{ background: "#E8693A", color: "#fff" }}>
+                {isSubmitting ? "Saving…" : "Save employee"}
+              </Button>
             </div>
           </div>
         </div>
