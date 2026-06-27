@@ -66,9 +66,12 @@ export async function POST(req: NextRequest) {
         essPin: string | null;
         deletedAt: Date | null;
         employmentStatus: string;
+        essAccessStatus: string;
+        essDeactivateAt: Date | null;
       }>
     >`
-      SELECT id, "birthDate", "essPin", "deletedAt", "employmentStatus"
+      SELECT id, "birthDate", "essPin", "deletedAt", "employmentStatus",
+             "essAccessStatus", "essDeactivateAt"
       FROM "Employee"
       WHERE "tenantId" = ${tenantId}
         AND "employeeNumber" = ${employeeNumber}
@@ -87,6 +90,17 @@ export async function POST(req: NextRequest) {
     }
     if (["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus)) {
       return err("Access denied — inactive employee", 403);
+    }
+
+    // ESS access gate — employees do NOT have access by default; HR must grant
+    // it. NOT_INVITED / DISABLED cannot sign in.
+    if (emp.essAccessStatus === "NOT_INVITED" || emp.essAccessStatus === "DISABLED") {
+      return err("Employee Self-Service access isn't enabled for your account — please contact HR.", 403);
+    }
+    // Scheduled deactivation is authoritative even if the hourly sweep hasn't
+    // run yet: once the time passes, access is denied.
+    if (emp.essDeactivateAt && emp.essDeactivateAt.getTime() <= Date.now()) {
+      return err("Your Employee Self-Service access has ended — please contact HR.", 403);
     }
 
     let authenticated = false;
@@ -126,6 +140,17 @@ export async function POST(req: NextRequest) {
     if (!authenticated) {
       return err("Invalid credentials", 401);
     }
+
+    // First successful login flips INVITED → ACTIVE; always record last login.
+    await prismaAdmin.employee.update({
+      where: { id: emp.id },
+      data: {
+        essLastLoginAt: new Date(),
+        ...(emp.essAccessStatus === "INVITED"
+          ? { essAccessStatus: "ACTIVE", essActivatedAt: new Date() }
+          : {}),
+      },
+    });
 
     const rawToken = await createEssSession(tenantId, emp.id);
     return ok({ token: rawToken, employeeId: emp.id }, "Login successful");

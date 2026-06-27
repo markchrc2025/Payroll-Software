@@ -11,6 +11,7 @@ import { handleOtApproved, OtApprovedJobData } from "./handlers/ot-approved";
 import { handleDtrSubmitted, DtrSubmittedJobData } from "./handlers/dtr-submitted";
 import { handlePayslipPublish, PayslipPublishJobData } from "./handlers/payslip-publish";
 import { handleLeaveAccrual } from "./handlers/leave-accrual";
+import { handleEssDeactivationSweep } from "./handlers/ess-deactivation";
 
 export const JOB_NAMES = {
   PAYROLL_RUN: "payroll.run",
@@ -18,6 +19,7 @@ export const JOB_NAMES = {
   DTR_SUBMITTED: "dtr.submitted",
   PAYSLIP_PUBLISH: "payslip.publish",
   LEAVE_ACCRUAL: "leave.accrual",
+  ESS_DEACTIVATION: "ess.deactivation",
 } as const;
 
 const RETRY_LIMIT = 3;
@@ -77,6 +79,20 @@ export async function registerWorkers(): Promise<void> {
     JOB_NAMES.LEAVE_ACCRUAL,
     { localConcurrency: 1 },
     () => handleLeaveAccrual(),
+  );
+
+  // ESS scheduled-deactivation sweep — hourly, on the hour.
+  await boss.schedule(
+    JOB_NAMES.ESS_DEACTIVATION,
+    "0 * * * *",
+    {},
+    { tz: "UTC" },
+  );
+
+  await boss.work(
+    JOB_NAMES.ESS_DEACTIVATION,
+    { localConcurrency: 1 },
+    () => handleEssDeactivationSweep(),
   );
 
   console.log("[pg-boss] Workers registered:", Object.values(JOB_NAMES).join(", "));

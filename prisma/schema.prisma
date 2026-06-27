@@ -1140,6 +1140,19 @@ model Employee {
   essPin          String? // hashed at app layer
   essPasswordHash String? // optional ESS password (bcrypt), set by the employee
   kioskPinHash    String?
+  /// ESS portal access. Employees do NOT get access on creation — HR must
+  /// grant (activate) it. Login is blocked unless INVITED or ACTIVE.
+  essAccessStatus EssAccessStatus @default(NOT_INVITED)
+  essInvitedAt    DateTime?
+  essActivatedAt  DateTime?
+  essInvitedByUserId String?
+  essLastLoginAt  DateTime?
+  /// Scheduled ESS deactivation. When essDeactivateAt passes, access is revoked
+  /// (auth gate denies immediately; an hourly sweep flips status → DISABLED and
+  /// ends live sessions). Reason is required when scheduling/deactivating.
+  essDeactivateAt              DateTime?
+  essDeactivateReason          String?
+  essDeactivateScheduledByUserId String?
   qrBadgeCode     String?
 
   // Bank (encrypted at app layer)
@@ -3063,6 +3076,18 @@ model ApplicantNote {
 // =============================================================================
 
 /// Employee Self-Service session.  One row per active login.
+/// Employee Self-Service portal access lifecycle.
+///   NOT_INVITED — created but no ESS access (default); login blocked.
+///   INVITED     — granted access, not yet logged in for the first time.
+///   ACTIVE      — has logged in at least once.
+///   DISABLED    — access revoked (manually or by a scheduled deactivation).
+enum EssAccessStatus {
+  NOT_INVITED
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
 model EssSession {
   id         String    @id @default(cuid())
   tenantId   String
