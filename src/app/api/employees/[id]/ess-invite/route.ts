@@ -14,7 +14,7 @@ import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { generateEssToken, hashEssToken } from "@/lib/ess-auth";
-import { sendEssInviteEmail } from "@/lib/email";
+import { sendEmployeeOnboarding } from "@/lib/emails";
 
 const EXPIRES_DAYS = 7;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -83,14 +83,10 @@ export async function POST(
   // Send the email last — if it fails, surface it (the invite row still exists
   // so a resend works, and access is already granted).
   try {
-    await sendEssInviteEmail({
-      to: emp.workEmail,
-      name: `${emp.firstName} ${emp.lastName}`.trim(),
+    await sendEmployeeOnboarding(emp.workEmail, {
+      firstName: emp.firstName,
       companyName: tenant.name,
-      companyCode: tenant.companyCode,
-      employeeNumber: emp.employeeNumber,
-      activateUrl: `${APP_URL}/ess/activate?token=${rawToken}`,
-      expiresInDays: EXPIRES_DAYS,
+      activationUrl: `${APP_URL}/ess/activate?token=${rawToken}`,
     });
   } catch (e) {
     console.error("[ess-invite] email failed:", e);

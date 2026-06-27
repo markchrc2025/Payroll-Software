@@ -1,7 +1,7 @@
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
-import { sendWelcomeEmail } from "@/lib/email";
+import { sendAdminOnboarding } from "@/lib/emails";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sentire-payroll.onrender.com";
   const link = `${base}/centralportal/accept-invite?token=${raw}`;
-  await sendWelcomeEmail({ to: user.email, name: user.firstName, loginUrl: link }).catch(() => {});
+  await sendAdminOnboarding(user.email, { firstName: user.firstName, activationUrl: link }).catch(() => {});
 
   return ok({ id: user.id, invited: true });
 }

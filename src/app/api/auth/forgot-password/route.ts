@@ -9,7 +9,7 @@ import { type NextRequest } from "next/server";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { sendTenantAdminResetPassword } from "@/lib/emails";
 import { ok, err } from "@/lib/api-response";
 
 const schema = z.object({
@@ -62,9 +62,8 @@ export async function POST(req: NextRequest) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
 
-      await sendPasswordResetEmail({
-        to: user.email,
-        name: user.firstName,
+      await sendTenantAdminResetPassword(user.email, {
+        firstName: user.firstName,
         resetUrl,
       });
     }

@@ -1,7 +1,7 @@
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { sendAdminResetPassword } from "@/lib/emails";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -127,7 +127,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const link = `${base}/centralportal/reset-password?token=${raw}`;
 
   try {
-    await sendPasswordResetEmail({ to: target.email, name: target.firstName, resetUrl: link });
+    await sendAdminResetPassword(target.email, { firstName: target.firstName, resetUrl: link });
   } catch (e) {
     // The token exists, but delivery failed. Tell the admin the truth instead
     // of a misleading "link sent" toast. (This is an authenticated USERS:MANAGE
