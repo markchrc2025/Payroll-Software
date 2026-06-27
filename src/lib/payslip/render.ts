@@ -99,6 +99,8 @@ export interface Payslip {
   };
   loans: {
     loanDeductions: string;
+    /** Installment deferred this period by the net-pay floor (carried forward). */
+    loanDeferred: string;
   };
   net: {
     netPay: string;
@@ -191,6 +193,7 @@ export function renderPayslip(input: RenderPayslipInput): Payslip {
     },
     loans: {
       loanDeductions: c(sheet.loanDeductionsCents),
+      loanDeferred: c(sheet.loanDeferredCents),
     },
     net: {
       netPay: c(sheet.netPayCents),

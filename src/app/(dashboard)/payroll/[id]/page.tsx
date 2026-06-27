@@ -78,6 +78,7 @@ type PayrollSheet = {
   pagibigEeCents: string;
   withholdingTaxCents: string;
   loanDeductionsCents: string;
+  loanDeferredCents: string;
   nontaxableAdditionsCents: string;
   netPayCents: string;
 };
@@ -612,6 +613,14 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
                       {formatPeso(s.loanDeductionsCents)}
+                      {Number(s.loanDeferredCents) > 0 && (
+                        <span
+                          className="block text-[11px] font-medium text-amber-600"
+                          title="Loan amortization deferred to keep net pay at or above zero. The unpaid amount stays in the loan balance and carries to the next period."
+                        >
+                          {formatPeso(s.loanDeferredCents)} deferred
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-semibold">
                       {formatPeso(s.netPayCents)}
