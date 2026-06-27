@@ -209,6 +209,54 @@ export async function sendWelcomeEmail({
 }
 
 // ---------------------------------------------------------------------------
+// ESS invitation — activate Employee Self-Service (set a password)
+// ---------------------------------------------------------------------------
+
+export async function sendEssInviteEmail({
+  to,
+  name,
+  companyName,
+  companyCode,
+  employeeNumber,
+  activateUrl,
+  expiresInDays = 7,
+}: {
+  to: string;
+  name: string;
+  companyName: string;
+  companyCode: string;
+  employeeNumber: string;
+  activateUrl: string;
+  expiresInDays?: number;
+}): Promise<void> {
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">You're invited to Employee Self-Service</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(name)}, ${escapeHtml(companyName)} has enabled your Employee Self-Service
+      (ESS) access. Click below to set your password and activate your account.
+      This link expires in <strong>${expiresInDays} day${expiresInDays === 1 ? "" : "s"}</strong>.
+    </p>
+    <a href="${escapeHtml(activateUrl)}"
+       style="display:inline-block;padding:12px 28px;background:#1E3A5F;color:#FFFFFF;font-size:14px;font-weight:600;border-radius:8px;text-decoration:none;">
+      Activate ESS Access
+    </a>
+    <p style="margin:24px 0 0;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      When you sign in, you'll need your <strong>Company Code</strong> and <strong>Employee ID</strong>:
+    </p>
+    <p style="margin:8px 0 0;font-size:13px;color:#111827;">
+      Company Code: <strong style="font-family:monospace;">${escapeHtml(companyCode)}</strong><br/>
+      Employee ID: <strong style="font-family:monospace;">${escapeHtml(employeeNumber)}</strong>
+    </p>
+    <p style="margin:20px 0 0;font-size:12px;color:#9AA5B4;">
+      Or copy this link into your browser:<br/>
+      <span style="color:#2D6BE4;word-break:break-all;">${escapeHtml(activateUrl)}</span>
+    </p>
+  `);
+
+  await dispatch({ to, subject: `Activate your ${companyName} Employee Self-Service access`, html });
+}
+
+// ---------------------------------------------------------------------------
 // Payslip notification
 // ---------------------------------------------------------------------------
 

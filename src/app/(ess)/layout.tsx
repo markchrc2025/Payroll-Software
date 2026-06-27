@@ -29,15 +29,18 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // Public ESS pages (no session required).
+  const isPublic = pathname === "/ess/login" || pathname === "/ess/activate";
+
   useEffect(() => {
-    if (pathname === "/ess/login") return;
+    if (isPublic) return;
     const token = typeof window !== "undefined" ? localStorage.getItem("ess_token") : null;
     if (!token) {
       router.replace("/ess/login");
     }
-  }, [pathname, router]);
+  }, [isPublic, router]);
 
-  const isLogin = pathname === "/ess/login";
+  const isLogin = isPublic;
   // The redesigned ESS app is a single full-bleed shell that owns its own
   // top bar + bottom nav (see /ess). Legacy sub-routes keep the sidebar chrome.
   const isShell = pathname === "/ess";

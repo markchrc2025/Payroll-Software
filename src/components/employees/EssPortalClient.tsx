@@ -129,6 +129,19 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
     }
   }
 
+  async function invite(id: string): Promise<void> {
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/employees/${id}/ess-invite`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { toast.error(json?.error ?? "Could not send invitation"); return; }
+      toast.success(json?.message ?? "Invitation sent");
+      await reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function confirmDisable() {
     if (!disableTarget) return;
     if (!disableReason.trim()) { toast.error("A reason is required."); return; }
@@ -210,12 +223,26 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                     <TableCell>
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {!granted ? (
-                          <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                            onClick={() => act(r.id, { action: "activate" })}>
-                            Activate
-                          </Button>
+                          <>
+                            <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                              onClick={() => act(r.id, { action: "activate" })}>
+                              {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
+                            </Button>
+                            {r.workEmail && (
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                onClick={() => invite(r.id)}>
+                                Invite by email
+                              </Button>
+                            )}
+                          </>
                         ) : (
                           <>
+                            {r.essAccessStatus === "INVITED" && r.workEmail && (
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                onClick={() => invite(r.id)}>
+                                Resend invite
+                              </Button>
+                            )}
                             {scheduled ? (
                               <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
                                 onClick={() => act(r.id, { action: "cancel_schedule" })}>
@@ -232,12 +259,6 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                               Disable
                             </Button>
                           </>
-                        )}
-                        {r.essAccessStatus === "DISABLED" && (
-                          <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                            onClick={() => act(r.id, { action: "activate" })}>
-                            Re-activate
-                          </Button>
                         )}
                       </div>
                     </TableCell>

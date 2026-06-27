@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { randomBytes } from "node:crypto";
-import { checkCriticalEnv } from "@/lib/env-check";
+import { checkCriticalEnv, checkEnvWarnings } from "@/lib/env-check";
 
 const SAVED = { ...process.env };
 
@@ -46,5 +46,20 @@ describe("checkCriticalEnv", () => {
     delete process.env.DATABASE_URL;
     process.env.DIRECT_DATABASE_URL = "postgresql://u:p@h:5432/db";
     expect(checkCriticalEnv().some((p) => p.name === "DATABASE_URL")).toBe(false);
+  });
+});
+
+describe("checkEnvWarnings", () => {
+  it("warns (non-blocking) when RESEND_API_KEY is missing", () => {
+    delete process.env.RESEND_API_KEY;
+    const warnings = checkEnvWarnings();
+    expect(warnings.some((w) => w.name === "RESEND_API_KEY")).toBe(true);
+    // A missing email key is NOT a critical problem (app still boots).
+    expect(checkCriticalEnv().some((p) => p.name === "RESEND_API_KEY")).toBe(false);
+  });
+
+  it("no warning when RESEND_API_KEY is set", () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    expect(checkEnvWarnings()).toEqual([]);
   });
 });

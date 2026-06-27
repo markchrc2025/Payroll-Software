@@ -59,6 +59,27 @@ export function checkCriticalEnv(): EnvProblem[] {
   return problems;
 }
 
+/**
+ * Non-blocking configuration warnings — features that degrade gracefully when
+ * unset (the app still boots and serves). Reported by /api/health but do NOT
+ * mark it unhealthy.
+ */
+export function checkEnvWarnings(): EnvProblem[] {
+  const warnings: EnvProblem[] = [];
+
+  // RESEND_API_KEY — needed to send transactional email (ESS invites, payslip
+  // notifications, password resets). Optional: those features fail at send time.
+  if (!process.env.RESEND_API_KEY) {
+    warnings.push({
+      name: "RESEND_API_KEY",
+      detail:
+        "Not set — outbound email (ESS invites, payslip/reset notifications) will fail.",
+    });
+  }
+
+  return warnings;
+}
+
 /** Log a clear banner to the server logs when critical env is missing/invalid. */
 export function logEnvCheck(): EnvProblem[] {
   const problems = checkCriticalEnv();
@@ -69,6 +90,13 @@ export function logEnvCheck(): EnvProblem[] {
         problems.map((p) => `  • ${p.name}: ${p.detail}`).join("\n") +
         "\n  Affected features will fail at runtime until fixed.\n" +
         "========================================================\n",
+    );
+  }
+  const warnings = checkEnvWarnings();
+  if (warnings.length > 0) {
+    console.warn(
+      "[env-check] Optional configuration missing:\n" +
+        warnings.map((w) => `  • ${w.name}: ${w.detail}`).join("\n"),
     );
   }
   return problems;
