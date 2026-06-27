@@ -378,6 +378,7 @@ function resultToSheetCreate(
     withholdingTaxCents: r.withholdingTaxCents,
     nontaxableAdditionsCents: r.nontaxableAdditionsCents,
     loanDeductionsCents: r.loanDeductionsCents,
+    loanDeferredCents: r.loanDeferredCents,
     adjustmentDeductionsCents: r.adjustmentDeductionsCents,
     netPayCents: r.netPayCents,
     payComponentsApplied:

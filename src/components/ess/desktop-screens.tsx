@@ -456,7 +456,11 @@ function DPayslipDetail({ data: p }: { data: PayslipDetailData }) {
     { label: "PhilHealth", sub: "", amt: centsNum(p.statutory.philhealthEe) },
     { label: "Pag-IBIG", sub: "", amt: centsNum(p.statutory.pagibigEe) },
     { label: "Withholding tax", sub: "", amt: centsNum(p.tax.withholdingTax) },
-    { label: "Loans", sub: "", amt: centsNum(p.loans.loanDeductions) },
+    {
+      label: "Loans",
+      sub: Number(p.loans.loanDeferred) > 0 ? `₱${centsNum(p.loans.loanDeferred).toLocaleString("en-PH", { minimumFractionDigits: 2 })} deferred to next period` : "",
+      amt: centsNum(p.loans.loanDeductions),
+    },
     {
       label: "Tardiness / undertime",
       sub: p.tardinessMinutes ? `${p.tardinessMinutes} mins` : "",
@@ -558,6 +562,7 @@ function printPayslip(p: PayslipDetailData) {
       ${row("Pag-IBIG", P(p.statutory.pagibigEe))}
       ${row("Withholding tax", P(p.tax.withholdingTax))}
       ${Number(p.loans.loanDeductions) ? row("Loans", P(p.loans.loanDeductions)) : ""}
+      ${Number(p.loans.loanDeferred) ? row("Loan deferred (carried forward)", P(p.loans.loanDeferred)) : ""}
     </table></body></html>`);
   w.document.close();
 }

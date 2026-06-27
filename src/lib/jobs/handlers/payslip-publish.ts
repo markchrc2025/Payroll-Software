@@ -71,6 +71,7 @@ interface PayslipData {
   pagibigDed: bigint;
   withholdingTax: bigint;
   loanDeductions: bigint;
+  loanDeferred: bigint;
   netPay: bigint;
 }
 
@@ -144,6 +145,12 @@ function PayslipDocument({ data }: { data: PayslipData }) {
         React.createElement(Text, { style: pdfStyles.totalLabel }, "NET PAY"),
         React.createElement(Text, { style: pdfStyles.totalValue }, centsToPHP(data.netPay)),
       ),
+      data.loanDeferred > 0n &&
+        React.createElement(
+          Text,
+          { style: { fontSize: 8, color: "#92400e", marginTop: 6 } },
+          `Note: ${centsToPHP(data.loanDeferred)} of loan amortization was deferred this period to keep net pay non-negative. The unpaid amount remains in your loan balance and carries to the next period.`,
+        ),
     ),
   );
 }
@@ -207,6 +214,7 @@ export async function handlePayslipPublish(job: { data: PayslipPublishJobData })
     pagibigDed: sheet.pagibigEeCents,
     withholdingTax: sheet.withholdingTaxCents,
     loanDeductions: sheet.loanDeductionsCents,
+    loanDeferred: sheet.loanDeferredCents,
     netPay: sheet.netPayCents,
   };
 

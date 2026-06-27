@@ -2336,6 +2336,10 @@ model PayrollSheet {
   // -- Step 10/11: Add-backs and deductions ---------------------------------
   nontaxableAdditionsCents BigInt @default(0)
   loanDeductionsCents      BigInt @default(0)
+  /// Loan installment scheduled this period but DEFERRED by the "no negative
+  /// pay" floor (carried forward in the loan balance). 0 when nothing was
+  /// deferred. Lets the payslip show that amortisation was paused this period.
+  loanDeferredCents        BigInt @default(0)
   /// DEDUCTION-kind payroll adjustments applied this run (subtracted from net).
   adjustmentDeductionsCents BigInt @default(0)
 

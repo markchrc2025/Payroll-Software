@@ -121,7 +121,7 @@ export interface PayslipDetailData {
   nonTaxable: { nontaxableCompensation: string; nontaxable13MonthAndBenefits: string };
   statutory: { sssEe: string; philhealthEe: string; pagibigEe: string };
   tax: { grossTaxableIncome: string; withholdingTax: string };
-  loans: { loanDeductions: string };
+  loans: { loanDeductions: string; loanDeferred: string };
   net: { netPay: string };
   ytd: {
     grossCents: string;
