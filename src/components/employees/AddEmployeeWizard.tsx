@@ -11,6 +11,7 @@ import Link from "next/link";
 import { uploadImage, ACCEPT_ATTR } from "@/lib/upload-image";
 import {
   createEmployeeSchema,
+  updateEmployeeSchema,
   type CreateEmployeeInput,
 } from "@/lib/validations/employee";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,12 @@ type Props = {
   levels: LevelRef[];
   workflows: WorkflowRef[];
   employees: EmpRef[];
+  /** "edit" reuses this wizard to update an existing employee. */
+  mode?: "create" | "edit";
+  /** Required when mode === "edit". */
+  employeeId?: string;
+  /** Prefill values when editing (shaped like CreateEmployeeInput). */
+  initialData?: Partial<CreateEmployeeInput>;
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -476,7 +483,8 @@ function SuccessState({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees, mode = "create", employeeId, initialData }: Props) {
+  const isEdit = mode === "edit";
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
@@ -484,9 +492,13 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const [savedInfo, setSavedInfo] = useState({ first:"", last:"", pos:"", dept:"", hireDate:"" });
 
   const form = useForm<CreateEmployeeInput>({
+    // Edit uses updateEmployeeSchema (partial; salary is omitted because it
+    // changes only via Movements). Create uses the full required schema.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(createEmployeeSchema as any),
-    defaultValues: DEFAULTS as CreateEmployeeInput,
+    resolver: zodResolver((isEdit ? updateEmployeeSchema : createEmployeeSchema) as any),
+    defaultValues: (isEdit
+      ? { ...DEFAULTS, ...initialData }
+      : DEFAULTS) as CreateEmployeeInput,
   });
 
   const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset, setValue } = form;
@@ -528,7 +540,11 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   }
 
   async function handleContinue() {
-    const fields = STEP_TRIGGER_FIELDS[step];
+    // In edit mode basicSalary isn't collected (salary is changed via
+    // Movements), so don't gate the Salary step on it.
+    const fields = STEP_TRIGGER_FIELDS[step].filter(
+      (f) => !(isEdit && f === "basicSalary"),
+    );
     if (fields.length > 0) {
       const ok = await trigger(fields);
       if (!ok) return;
@@ -563,11 +579,14 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   }
 
   async function onSubmit(data: CreateEmployeeInput) {
-    const res = await fetch("/api/employees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+    const res = await fetch(
+      isEdit ? `/api/employees/${employeeId}` : "/api/employees",
+      {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      },
+    );
     const json = await res.json().catch(() => null);
     if (!res.ok) {
       const detail = json?.details?.fieldErrors
@@ -576,6 +595,12 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             .join("\n")
         : json?.error ?? "Request failed";
       toast.error(detail);
+      return;
+    }
+    if (isEdit) {
+      toast.success("Employee updated");
+      router.push(`/employees/${employeeId}`);
+      router.refresh();
       return;
     }
     setSavedInfo({
@@ -877,11 +902,19 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         return (
           <FGrid>
             <FSec label="Salary" />
-            <TF control={c} name="salaryEffectiveDate"  label="Effective Date"    type="date" span2 errors={e} />
-            <MF control={c} name="basicSalary"          label="Basic Salary"                  req        errors={e} />
-            <SF control={c} name="salaryType"           label="Salary Type"       options={SAL_TYPE_OPT} placeholder="Monthly"    errors={e} />
+            {isEdit ? (
+              // Salary is effective-dated on EmploymentTerm and changes only via
+              // Movements (so the payroll engine never desyncs) — read-only here.
+              <FNote lines={["Basic salary and salary type are managed through Movements to keep payroll in sync — they can't be edited on this screen."]} />
+            ) : (
+              <>
+                <TF control={c} name="salaryEffectiveDate"  label="Effective Date"    type="date" span2 errors={e} />
+                <MF control={c} name="basicSalary"          label="Basic Salary"                  req        errors={e} />
+                <SF control={c} name="salaryType"           label="Salary Type"       options={SAL_TYPE_OPT} placeholder="Monthly"    errors={e} />
+                <FNote lines={["For hourly rate, you may use Earning."]} />
+              </>
+            )}
             <SF control={c} name="currency"             label="Currency"          options={CURRENCIES}   placeholder="PHP"        errors={e} />
-            <FNote lines={["For hourly rate, you may use Earning."]} />
             <FSec label="Payment" />
             <SF control={c} name="bankName"             label="Bank"              options={BANKS}       placeholder="Select…"       errors={e} />
             <TF control={c} name="bankAccountNumber"    label="Bank Account"                            placeholder="0000 0000 0000" errors={e} />
@@ -1060,7 +1093,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               )}
               <Button type="submit" size="sm" disabled={isSubmitting}
                 style={{ background: "#E8693A", color: "#fff" }}>
-                {isSubmitting ? "Saving…" : "Save employee"}
+                {isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Save employee"}
               </Button>
             </div>
           </div>
