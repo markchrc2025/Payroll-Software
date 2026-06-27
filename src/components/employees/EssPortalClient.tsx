@@ -223,18 +223,23 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                     <TableCell>
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {!granted ? (
-                          <>
-                            <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                              onClick={() => act(r.id, { action: "activate" })}>
-                              {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
-                            </Button>
-                            {r.workEmail && (
+                          r.workEmail ? (
+                            <>
+                              <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                onClick={() => act(r.id, { action: "activate" })}>
+                                {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
+                              </Button>
                               <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
                                 onClick={() => invite(r.id)}>
                                 Invite by email
                               </Button>
-                            )}
-                          </>
+                            </>
+                          ) : (
+                            // Safeguard: ESS access requires a work email on file.
+                            <span className="text-[11px] text-muted-foreground" title="Add a work email to this employee (Edit → Contact) before enabling ESS access.">
+                              Needs a work email
+                            </span>
+                          )
                         ) : (
                           <>
                             {r.essAccessStatus === "INVITED" && r.workEmail && (
