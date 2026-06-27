@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
 
   // Create employee + initial salary + statutory IDs, plus all tenant-scoped
   // pre-checks, in a single tenant-scoped transaction.
+  try {
   const result = await withTenant(auth.tenantId, async (tx) => {
     if (departmentId) {
       const dept = await tx.department.findFirst({
@@ -357,6 +358,25 @@ export async function POST(req: NextRequest) {
     "Employee created successfully",
     201,
   );
+  } catch (e) {
+    // Previously any thrown error here became an opaque 500 with no body, so the
+    // UI could only show a generic "Request failed". Log the full error for the
+    // server logs and return the real reason so it's diagnosable from the UI.
+    console.error("[POST /api/employees] create failed:", e);
+    const raw = e instanceof Error ? e.message : String(e);
+    // Map the most common operational causes to actionable messages.
+    let message = raw;
+    if (raw.includes("ENCRYPTION_KEY")) {
+      message =
+        "Server encryption key is not configured (ENCRYPTION_KEY). " +
+        "Set a 32-byte base64 ENCRYPTION_KEY in the environment, then retry.";
+    } else if (raw.toLowerCase().includes("row-level security")) {
+      message =
+        "Database row-level security blocked the insert. " +
+        "This usually means the tenant context wasn't applied for this request.";
+    }
+    return err(`Could not create employee: ${message}`, 500);
+  }
 }
 
 /** Convert empty / undefined strings to null for DB storage. */
