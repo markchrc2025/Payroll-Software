@@ -84,6 +84,15 @@ const pagibigRegex = /^[0-9-]{12,15}$/;
 const optionalString = (max = 100) =>
   z.string().max(max).optional().nullable().or(z.literal(""));
 
+// HTML <input type="date"> emits "" when empty/cleared. A plain
+// `z.coerce.date().optional().nullable()` would coerce "" → Invalid Date and
+// FAIL validation (silently killing a whole-form submit). Treat "" (and null)
+// as "no date" before coercion so an untouched/cleared optional date is valid.
+const optionalDate = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? null : v),
+  z.coerce.date().nullable(),
+);
+
 // ---------------------------------------------------------------------------
 // Statutory IDs sub-schema (one-to-one with Employee)
 // ---------------------------------------------------------------------------
@@ -129,7 +138,7 @@ export const createEmployeeSchema = z.object({
   lastName: z.string().min(1, "Last name is required").max(100),
   suffix: z.string().max(20).optional().nullable(),
   preferredName: z.string().max(100).optional().nullable(),
-  birthDate: z.coerce.date().optional().nullable(),
+  birthDate: optionalDate,
   gender: z.nativeEnum(Gender).optional().nullable(),
   civilStatus: z.nativeEnum(CivilStatus).optional().nullable(),
   nationality: z.string().max(100).optional().nullable(),
@@ -170,10 +179,10 @@ export const createEmployeeSchema = z.object({
   employmentStatus: z.nativeEnum(EmploymentStatus).default("PROBATIONARY"),
   employmentType: z.nativeEnum(EmploymentType).default("FULL_TIME"),
   hireDate: z.coerce.date({ error: "Hire date is required" }),
-  regularizationDate: z.coerce.date().optional().nullable(),
-  resignationDate: z.coerce.date().optional().nullable(),
-  lastWorkingDate: z.coerce.date().optional().nullable(),
-  endOfContractDate: z.coerce.date().optional().nullable(),
+  regularizationDate: optionalDate,
+  resignationDate: optionalDate,
+  lastWorkingDate: optionalDate,
+  endOfContractDate: optionalDate,
 
   // Payroll settings
   payFrequency: z.nativeEnum(PayFrequency).default("SEMI_MONTHLY"),
@@ -219,17 +228,17 @@ export const createEmployeeSchema = z.object({
   attendanceExempt: z.coerce.boolean().optional().default(false),
 
   // Extended employment
-  placementEffectiveDate: z.coerce.date().optional().nullable(),
+  placementEffectiveDate: optionalDate,
   jobTypeId: z.string().cuid().optional().nullable(),
   jobStatusId: z.string().cuid().optional().nullable(),
   workflowId: z.string().cuid().optional().nullable(),
   shiftScheduleId: z.string().cuid().optional().nullable(),
-  termEffectiveDate: z.coerce.date().optional().nullable(),
-  contractStartDate: z.coerce.date().optional().nullable(),
-  contractEndDate: z.coerce.date().optional().nullable(),
+  termEffectiveDate: optionalDate,
+  contractStartDate: optionalDate,
+  contractEndDate: optionalDate,
 
   // Salary metadata
-  salaryEffectiveDate: z.coerce.date().optional().nullable(),
+  salaryEffectiveDate: optionalDate,
   currency: z.string().max(10).optional().default("PHP"),
   payMethod: z.string().max(50).optional().nullable(),
 
@@ -257,7 +266,7 @@ export const createEmployeeSchema = z.object({
   spouseFirstName: z.string().max(100).optional().nullable(),
   spouseMiddleName: z.string().max(100).optional().nullable(),
   spouseLastName: z.string().max(100).optional().nullable(),
-  spouseBirthDate: z.coerce.date().optional().nullable(),
+  spouseBirthDate: optionalDate,
   spouseNationality: z.string().max(100).optional().nullable(),
   spouseNationalId: z.string().max(50).optional().nullable(),
   spousePassport: z.string().max(50).optional().nullable(),
