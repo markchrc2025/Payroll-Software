@@ -18,9 +18,9 @@ import { z } from "zod";
 
 const schema = z
   .object({
-    employeeId: z.string().cuid(),
-    targetEmployeeId: z.string().cuid().nullable().optional(),
-    targetPositionId: z.string().cuid().nullable().optional(),
+    employeeId: z.string(),
+    targetEmployeeId: z.string().nullable().optional(),
+    targetPositionId: z.string().nullable().optional(),
   })
   .refine((v) => !(v.targetEmployeeId && v.targetPositionId), {
     message: "Provide either a target employee or a target position, not both",

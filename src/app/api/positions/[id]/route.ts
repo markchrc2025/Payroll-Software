@@ -16,7 +16,7 @@ const patchSchema = z.object({
   title:        z.string().min(1).max(150).optional(),
   levelId:      z.string().min(1).optional().nullable(),
   description:  z.string().max(500).nullable().optional(),
-  departmentId: z.string().cuid().optional().nullable(),
+  departmentId: z.string().optional().nullable(),
 });
 
 export async function GET(

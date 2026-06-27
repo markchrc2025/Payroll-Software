@@ -14,7 +14,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   rank: z.coerce.number().int().min(0).max(9999).optional(),
   description: z.string().max(500).nullable().optional(),
-  defaultWorkflowId: z.string().cuid().nullable().optional(),
+  defaultWorkflowId: z.string().nullable().optional(),
 });
 
 export async function GET(

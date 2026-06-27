@@ -114,7 +114,7 @@ export const listShiftSchedulesSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createShiftAssignmentSchema = z.object({
-  shiftScheduleId: z.string().cuid(),
+  shiftScheduleId: z.string(),
   effectiveFrom: z.string().date(),
   effectiveTo: z.string().date().optional().nullable(),
 });
@@ -124,9 +124,9 @@ export const createShiftAssignmentSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createDtrRecordSchema = z.object({
-  employeeId: z.string().cuid(),
+  employeeId: z.string(),
   date: z.string().date(),
-  shiftScheduleId: z.string().cuid().optional().nullable(),
+  shiftScheduleId: z.string().optional().nullable(),
   dayStatus: z
     .enum(["PRESENT", "ABSENT", "PAID_LEAVE", "UNPAID_LEAVE", "HOLIDAY", "REST_DAY"])
     .default("PRESENT"),
@@ -148,7 +148,7 @@ export const updateDtrRecordSchema = createDtrRecordSchema
   .partial();
 
 export const listDtrRecordsSchema = z.object({
-  employeeId: z.string().cuid().optional(),
+  employeeId: z.string().optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
   approvalStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
@@ -188,13 +188,13 @@ export const DTR_SUBMISSION_STATUSES = [
 ] as const;
 
 export const createDtrSubmissionSchema = z.object({
-  employeeId: z.string().cuid(),
+  employeeId: z.string(),
   periodStart: z.string().date(),
   periodEnd: z.string().date(),
 });
 
 export const listDtrSubmissionsSchema = z.object({
-  employeeId: z.string().cuid().optional(),
+  employeeId: z.string().optional(),
   status: z.enum(DTR_SUBMISSION_STATUSES).optional(),
   periodStart: z.string().date().optional(),
   periodEnd: z.string().date().optional(),
@@ -218,5 +218,5 @@ export const manualTimeOverrideSchema = z.object({
   reasonCode: z.enum(DTR_MANUAL_REASON_CODES),
   notes: z.string().max(1000).optional().nullable(),
   /** Link the audit entry to the open submission, if known. */
-  dtrSubmissionId: z.string().cuid().optional().nullable(),
+  dtrSubmissionId: z.string().optional().nullable(),
 });

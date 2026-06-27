@@ -20,7 +20,7 @@ import { requirePermission } from "@/lib/require-permission";
 import { err, paginated } from "@/lib/api-response";
 
 const listSchema = z.object({
-  employeeId:      z.string().cuid().optional(),
+  employeeId:      z.string().optional(),
   dateFrom:        z.string().date().optional(),
   dateTo:          z.string().date().optional(),
   outsideGeofence: z.string().optional().transform((v) => v === "true" ? true : undefined),

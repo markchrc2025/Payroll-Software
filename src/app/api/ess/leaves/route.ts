@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
 // POST
 // ---------------------------------------------------------------------------
 const FiledLeaveSchema = z.object({
-  leaveTypeId: z.string().cuid(),
+  leaveTypeId: z.string(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   /** Number of days (or hours if unit=HOURS). */

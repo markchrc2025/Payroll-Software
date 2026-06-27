@@ -13,7 +13,7 @@ const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   rank: z.coerce.number().int().min(0).max(9999).optional(),
   description: z.string().max(500).optional().nullable(),
-  defaultWorkflowId: z.string().cuid().nullable().optional(),
+  defaultWorkflowId: z.string().nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {

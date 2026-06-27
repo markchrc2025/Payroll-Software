@@ -10,13 +10,13 @@ import { ok, err, paginated } from "@/lib/api-response";
 
 const createSchema = z.object({
   name:          z.string().min(1).max(150),
-  branchId:      z.string().cuid().optional().nullable(),
+  branchId:      z.string().optional().nullable(),
   requiresSelfie: z.boolean().default(true),
   isActive:      z.boolean().default(true),
 });
 
 const listSchema = z.object({
-  branchId: z.string().cuid().optional(),
+  branchId: z.string().optional(),
   isActive: z
     .string()
     .optional()

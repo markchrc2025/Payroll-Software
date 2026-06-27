@@ -12,7 +12,7 @@ import { z } from "zod";
 const createDeptSchema = z.object({
   name: z.string().min(1, "Name is required").max(150),
   description: z.string().max(500).optional().nullable(),
-  headId: z.string().cuid().optional().nullable(),
+  headId: z.string().optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
