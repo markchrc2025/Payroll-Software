@@ -58,7 +58,7 @@ export type ListPayrollRunsInput = z.infer<typeof listPayrollRunsSchema>;
  * `amountCents` is a coerced bigint string (e.g. "5000"); must be > 0.
  */
 export const createAdjustmentSchema = z.object({
-  employeeId: z.string().cuid(),
+  employeeId: z.string(),
   kind: z.nativeEnum(AdjustmentKind),
   /** Amount in centavos, always positive — kind determines sign direction. */
   amountCents: z.coerce.bigint().refine((v) => v > 0n, {

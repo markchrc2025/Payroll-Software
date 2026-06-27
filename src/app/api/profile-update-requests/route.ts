@@ -13,7 +13,7 @@ import { err, paginated } from "@/lib/api-response";
 
 const listSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
-  employeeId: z.string().cuid().optional(),
+  employeeId: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });

@@ -11,7 +11,7 @@ import { ok, err, notFound } from "@/lib/api-response";
 
 const patchSchema = z.object({
   name:           z.string().min(1).max(150).optional(),
-  branchId:       z.string().cuid().nullable().optional(),
+  branchId:       z.string().nullable().optional(),
   requiresSelfie: z.boolean().optional(),
   isActive:       z.boolean().optional(),
 });

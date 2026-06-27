@@ -93,6 +93,16 @@ const optionalDate = z.preprocess(
   z.coerce.date().nullable(),
 );
 
+// Optional foreign-key id. We do NOT format-check these as cuid: the records
+// are real DB rows whose ids may be cuid v1 / cuid2 / etc., and referential
+// integrity is enforced by the database, not by a client-side regex. A strict
+// `.cuid()` here rejected legitimate Job Type / Job Status / department ids and
+// silently blocked the form. "" / null / undefined all mean "not set".
+const optionalId = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? null : v),
+  z.string().min(1).nullable(),
+);
+
 // ---------------------------------------------------------------------------
 // Statutory IDs sub-schema (one-to-one with Employee)
 // ---------------------------------------------------------------------------
@@ -169,13 +179,13 @@ export const createEmployeeSchema = z.object({
   region: z.string().max(100).optional().nullable(),
 
   // Employment
-  departmentId: z.string().cuid().optional().nullable(),
+  departmentId: optionalId,
   branchId: z.string().min(1, "Branch is required"),
-  positionId: z.string().cuid().optional().nullable(),
-  immediateSupervisorId: z.string().cuid().optional().nullable(),
-  managerId: z.string().cuid().optional().nullable(),
+  positionId: optionalId,
+  immediateSupervisorId: optionalId,
+  managerId: optionalId,
   jobTitle: z.string().max(150).optional().nullable(),
-  levelId: z.string().cuid().optional().nullable(),
+  levelId: optionalId,
   employmentStatus: z.nativeEnum(EmploymentStatus).default("PROBATIONARY"),
   employmentType: z.nativeEnum(EmploymentType).default("FULL_TIME"),
   hireDate: z.coerce.date({ error: "Hire date is required" }),
@@ -229,10 +239,10 @@ export const createEmployeeSchema = z.object({
 
   // Extended employment
   placementEffectiveDate: optionalDate,
-  jobTypeId: z.string().cuid().optional().nullable(),
-  jobStatusId: z.string().cuid().optional().nullable(),
-  workflowId: z.string().cuid().optional().nullable(),
-  shiftScheduleId: z.string().cuid().optional().nullable(),
+  jobTypeId: optionalId,
+  jobStatusId: optionalId,
+  workflowId: optionalId,
+  shiftScheduleId: optionalId,
   termEffectiveDate: optionalDate,
   contractStartDate: optionalDate,
   contractEndDate: optionalDate,
@@ -378,8 +388,8 @@ export const listEmployeesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(25),
   search: z.string().optional(),
-  departmentId: z.string().cuid().optional(),
-  branchId: z.string().cuid().optional(),
+  departmentId: z.string().optional(),
+  branchId: z.string().optional(),
   status: z.nativeEnum(EmploymentStatus).optional(),
   employmentType: z.nativeEnum(EmploymentType).optional(),
 });

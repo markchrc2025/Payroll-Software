@@ -70,3 +70,30 @@ describe("createEmployeeSchema — optional date handling", () => {
     expect(createEmployeeSchema.safeParse({ ...base(), branchId: "" }).success).toBe(false);
   });
 });
+
+describe("createEmployeeSchema — foreign-key id handling", () => {
+  it("accepts non-cuid-v1 ids (cuid2 / arbitrary db ids) for FK fields", () => {
+    // Real Prisma rows may use cuid2-style ids that a strict .cuid() rejected.
+    const r = createEmployeeSchema.safeParse({
+      ...base(),
+      jobTypeId: "tz4a98xxat96iws9zmbrgj3a",
+      jobStatusId: "clx0probation0status0001",
+      departmentId: "dept-engineering",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("treats empty-string FK ids as not set (null)", () => {
+    const r = createEmployeeSchema.safeParse({
+      ...base(),
+      jobTypeId: "",
+      jobStatusId: "",
+      positionId: "",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.jobTypeId).toBeNull();
+      expect(r.data.jobStatusId).toBeNull();
+    }
+  });
+});

@@ -25,7 +25,7 @@ const querySchema = z.object({
     .int()
     .min(2000, "year must be ≥ 2000")
     .max(2099, "year must be ≤ 2099"),
-  employeeId: z.string().cuid().optional(),
+  employeeId: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {

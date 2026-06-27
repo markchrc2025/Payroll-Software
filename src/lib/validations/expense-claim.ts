@@ -16,7 +16,7 @@ const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const createExpenseClaimSchema = z.object({
-  employeeId: z.string().cuid(),
+  employeeId: z.string(),
   category: z.enum(EXPENSE_CATEGORIES),
   description: z.string().min(1).max(1000),
   /// Amount in peso string: "1500.00"
@@ -51,11 +51,11 @@ export const rejectExpenseClaimSchema = z.object({
 });
 
 export const attachExpenseClaimSchema = z.object({
-  payrollBookId: z.string().cuid(),
+  payrollBookId: z.string(),
 });
 
 export const listExpenseClaimsSchema = z.object({
-  employeeId: z.string().cuid().optional(),
+  employeeId: z.string().optional(),
   status: z
     .enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "ATTACHED", "PAID"])
     .optional(),
