@@ -44,11 +44,16 @@ export async function POST(
   const result = await withTenant(ctx.tenantId, async (tx) => {
     const emp = await tx.employee.findFirst({
       where: { id, tenantId: ctx.tenantId, deletedAt: null },
-      select: { id: true, essAccessStatus: true, essActivatedAt: true },
+      select: { id: true, essAccessStatus: true, essActivatedAt: true, workEmail: true },
     });
     if (!emp) return { kind: "not_found" as const };
 
     if (input.action === "activate") {
+      // Safeguard: an ESS account must be tied to a work email (used for
+      // invites, password reset, and notifications). No email → no activation.
+      if (!emp.workEmail) {
+        return { kind: "needs_email" as const };
+      }
       await tx.employee.update({
         where: { id },
         data: {
@@ -124,6 +129,9 @@ export async function POST(
   });
 
   if (result.kind === "not_found") return notFound("Employee");
+  if (result.kind === "needs_email") {
+    return err("Add a work email to this employee before enabling ESS access.", 422);
+  }
 
   void writeAuditLog({
     tenantId: ctx.tenantId,
