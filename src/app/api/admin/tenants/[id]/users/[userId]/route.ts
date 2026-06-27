@@ -16,7 +16,7 @@ import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, notFound, serverError } from "@/lib/api-response";
-import { sendPasswordResetEmail, sendWelcomeEmail } from "@/lib/email";
+import { sendTenantAdminResetPassword, sendTenantOnboarding } from "@/lib/emails";
 import { writeCentralAudit } from "@/lib/central/audit";
 import { getClientIp } from "@/lib/audit";
 
@@ -78,13 +78,13 @@ export async function POST(
     switch (action) {
       case "reset_link": {
         const resetUrl = await issueResetToken(user.id, 60 * 60 * 1000); // 1h
-        await sendPasswordResetEmail({ to: user.email, name: user.firstName, resetUrl });
+        await sendTenantAdminResetPassword(user.email, { firstName: user.firstName, resetUrl });
         await audit("sent a password-reset link");
         return ok(null, `Reset link sent to ${user.email}`);
       }
       case "invite": {
         const resetUrl = await issueResetToken(user.id, 7 * 24 * 60 * 60 * 1000); // 7d
-        await sendWelcomeEmail({ to: user.email, name: user.firstName, loginUrl: resetUrl });
+        await sendTenantOnboarding(user.email, { firstName: user.firstName, companyName: tenant.name, activationUrl: resetUrl });
         await audit("re-sent the account invite");
         return ok(null, `Invite re-sent to ${user.email}`);
       }

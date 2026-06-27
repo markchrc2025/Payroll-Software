@@ -11,6 +11,8 @@ import { z } from "zod";
 import { err, ok, serverError, unauthorized } from "@/lib/api-response";
 import { getEssContext, hashEssPassword } from "@/lib/ess-auth";
 import { withTenant } from "@/lib/with-tenant";
+import { sendEmployeeResetPasswordNotice } from "@/lib/emails";
+import { securityContext } from "@/lib/security-context";
 
 const Schema = z.object({ newPassword: z.string().min(8).max(72) });
 
@@ -31,12 +33,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const hash = await hashEssPassword(parsed.data.newPassword);
-    await withTenant(ctx.tenantId, (tx) =>
+    const emp = await withTenant(ctx.tenantId, (tx) =>
       tx.employee.update({
         where: { id: ctx.employeeId },
         data: { essPasswordHash: hash },
+        select: { workEmail: true },
       }),
     );
+
+    // Security notice (best-effort — never fail the change on a delivery error).
+    if (emp.workEmail) {
+      try {
+        const { device, changedAt } = securityContext(req);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        await sendEmployeeResetPasswordNotice(emp.workEmail, {
+          accountEmail: emp.workEmail,
+          changedAt,
+          device,
+          secureUrl: `${appUrl}/ess/login`,
+        });
+      } catch (mailErr) {
+        console.error("[ess/password] notice email failed:", mailErr);
+      }
+    }
+
     return ok({ updated: true }, "Password updated");
   } catch (e) {
     console.error("[ess/password]", e);

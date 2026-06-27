@@ -1,6 +1,7 @@
 import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
-import { sendPasswordChangedEmail } from "@/lib/email";
+import { sendAdminResetPasswordNotice } from "@/lib/emails";
+import { securityContext } from "@/lib/security-context";
 import bcrypt from "bcryptjs";
 import { createHash } from "crypto";
 import { z } from "zod";
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
 
   const user = await prismaAdmin.user.findFirst({
     where: { id: record.userId, tenantId: null, deletedAt: null },
-    select: { id: true, email: true, firstName: true },
+    select: { id: true, email: true, firstName: true, systemRole: true, centralRole: { select: { name: true } } },
   });
   if (!user) return err("This link is invalid or has expired", 400);
 
@@ -51,7 +52,15 @@ export async function POST(req: Request) {
   // failure must not fail the request (the user would retry with a now-used
   // token) — log it instead.
   try {
-    await sendPasswordChangedEmail({ to: user.email, name: user.firstName });
+    const { device, changedAt } = securityContext(req);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sentire-payroll.onrender.com";
+    await sendAdminResetPasswordNotice(user.email, {
+      accountEmail: user.email,
+      role: user.centralRole?.name ?? user.systemRole ?? "Central Admin",
+      changedAt,
+      device,
+      secureUrl: `${appUrl}/centralportal`,
+    });
   } catch (e) {
     console.error("[central-set-password] password-changed email failed:", e);
   }
