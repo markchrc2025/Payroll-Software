@@ -529,6 +529,27 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
     setStep((s) => s + 1);
   }
 
+  // Surfaces validation failures instead of letting handleSubmit silently no-op
+  // (RHF won't call onSubmit if any field on ANY step is invalid). Jumps to the
+  // earliest step that owns an invalid field and names what needs fixing.
+  function onInvalid(formErrors: FieldErrors<CreateEmployeeInput>) {
+    const names = Object.keys(formErrors);
+    const stepIdx = STEP_TRIGGER_FIELDS.findIndex((fs) =>
+      fs.some((f) => names.includes(f as string)),
+    );
+    if (stepIdx >= 0) setStep(stepIdx);
+    const labels = names
+      .slice(0, 6)
+      .map((k) => {
+        const msg = getErr(formErrors, k);
+        return msg ? `${k}: ${msg}` : k;
+      });
+    toast.error(
+      `Can't save yet — please review: ${labels.join("; ")}` +
+        (names.length > 6 ? ` (+${names.length - 6} more)` : ""),
+    );
+  }
+
   async function onSubmit(data: CreateEmployeeInput) {
     const res = await fetch("/api/employees", {
       method: "POST",
@@ -980,7 +1001,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const isLast = step === STEPS.length - 1;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
       <div className="grid grid-cols-1 xl:grid-cols-[232px_1fr] gap-7 max-w-[968px]">
 
         {/* Left: vertical stepper */}
