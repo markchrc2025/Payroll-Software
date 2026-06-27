@@ -15,6 +15,15 @@ export async function register() {
   // Skip during next build / static generation
   if (process.env.NODE_ENV === "test") return;
 
+  // Preflight: surface missing/invalid critical env vars (e.g. ENCRYPTION_KEY)
+  // at boot in the logs, instead of as a mystery 500 on first use.
+  try {
+    const { logEnvCheck } = await import("./lib/env-check");
+    logEnvCheck();
+  } catch {
+    // never block startup on the check itself
+  }
+
   try {
     const { registerWorkers } = await import("./lib/jobs/workers");
     await registerWorkers();
