@@ -30,7 +30,11 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Public ESS pages (no session required).
-  const isPublic = pathname === "/ess/login" || pathname === "/ess/activate";
+  const isPublic =
+    pathname === "/ess/login" ||
+    pathname === "/ess/activate" ||
+    pathname === "/ess/forgot-password" ||
+    pathname === "/ess/reset-password";
 
   useEffect(() => {
     if (isPublic) return;
