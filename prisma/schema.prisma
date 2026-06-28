@@ -672,6 +672,7 @@ model Tenant {
   essSessions           EssSession[]
   essWebAuthnCredentials EssWebAuthnCredential[]
   essInvites            EssInvite[]
+  essPasswordResets     EssPasswordReset[]
   otApplications        OTApplication[]
   undertimeRequests     UndertimeRequest[]
   profileUpdateRequests ProfileUpdateRequest[]
@@ -1293,6 +1294,7 @@ model Employee {
   essSessions             EssSession[]
   essWebAuthnCredentials  EssWebAuthnCredential[]
   essInvites              EssInvite[]
+  essPasswordResets       EssPasswordReset[]
   otApplications          OTApplication[]
   undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
@@ -3093,6 +3095,24 @@ enum EssAccessStatus {
 /// One-time email invitation to activate ESS access (set a password). The raw
 /// token is emailed; only its SHA-256 hash is stored. Expires; single-use.
 model EssInvite {
+  id         String    @id @default(cuid())
+  tenantId   String
+  employeeId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([employeeId])
+}
+
+/// One-time ESS password-reset token (forgot-password flow). Raw token emailed;
+/// only its SHA-256 hash stored. Expires; single-use.
+model EssPasswordReset {
   id         String    @id @default(cuid())
   tenantId   String
   employeeId String

@@ -403,6 +403,9 @@ function EssLoginContent() {
         </button>
         {errMsg && <p className="d-login-err">{errMsg}</p>}
         <div className="d-login-links">
+          <button type="button" onClick={() => router.push("/ess/forgot-password")}>
+            Forgot password?
+          </button>
           <button type="button" onClick={() => { setMethod("pin"); setStatus("idle"); }}>
             Use PIN
           </button>
