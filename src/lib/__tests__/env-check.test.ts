@@ -64,10 +64,11 @@ describe("checkEnvWarnings", () => {
     expect(checkEnvWarnings()).toEqual([]);
   });
 
-  it("warns (non-blocking) when no email-asset base is configured", () => {
+  it("warns (non-blocking) when no email-asset base is resolvable", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     delete process.env.EMAIL_ASSET_BASE_URL;
     delete process.env.R2_PUBLIC_URL;
+    delete process.env.NEXT_PUBLIC_APP_URL;
     const warnings = checkEnvWarnings();
     expect(warnings.some((w) => w.name === "EMAIL_ASSET_BASE_URL")).toBe(true);
     expect(checkCriticalEnv().some((p) => p.name === "EMAIL_ASSET_BASE_URL")).toBe(false);
@@ -76,7 +77,16 @@ describe("checkEnvWarnings", () => {
   it("no asset warning when R2_PUBLIC_URL is set", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     delete process.env.EMAIL_ASSET_BASE_URL;
+    delete process.env.NEXT_PUBLIC_APP_URL;
     process.env.R2_PUBLIC_URL = "https://r2.example.com";
+    expect(checkEnvWarnings().some((w) => w.name === "EMAIL_ASSET_BASE_URL")).toBe(false);
+  });
+
+  it("no asset warning when NEXT_PUBLIC_APP_URL is set (assets served from the app)", () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    delete process.env.EMAIL_ASSET_BASE_URL;
+    delete process.env.R2_PUBLIC_URL;
+    process.env.NEXT_PUBLIC_APP_URL = "https://payroll.example.com";
     expect(checkEnvWarnings().some((w) => w.name === "EMAIL_ASSET_BASE_URL")).toBe(false);
   });
 });

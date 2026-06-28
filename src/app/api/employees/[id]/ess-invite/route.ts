@@ -37,7 +37,7 @@ export async function POST(
     if (!emp) return null;
     const tenant = await tx.tenant.findUnique({
       where: { id: ctx.tenantId },
-      select: { name: true, companyCode: true },
+      select: { name: true, companyCode: true, contactEmail: true },
     });
     return { emp, tenant };
   });
@@ -87,6 +87,8 @@ export async function POST(
       firstName: emp.firstName,
       companyName: tenant.name,
       activationUrl: `${APP_URL}/ess/activate?token=${rawToken}`,
+      // Employees contact their own company/HR for sign-in trouble, not Sentire.
+      supportEmail: tenant.contactEmail ?? undefined,
     });
   } catch (e) {
     console.error("[ess-invite] email failed:", e);

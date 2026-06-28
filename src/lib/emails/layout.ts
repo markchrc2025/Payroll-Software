@@ -14,6 +14,7 @@
 import { COLOR, FONT } from "./tokens";
 import { LOGO_MARK } from "./assets";
 import { SURFACES, type Surface } from "./surfaces";
+import { escapeHtml, escapeAttr } from "./util";
 
 // zwnj+nbsp padding that stops clients pulling body copy into the inbox preview.
 const PREHEADER_PAD = "&zwnj;&nbsp;".repeat(6);
@@ -96,8 +97,12 @@ ${s.body}
 </html>`;
 }
 
-/** Convenience: a footer "support" line with the surface's mailto link. */
-export function supportLine(prefix: string, surface: Surface): string {
-  const { support } = SURFACES[surface];
-  return `${prefix} <a href="mailto:${support}" style="color:${COLOR.accPress};font-weight:600;">${support}</a>`;
+/**
+ * Convenience: a footer "support" line with a mailto link. Defaults to the
+ * surface's support address; pass `overrideEmail` to use a per-tenant contact
+ * instead (e.g. the company's HR email on employee-facing ESS emails).
+ */
+export function supportLine(prefix: string, surface: Surface, overrideEmail?: string): string {
+  const email = overrideEmail?.trim() || SURFACES[surface].support;
+  return `${prefix} <a href="mailto:${escapeAttr(email)}" style="color:${COLOR.accPress};font-weight:600;">${escapeHtml(email)}</a>`;
 }

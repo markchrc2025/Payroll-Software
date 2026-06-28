@@ -22,7 +22,8 @@ export async function sendEmployeeOnboarding(
   v: Parameters<typeof t.renderEmployeeOnboarding>[0],
 ): Promise<void> {
   const { subject, html } = t.renderEmployeeOnboarding(v);
-  await dispatch({ to, subject, html, replyTo: support.selfService });
+  // Replies go to the company/HR contact when provided, else Sentire support.
+  await dispatch({ to, subject, html, replyTo: v.supportEmail?.trim() || support.selfService });
 }
 
 // 2
