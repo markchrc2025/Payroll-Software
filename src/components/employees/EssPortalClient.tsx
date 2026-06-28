@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Mail, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -95,6 +95,8 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
   const [scheduleTarget, setScheduleTarget] = useState<EssRow | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
   const [scheduleReason, setScheduleReason] = useState("");
+  const [emailTarget, setEmailTarget] = useState<EssRow | null>(null);
+  const [emailValue, setEmailValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const reload = useCallback(async () => {
@@ -142,6 +144,24 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
     }
   }
 
+  function openEmailDialog(r: EssRow) {
+    setEmailTarget(r);
+    setEmailValue(r.workEmail ?? "");
+  }
+
+  async function confirmEmail() {
+    if (!emailTarget) return;
+    const email = emailValue.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid email address.");
+      return;
+    }
+    setSubmitting(true);
+    const okDone = await act(emailTarget.id, { action: "set_work_email", workEmail: email });
+    setSubmitting(false);
+    if (okDone) { setEmailTarget(null); setEmailValue(""); }
+  }
+
   async function confirmDisable() {
     if (!disableTarget) return;
     if (!disableReason.trim()) { toast.error("A reason is required."); return; }
@@ -162,9 +182,25 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
   }
 
   const activeCount = rows.filter((r) => r.essAccessStatus === "ACTIVE" || r.essAccessStatus === "INVITED").length;
+  const stats = {
+    active: rows.filter((r) => r.essAccessStatus === "ACTIVE").length,
+    invited: rows.filter((r) => r.essAccessStatus === "INVITED").length,
+    notInvited: rows.filter((r) => r.essAccessStatus === "NOT_INVITED").length,
+    disabled: rows.filter((r) => r.essAccessStatus === "DISABLED").length,
+    noEmail: rows.filter((r) => !r.workEmail).length,
+  };
 
   return (
     <div className="space-y-5">
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Active" value={stats.active} tone="text-emerald-600" />
+        <StatCard label="Invited" value={stats.invited} tone="text-blue-600" />
+        <StatCard label="Not invited" value={stats.notInvited} tone="text-foreground" />
+        <StatCard label="Disabled" value={stats.disabled} tone="text-destructive" />
+        <StatCard label="No work email" value={stats.noEmail} tone="text-amber-600" />
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <Input
@@ -217,7 +253,24 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                       <div className="font-medium text-sm">{r.lastName}, {r.firstName}</div>
                       <div className="text-xs text-muted-foreground">{r.employeeNumber}</div>
                     </TableCell>
-                    <TableCell className="text-sm">{r.workEmail || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="text-sm">
+                      {r.workEmail ? (
+                        <button
+                          type="button"
+                          onClick={() => openEmailDialog(r)}
+                          title="Edit work email"
+                          className="group inline-flex items-center gap-1.5 text-left hover:text-primary"
+                        >
+                          <span>{r.workEmail}</span>
+                          <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
+                        </button>
+                      ) : (
+                        <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
+                          onClick={() => openEmailDialog(r)}>
+                          <Mail className="h-3.5 w-3.5" /> Add work email
+                        </Button>
+                      )}
+                    </TableCell>
                     <TableCell><StatusBadge row={r} /></TableCell>
                     <TableCell className="text-sm">{fmt(r.essLastLoginAt)}</TableCell>
                     <TableCell>
@@ -236,9 +289,12 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                             </>
                           ) : (
                             // Safeguard: ESS access requires a work email on file.
-                            <span className="text-[11px] text-muted-foreground" title="Add a work email to this employee (Edit → Contact) before enabling ESS access.">
-                              Needs a work email
-                            </span>
+                            // Offer to add it right here instead of a dead end.
+                            <Button size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
+                              onClick={() => openEmailDialog(r)}
+                              title="A work email is required before ESS access can be enabled.">
+                              <Mail className="h-3.5 w-3.5" /> Add work email
+                            </Button>
                           )
                         ) : (
                           <>
@@ -325,6 +381,46 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Work email dialog */}
+      <Dialog open={!!emailTarget} onOpenChange={(o) => !o && setEmailTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{emailTarget?.workEmail ? "Edit work email" : "Add work email"}</DialogTitle>
+            <DialogDescription>
+              {emailTarget ? `${emailTarget.firstName} ${emailTarget.lastName} (${emailTarget.employeeNumber}). ` : ""}
+              This is saved to the employee&apos;s record and is where ESS invites,
+              password resets and notifications are sent.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Work email</label>
+            <Input
+              type="email"
+              autoComplete="off"
+              placeholder="e.g. juan.delacruz@company.com"
+              value={emailValue}
+              onChange={(e) => setEmailValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !submitting) confirmEmail(); }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailTarget(null)}>Cancel</Button>
+            <Button onClick={confirmEmail} disabled={submitting || !emailValue.trim()}>
+              {submitting ? "Saving…" : "Save email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <div className={`text-2xl font-bold ${tone}`}>{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }
