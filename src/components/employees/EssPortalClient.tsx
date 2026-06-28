@@ -11,11 +11,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { getAvatarColor, getInitials } from "./columns";
 
 type EssRow = {
   id: string;
@@ -220,115 +218,136 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
-        <span className="ml-auto text-sm text-muted-foreground">
-          {activeCount} of {rows.length} have ESS access
-        </span>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Employee</TableHead>
-              <TableHead>Work Email</TableHead>
-              <TableHead>ESS Status</TableHead>
-              <TableHead>Last Login</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">No employees found.</TableCell>
-              </TableRow>
-            ) : (
-              rows.map((r) => {
-                const granted = r.essAccessStatus === "INVITED" || r.essAccessStatus === "ACTIVE";
-                const scheduled = granted && !!r.essDeactivateAt;
-                const busy = busyId === r.id;
-                return (
-                  <TableRow key={r.id}>
-                    <TableCell>
-                      <div className="font-medium text-sm">{r.lastName}, {r.firstName}</div>
-                      <div className="text-xs text-muted-foreground">{r.employeeNumber}</div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {r.workEmail ? (
-                        <button
-                          type="button"
-                          onClick={() => openEmailDialog(r)}
-                          title="Edit work email"
-                          className="group inline-flex items-center gap-1.5 text-left hover:text-primary"
-                        >
-                          <span>{r.workEmail}</span>
-                          <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
-                        </button>
-                      ) : (
-                        <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
-                          onClick={() => openEmailDialog(r)}>
-                          <Mail className="h-3.5 w-3.5" /> Add work email
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell><StatusBadge row={r} /></TableCell>
-                    <TableCell className="text-sm">{fmt(r.essLastLoginAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {!granted ? (
-                          r.workEmail ? (
-                            <>
-                              <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                onClick={() => act(r.id, { action: "activate" })}>
-                                {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
+      {/* Table card — mirrors the Employees table chrome */}
+      <div className="overflow-hidden rounded-[14px] border border-[#E8EBF1] bg-white shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13.5px]">
+            <thead>
+              <tr>
+                {["Employee", "Work Email", "ESS Status", "Last Login"].map((h) => (
+                  <th key={h} className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
+                    {h}
+                  </th>
+                ))}
+                <th className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-16 text-center text-[13.5px] text-[#8E9AAC]">No employees found.</td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const granted = r.essAccessStatus === "INVITED" || r.essAccessStatus === "ACTIVE";
+                  const scheduled = granted && !!r.essDeactivateAt;
+                  const busy = busyId === r.id;
+                  const avatar = getAvatarColor(`${r.firstName}${r.lastName}`);
+                  return (
+                    <tr key={r.id} className="border-b border-[#E8EBF1] transition-colors last:border-b-0 hover:bg-[#F8F9FC]">
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold"
+                            style={{ background: avatar.bg, color: avatar.color }}>
+                            {getInitials(r.firstName, r.lastName)}
+                          </div>
+                          <div>
+                            <div className="text-[13.5px] font-semibold leading-tight text-[#0E1B2E]">{r.firstName} {r.lastName}</div>
+                            <div className="text-[11.5px] text-[#8E9AAC]">{r.employeeNumber}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {r.workEmail ? (
+                          <button
+                            type="button"
+                            onClick={() => openEmailDialog(r)}
+                            title="Edit work email"
+                            className="group inline-flex items-center gap-1.5 text-left text-[13.5px] text-[#4A586B] hover:text-[#E8693A]"
+                          >
+                            <span>{r.workEmail}</span>
+                            <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
+                          </button>
+                        ) : (
+                          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
+                            onClick={() => openEmailDialog(r)}>
+                            <Mail className="h-3.5 w-3.5" /> Add work email
+                          </Button>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3"><StatusBadge row={r} /></td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[13.5px] text-[#4A586B]">{fmt(r.essLastLoginAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {!granted ? (
+                            r.workEmail ? (
+                              <>
+                                <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                  onClick={() => act(r.id, { action: "activate" })}>
+                                  {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                  onClick={() => invite(r.id)}>
+                                  Invite by email
+                                </Button>
+                              </>
+                            ) : (
+                              // Safeguard: ESS access requires a work email on file.
+                              // Offer to add it right here instead of a dead end.
+                              <Button size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
+                                onClick={() => openEmailDialog(r)}
+                                title="A work email is required before ESS access can be enabled.">
+                                <Mail className="h-3.5 w-3.5" /> Add work email
                               </Button>
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                onClick={() => invite(r.id)}>
-                                Invite by email
+                            )
+                          ) : (
+                            <>
+                              {r.essAccessStatus === "INVITED" && r.workEmail && (
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                  onClick={() => invite(r.id)}>
+                                  Resend invite
+                                </Button>
+                              )}
+                              {scheduled ? (
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                  onClick={() => act(r.id, { action: "cancel_schedule" })}>
+                                  Cancel schedule
+                                </Button>
+                              ) : (
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                  onClick={() => { setScheduleTarget(r); setScheduleAt(""); setScheduleReason(""); }}>
+                                  Schedule deactivation
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive" disabled={busy}
+                                onClick={() => { setDisableTarget(r); setDisableReason(""); }}>
+                                Disable
                               </Button>
                             </>
-                          ) : (
-                            // Safeguard: ESS access requires a work email on file.
-                            // Offer to add it right here instead of a dead end.
-                            <Button size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
-                              onClick={() => openEmailDialog(r)}
-                              title="A work email is required before ESS access can be enabled.">
-                              <Mail className="h-3.5 w-3.5" /> Add work email
-                            </Button>
-                          )
-                        ) : (
-                          <>
-                            {r.essAccessStatus === "INVITED" && r.workEmail && (
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                onClick={() => invite(r.id)}>
-                                Resend invite
-                              </Button>
-                            )}
-                            {scheduled ? (
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                onClick={() => act(r.id, { action: "cancel_schedule" })}>
-                                Cancel schedule
-                              </Button>
-                            ) : (
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                onClick={() => { setScheduleTarget(r); setScheduleAt(""); setScheduleReason(""); }}>
-                                Schedule deactivation
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive" disabled={busy}
-                              onClick={() => { setDisableTarget(r); setDisableReason(""); }}>
-                              Disable
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-[#E8EBF1] px-4 py-3.5">
+          <span className="text-[12.5px] text-[#8E9AAC]">
+            Showing {rows.length === 0 ? 0 : 1}–{rows.length} of {rows.length}
+          </span>
+          <span className="text-[12.5px] text-[#8E9AAC]">
+            {activeCount} of {rows.length} have ESS access
+          </span>
+        </div>
       </div>
 
       {/* Disable dialog */}
@@ -418,9 +437,9 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-lg border bg-card px-4 py-3">
+    <div className="rounded-[14px] border border-[#E8EBF1] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
       <div className={`text-2xl font-bold ${tone}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-xs text-[#8E9AAC]">{label}</div>
     </div>
   );
 }
