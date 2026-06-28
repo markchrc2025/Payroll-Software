@@ -6,6 +6,10 @@
  *   { action: "disable", reason }                   — revoke now (→ DISABLED), kills sessions
  *   { action: "schedule", deactivateAt, reason }    — schedule future deactivation
  *   { action: "cancel_schedule" }                   — cancel a pending schedule
+ *   { action: "set_work_email", workEmail }         — set/update the employee's
+ *                                                     work email (wired to the
+ *                                                     employee record; required
+ *                                                     before ESS can be enabled)
  *
  * Requires EMPLOYEES:UPDATE.
  */
@@ -25,6 +29,10 @@ const bodySchema = z.discriminatedUnion("action", [
     reason: z.string().trim().min(1, "A reason is required").max(500),
   }),
   z.object({ action: z.literal("cancel_schedule") }),
+  z.object({
+    action: z.literal("set_work_email"),
+    workEmail: z.string().trim().email("Enter a valid email address").max(255),
+  }),
 ]);
 
 export async function POST(
@@ -47,6 +55,17 @@ export async function POST(
       select: { id: true, essAccessStatus: true, essActivatedAt: true, workEmail: true },
     });
     if (!emp) return { kind: "not_found" as const };
+
+    if (input.action === "set_work_email") {
+      // The work email lives on the employee record — this is the single place
+      // it can be set/edited from the ESS portal, and it's what invites,
+      // password resets and notifications are sent to. Stored lowercased.
+      await tx.employee.update({
+        where: { id },
+        data: { workEmail: input.workEmail.toLowerCase() },
+      });
+      return { kind: "ok" as const, message: "Work email saved" };
+    }
 
     if (input.action === "activate") {
       // Safeguard: an ESS account must be tied to a work email (used for
@@ -144,6 +163,7 @@ export async function POST(
       essAction: input.action,
       ...("reason" in input ? { reason: input.reason } : {}),
       ...("deactivateAt" in input ? { deactivateAt: input.deactivateAt.toISOString() } : {}),
+      ...("workEmail" in input ? { workEmail: input.workEmail.toLowerCase() } : {}),
     },
     ipAddress: getClientIp(req),
   });
