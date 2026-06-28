@@ -111,7 +111,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-training", label: "Training", icon: "recruitment", comingSoon: true },
       { href: "#soon-legal-documents", label: "Legal Documents", icon: "claims", comingSoon: true },
       { href: "/settings/roles", label: "Custom Role", icon: "roles" },
-      { href: "/employees/ess", label: "Employee Self-Service", icon: "kiosks" },
+      { href: "/ess-portal", label: "Employee Self-Service", icon: "kiosks" },
     ],
   },
   {

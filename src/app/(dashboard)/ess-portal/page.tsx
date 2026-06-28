@@ -1,5 +1,5 @@
 /**
- * /employees/ess — Employee Self-Service (ESS) access admin.
+ * /ess-portal — Employee Self-Service (ESS) access admin.
  *
  * Lists employees with their ESS activation status. Employees do NOT get ESS
  * access on creation — HR grants it here, and can schedule a future
