@@ -77,6 +77,20 @@ export function checkEnvWarnings(): EnvProblem[] {
     });
   }
 
+  // EMAIL_ASSET_BASE_URL — absolute CDN base for transactional-email images
+  // (logo + monoline icons). Mail clients drop relative paths, so without a
+  // valid base the logo/icons render broken. Falls back to R2_PUBLIC_URL
+  // (+/email-assets) and then a hardcoded default domain, so it only warns.
+  if (!process.env.EMAIL_ASSET_BASE_URL && !process.env.R2_PUBLIC_URL) {
+    warnings.push({
+      name: "EMAIL_ASSET_BASE_URL",
+      detail:
+        "Not set (and no R2_PUBLIC_URL) — transactional emails fall back to the " +
+        "default asset domain; logo/icons may not load until you host the files " +
+        "from docs/design_handoff_emails/assets/ and point this at that folder.",
+    });
+  }
+
   return warnings;
 }
 

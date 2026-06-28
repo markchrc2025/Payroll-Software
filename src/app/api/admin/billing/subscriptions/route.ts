@@ -3,6 +3,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { sendDeactivationEmailForTenant } from "@/lib/billing-email";
 import { z } from "zod";
 
 // Convert BigInt centavos in a tenant row's nested package to Number for JSON.
@@ -142,6 +143,13 @@ export async function POST(req: NextRequest) {
       changes: d,
       ipAddress: getClientIp(req),
     });
+
+    // When a subscription is cancelled, warn the tenant about pending
+    // deactivation if they still owe an outstanding (OPEN/OVERDUE) invoice.
+    // Best-effort — never blocks or fails the save on email error.
+    if (d.status === "CANCELLED") {
+      await sendDeactivationEmailForTenant(d.tenantId);
+    }
 
     return ok(subscription, "Subscription saved");
   } catch (e) {

@@ -4,6 +4,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { sendMonthlyInvoiceEmail } from "@/lib/billing-email";
 import { z } from "zod";
 
 // Money is centavos (BigInt). Serialize invoice + nested payment amounts to Number.
@@ -137,6 +138,13 @@ export async function POST(req: NextRequest) {
       changes: { total: Number(total), status: invoice.status },
       ipAddress: getClientIp(req),
     });
+
+    // Email the Monthly Billing Notice when the invoice is actually issued
+    // (DRAFT invoices stay silent until issued). Best-effort — never blocks
+    // or fails the create on email error.
+    if (invoice.status === "OPEN") {
+      await sendMonthlyInvoiceEmail(invoice.id);
+    }
 
     return ok(serializeInvoice(invoice), "Invoice created", 201);
   } catch (e) {

@@ -12,6 +12,7 @@ import { handleDtrSubmitted, DtrSubmittedJobData } from "./handlers/dtr-submitte
 import { handlePayslipPublish, PayslipPublishJobData } from "./handlers/payslip-publish";
 import { handleLeaveAccrual } from "./handlers/leave-accrual";
 import { handleEssDeactivationSweep } from "./handlers/ess-deactivation";
+import { handleBillingOverdueSweep } from "./handlers/billing-overdue";
 
 export const JOB_NAMES = {
   PAYROLL_RUN: "payroll.run",
@@ -20,6 +21,7 @@ export const JOB_NAMES = {
   PAYSLIP_PUBLISH: "payslip.publish",
   LEAVE_ACCRUAL: "leave.accrual",
   ESS_DEACTIVATION: "ess.deactivation",
+  BILLING_OVERDUE: "billing.overdue",
 } as const;
 
 const RETRY_LIMIT = 3;
@@ -93,6 +95,21 @@ export async function registerWorkers(): Promise<void> {
     JOB_NAMES.ESS_DEACTIVATION,
     { localConcurrency: 1 },
     () => handleEssDeactivationSweep(),
+  );
+
+  // Overdue-invoice sweep — daily at 00:15 PH time (UTC 16:15 prev day).
+  // Flips past-due OPEN invoices to OVERDUE and sends the Unpaid notice once.
+  await boss.schedule(
+    JOB_NAMES.BILLING_OVERDUE,
+    "15 16 * * *",
+    {},
+    { tz: "UTC" },
+  );
+
+  await boss.work(
+    JOB_NAMES.BILLING_OVERDUE,
+    { localConcurrency: 1 },
+    () => handleBillingOverdueSweep(),
   );
 
   console.log("[pg-boss] Workers registered:", Object.values(JOB_NAMES).join(", "));
