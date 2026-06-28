@@ -12,6 +12,7 @@ const SAVED = { ...process.env };
 beforeEach(() => {
   process.env.DATABASE_URL = "postgresql://u:p@h:6543/db";
   process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
+  process.env.EMAIL_ASSET_BASE_URL = "https://cdn.example.com/email-assets";
   delete process.env.DIRECT_DATABASE_URL;
 });
 afterEach(() => {
@@ -61,5 +62,21 @@ describe("checkEnvWarnings", () => {
   it("no warning when RESEND_API_KEY is set", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     expect(checkEnvWarnings()).toEqual([]);
+  });
+
+  it("warns (non-blocking) when no email-asset base is configured", () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    delete process.env.EMAIL_ASSET_BASE_URL;
+    delete process.env.R2_PUBLIC_URL;
+    const warnings = checkEnvWarnings();
+    expect(warnings.some((w) => w.name === "EMAIL_ASSET_BASE_URL")).toBe(true);
+    expect(checkCriticalEnv().some((p) => p.name === "EMAIL_ASSET_BASE_URL")).toBe(false);
+  });
+
+  it("no asset warning when R2_PUBLIC_URL is set", () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    delete process.env.EMAIL_ASSET_BASE_URL;
+    process.env.R2_PUBLIC_URL = "https://r2.example.com";
+    expect(checkEnvWarnings().some((w) => w.name === "EMAIL_ASSET_BASE_URL")).toBe(false);
   });
 });
