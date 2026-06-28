@@ -36,6 +36,8 @@ export function renderEmployeeOnboarding(v: {
   firstName: string;
   companyName: string;
   activationUrl: string;
+  /** Company/HR support contact shown in the footer (defaults to Sentire). */
+  supportEmail?: string;
 }): Rendered {
   const name = escapeHtml(v.firstName);
   const company = escapeHtml(v.companyName);
@@ -62,7 +64,7 @@ export function renderEmployeeOnboarding(v: {
     ].join("\n"),
     footerLines: [
       `This invite was sent to you by ${company}. The activation link expires in <strong style="color:${COLOR.muted};font-weight:600;">7 days</strong>.`,
-      supportLine("Trouble signing in? Email", "SELF_SERVICE"),
+      supportLine("Trouble signing in? Email", "SELF_SERVICE", v.supportEmail),
     ],
     legal: "© 2026 Sentire · You’re receiving this because you were added to Sentire Self-Service.",
   });

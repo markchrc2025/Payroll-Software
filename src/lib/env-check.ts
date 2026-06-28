@@ -77,17 +77,24 @@ export function checkEnvWarnings(): EnvProblem[] {
     });
   }
 
-  // EMAIL_ASSET_BASE_URL — absolute CDN base for transactional-email images
-  // (logo + monoline icons). Mail clients drop relative paths, so without a
-  // valid base the logo/icons render broken. Falls back to R2_PUBLIC_URL
-  // (+/email-assets) and then a hardcoded default domain, so it only warns.
-  if (!process.env.EMAIL_ASSET_BASE_URL && !process.env.R2_PUBLIC_URL) {
+  // EMAIL_ASSET_BASE_URL — absolute base for transactional-email images (logo +
+  // monoline icons). Mail clients drop relative paths, so the <img> src must be
+  // absolute. The assets are bundled at public/email-assets/, so they're served
+  // from NEXT_PUBLIC_APP_URL by default — this only warns when there's no
+  // resolvable base at all (no explicit override, no R2, no app URL), which
+  // would fall back to a hardcoded domain that may not host them.
+  if (
+    !process.env.EMAIL_ASSET_BASE_URL &&
+    !process.env.R2_PUBLIC_URL &&
+    !process.env.NEXT_PUBLIC_APP_URL
+  ) {
     warnings.push({
       name: "EMAIL_ASSET_BASE_URL",
       detail:
-        "Not set (and no R2_PUBLIC_URL) — transactional emails fall back to the " +
-        "default asset domain; logo/icons may not load until you host the files " +
-        "from docs/design_handoff_emails/assets/ and point this at that folder.",
+        "No resolvable email-asset base (no EMAIL_ASSET_BASE_URL, R2_PUBLIC_URL, " +
+        "or NEXT_PUBLIC_APP_URL) — transactional-email images fall back to a " +
+        "hardcoded domain and may render broken. Set NEXT_PUBLIC_APP_URL (assets " +
+        "are served from /email-assets) or EMAIL_ASSET_BASE_URL.",
     });
   }
 
