@@ -33,10 +33,17 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 // configurable URL, falling back to the app's billing area.
 const BILLING_PORTAL_URL = process.env.BILLING_PORTAL_URL ?? `${APP_URL}/billing`;
 
-// Grace-period defaults (no formal policy defined). Days from "now" the tenant
-// is asked to settle before access is limited / the account is deactivated.
-const SETTLE_GRACE_DAYS = 7;
-const DEACTIVATE_GRACE_DAYS = 7;
+// Grace-period windows — days from "now" the tenant is asked to settle before
+// access is limited (SETTLE) / the account is deactivated (DEACTIVATE). These
+// are PLATFORM-level knobs set in the Central Portal's environment, not
+// per-tenant: configure BILLING_SETTLE_GRACE_DAYS / BILLING_DEACTIVATE_GRACE_DAYS
+// in Render. Fall back to 7 when unset, blank, or not a positive integer.
+function graceDays(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+const SETTLE_GRACE_DAYS = graceDays(process.env.BILLING_SETTLE_GRACE_DAYS, 7);
+const DEACTIVATE_GRACE_DAYS = graceDays(process.env.BILLING_DEACTIVATE_GRACE_DAYS, 7);
 
 const TZ = "Asia/Manila";
 const DAY_MS = 86_400_000;
