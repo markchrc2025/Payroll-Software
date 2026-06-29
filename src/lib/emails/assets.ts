@@ -6,10 +6,13 @@
  * served from the app's own origin — no CDN/bucket setup required. Override
  * EMAIL_ASSET_BASE_URL only if you want to serve them from a dedicated CDN.
  *
- * Resolution order:
- *   1. EMAIL_ASSET_BASE_URL                (explicit, preferred)
- *   2. R2_PUBLIC_URL + "/email-assets"     (reuse the app's R2 public domain)
- *   3. NEXT_PUBLIC_APP_URL + "/email-assets"   (the app serves public/ — default)
+ * Resolution order — the app-origin default wins over R2 because the files are
+ * COMMITTED at public/email-assets/ (guaranteed present), whereas R2 only works
+ * if someone manually uploaded them there. To serve from a CDN/R2/subdomain,
+ * set EMAIL_ASSET_BASE_URL explicitly:
+ *   1. EMAIL_ASSET_BASE_URL                    (explicit override — CDN/R2/subdomain)
+ *   2. NEXT_PUBLIC_APP_URL + "/email-assets"   (app serves public/ — reliable default)
+ *   3. R2_PUBLIC_URL + "/email-assets"         (only if you uploaded them to R2)
  *   4. https://assets.sentire.solutions/email-assets   (last-resort default)
  *
  * Files (committed at public/email-assets/, exact names — see README "Assets"):
@@ -22,8 +25,9 @@ const stripTrailingSlash = (s: string) => s.replace(/\/$/, "");
 
 function resolveBase(): string {
   if (process.env.EMAIL_ASSET_BASE_URL) return stripTrailingSlash(process.env.EMAIL_ASSET_BASE_URL);
-  if (process.env.R2_PUBLIC_URL) return `${stripTrailingSlash(process.env.R2_PUBLIC_URL)}/email-assets`;
+  // Prefer the app origin: public/email-assets/ is committed, so it always exists.
   if (process.env.NEXT_PUBLIC_APP_URL) return `${stripTrailingSlash(process.env.NEXT_PUBLIC_APP_URL)}/email-assets`;
+  if (process.env.R2_PUBLIC_URL) return `${stripTrailingSlash(process.env.R2_PUBLIC_URL)}/email-assets`;
   return "https://assets.sentire.solutions/email-assets";
 }
 
