@@ -178,7 +178,7 @@ export function buildColumns(
       id: "monthlyRate",
       header: () => <span className="block text-right">Monthly rate</span>,
       cell: ({ row }) => (
-        <span className="text-[13.5px] text-[#0E1B2E] font-[tabular-nums] block text-right">
+        <span className="text-[13.5px] text-[#0E1B2E] tabular-nums block text-right">
           {formatRate(row.original.salaryHistory?.[0]?.basicSalaryCents, row.original.salaryType)}
         </span>
       ),
