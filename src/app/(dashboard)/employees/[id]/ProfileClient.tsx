@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle } from "lucide-react";
+import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +32,7 @@ interface Employee {
   middleName?: string;
   lastName: string;
   suffix?: string;
+  photoKey?: string | null;
   birthDate?: string;
   gender?: string;
   civilStatus?: string;
@@ -57,7 +58,8 @@ interface Employee {
   level?: { id: string; name: string };
   department?: { id: string; name: string };
   branch?: { id: string; name: string };
-  position?: { id: string; title: string; level?: string };
+  // position.level is a JobLevel relation object (not a string).
+  position?: { id: string; title: string; level?: { id: string; name: string } | string | null };
   statutoryIds?: StatutoryId[];
   salaryHistory?: { basicSalaryCents: number; effectiveDate: string }[];
   immediateSupervisorId?: string;
@@ -82,6 +84,13 @@ type Tab = (typeof TABS)[number];
 
 function fmt(val: string | undefined | null, fallback = "—") {
   return val || fallback;
+}
+
+/** position.level may be a JobLevel object or a string; fall back to emp.level. */
+function levelNameOf(emp: Employee): string | undefined {
+  const pl = emp.position?.level;
+  const fromPos = typeof pl === "string" ? pl : pl?.name;
+  return fromPos ?? emp.level?.name;
 }
 
 function fmtDate(iso: string | undefined | null) {
@@ -198,7 +207,7 @@ function EmploymentTab({ emp }: { emp: Employee }) {
         {irow("Department", fmt(emp.department?.name))}
         {irow("Branch", fmt(emp.branch?.name))}
         {irow("Position", emp.position?.title ?? fmt(emp.jobTitle))}
-        {irow("Job Level", fmt(emp.position?.level ?? emp.level?.name))}
+        {irow("Job Level", fmt(levelNameOf(emp)))}
         {irow("Employment Status", fmt(emp.employmentStatus))}
         {irow("Employment Type", fmt(emp.employmentType))}
         {irow("Pay Frequency", fmt(emp.payFrequency))}
@@ -240,6 +249,73 @@ function PlaceholderTab({ label }: { label: string }) {
 // Left panel
 // ---------------------------------------------------------------------------
 
+function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
+  employeeId: string; photoKey: string | null | undefined; bg: string; color: string; initials: string;
+}) {
+  const [hasPhoto, setHasPhoto] = useState(!!photoKey);
+  const [ver, setVer] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file."); return; }
+    setUploading(true);
+    try {
+      const presign = await fetch("/api/employees/photo/presign", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileSize: file.size }),
+      });
+      const pj = await presign.json().catch(() => null);
+      if (!presign.ok) throw new Error(pj?.error ?? "Could not start the upload");
+      const { uploadUrl, storageKey } = pj.data as { uploadUrl: string; storageKey: string };
+
+      const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!put.ok) throw new Error(`Upload failed (HTTP ${put.status})`);
+
+      const patch = await fetch(`/api/employees/${employeeId}/photo`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoKey: storageKey }),
+      });
+      const jj = await patch.json().catch(() => null);
+      if (!patch.ok) throw new Error(jj?.error ?? "Could not save the photo");
+
+      toast.success("Profile photo updated");
+      setHasPhoto(true);
+      setVer((v) => v + 1); // bust the <img> cache
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="group relative mb-3 h-[72px] w-[72px]">
+      {hasPhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/employees/${employeeId}/photo?v=${ver}`} alt="" className="h-[72px] w-[72px] rounded-full object-cover" />
+      ) : (
+        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full text-[22px] font-bold" style={{ background: bg, color }}>
+          {initials}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        title="Upload photo"
+        className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+      >
+        {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-[18px] w-[18px]" />}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+    </div>
+  );
+}
+
 function LeftPanel({
   emp,
   leaveBalances,
@@ -249,7 +325,7 @@ function LeftPanel({
 }) {
   const { bg, color } = getAvatarColor(emp.firstName + " " + emp.lastName);
   const initials = getInitials(emp.firstName, emp.lastName);
-  const posLine = [emp.position?.title ?? emp.jobTitle, emp.position?.level ?? emp.level?.name]
+  const posLine = [emp.position?.title ?? emp.jobTitle, levelNameOf(emp)]
     .filter(Boolean)
     .join(" · ");
 
@@ -257,12 +333,7 @@ function LeftPanel({
     <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] p-5 flex flex-col gap-0">
       {/* Avatar */}
       <div className="flex flex-col items-center text-center py-5 border-b border-[#E8EBF1]">
-        <div
-          className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[22px] font-bold mb-3"
-          style={{ background: bg, color }}
-        >
-          {initials}
-        </div>
+        <EditableAvatar employeeId={emp.id} photoKey={emp.photoKey} bg={bg} color={color} initials={initials} />
         <p className="text-[16px] font-bold text-[#0E1B2E]">
           {emp.firstName} {emp.lastName}
         </p>
