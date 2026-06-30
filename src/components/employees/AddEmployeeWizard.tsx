@@ -25,6 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  EducationSection,
+  WorkExperienceSection,
+  TrainingSection,
+} from "@/components/employees/EmployeeBackground";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +63,8 @@ type Props = {
   hasEssPin?: boolean;
   /** Prefill values when editing (shaped like CreateEmployeeInput). */
   initialData?: Partial<CreateEmployeeInput>;
+  /** Whether R2 file storage is configured (enables training-cert uploads). */
+  storageReady?: boolean;
 };
 
 // ─── Wizard step metadata ─────────────────────────────────────────────────────
@@ -72,6 +79,9 @@ const STEPS = [
   { id: "Health",         sub: "Physical & senses"                },
   { id: "Directory",      sub: "Access & privacy"                 },
   { id: "Others",         sub: "Remarks"                          },
+  { id: "Education",      sub: "Schools & degrees"                },
+  { id: "Experience",     sub: "Employment history"               },
+  { id: "Training",       sub: "Seminars & certificates"          },
 ];
 
 // Fields validated on "Continue" per step
@@ -85,6 +95,9 @@ const STEP_TRIGGER_FIELDS: Path<CreateEmployeeInput>[][] = [
   [],
   [],
   [],
+  [], // Education — managed independently
+  [], // Experience — managed independently
+  [], // Training — managed independently
 ];
 
 // Plain-language labels for the validation toast (falls back to the raw key).
@@ -485,9 +498,26 @@ function SuccessState({
   );
 }
 
+// Shown for the Education/Experience/Training steps while creating a new
+// employee — these records attach to the employee, so they're added once the
+// employee exists (save first, then edit to add history + certificates).
+function BackgroundCreateNotice({ what }: { what: string }) {
+  return (
+    <div className="rounded-[12px] border border-dashed px-5 py-8 text-center" style={{ borderColor: "#ECE6DD" }}>
+      <p className="text-[13.5px] font-medium" style={{ color: "#2A2420" }}>
+        Save the employee first to add {what}
+      </p>
+      <p className="mx-auto mt-1 max-w-sm text-[12.5px]" style={{ color: "#9b9085" }}>
+        Click <strong>Save employee</strong> below, then reopen them in Edit — this
+        section becomes editable once the record exists.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees, mode = "create", employeeId, employeeNumber, hasEssPin = false, initialData }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees, mode = "create", employeeId, employeeNumber, hasEssPin = false, initialData, storageReady = false }: Props) {
   const isEdit = mode === "edit";
   const router = useRouter();
 
@@ -1119,6 +1149,21 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             </div>
           </FGrid>
         );
+
+      case 9: // Education
+        return isEdit && employeeId
+          ? <EducationSection employeeId={employeeId} />
+          : <BackgroundCreateNotice what="education" />;
+
+      case 10: // Experience
+        return isEdit && employeeId
+          ? <WorkExperienceSection employeeId={employeeId} />
+          : <BackgroundCreateNotice what="work experience" />;
+
+      case 11: // Training
+        return isEdit && employeeId
+          ? <TrainingSection employeeId={employeeId} storageReady={storageReady} />
+          : <BackgroundCreateNotice what="training" />;
 
       default:
         return null;

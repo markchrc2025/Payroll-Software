@@ -9,8 +9,9 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { AddEmployeeWizard } from "@/components/employees/AddEmployeeWizard";
-import { ArrowLeft, FileText, GraduationCap } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import Link from "next/link";
+import { isR2Configured } from "@/lib/r2";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -113,20 +114,12 @@ export default async function EditEmployeePage({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/employees/${encodeURIComponent(String(emp.employeeNumber ?? ""))}/background`}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#E8EBF1] bg-white px-3.5 py-2 text-sm font-medium text-[#4A586B] transition-colors hover:bg-[#F4F6F9] hover:text-[#0E1B2E]"
-          >
-            <GraduationCap className="h-4 w-4" /> Education / Experience / Training
-          </Link>
-          <Link
-            href={`/employees/${encodeURIComponent(String(emp.employeeNumber ?? ""))}/documents`}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#E8EBF1] bg-white px-3.5 py-2 text-sm font-medium text-[#4A586B] transition-colors hover:bg-[#F4F6F9] hover:text-[#0E1B2E]"
-          >
-            <FileText className="h-4 w-4" /> 201 File / Documents
-          </Link>
-        </div>
+        <Link
+          href={`/employees/${encodeURIComponent(String(emp.employeeNumber ?? ""))}/documents`}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#E8EBF1] bg-white px-3.5 py-2 text-sm font-medium text-[#4A586B] transition-colors hover:bg-[#F4F6F9] hover:text-[#0E1B2E]"
+        >
+          <FileText className="h-4 w-4" /> 201 File / Documents
+        </Link>
       </div>
 
       <AddEmployeeWizard
@@ -134,6 +127,7 @@ export default async function EditEmployeePage({
         employeeId={String(emp.id)}
         employeeNumber={String(emp.employeeNumber ?? "")}
         hasEssPin={!!emp.hasEssPin}
+        storageReady={isR2Configured()}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         initialData={initialData as any}
         departments={departments as { id: string; name: string }[]}
