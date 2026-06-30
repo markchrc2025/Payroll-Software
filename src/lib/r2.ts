@@ -66,6 +66,19 @@ export function buildEmployeeDocumentKey(opts: {
   return `tenants/${opts.tenantId}/employees/${opts.employeeId}/documents/${uuid}.${ext}`;
 }
 
+/** Build a storage key for an employee's training certificate. */
+export function buildEmployeeTrainingCertKey(opts: {
+  tenantId: string;
+  employeeId: string;
+  fileName: string;
+}): string {
+  const ext = opts.fileName.includes(".")
+    ? opts.fileName.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "bin";
+  const uuid = crypto.randomUUID();
+  return `tenants/${opts.tenantId}/employees/${opts.employeeId}/training/${uuid}.${ext}`;
+}
+
 /** Build a storage key for a clock-punch selfie. */
 export function buildSelfieKey(opts: {
   tenantId: string;
