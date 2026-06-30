@@ -592,30 +592,30 @@ model Tenant {
   featureFlags Json @default("{}")
 
   // Payroll defaults (§9 of blueprint)
-  payrollCycle           PayFrequency         @default(SEMI_MONTHLY)
+  payrollCycle            PayFrequency            @default(SEMI_MONTHLY)
   /// For Semi-Monthly/Monthly: day of month (1–28). For Weekly/Bi-Weekly: ISO weekday (1=Mon … 7=Sun).
-  payDay1                Int?
+  payDay1                 Int?
   /// Second pay day — only used for Semi-Monthly (e.g. 1 & 15 → payDay1=1, payDay2=15).
-  payDay2                Int?
-  workingDaysDenominator Int                  @default(261)
-  statutoryCutoffRule    StatutoryCutoffRule  @default(SECOND_CUTOFF)
-  thirteenthMonthBasis   ThirteenthMonthBasis @default(STRICT_DOLE)
+  payDay2                 Int?
+  workingDaysDenominator  Int                     @default(261)
+  statutoryCutoffRule     StatutoryCutoffRule     @default(SECOND_CUTOFF)
+  thirteenthMonthBasis    ThirteenthMonthBasis    @default(STRICT_DOLE)
   /// Payroll safeguard: max % of monthly gross that statutory + loan/recurring
   /// deductions may consume. New loans that would breach this are blocked
   /// ("no negative pay" policy). Default 50.
-  maxDeductionPctOfGross Int                  @default(50)
+  maxDeductionPctOfGross  Int                     @default(50)
   /// "No negative pay" run-time floor: in REGULAR/YEAR_END runs, loan
   /// installments are deferred (carried in the loan balance) so net pay never
   /// drops below zero. FINAL_PAY is exempt by default — terminal charges
   /// against a separating employee's last pay may legitimately make it
   /// negative. Set false to also floor FINAL_PAY. Default true.
-  allowNegativeFinalPay  Boolean              @default(true)
-  defaultDtrApproverId   String?
+  allowNegativeFinalPay   Boolean                 @default(true)
+  defaultDtrApproverId    String?
   /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
   /// be turned off); only the window is configurable. The premium multiplier
   /// lives in PremiumRateConfig (key NSD, DOLE default 0.10).
-  nsdWindowStart         String               @default("22:00")
-  nsdWindowEnd           String               @default("06:00")
+  nsdWindowStart          String                  @default("22:00")
+  nsdWindowEnd            String                  @default("06:00")
   /// IANA timezone for company-wide timekeeping (default derived from country
   /// at creation). Anchors business-day boundaries, the NSD window and the
   /// statutory month-end for this tenant.
@@ -628,59 +628,62 @@ model Tenant {
   deletedAt DateTime?
 
   // Relations
-  users                 User[]
-  roles                 Role[]
-  departments           Department[]
-  branches              Branch[]
-  workLocations         WorkLocation[]
-  positions             Position[]
-  jobLevels             JobLevel[]
-  jobTypes              JobType[]
-  jobStatuses           JobStatus[]
-  employees             Employee[]
-  statutoryIds          StatutoryId[]
-  employeeSalaries      EmployeeSalary[]
-  employeeMovements     EmployeeMovement[]
-  placements            Placement[]
-  employmentTerms       EmploymentTerm[]
-  incidentReports       IncidentReport[]
-  assets               Asset[]
-  assetAssignments     AssetAssignment[]
-  employeeDocuments     EmployeeDocument[]
-  geofences             Geofence[]
-  kiosks                Kiosk[]
-  leaveTypes            LeaveType[]
-  approvalWorkflows     ApprovalWorkflow[]
-  leaveTransactions     LeaveTransaction[]
-  dtrApprovalConfig     DTRApprovalConfig?
-  auditLogs             AuditLog[]
-  consentRecords        ConsentRecord[]
-  aiUsage               AiUsage[]
-  statutoryRules        StatutoryRule[]
-  payComponents         PayComponent[]
-  employeePayComponents EmployeePayComponent[]
-  periodInputs          PeriodInput[]
-  loans                 Loan[]
-  payrollBooks          PayrollBook[]
-  payrollSheets         PayrollSheet[]
-  payrollAdjustments    PayrollAdjustment[]
-  shiftSchedules        ShiftSchedule[]
-  shiftAssignments      EmployeeShiftAssignment[]
-  dtrRecords            DTRRecord[]
-  attendanceLogs        AttendanceLog[]
-  expenseClaims         ExpenseClaim[]
-  essSessions           EssSession[]
-  essWebAuthnCredentials EssWebAuthnCredential[]
-  essInvites            EssInvite[]
-  essPasswordResets     EssPasswordReset[]
-  otApplications        OTApplication[]
-  undertimeRequests     UndertimeRequest[]
-  profileUpdateRequests ProfileUpdateRequest[]
-  dtrSubmissions        DTRSubmission[]
-  dtrAuditLogs          DTRAuditLog[]
+  users                   User[]
+  roles                   Role[]
+  departments             Department[]
+  branches                Branch[]
+  workLocations           WorkLocation[]
+  positions               Position[]
+  jobLevels               JobLevel[]
+  jobTypes                JobType[]
+  jobStatuses             JobStatus[]
+  employees               Employee[]
+  statutoryIds            StatutoryId[]
+  employeeSalaries        EmployeeSalary[]
+  employeeMovements       EmployeeMovement[]
+  placements              Placement[]
+  employmentTerms         EmploymentTerm[]
+  incidentReports         IncidentReport[]
+  assets                  Asset[]
+  assetAssignments        AssetAssignment[]
+  employeeDocuments       EmployeeDocument[]
+  employeeEducation       EmployeeEducation[]
+  employeeWorkExperiences EmployeeWorkExperience[]
+  employeeTrainings       EmployeeTraining[]
+  geofences               Geofence[]
+  kiosks                  Kiosk[]
+  leaveTypes              LeaveType[]
+  approvalWorkflows       ApprovalWorkflow[]
+  leaveTransactions       LeaveTransaction[]
+  dtrApprovalConfig       DTRApprovalConfig?
+  auditLogs               AuditLog[]
+  consentRecords          ConsentRecord[]
+  aiUsage                 AiUsage[]
+  statutoryRules          StatutoryRule[]
+  payComponents           PayComponent[]
+  employeePayComponents   EmployeePayComponent[]
+  periodInputs            PeriodInput[]
+  loans                   Loan[]
+  payrollBooks            PayrollBook[]
+  payrollSheets           PayrollSheet[]
+  payrollAdjustments      PayrollAdjustment[]
+  shiftSchedules          ShiftSchedule[]
+  shiftAssignments        EmployeeShiftAssignment[]
+  dtrRecords              DTRRecord[]
+  attendanceLogs          AttendanceLog[]
+  expenseClaims           ExpenseClaim[]
+  essSessions             EssSession[]
+  essWebAuthnCredentials  EssWebAuthnCredential[]
+  essInvites              EssInvite[]
+  essPasswordResets       EssPasswordReset[]
+  otApplications          OTApplication[]
+  undertimeRequests       UndertimeRequest[]
+  profileUpdateRequests   ProfileUpdateRequest[]
+  dtrSubmissions          DTRSubmission[]
+  dtrAuditLogs            DTRAuditLog[]
 
-  defaultDtrApprover Employee? @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
-  owner              User?     @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  defaultDtrApprover Employee?      @relation("TenantDefaultDtrApprover", fields: [defaultDtrApproverId], references: [id])
+  owner              User?          @relation("TenantOwner", fields: [ownerUserId], references: [id])
   orgRoles           OrgRole[]
   approvalSteps      ApprovalStep[]
 
@@ -689,12 +692,12 @@ model Tenant {
   invoices     Invoice[]
   payments     Payment[]
 
-  jobPostings    JobPosting[]
-  applicants     Applicant[]
-  applicantNotes ApplicantNote[]
-  holidays       Holiday[]
+  jobPostings        JobPosting[]
+  applicants         Applicant[]
+  applicantNotes     ApplicantNote[]
+  holidays           Holiday[]
   premiumRateConfigs PremiumRateConfig[]
-  announcements  Announcement[]
+  announcements      Announcement[]
   supportTickets     SupportTicket[]
   subscriptionEvents SubscriptionEvent[]
   centralAuditEvents CentralAuditEvent[]
@@ -705,15 +708,15 @@ model Tenant {
 /// Company-wide announcement surfaced in the ESS app (Home feed + detail).
 /// Authored by tenant HR/admins; read-only for employees.
 model Announcement {
-  id        String  @id @default(cuid())
-  tenantId  String
-  title     String
-  body      String  @db.Text
+  id       String  @id @default(cuid())
+  tenantId String
+  title    String
+  body     String  @db.Text
   /// Free-text tag shown as a chip, e.g. "Payroll", "Benefits", "General".
-  category  String?
+  category String?
 
-  isPublished     Boolean   @default(true)
-  publishedAt     DateTime  @default(now())
+  isPublished     Boolean  @default(true)
+  publishedAt     DateTime @default(now())
   createdByUserId String?
 
   createdAt DateTime  @default(now())
@@ -757,19 +760,19 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant       Tenant?      @relation(fields: [tenantId], references: [id])
-  ownedTenants Tenant[]     @relation("TenantOwner")
-  assignedRole Role?        @relation(fields: [roleId], references: [id])
-  centralRole  CentralRole? @relation(fields: [centralRoleId], references: [id])
-  employee     Employee?
+  tenant                Tenant?        @relation(fields: [tenantId], references: [id])
+  ownedTenants          Tenant[]       @relation("TenantOwner")
+  assignedRole          Role?          @relation(fields: [roleId], references: [id])
+  centralRole           CentralRole?   @relation(fields: [centralRoleId], references: [id])
+  employee              Employee?
   approvedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimApprover")
 
-  createdJobPostings    JobPosting[]
-  assignedApplicants    Applicant[]       @relation("ApplicantAssignedTo")
-  applicantNotes        ApplicantNote[]
-  passwordResetTokens   PasswordResetToken[]
-  assignedTickets       SupportTicket[]     @relation("TicketAgent")
-  centralAuditEvents    CentralAuditEvent[] @relation("CentralAuditActor")
+  createdJobPostings  JobPosting[]
+  assignedApplicants  Applicant[]          @relation("ApplicantAssignedTo")
+  applicantNotes      ApplicantNote[]
+  passwordResetTokens PasswordResetToken[]
+  assignedTickets     SupportTicket[]      @relation("TicketAgent")
+  centralAuditEvents  CentralAuditEvent[]  @relation("CentralAuditActor")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -779,12 +782,12 @@ model User {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique // SHA-256 hex of the raw token
+  tokenHash String    @unique // SHA-256 hex of the raw token
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -916,8 +919,8 @@ model Department {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant      Tenant     @relation(fields: [tenantId], references: [id])
-  head        Employee?  @relation("DepartmentHead", fields: [headId], references: [id])
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  head        Employee?    @relation("DepartmentHead", fields: [headId], references: [id])
   employees   Employee[]
   positions   Position[]
   jobPostings JobPosting[]
@@ -959,7 +962,7 @@ model Branch {
 }
 
 model Position {
-  id           String        @id @default(cuid())
+  id           String  @id @default(cuid())
   tenantId     String
   title        String
   levelId      String?
@@ -970,13 +973,13 @@ model Position {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id])
-  level       JobLevel?   @relation("PositionLevel", fields: [levelId], references: [id], onDelete: SetNull)
-  department  Department? @relation(fields: [departmentId], references: [id])
-  employees   Employee[]
-  jobPostings JobPosting[]
-  placements  Placement[]
-  reportsFromEmployees Employee[] @relation("EmployeeReportsToPosition")
+  tenant               Tenant       @relation(fields: [tenantId], references: [id])
+  level                JobLevel?    @relation("PositionLevel", fields: [levelId], references: [id], onDelete: SetNull)
+  department           Department?  @relation(fields: [departmentId], references: [id])
+  employees            Employee[]
+  jobPostings          JobPosting[]
+  placements           Placement[]
+  reportsFromEmployees Employee[]   @relation("EmployeeReportsToPosition")
 
   @@unique([tenantId, title])
   @@index([tenantId])
@@ -1016,7 +1019,7 @@ model JobLevel {
 // Per-employee roles (supervisor, line_manager) live on Employee directly.
 // Department head lives on Department.headId.
 model OrgRole {
-  id         String   @id @default(cuid())
+  id         String @id @default(cuid())
   tenantId   String
   roleKey    String
   employeeId String
@@ -1139,23 +1142,23 @@ model Employee {
   nontaxableBasicAmountCents BigInt            @default(0)
 
   // ESS
-  essPin          String? // hashed at app layer
-  essPasswordHash String? // optional ESS password (bcrypt), set by the employee
-  kioskPinHash    String?
+  essPin                         String? // hashed at app layer
+  essPasswordHash                String? // optional ESS password (bcrypt), set by the employee
+  kioskPinHash                   String?
   /// ESS portal access. Employees do NOT get access on creation — HR must
   /// grant (activate) it. Login is blocked unless INVITED or ACTIVE.
-  essAccessStatus EssAccessStatus @default(NOT_INVITED)
-  essInvitedAt    DateTime?
-  essActivatedAt  DateTime?
-  essInvitedByUserId String?
-  essLastLoginAt  DateTime?
+  essAccessStatus                EssAccessStatus @default(NOT_INVITED)
+  essInvitedAt                   DateTime?
+  essActivatedAt                 DateTime?
+  essInvitedByUserId             String?
+  essLastLoginAt                 DateTime?
   /// Scheduled ESS deactivation. When essDeactivateAt passes, access is revoked
   /// (auth gate denies immediately; an hourly sweep flips status → DISABLED and
   /// ends live sessions). Reason is required when scheduling/deactivating.
-  essDeactivateAt              DateTime?
-  essDeactivateReason          String?
+  essDeactivateAt                DateTime?
+  essDeactivateReason            String?
   essDeactivateScheduledByUserId String?
-  qrBadgeCode     String?
+  qrBadgeCode                    String?
 
   // Bank (encrypted at app layer)
   bankName          String?
@@ -1163,58 +1166,58 @@ model Employee {
   bankAccountName   String?
 
   // Extended personal fields
-  nationalId        String?
-  passportNumber    String?
-  ethnicity         String?
-  religion          String?
-  allowProfileUpdate Boolean  @default(false)
-  needsTimeClock    Boolean   @default(true)
+  nationalId         String?
+  passportNumber     String?
+  ethnicity          String?
+  religion           String?
+  allowProfileUpdate Boolean @default(false)
+  needsTimeClock     Boolean @default(true)
   /// Skip geofence enforcement for this employee's punches (e.g. field staff,
   /// or employees whose time clock is off). When true, punches are never
   /// flagged outsideGeofence.
-  geofenceExempt    Boolean   @default(false)
+  geofenceExempt     Boolean @default(false)
   /// Employee receives full pay for every scheduled workday without needing
   /// time-clock punches or DTR records (e.g. executives, C-level). Leaves and
   /// public holidays still apply. Only HR/Payroll Admin may enable this.
-  attendanceExempt  Boolean   @default(false)
+  attendanceExempt   Boolean @default(false)
 
   // Extended employment fields
   placementEffectiveDate DateTime?
-  jobTypeId             String?
-  jobStatusId           String?
-  shiftScheduleId       String?
+  jobTypeId              String?
+  jobStatusId            String?
+  shiftScheduleId        String?
   // Org-chart: when set, this employee reports to a (vacant) position/role
   // rather than to a specific person. Resolved to the incumbent if filled.
-  reportsToPositionId   String?
-  termEffectiveDate     DateTime?
-  contractStartDate     DateTime?
-  contractEndDate       DateTime?
+  reportsToPositionId    String?
+  termEffectiveDate      DateTime?
+  contractStartDate      DateTime?
+  contractEndDate        DateTime?
 
   // Salary metadata
-  salaryEffectiveDate   DateTime?
-  currency              String?   @default("PHP")
-  nextSalaryReviewDate  DateTime?
-  payMethod             String?
+  salaryEffectiveDate  DateTime?
+  currency             String?   @default("PHP")
+  nextSalaryReviewDate DateTime?
+  payMethod            String?
 
   // Extended contact
-  blogUrl       String?
-  officePhone   String?
-  housePhone    String?
-  postcode      String?
-  country       String?   @default("Philippines")
+  blogUrl     String?
+  officePhone String?
+  housePhone  String?
+  postcode    String?
+  country     String? @default("Philippines")
 
   // Health
-  heightCm   Decimal?  @db.Decimal(5, 1)
-  weightKg   Decimal?  @db.Decimal(5, 1)
-  bloodType  String?
-  visionL    String?
-  visionR    String?
-  hearingL   String?
-  hearingR   String?
-  handL      String?
-  handR      String?
-  legL       String?
-  legR       String?
+  heightCm  Decimal? @db.Decimal(5, 1)
+  weightKg  Decimal? @db.Decimal(5, 1)
+  bloodType String?
+  visionL   String?
+  visionR   String?
+  hearingL  String?
+  hearingR  String?
+  handL     String?
+  handR     String?
+  legL      String?
+  legR      String?
 
   // Family / spouse
   spouseFirstName   String?
@@ -1230,17 +1233,17 @@ model Employee {
   numberOfChildren  Int?      @default(0)
 
   // Directory & privacy
-  directoryRole    String?   @default("Employee")
-  pvEmail          String?   @default("Employee")
-  pvBlog           String?   @default("Employee")
-  pvOfficePhone    String?   @default("Employee")
-  pvMobilePhone    String?   @default("Employee")
-  pvHousePhone     String?   @default("Not Accessible")
-  pvAddress        String?   @default("Not Accessible")
-  pvEmergency      String?   @default("Manager")
-  pvBirthday       String?   @default("Employee")
-  pvFamilyBirthday String?   @default("Employee")
-  pvAnniversary    String?   @default("Employee")
+  directoryRole    String? @default("Employee")
+  pvEmail          String? @default("Employee")
+  pvBlog           String? @default("Employee")
+  pvOfficePhone    String? @default("Employee")
+  pvMobilePhone    String? @default("Employee")
+  pvHousePhone     String? @default("Not Accessible")
+  pvAddress        String? @default("Not Accessible")
+  pvEmergency      String? @default("Manager")
+  pvBirthday       String? @default("Employee")
+  pvFamilyBirthday String? @default("Employee")
+  pvAnniversary    String? @default("Employee")
 
   // Others
   remark String?
@@ -1250,36 +1253,39 @@ model Employee {
   deletedAt DateTime?
 
   // Relations
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
-  user       User?       @relation(fields: [userId], references: [id])
-  department Department? @relation(fields: [departmentId], references: [id])
-  branch     Branch?     @relation(fields: [branchId], references: [id])
-  position   Position?   @relation(fields: [positionId], references: [id])
-  level      JobLevel?   @relation(fields: [levelId], references: [id])
-  jobType    JobType?    @relation(fields: [jobTypeId], references: [id])
-  jobStatus  JobStatus?  @relation(fields: [jobStatusId], references: [id])
-  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
-  reportsToPosition Position? @relation("EmployeeReportsToPosition", fields: [reportsToPositionId], references: [id])
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  user              User?          @relation(fields: [userId], references: [id])
+  department        Department?    @relation(fields: [departmentId], references: [id])
+  branch            Branch?        @relation(fields: [branchId], references: [id])
+  position          Position?      @relation(fields: [positionId], references: [id])
+  level             JobLevel?      @relation(fields: [levelId], references: [id])
+  jobType           JobType?       @relation(fields: [jobTypeId], references: [id])
+  jobStatus         JobStatus?     @relation(fields: [jobStatusId], references: [id])
+  shiftSchedule     ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+  reportsToPosition Position?      @relation("EmployeeReportsToPosition", fields: [reportsToPositionId], references: [id])
 
   immediateSupervisor Employee?  @relation("EmployeeSupervisor", fields: [immediateSupervisorId], references: [id])
   supervisorOf        Employee[] @relation("EmployeeSupervisor")
   manager             Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
   managerOf           Employee[] @relation("EmployeeManager")
 
-  headOfDepartments   Department[]    @relation("DepartmentHead")
-  orgRoles            OrgRole[]       @relation("OrgRoleEmployee")
-  approvalSteps       ApprovalStep[]  @relation("ApprovalStepApprover")
+  headOfDepartments Department[]   @relation("DepartmentHead")
+  orgRoles          OrgRole[]      @relation("OrgRoleEmployee")
+  approvalSteps     ApprovalStep[] @relation("ApprovalStepApprover")
 
   statutoryIds            StatutoryId[]
   salaryHistory           EmployeeSalary[]
   movements               EmployeeMovement[]
   placements              Placement[]
-  lineManaged             Placement[]      @relation("PlacementLineManager")
-  supervisedPlacements    Placement[]      @relation("PlacementSupervisor")
+  lineManaged             Placement[]               @relation("PlacementLineManager")
+  supervisedPlacements    Placement[]               @relation("PlacementSupervisor")
   employmentTerms         EmploymentTerm[]
   incidentReports         IncidentReport[]
   assetAssignments        AssetAssignment[]
   documents               EmployeeDocument[]
+  educationRecords        EmployeeEducation[]
+  workExperiences         EmployeeWorkExperience[]
+  trainings               EmployeeTraining[]
   leaveBalances           LeaveBalance[]
   leaveTransactions       LeaveTransaction[]
   consentRecords          ConsentRecord[]
@@ -1299,11 +1305,11 @@ model Employee {
   undertimeRequests       UndertimeRequest[]
   profileUpdateRequests   ProfileUpdateRequest[]
   attendanceLogs          AttendanceLog[]
-  dtrSubmissions          DTRSubmission[]  @relation("DTRSubmissionEmployee")
-  supervisedSubmissions   DTRSubmission[]  @relation("DTRSubmissionSupervisor")
-  managedSubmissions      DTRSubmission[]  @relation("DTRSubmissionManager")
+  dtrSubmissions          DTRSubmission[]           @relation("DTRSubmissionEmployee")
+  supervisedSubmissions   DTRSubmission[]           @relation("DTRSubmissionSupervisor")
+  managedSubmissions      DTRSubmission[]           @relation("DTRSubmissionManager")
 
-  defaultDtrApproverFor Tenant[] @relation("TenantDefaultDtrApprover")
+  defaultDtrApproverFor Tenant[]   @relation("TenantDefaultDtrApprover")
   hiredFromApplicant    Applicant?
 
   @@unique([tenantId, employeeNumber])
@@ -1384,6 +1390,114 @@ model EmployeeDocument {
 }
 
 // =============================================================================
+// EMPLOYEE BACKGROUND — Education, Work Experience, Training
+// Repeatable per-employee history records (an employee has many of each).
+// Tenant-scoped (RLS via app.current_tenant_id). Soft-deleted.
+// =============================================================================
+
+enum EducationLevel {
+  ELEMENTARY
+  HIGH_SCHOOL
+  SENIOR_HIGH
+  VOCATIONAL
+  COLLEGE
+  MASTERS
+  DOCTORATE
+  OTHER
+}
+
+/// A school/degree entry in an employee's educational background.
+model EmployeeEducation {
+  id         String @id @default(cuid())
+  employeeId String
+  tenantId   String
+
+  level        EducationLevel?
+  school       String
+  degree       String?
+  fieldOfStudy String?
+  /// Calendar years (e.g. 2014, 2018). Either may be null (ongoing/unknown).
+  startYear    Int?
+  endYear      Int?
+  honors       String?
+  notes        String?
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([deletedAt])
+}
+
+/// A prior employment record in an employee's work history.
+model EmployeeWorkExperience {
+  id         String @id @default(cuid())
+  employeeId String
+  tenantId   String
+
+  companyName      String
+  position         String
+  startDate        DateTime?
+  /// null = present / ongoing.
+  endDate          DateTime?
+  location         String?
+  description      String?
+  reasonForLeaving String?
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([deletedAt])
+}
+
+/// A training / seminar / certification completed by an employee. An optional
+/// certificate file can be uploaded to R2 (same presigned flow as 201 files).
+model EmployeeTraining {
+  id         String @id @default(cuid())
+  employeeId String
+  tenantId   String
+
+  title               String
+  provider            String?
+  trainingDate        DateTime?
+  /// Training duration in whole hours.
+  hours               Int?
+  /// Optional uploaded certificate (R2 object key + metadata).
+  certificateKey      String?
+  certificateFileName String?
+  certificateMimeType String?
+  certificateFileSize Int?
+  /// For certifications that expire (e.g. first-aid, safety).
+  expiresAt           DateTime?
+  notes               String?
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
 // SALARY HISTORY
 // All monetary amounts stored as BigInt centavos.
 // =============================================================================
@@ -1448,13 +1562,13 @@ model EmployeeMovement {
   fromImmediateSupervisorId String?
   toImmediateSupervisorId   String?
   // Placement-scope: approval workflow assignment
-  toWorkflowId         String?
+  toWorkflowId              String?
   // Terms-scope fields (used by TERMS_CHANGE and COMBINED_CHANGE)
-  toJobTypeId          String?
-  toJobStatusId        String?
-  toShiftScheduleId    String?
-  toTermStart          DateTime?
-  toNextReviewDate     DateTime?
+  toJobTypeId               String?
+  toJobStatusId             String?
+  toShiftScheduleId         String?
+  toTermStart               DateTime?
+  toNextReviewDate          DateTime?
 
   effectiveDate DateTime
   reason        String?
@@ -1470,14 +1584,14 @@ model EmployeeMovement {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  employee      Employee       @relation(fields: [employeeId], references: [id])
-  fromLevel     JobLevel?      @relation("MovementFromLevel", fields: [fromLevelId], references: [id])
-  toLevel       JobLevel?      @relation("MovementToLevel", fields: [toLevelId], references: [id])
-  toShiftSchedule ShiftSchedule? @relation(fields: [toShiftScheduleId], references: [id])
-  toJobType     JobType?       @relation("MovementToJobType", fields: [toJobTypeId], references: [id])
-  toJobStatus   JobStatus?     @relation("MovementToJobStatus", fields: [toJobStatusId], references: [id])
-  toWorkflow    ApprovalWorkflow? @relation("MovementToWorkflow", fields: [toWorkflowId], references: [id], onDelete: SetNull)
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  employee        Employee          @relation(fields: [employeeId], references: [id])
+  fromLevel       JobLevel?         @relation("MovementFromLevel", fields: [fromLevelId], references: [id])
+  toLevel         JobLevel?         @relation("MovementToLevel", fields: [toLevelId], references: [id])
+  toShiftSchedule ShiftSchedule?    @relation(fields: [toShiftScheduleId], references: [id])
+  toJobType       JobType?          @relation("MovementToJobType", fields: [toJobTypeId], references: [id])
+  toJobStatus     JobStatus?        @relation("MovementToJobStatus", fields: [toJobStatusId], references: [id])
+  toWorkflow      ApprovalWorkflow? @relation("MovementToWorkflow", fields: [toWorkflowId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId, effectiveDate])
@@ -1488,31 +1602,31 @@ model EmployeeMovement {
 // =============================================================================
 
 model Placement {
-  id            String   @id @default(cuid())
-  tenantId      String
-  employeeId    String
-  effectiveDate DateTime
-  positionId    String?
-  jobTitle      String?
-  lineManagerId String?
+  id                    String   @id @default(cuid())
+  tenantId              String
+  employeeId            String
+  effectiveDate         DateTime
+  positionId            String?
+  jobTitle              String?
+  lineManagerId         String?
   immediateSupervisorId String?
-  departmentId  String?
-  branchId      String?
-  levelId       String?
-  workflowId    String?
-  remark        String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  departmentId          String?
+  branchId              String?
+  levelId               String?
+  workflowId            String?
+  remark                String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id])
-  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  position    Position?   @relation(fields: [positionId], references: [id])
-  lineManager Employee?   @relation("PlacementLineManager", fields: [lineManagerId], references: [id])
-  immediateSupervisor Employee? @relation("PlacementSupervisor", fields: [immediateSupervisorId], references: [id])
-  department  Department? @relation(fields: [departmentId], references: [id])
-  branch      Branch?     @relation(fields: [branchId], references: [id])
-  level       JobLevel?   @relation(fields: [levelId], references: [id])
-  workflow    ApprovalWorkflow? @relation("PlacementWorkflow", fields: [workflowId], references: [id], onDelete: SetNull)
+  tenant              Tenant            @relation(fields: [tenantId], references: [id])
+  employee            Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  position            Position?         @relation(fields: [positionId], references: [id])
+  lineManager         Employee?         @relation("PlacementLineManager", fields: [lineManagerId], references: [id])
+  immediateSupervisor Employee?         @relation("PlacementSupervisor", fields: [immediateSupervisorId], references: [id])
+  department          Department?       @relation(fields: [departmentId], references: [id])
+  branch              Branch?           @relation(fields: [branchId], references: [id])
+  level               JobLevel?         @relation(fields: [levelId], references: [id])
+  workflow            ApprovalWorkflow? @relation("PlacementWorkflow", fields: [workflowId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, employeeId])
   @@index([tenantId, effectiveDate])
@@ -1520,15 +1634,15 @@ model Placement {
 }
 
 model EmploymentTerm {
-  id               String    @id @default(cuid())
-  tenantId         String
-  employeeId       String
-  effectiveDate    DateTime
-  jobTypeId        String?
-  jobStatusId      String?
-  shiftScheduleId  String?
-  termStart        DateTime?
-  nextReviewDate   DateTime?
+  id              String    @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  effectiveDate   DateTime
+  jobTypeId       String?
+  jobStatusId     String?
+  shiftScheduleId String?
+  termStart       DateTime?
+  nextReviewDate  DateTime?
 
   /// Compensation is part of the employment terms record (merged from the
   /// former EmployeeSalary table). Every EmploymentTerm row is a COMPLETE
@@ -1539,9 +1653,9 @@ model EmploymentTerm {
   basicSalaryCents BigInt?
   salaryType       SalaryType?
 
-  remark           String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  remark    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1633,7 +1747,7 @@ model Asset {
   status    AssetStatus    @default(AVAILABLE)
   condition AssetCondition @default(GOOD)
 
-  notes     String?
+  notes String?
 
   createdByUserId String?
   createdAt       DateTime  @default(now())
@@ -1658,7 +1772,7 @@ model AssetAssignment {
   assignedAt DateTime  @default(now())
   returnedAt DateTime?
 
-  conditionAtAssign AssetCondition @default(GOOD)
+  conditionAtAssign AssetCondition  @default(GOOD)
   conditionAtReturn AssetCondition?
 
   assignmentNotes String?
@@ -1756,9 +1870,9 @@ model ApprovalWorkflow {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  tenant           Tenant      @relation(fields: [tenantId], references: [id])
-  defaultForLevels JobLevel[]  @relation("LevelDefaultWorkflow")
-  placements       Placement[] @relation("PlacementWorkflow")
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  defaultForLevels JobLevel[]         @relation("LevelDefaultWorkflow")
+  placements       Placement[]        @relation("PlacementWorkflow")
   movementsTo      EmployeeMovement[] @relation("MovementToWorkflow")
 
   @@unique([tenantId, code])
@@ -1822,12 +1936,12 @@ model LeaveTransaction {
   amount Decimal              @db.Decimal(8, 4)
 
   /// Which portion of the day the leave covers (single-day partial leaves).
-  dayPortion LeavePortion @default(FULL)
+  dayPortion  LeavePortion @default(FULL)
   /// Units (days/hours) covered by entitlement — these debit the balance and
   /// mark the DTR as PAID_LEAVE.
-  paidUnits   Decimal @default(0) @db.Decimal(8, 4)
+  paidUnits   Decimal      @default(0) @db.Decimal(8, 4)
   /// Units beyond entitlement — Leave-Without-Pay; mark the DTR as UNPAID_LEAVE.
-  unpaidUnits Decimal @default(0) @db.Decimal(8, 4)
+  unpaidUnits Decimal      @default(0) @db.Decimal(8, 4)
 
   startDate      DateTime?
   endDate        DateTime?
@@ -1844,10 +1958,10 @@ model LeaveTransaction {
   createdByUserId String?
   createdAt       DateTime @default(now())
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  employee       Employee        @relation(fields: [employeeId], references: [id])
-  leaveType      LeaveType       @relation(fields: [leaveTypeId], references: [id])
-  dtrRecords     DTRRecord[]
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  leaveType  LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  dtrRecords DTRRecord[]
 
   @@index([tenantId])
   @@index([employeeId, leaveTypeId])
@@ -2151,42 +2265,42 @@ model PeriodInput {
   unpaidLeaveDays Decimal @default(0) @db.Decimal(6, 2)
 
   /// Full rest-day worked: daily-rate-based (one entry per full day off-duty worked).
-  dayOffDutyDays                        Decimal @default(0) @db.Decimal(6, 2)
+  dayOffDutyDays Decimal @default(0) @db.Decimal(6, 2)
 
   // ─── OT extensions (already in types.ts, now persisted) ───────────────────
-  restDayOtHours           Decimal @default(0) @db.Decimal(6, 2)
-  specialHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2)
-  regularHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2)
-  doubleHolidayHours       Decimal @default(0) @db.Decimal(6, 2)
-  doubleHolidayOtHours     Decimal @default(0) @db.Decimal(6, 2)
+  restDayOtHours        Decimal @default(0) @db.Decimal(6, 2)
+  specialHolidayOtHours Decimal @default(0) @db.Decimal(6, 2)
+  regularHolidayOtHours Decimal @default(0) @db.Decimal(6, 2)
+  doubleHolidayHours    Decimal @default(0) @db.Decimal(6, 2)
+  doubleHolidayOtHours  Decimal @default(0) @db.Decimal(6, 2)
 
   // ─── No-work holiday (already in types.ts, now persisted) ─────────────────
   noWorkRegularHolidayDays Decimal @default(0) @db.Decimal(6, 2)
 
   // ─── Rest-day + holiday compound scenarios ────────────────────────────────
-  restDaySpecialHolidayHours      Decimal @default(0) @db.Decimal(6, 2) // 1.50×
-  restDaySpecialHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2) // 1.95×
-  restDayRegularHolidayHours      Decimal @default(0) @db.Decimal(6, 2) // 2.60×
-  restDayRegularHolidayOtHours    Decimal @default(0) @db.Decimal(6, 2) // 3.38×
-  restDayDoubleHolidayHours       Decimal @default(0) @db.Decimal(6, 2) // 3.90×
-  restDayDoubleHolidayOtHours     Decimal @default(0) @db.Decimal(6, 2) // 5.07×
+  restDaySpecialHolidayHours   Decimal @default(0) @db.Decimal(6, 2) // 1.50×
+  restDaySpecialHolidayOtHours Decimal @default(0) @db.Decimal(6, 2) // 1.95×
+  restDayRegularHolidayHours   Decimal @default(0) @db.Decimal(6, 2) // 2.60×
+  restDayRegularHolidayOtHours Decimal @default(0) @db.Decimal(6, 2) // 3.38×
+  restDayDoubleHolidayHours    Decimal @default(0) @db.Decimal(6, 2) // 3.90×
+  restDayDoubleHolidayOtHours  Decimal @default(0) @db.Decimal(6, 2) // 5.07×
 
   // ─── NSD differential hours (already partially in types.ts) ───────────────
-  nightDiffOtHours                         Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRestDayHours                    Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRestDayOtHours                  Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffSpecialHolidayHours             Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffSpecialHolidayOtHours           Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffSpecialHolidayRestDayHours      Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffSpecialHolidayRestDayOtHours    Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRegularHolidayHours             Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRegularHolidayOtHours           Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRegularHolidayRestDayHours      Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffRegularHolidayRestDayOtHours    Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffDoubleHolidayHours              Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffDoubleHolidayOtHours            Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffDoubleHolidayRestDayHours       Decimal @default(0) @db.Decimal(6, 2)
-  nightDiffDoubleHolidayRestDayOtHours     Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffOtHours                      Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRestDayHours                 Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRestDayOtHours               Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayHours          Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayOtHours        Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayRestDayHours   Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffSpecialHolidayRestDayOtHours Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayHours          Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayOtHours        Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayRestDayHours   Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffRegularHolidayRestDayOtHours Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayHours           Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayOtHours         Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayRestDayHours    Decimal @default(0) @db.Decimal(6, 2)
+  nightDiffDoubleHolidayRestDayOtHours  Decimal @default(0) @db.Decimal(6, 2)
 
   notes String?
 
@@ -2281,11 +2395,11 @@ model PayrollBook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id])
-  sheets      PayrollSheet[]
-  adjustments PayrollAdjustment[]
-  expenseClaims     ExpenseClaim[]     @relation("BookExpenseClaims")
-  paidExpenseClaims ExpenseClaim[]     @relation("BookPaidExpenseClaims")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  sheets            PayrollSheet[]
+  adjustments       PayrollAdjustment[]
+  expenseClaims     ExpenseClaim[]      @relation("BookExpenseClaims")
+  paidExpenseClaims ExpenseClaim[]      @relation("BookPaidExpenseClaims")
 
   @@unique([tenantId, periodStart, periodEnd, runType])
   @@index([tenantId])
@@ -2351,12 +2465,12 @@ model PayrollSheet {
   withholdingTaxCents BigInt @default(0)
 
   // -- Step 10/11: Add-backs and deductions ---------------------------------
-  nontaxableAdditionsCents BigInt @default(0)
-  loanDeductionsCents      BigInt @default(0)
+  nontaxableAdditionsCents  BigInt @default(0)
+  loanDeductionsCents       BigInt @default(0)
   /// Loan installment scheduled this period but DEFERRED by the "no negative
   /// pay" floor (carried forward in the loan balance). 0 when nothing was
   /// deferred. Lets the payslip show that amortisation was paused this period.
-  loanDeferredCents        BigInt @default(0)
+  loanDeferredCents         BigInt @default(0)
   /// DEDUCTION-kind payroll adjustments applied this run (subtracted from net).
   adjustmentDeductionsCents BigInt @default(0)
 
@@ -2365,13 +2479,13 @@ model PayrollSheet {
 
   // -- Polymorphic breakdowns for payslip / audit ---------------------------
   /// Array of { id, code, name, kind, taxability, amountCents }.
-  payComponentsApplied Json @default("[]")
+  payComponentsApplied Json  @default("[]")
   /// Array of { loanId, type, amountCents, balanceBeforeCents, balanceAfterCents }.
   /// Populated at compute; `balanceAfterCents` only authoritative once the run
   /// is FINALIZED (engine debits the loan during finalize tx).
-  loanPaymentsApplied  Json @default("[]")
+  loanPaymentsApplied  Json  @default("[]")
   /// Snapshot of the PeriodInput row used (days/hours/minutes).
-  periodInputSnapshot  Json @default("{}")
+  periodInputSnapshot  Json  @default("{}")
   /// Per-fund SSS/PhilHealth/Pag-IBIG raw breakdown (msc, regular, mpf, ec).
   statutoryBreakdown   Json  @default("{}")
   /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
@@ -2405,7 +2519,7 @@ model PayrollSheet {
 /// run.  Created by payroll operators before finalizing the book; consumed by
 /// the engine in the gross-to-net waterfall.
 model PayrollAdjustment {
-  id            String         @id @default(cuid())
+  id            String @id @default(cuid())
   tenantId      String
   employeeId    String
   payrollBookId String
@@ -2416,9 +2530,9 @@ model PayrollAdjustment {
   amountCents BigInt
   /// True → included in gross compensation (taxable); False → added back
   /// after WHT as a non-taxable reimbursement/allowance.
-  isTaxable   Boolean @default(true)
+  isTaxable   Boolean        @default(true)
   /// Required audit trail (e.g. "Bonus adjustment", "Salary overpayment").
-  reason      String  @db.Text
+  reason      String         @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2463,46 +2577,46 @@ model ShiftSchedule {
   id       String @id @default(cuid())
   tenantId String
 
-  name         String
+  name               String
   /// Optional short code for payslips/reports (e.g. "FIXED-8", "FLEX-MOR").
-  code         String?
-  type         ShiftType @default(FIXED)
+  code               String?
+  type               ShiftType   @default(FIXED)
   /// Expected time-in in 24-hour "HH:MM" format. Null for FLEXIBLE shifts.
-  timeIn       String?
+  timeIn             String?
   /// Expected time-out in 24-hour "HH:MM" format. Null for FLEXIBLE shifts.
-  timeOut      String?
+  timeOut            String?
   /// Required hours per day for FLEXIBLE/OPEN shifts (e.g. 8.0). Ignored for FIXED.
-  requiredHours        Float?
+  requiredHours      Float?
   /// Core window start for FLEXIBLE shifts — "HH:MM". Null for FIXED and OPEN.
-  coreTimeIn           String?
+  coreTimeIn         String?
   /// Core window end for FLEXIBLE shifts — "HH:MM". Null for FIXED and OPEN.
-  coreTimeOut          String?
+  coreTimeOut        String?
   /// Minutes after expected time-in before tardiness is recorded (0 = strict).
-  gracePeriodMinutes   Int     @default(0)
-  breakMinutes         Int     @default(60)
-  breakPolicy          BreakPolicy @default(FIXED_DEDUCTION)
+  gracePeriodMinutes Int         @default(0)
+  breakMinutes       Int         @default(60)
+  breakPolicy        BreakPolicy @default(FIXED_DEDUCTION)
   /// True when the shift spans midnight (e.g. night shift 22:00–06:00).
-  crossesMidnight      Boolean @default(false)
+  crossesMidnight    Boolean     @default(false)
   /// JSON array of ISO weekday names: ["MON","TUE","WED","THU","FRI"].
-  workDays             Json
+  workDays           Json
   /// If set, the daily worked-minutes threshold above which OT is suggested
   /// (and, when otAutoApprove is on, auto-approved). Null = no suggestion.
-  otThresholdMinutes   Int?
+  otThresholdMinutes Int?
 
   // -- Overtime policy (per-shift) ------------------------------------------
   /// OT is never paid from the threshold alone — it must be approved.
-  otRequiresApproval   Boolean     @default(true)
+  otRequiresApproval  Boolean     @default(true)
   /// Employer safeguard: auto-create an APPROVED OT application for worked
   /// minutes beyond otThresholdMinutes (still subject to the break rule below).
-  otAutoApprove        Boolean     @default(false)
+  otAutoApprove       Boolean     @default(false)
   /// Break-deduction rule applied to approved OT hours.
-  otBreakMode          OtBreakMode @default(NONE)
+  otBreakMode         OtBreakMode @default(NONE)
   /// SINGLE: deduct otBreakMinutes once OT ≥ this many hours.
-  otBreakTriggerHours  Decimal?    @db.Decimal(5, 2)
+  otBreakTriggerHours Decimal?    @db.Decimal(5, 2)
   /// TIERED: deduct otBreakMinutes for every this-many hours of OT.
-  otBreakBlockHours    Decimal?    @db.Decimal(5, 2)
+  otBreakBlockHours   Decimal?    @db.Decimal(5, 2)
   /// Minutes deducted each time the OT break rule fires.
-  otBreakMinutes       Int?
+  otBreakMinutes      Int?
 
   isActive  Boolean   @default(true)
   deletedAt DateTime?
@@ -2510,9 +2624,9 @@ model ShiftSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant                    @relation(fields: [tenantId], references: [id])
-  assignments EmployeeShiftAssignment[]
-  dtrRecords  DTRRecord[]
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id])
+  assignments     EmployeeShiftAssignment[]
+  dtrRecords      DTRRecord[]
   employees       Employee[]
   employmentTerms EmploymentTerm[]
   movements       EmployeeMovement[]
@@ -2523,7 +2637,7 @@ model ShiftSchedule {
 
 /// Effective-dated assignment of a ShiftSchedule to an Employee.
 model EmployeeShiftAssignment {
-  id              String    @id @default(cuid())
+  id              String @id @default(cuid())
   tenantId        String
   employeeId      String
   shiftScheduleId String
@@ -2555,30 +2669,30 @@ model DTRRecord {
   date            DateTime
   shiftScheduleId String?
 
-  dayStatus        DTRDayStatus @default(PRESENT)
-  workedMinutes    Int          @default(0)
-  lateMinutes      Int          @default(0)
-  undertimeMinutes Int          @default(0)
+  dayStatus          DTRDayStatus @default(PRESENT)
+  workedMinutes      Int          @default(0)
+  lateMinutes        Int          @default(0)
+  undertimeMinutes   Int          @default(0)
   /// Pre-approved overtime minutes for this day. Only ever set from an
   /// APPROVED OT application (manual or employer auto-approve) — never paid
   /// from the shift threshold alone.
-  otMinutes        Int          @default(0)
+  otMinutes          Int          @default(0)
   /// Advisory only: worked minutes flagged beyond the shift OT threshold.
   /// Surfaced to supervisors as a "file OT?" hint; NEVER consumed by payroll.
-  suggestedOtMinutes Int        @default(0)
+  suggestedOtMinutes Int          @default(0)
   /// Night-shift differential minutes (10 PM – 6 AM window).
-  nsdMinutes       Int          @default(0)
-  hazardMinutes    Int          @default(0)
+  nsdMinutes         Int          @default(0)
+  hazardMinutes      Int          @default(0)
   /// True when the day has a clock-in but no clock-out (forgotten OUT). Flags
   /// the record for HR instead of silently reading as a zero-hour present day.
-  hasMissingPunch  Boolean      @default(false)
+  hasMissingPunch    Boolean      @default(false)
   /// Paid-leave minutes credited to this day (from an approved leave). Counts
   /// toward paid time and suppresses undertime for the covered portion.
-  paidLeaveMinutes Int          @default(0)
+  paidLeaveMinutes   Int          @default(0)
   /// The approved leave that wrote this day's leave status, if any.
   leaveTransactionId String?
   /// SPECIAL_HOLIDAY | REGULAR_HOLIDAY | null
-  holidayType      String?
+  holidayType        String?
 
   approvalStatus DTRStatus @default(PENDING)
   approvedById   String?
@@ -2600,7 +2714,7 @@ model DTRRecord {
   /// Employee or Supervisor manual clock-out correction.
   manualTimeOut    DateTime?
   manualReasonCode DTRManualReasonCode?
-  manualNotes      String?             @db.Text
+  manualNotes      String?              @db.Text
   /// "EMPLOYEE" | "SUPERVISOR" — role of the last actor to write the manual layer.
   manualActorRole  String?
   /// References the Employee who last wrote the manual layer.
@@ -2616,11 +2730,11 @@ model DTRRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant        Tenant            @relation(fields: [tenantId], references: [id])
-  employee      Employee          @relation(fields: [employeeId], references: [id])
-  shiftSchedule ShiftSchedule?    @relation(fields: [shiftScheduleId], references: [id])
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  employee         Employee          @relation(fields: [employeeId], references: [id])
+  shiftSchedule    ShiftSchedule?    @relation(fields: [shiftScheduleId], references: [id])
   leaveTransaction LeaveTransaction? @relation(fields: [leaveTransactionId], references: [id], onDelete: SetNull)
-  auditLogs     DTRAuditLog[]
+  auditLogs        DTRAuditLog[]
 
   @@unique([tenantId, employeeId, date])
   @@index([tenantId])
@@ -2660,7 +2774,7 @@ model DTRSubmission {
   managerActedAt DateTime?
 
   /// Populated when status = RETURNED. Free-text reason for the return.
-  returnedReason String? @db.Text
+  returnedReason String?   @db.Text
   returnedAt     DateTime?
   /// "SUPERVISOR" | "MANAGER" — which role issued the Return action.
   returnedByRole String?
@@ -2668,10 +2782,10 @@ model DTRSubmission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-  employee   Employee  @relation("DTRSubmissionEmployee", fields: [employeeId], references: [id])
-  supervisor Employee? @relation("DTRSubmissionSupervisor", fields: [supervisorId], references: [id])
-  manager    Employee? @relation("DTRSubmissionManager", fields: [managerId], references: [id])
+  tenant     Tenant        @relation(fields: [tenantId], references: [id])
+  employee   Employee      @relation("DTRSubmissionEmployee", fields: [employeeId], references: [id])
+  supervisor Employee?     @relation("DTRSubmissionSupervisor", fields: [supervisorId], references: [id])
+  manager    Employee?     @relation("DTRSubmissionManager", fields: [managerId], references: [id])
   auditLogs  DTRAuditLog[]
 
   @@unique([tenantId, employeeId, periodStart, periodEnd])
@@ -2730,27 +2844,27 @@ model DTRAuditLog {
 /// One row per clock punch (IN or OUT).  Drives DTRRecord computation.
 /// Geofence violations are flagged but never block the punch (Section 5.3).
 model AttendanceLog {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   tenantId   String
   employeeId String
   /// FK to Kiosk — null for ESS/import/manual punches.
   kioskId    String?
 
-  punchType  PunchType  // IN | OUT
-  source     PunchSource // KIOSK | ESS | IMPORT | MANUAL
+  punchType PunchType // IN | OUT
+  source    PunchSource // KIOSK | ESS | IMPORT | MANUAL
   /// Server-side timestamp of the punch (stored UTC).
-  punchedAt  DateTime
+  punchedAt DateTime
 
   /// R2 object key for selfie image.  Null when selfie was not captured.
-  selfieKey  String?
+  selfieKey       String?
   /// Raw JPEG bytes stored directly in DB when R2 is not configured.
-  selfieData Bytes?
+  selfieData      Bytes?
   /// GPS latitude at punch time.  Null when location was not captured.
-  latitude   Decimal? @db.Decimal(10, 7)
+  latitude        Decimal? @db.Decimal(10, 7)
   /// GPS longitude at punch time.  Null when location was not captured.
-  longitude  Decimal? @db.Decimal(10, 7)
+  longitude       Decimal? @db.Decimal(10, 7)
   /// True when the punch was captured outside the assigned branch geofence.
-  outsideGeofence Boolean @default(false)
+  outsideGeofence Boolean  @default(false)
   /// Haversine distance in metres from the nearest active geofence centre.
   distanceMeters  Int?
 
@@ -2781,22 +2895,22 @@ model ExpenseClaim {
   employeeId String
 
   /// Free-text category (TRANSPORTATION, MEALS, ACCOMMODATION, MEDICAL, etc.).
-  category        String
-  description     String  @db.Text
+  category    String
+  description String   @db.Text
   /// Claim amount in centavos.
-  amountCents     BigInt
+  amountCents BigInt
   /// Object store key for the attached receipt (e.g. R2 key). Nullable.
-  receiptKey      String?
+  receiptKey  String?
   /// The date the expense was incurred (UTC midnight).
-  claimDate       DateTime
+  claimDate   DateTime
 
-  status       ExpenseClaimStatus  @default(DRAFT)
+  status       ExpenseClaimStatus   @default(DRAFT)
   /// Set by Finance/HR during APPROVAL. Drives engine treatment.
   taxTreatment ExpenseTaxTreatment?
 
   approvedById    String?
   approvedAt      DateTime?
-  rejectionReason String? @db.Text
+  rejectionReason String?   @db.Text
 
   /// Set to the target PayrollBook when status = ATTACHED.
   payrollBookId String?
@@ -2835,12 +2949,12 @@ model OTApplication {
   hours         Decimal  @db.Decimal(5, 2)
   justification String   @db.Text
 
-  status           ApprovalStatus @default(PENDING)
-  approverId       String?
-  approvedAt       DateTime?
-  rejectedAt       DateTime?
-  rejectionReason  String?        @db.Text
-  cancelledAt      DateTime?
+  status          ApprovalStatus @default(PENDING)
+  approverId      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?        @db.Text
+  cancelledAt     DateTime?
 
   /// Active step pointer into the ApprovalStep chain (module = OT).
   currentStepIndex Int @default(0)
@@ -2848,7 +2962,7 @@ model OTApplication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@index([tenantId])
@@ -2888,7 +3002,7 @@ model UndertimeRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@index([tenantId])
@@ -2910,8 +3024,8 @@ model ProfileUpdateRequest {
 
   /// Name of the Employee field being changed (e.g. "bankAccountNumber").
   field    String
-  oldValue String?  @db.Text
-  newValue String   @db.Text
+  oldValue String? @db.Text
+  newValue String  @db.Text
 
   status          ApprovalStatus @default(PENDING)
   approverId      String?
@@ -2922,7 +3036,7 @@ model ProfileUpdateRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId],   references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@index([tenantId])
@@ -3011,8 +3125,8 @@ model JobPosting {
 
 /// An individual who applied for a job posting.
 model Applicant {
-  id         String @id @default(cuid())
-  tenantId   String
+  id           String @id @default(cuid())
+  tenantId     String
   jobPostingId String
 
   firstName String
@@ -3038,10 +3152,10 @@ model Applicant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant       Tenant     @relation(fields: [tenantId], references: [id])
-  jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id])
-  assignedTo   User?      @relation("ApplicantAssignedTo", fields: [assignedToUserId], references: [id])
-  hiredEmployee Employee? @relation(fields: [hiredEmployeeId], references: [id])
+  tenant        Tenant     @relation(fields: [tenantId], references: [id])
+  jobPosting    JobPosting @relation(fields: [jobPostingId], references: [id])
+  assignedTo    User?      @relation("ApplicantAssignedTo", fields: [assignedToUserId], references: [id])
+  hiredEmployee Employee?  @relation(fields: [hiredEmployeeId], references: [id])
 
   notes ApplicantNote[]
 
@@ -3056,7 +3170,7 @@ model ApplicantNote {
   tenantId    String
   applicantId String
 
-  body     String @db.Text
+  body     String  @db.Text
   authorId String?
 
   createdAt DateTime  @default(now())
@@ -3129,12 +3243,12 @@ model EssPasswordReset {
 }
 
 model EssSession {
-  id         String    @id @default(cuid())
+  id         String @id @default(cuid())
   tenantId   String
   employeeId String
 
   /// SHA-256 hex digest of the raw 32-byte token (never stored in clear text).
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
 
@@ -3170,7 +3284,7 @@ model EssWebAuthnCredential {
   /// Human-readable label set by the user (e.g. "iPhone 15 Face ID").
   label String?
 
-  createdAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
@@ -3213,9 +3327,9 @@ model Holiday {
   /// row keeps recurring for every other year.
   skippedDates Json @default("[]")
 
-  scope    HolidayScope @default(COMPANY_WIDE)
+  scope     HolidayScope @default(COMPANY_WIDE)
   /// Non-empty only when scope = BRANCH_SPECIFIC. Array of Branch IDs.
-  branchIds Json @default("[]")
+  branchIds Json         @default("[]")
 
   /// Non-empty only when category = AREA_SPECIFIC. PH region code (e.g. "NCR").
   region       String?
@@ -3251,11 +3365,11 @@ model Holiday {
 // =============================================================================
 
 model PremiumRateConfig {
-  id           String               @id @default(cuid())
-  tenantId     String
+  id            String               @id @default(cuid())
+  tenantId      String
   multiplierKey PremiumMultiplierKey
   /// Multiplier value (e.g. 1.30 for REST_DAY). Must be >= DOLE floor.
-  rate         Decimal              @db.Decimal(8, 4)
+  rate          Decimal              @db.Decimal(8, 4)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3265,7 +3379,6 @@ model PremiumRateConfig {
   @@unique([tenantId, multiplierKey])
   @@index([tenantId])
 }
-
 
 // ============================================================
 // BILLING
@@ -3302,23 +3415,23 @@ enum PaymentMethod {
 /// each optionally tagged with a coarse tier for badge colour / grouping.
 /// monthlyPrice / annualPrice are centavos. taxRateBps is basis points.
 model BillingPackage {
-  id              String            @id @default(cuid())
+  id           String            @id @default(cuid())
   /// Optional coarse tag (badge colour / analytics grouping). No longer unique.
-  tier            SubscriptionTier?
-  name            String
-  description     String?
-  monthlyPrice    BigInt            @default(0)
-  annualPrice     BigInt            @default(0)
+  tier         SubscriptionTier?
+  name         String
+  description  String?
+  monthlyPrice BigInt            @default(0)
+  annualPrice  BigInt            @default(0)
   /// Tax rate in basis points applied to invoices for this package (1200 = 12%).
-  taxRateBps      Int               @default(0)
-  currency        String            @default("PHP")
-  isActive        Boolean           @default(true)
+  taxRateBps   Int               @default(0)
+  currency     String            @default("PHP")
+  isActive     Boolean           @default(true)
   /// Only published packages can be assigned to tenants / offered.
-  isPublished     Boolean           @default(true)
+  isPublished  Boolean           @default(true)
   /// Display order in the Packages list (ascending).
-  sortOrder       Int               @default(0)
+  sortOrder    Int               @default(0)
   /// Marketing/feature list shown alongside the package.
-  features        Json              @default("[]")
+  features     Json              @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3390,16 +3503,16 @@ model Invoice {
 /// A payment recorded against an invoice. amount is centavos. Manual entry
 /// now; gateway* fields stay null until a webhook fills them in.
 model Payment {
-  id           String        @id @default(cuid())
-  tenantId     String
-  invoiceId    String
-  amount       BigInt        @default(0)
-  currency     String        @default("PHP")
-  method       PaymentMethod @default(MANUAL)
-  reference    String?
-  paidAt       DateTime      @default(now())
-  recordedById String?
-  notes        String?
+  id               String        @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  amount           BigInt        @default(0)
+  currency         String        @default("PHP")
+  method           PaymentMethod @default(MANUAL)
+  reference        String?
+  paidAt           DateTime      @default(now())
+  recordedById     String?
+  notes            String?
   /// Gateway fields, populated only when a payment gateway is integrated.
   gatewayProvider  String?
   gatewayReference String?
