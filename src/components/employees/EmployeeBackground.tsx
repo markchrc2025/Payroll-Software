@@ -1,16 +1,15 @@
 "use client";
 
 /**
- * EmployeeBackground — three repeatable record sections for one employee:
- * Education, Work Experience, and Training. Each supports add / edit / delete
- * against /api/employees/[id]/{education,work-experience,training}. Training
- * entries can attach a certificate uploaded to R2 via the presigned-PUT flow.
- *
- * Seeded from server props; each section re-fetches its own list after a
- * mutation rather than refreshing the whole page.
+ * Employee background sections — Education, Work Experience, and Training.
+ * Each is a self-contained, self-loading add/edit/delete manager backed by
+ * /api/employees/[id]/{education,work-experience,training}. Designed to be
+ * embedded as steps inside the Add/Edit Employee wizard (edit mode), so each
+ * section fetches its own list on mount. Training entries can attach a
+ * certificate uploaded to R2 via the presigned-PUT flow.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,15 +69,21 @@ async function api(method: string, url: string, body?: unknown) {
   return { ok: res.ok, json };
 }
 
-function Card({ title, count, onAdd, children }: { title: string; count: number; onAdd: () => void; children: React.ReactNode }) {
+// ── shared presentational bits ───────────────────────────────────────────────
+function Toolbar({ count, onAdd }: { count: number; onAdd: () => void }) {
   return (
-    <section className="overflow-hidden rounded-[14px] border border-[#E8EBF1] bg-white shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
-      <div className="flex items-center justify-between border-b border-[#E8EBF1] bg-[#FBFCFE] px-5 py-3.5">
-        <h2 className="text-[14px] font-semibold text-[#0E1B2E]">{title} <span className="text-[#8E9AAC]">({count})</span></h2>
-        <Button size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add</Button>
-      </div>
-      {children}
-    </section>
+    <div className="mb-3 flex items-center justify-between">
+      <span className="text-[12.5px] text-[#8E9AAC]">{count} {count === 1 ? "entry" : "entries"}</span>
+      <Button size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add</Button>
+    </div>
+  );
+}
+
+function ListBox({ empty, children }: { empty: string; children: React.ReactNode[] }) {
+  return (
+    <div className="overflow-hidden rounded-[12px] border border-[#ECE6DD]">
+      {children.length === 0 ? <div className="px-4 py-10 text-center text-[13px] text-[#9b9085]">{empty}</div> : children}
+    </div>
   );
 }
 
@@ -86,11 +91,11 @@ function RowItem({ title, subtitle, meta, extra, onEdit, onDelete }: {
   title: string; subtitle?: string; meta?: string; extra?: React.ReactNode; onEdit: () => void; onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4 border-b border-[#E8EBF1] px-5 py-3.5 last:border-b-0">
+    <div className="flex items-start gap-4 border-b border-[#ECE6DD] px-4 py-3.5 last:border-b-0">
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-[#0E1B2E]">{title}</div>
+        <div className="text-[13.5px] font-semibold text-[#2A2420]">{title}</div>
         {subtitle && <div className="text-[12.5px] text-[#4A586B]">{subtitle}</div>}
-        {meta && <div className="mt-0.5 text-[11.5px] text-[#8E9AAC]">{meta}</div>}
+        {meta && <div className="mt-0.5 text-[11.5px] text-[#9b9085]">{meta}</div>}
         {extra}
       </div>
       <div className="flex shrink-0 gap-1">
@@ -101,27 +106,23 @@ function RowItem({ title, subtitle, meta, extra, onEdit, onDelete }: {
   );
 }
 
-function Empty({ label }: { label: string }) {
-  return <div className="px-5 py-10 text-center text-[13px] text-[#8E9AAC]">{label}</div>;
-}
-
 function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>;
 }
 
-// ── Education section ────────────────────────────────────────────────────────
-function EducationSection({ employeeId, initial }: { employeeId: string; initial: EducationRow[] }) {
+// ── Education ─────────────────────────────────────────────────────────────────
+export function EducationSection({ employeeId }: { employeeId: string }) {
   const base = `/api/employees/${employeeId}/education`;
-  const [rows, setRows] = useState(initial);
+  const [rows, setRows] = useState<EducationRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EducationRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ level: "NONE", school: "", degree: "", fieldOfStudy: "", startYear: "", endYear: "", honors: "", notes: "" });
 
-  async function reload() {
-    const { ok, json } = await api("GET", base);
-    if (ok) setRows(json?.data ?? []);
-  }
+  async function reload() { const { ok, json } = await api("GET", base); if (ok) setRows(json?.data ?? []); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reload(); }, []);
+
   function openAdd() {
     setEditing(null);
     setF({ level: "NONE", school: "", degree: "", fieldOfStudy: "", startYear: "", endYear: "", honors: "", notes: "" });
@@ -156,14 +157,17 @@ function EducationSection({ employeeId, initial }: { employeeId: string; initial
   }
 
   return (
-    <Card title="Education" count={rows.length} onAdd={openAdd}>
-      {rows.length === 0 ? <Empty label="No education records yet." /> : rows.map((r) => (
-        <RowItem key={r.id}
-          title={r.school}
-          subtitle={[r.degree, r.fieldOfStudy].filter(Boolean).join(" · ") || undefined}
-          meta={[r.level ? LEVEL_LABEL[r.level] : null, [r.startYear, r.endYear].filter(Boolean).join("–") || null, r.honors].filter(Boolean).join("  ·  ") || undefined}
-          onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
-      ))}
+    <div>
+      <Toolbar count={rows.length} onAdd={openAdd} />
+      <ListBox empty="No education records yet.">
+        {rows.map((r) => (
+          <RowItem key={r.id}
+            title={r.school}
+            subtitle={[r.degree, r.fieldOfStudy].filter(Boolean).join(" · ") || undefined}
+            meta={[r.level ? LEVEL_LABEL[r.level] : null, [r.startYear, r.endYear].filter(Boolean).join("–") || null, r.honors].filter(Boolean).join("  ·  ") || undefined}
+            onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
+        ))}
+      </ListBox>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? "Edit education" : "Add education"}</DialogTitle></DialogHeader>
@@ -198,20 +202,23 @@ function EducationSection({ employeeId, initial }: { employeeId: string; initial
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }
 
-// ── Work Experience section ──────────────────────────────────────────────────
-function WorkSection({ employeeId, initial }: { employeeId: string; initial: WorkRow[] }) {
+// ── Work Experience ──────────────────────────────────────────────────────────
+export function WorkExperienceSection({ employeeId }: { employeeId: string }) {
   const base = `/api/employees/${employeeId}/work-experience`;
-  const [rows, setRows] = useState(initial);
+  const [rows, setRows] = useState<WorkRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<WorkRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ companyName: "", position: "", startDate: "", endDate: "", location: "", description: "", reasonForLeaving: "" });
 
   async function reload() { const { ok, json } = await api("GET", base); if (ok) setRows(json?.data ?? []); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reload(); }, []);
+
   function openAdd() {
     setEditing(null);
     setF({ companyName: "", position: "", startDate: "", endDate: "", location: "", description: "", reasonForLeaving: "" });
@@ -242,15 +249,18 @@ function WorkSection({ employeeId, initial }: { employeeId: string; initial: Wor
   }
 
   return (
-    <Card title="Work Experience" count={rows.length} onAdd={openAdd}>
-      {rows.length === 0 ? <Empty label="No work experience yet." /> : rows.map((r) => (
-        <RowItem key={r.id}
-          title={r.position}
-          subtitle={r.companyName + (r.location ? ` · ${r.location}` : "")}
-          meta={[(r.startDate || r.endDate) ? `${fmtDate(r.startDate) || "—"} – ${r.endDate ? fmtDate(r.endDate) : "Present"}` : null, r.reasonForLeaving ? `Left: ${r.reasonForLeaving}` : null].filter(Boolean).join("  ·  ") || undefined}
-          extra={r.description ? <p className="mt-1 text-[12.5px] text-[#4A586B]">{r.description}</p> : undefined}
-          onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
-      ))}
+    <div>
+      <Toolbar count={rows.length} onAdd={openAdd} />
+      <ListBox empty="No work experience yet.">
+        {rows.map((r) => (
+          <RowItem key={r.id}
+            title={r.position}
+            subtitle={r.companyName + (r.location ? ` · ${r.location}` : "")}
+            meta={[(r.startDate || r.endDate) ? `${fmtDate(r.startDate) || "—"} – ${r.endDate ? fmtDate(r.endDate) : "Present"}` : null, r.reasonForLeaving ? `Left: ${r.reasonForLeaving}` : null].filter(Boolean).join("  ·  ") || undefined}
+            extra={r.description ? <p className="mt-1 text-[12.5px] text-[#4A586B]">{r.description}</p> : undefined}
+            onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
+        ))}
+      </ListBox>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? "Edit work experience" : "Add work experience"}</DialogTitle></DialogHeader>
@@ -261,7 +271,7 @@ function WorkSection({ employeeId, initial }: { employeeId: string; initial: Wor
             </FieldRow>
             <FieldRow>
               <div className="space-y-1.5"><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>End date <span className="text-[#8E9AAC]">(blank = present)</span></Label><Input type="date" value={f.endDate} onChange={(e) => setF({ ...f, endDate: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>End date <span className="text-[#9b9085]">(blank = present)</span></Label><Input type="date" value={f.endDate} onChange={(e) => setF({ ...f, endDate: e.target.value })} /></div>
             </FieldRow>
             <div className="space-y-1.5"><Label>Location</Label><Input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Makati City" /></div>
             <div className="space-y-1.5"><Label>Description</Label><Textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Key responsibilities…" /></div>
@@ -273,14 +283,14 @@ function WorkSection({ employeeId, initial }: { employeeId: string; initial: Wor
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }
 
-// ── Training section ─────────────────────────────────────────────────────────
-function TrainingSection({ employeeId, initial, storageReady }: { employeeId: string; initial: TrainingRow[]; storageReady: boolean }) {
+// ── Training ─────────────────────────────────────────────────────────────────
+export function TrainingSection({ employeeId, storageReady = true }: { employeeId: string; storageReady?: boolean }) {
   const base = `/api/employees/${employeeId}/training`;
-  const [rows, setRows] = useState(initial);
+  const [rows, setRows] = useState<TrainingRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TrainingRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -288,6 +298,9 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
   const [f, setF] = useState({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "" });
 
   async function reload() { const { ok, json } = await api("GET", base); if (ok) setRows(json?.data ?? []); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reload(); }, []);
+
   function openAdd() {
     setEditing(null); setFile(null);
     setF({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "" });
@@ -298,8 +311,7 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
     setF({ title: r.title, provider: r.provider ?? "", trainingDate: toDateInput(r.trainingDate), hours: r.hours?.toString() ?? "", expiresAt: toDateInput(r.expiresAt), notes: r.notes ?? "" });
     setOpen(true);
   }
-
-  async function uploadCert(): Promise<{ certificateKey: string; certificateFileName: string; certificateMimeType: string; certificateFileSize: number } | null> {
+  async function uploadCert() {
     if (!file) return null;
     if (file.size > MAX_FILE_SIZE) throw new Error(`File must be ≤ ${MAX_FILE_SIZE / 1024 / 1024} MB`);
     const presign = await api("POST", `${base}/presign`, { fileName: file.name, mimeType: file.type, fileSize: file.size });
@@ -309,12 +321,10 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
     if (!put.ok) throw new Error(`Upload failed (HTTP ${put.status})`);
     return { certificateKey: storageKey, certificateFileName: file.name, certificateMimeType: file.type, certificateFileSize: file.size };
   }
-
   async function save() {
     if (!f.title.trim()) { toast.error("Title is required."); return; }
     setBusy(true);
     try {
-      // New upload replaces; otherwise retain the editing record's certificate.
       const cert = file
         ? await uploadCert()
         : editing
@@ -339,19 +349,22 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
   }
 
   return (
-    <Card title="Training" count={rows.length} onAdd={openAdd}>
-      {rows.length === 0 ? <Empty label="No training records yet." /> : rows.map((r) => (
-        <RowItem key={r.id}
-          title={r.title}
-          subtitle={[r.provider, r.hours ? `${r.hours} hr` : null].filter(Boolean).join(" · ") || undefined}
-          meta={[r.trainingDate ? fmtDate(r.trainingDate) : null, r.expiresAt ? `Expires ${fmtDate(r.expiresAt)}` : null].filter(Boolean).join("  ·  ") || undefined}
-          extra={r.certificateUrl ? (
-            <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-[#E8693A] hover:underline">
-              <Download className="h-3 w-3" /> {r.certificateFileName ?? "Certificate"}
-            </a>
-          ) : undefined}
-          onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
-      ))}
+    <div>
+      <Toolbar count={rows.length} onAdd={openAdd} />
+      <ListBox empty="No training records yet.">
+        {rows.map((r) => (
+          <RowItem key={r.id}
+            title={r.title}
+            subtitle={[r.provider, r.hours ? `${r.hours} hr` : null].filter(Boolean).join(" · ") || undefined}
+            meta={[r.trainingDate ? fmtDate(r.trainingDate) : null, r.expiresAt ? `Expires ${fmtDate(r.expiresAt)}` : null].filter(Boolean).join("  ·  ") || undefined}
+            extra={r.certificateUrl ? (
+              <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-[#E8693A] hover:underline">
+                <Download className="h-3 w-3" /> {r.certificateFileName ?? "Certificate"}
+              </a>
+            ) : undefined}
+            onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
+        ))}
+      </ListBox>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? "Edit training" : "Add training"}</DialogTitle></DialogHeader>
@@ -368,9 +381,9 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
             <div className="space-y-1.5"><Label>Notes</Label><Textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
             {storageReady && (
               <div className="space-y-1.5">
-                <Label>Certificate {editing?.certificateFileName ? <span className="text-[#8E9AAC]">(current: {editing.certificateFileName})</span> : null}</Label>
+                <Label>Certificate {editing?.certificateFileName ? <span className="text-[#9b9085]">(current: {editing.certificateFileName})</span> : null}</Label>
                 <Input type="file" accept={ALLOWED_MIME_TYPES.join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-                <p className="text-[11px] text-[#8E9AAC]">PDF or image, max {MAX_FILE_SIZE / 1024 / 1024} MB. {editing ? "Choosing a new file replaces the current one." : ""}</p>
+                <p className="text-[11px] text-[#9b9085]">PDF or image, max {MAX_FILE_SIZE / 1024 / 1024} MB. {editing ? "Choosing a new file replaces the current one." : ""}</p>
               </div>
             )}
           </div>
@@ -380,25 +393,6 @@ function TrainingSection({ employeeId, initial, storageReady }: { employeeId: st
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
-  );
-}
-
-// ── Parent ────────────────────────────────────────────────────────────────
-export function EmployeeBackground({
-  employeeId, initialEducation, initialWorkExperience, initialTraining, storageReady,
-}: {
-  employeeId: string;
-  initialEducation: EducationRow[];
-  initialWorkExperience: WorkRow[];
-  initialTraining: TrainingRow[];
-  storageReady: boolean;
-}) {
-  return (
-    <div className="space-y-5">
-      <EducationSection employeeId={employeeId} initial={initialEducation} />
-      <WorkSection employeeId={employeeId} initial={initialWorkExperience} />
-      <TrainingSection employeeId={employeeId} initial={initialTraining} storageReady={storageReady} />
     </div>
   );
 }
