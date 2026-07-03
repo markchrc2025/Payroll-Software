@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getAvatarColor, getInitials, StatusPill } from "@/components/employees/columns";
+import { uploadImage, validateImage, ACCEPT_ATTR } from "@/lib/upload-image";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -260,19 +261,13 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file."); return; }
     setUploading(true);
     try {
-      const presign = await fetch("/api/employees/photo/presign", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileSize: file.size }),
-      });
-      const pj = await presign.json().catch(() => null);
-      if (!presign.ok) throw new Error(pj?.error ?? "Could not start the upload");
-      const { uploadUrl, storageKey } = pj.data as { uploadUrl: string; storageKey: string };
-
-      const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      if (!put.ok) throw new Error(`Upload failed (HTTP ${put.status})`);
+      // validateImage (inside uploadImage) gives a clear message for wrong
+      // type/size (e.g. HEIC iPhone photos) instead of a generic "Validation
+      // failed" from the server. Only JPG/PNG/WebP up to 5 MB are accepted.
+      validateImage(file);
+      const storageKey = await uploadImage(file, "/api/employees/photo/presign");
 
       const patch = await fetch(`/api/employees/${employeeId}/photo`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -311,7 +306,7 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
       >
         {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-[18px] w-[18px]" />}
       </button>
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+      <input ref={inputRef} type="file" accept={ACCEPT_ATTR} className="hidden" onChange={onPick} />
     </div>
   );
 }
