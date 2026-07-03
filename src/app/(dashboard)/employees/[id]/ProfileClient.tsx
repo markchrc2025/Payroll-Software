@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle, Pencil, Loader2 } from "lucide-react";
+import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getAvatarColor, getInitials, StatusPill } from "@/components/employees/columns";
-import { uploadImage, validateImage, ACCEPT_ATTR } from "@/lib/upload-image";
+import { validateImage, ACCEPT_ATTR } from "@/lib/upload-image";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -250,24 +250,76 @@ function PlaceholderTab({ label }: { label: string }) {
 // Left panel
 // ---------------------------------------------------------------------------
 
+/** PUT the file to the presigned URL via XHR so we get real upload progress. */
+function putWithProgress(url: string, file: File, onProgress: (fraction: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Upload to storage failed (HTTP ${xhr.status})`));
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(file);
+  });
+}
+
 function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
   employeeId: string; photoKey: string | null | undefined; bg: string; color: string; initials: string;
 }) {
   const [hasPhoto, setHasPhoto] = useState(!!photoKey);
   const [ver, setVer] = useState(0);
-  const [uploading, setUploading] = useState(false);
+  /** null = idle; 0–100 while uploading. */
+  const [progress, setProgress] = useState<number | null>(null);
+  const [justDone, setJustDone] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const uploading = progress !== null;
+
+  useEffect(() => () => {
+    // Release the local object URL on unmount.
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
+
+  function setLocalPreview(file: File | null) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = file ? URL.createObjectURL(file) : null;
+    setPreview(previewUrlRef.current);
+  }
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
     try {
-      // validateImage (inside uploadImage) gives a clear message for wrong
-      // type/size (e.g. HEIC iPhone photos) instead of a generic "Validation
-      // failed" from the server. Only JPG/PNG/WebP up to 5 MB are accepted.
+      // Clear message for wrong type/size (e.g. HEIC iPhone photos) instead of
+      // a generic server "Validation failed". Only JPG/PNG/WebP up to 5 MB.
       validateImage(file);
-      const storageKey = await uploadImage(file, "/api/employees/photo/presign");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid image");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    setLocalPreview(file); // show the chosen photo immediately
+    setProgress(2);
+    try {
+      const presignRes = await fetch("/api/employees/photo/presign", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileSize: file.size }),
+      });
+      const pj = await presignRes.json().catch(() => null);
+      if (!presignRes.ok) throw new Error(pj?.error ?? "Could not start the upload");
+      const { uploadUrl, storageKey } = pj.data as { uploadUrl: string; storageKey: string };
+      setProgress(8);
+
+      // The R2 upload is the bulk of the work: map it to 8→94%.
+      await putWithProgress(uploadUrl, file, (f) => setProgress(8 + Math.round(f * 86)));
 
       const patch = await fetch(`/api/employees/${employeeId}/photo`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -275,21 +327,32 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
       });
       const jj = await patch.json().catch(() => null);
       if (!patch.ok) throw new Error(jj?.error ?? "Could not save the photo");
+      setProgress(100);
 
       toast.success("Profile photo updated");
       setHasPhoto(true);
       setVer((v) => v + 1); // bust the <img> cache
+      setJustDone(true);
+      setTimeout(() => setJustDone(false), 1800);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
+      setLocalPreview(null); // drop the failed preview
     } finally {
-      setUploading(false);
+      setProgress(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
+  // Progress ring geometry — a 80×80 ring around the 72px avatar.
+  const R = 37;
+  const CIRC = 2 * Math.PI * R;
+
   return (
     <div className="group relative mb-3 h-[72px] w-[72px]">
-      {hasPhoto ? (
+      {preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={preview} alt="" className="h-[72px] w-[72px] rounded-full object-cover" />
+      ) : hasPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={`/api/employees/${employeeId}/photo?v=${ver}`} alt="" className="h-[72px] w-[72px] rounded-full object-cover" />
       ) : (
@@ -297,16 +360,46 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
           {initials}
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={uploading}
-        title="Upload photo"
-        className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-      >
-        {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-[18px] w-[18px]" />}
-      </button>
-      <input ref={inputRef} type="file" accept={ACCEPT_ATTR} className="hidden" onChange={onPick} />
+
+      {/* Encircling progress ring while uploading; turns green when done. */}
+      {(uploading || justDone) && (
+        <svg viewBox="0 0 80 80" className="pointer-events-none absolute -inset-1 h-[80px] w-[80px] -rotate-90">
+          <circle cx="40" cy="40" r={R} fill="none" stroke="#E8EBF1" strokeWidth="4" />
+          <circle
+            cx="40" cy="40" r={R} fill="none"
+            stroke={justDone ? "#0FA36B" : "#E8693A"}
+            strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={CIRC}
+            strokeDashoffset={justDone ? 0 : CIRC * (1 - (progress ?? 0) / 100)}
+            style={{ transition: "stroke-dashoffset 200ms ease, stroke 200ms ease" }}
+          />
+        </svg>
+      )}
+
+      {/* Uploading: darken + live percentage. Done: brief green check. */}
+      {uploading && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+          <span className="text-[13px] font-bold text-white">{progress}%</span>
+        </div>
+      )}
+      {justDone && !uploading && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/35">
+          <Check className="h-6 w-6 text-white" />
+        </div>
+      )}
+
+      {/* Idle: pencil on hover. */}
+      {!uploading && !justDone && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          title="Upload photo"
+          className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        >
+          <Pencil className="h-[18px] w-[18px]" />
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept={ACCEPT_ATTR} className="hidden" onChange={onPick} disabled={uploading} />
     </div>
   );
 }
