@@ -19,31 +19,44 @@
 
 import { S3Client } from "@aws-sdk/client-s3";
 
+// Credentials/bucket accept S3_* names (any S3-compatible store, e.g. Sliplane
+// Object Storage / MinIO) and fall back to the original R2_* names so existing
+// Cloudflare R2 deployments keep working unchanged.
 const accountId = process.env.R2_ACCOUNT_ID;
-const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? process.env.R2_ACCESS_KEY_ID;
+const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? process.env.R2_SECRET_ACCESS_KEY;
 
-export const R2_BUCKET = process.env.R2_BUCKET ?? "";
-export const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL; // optional
+export const R2_BUCKET = process.env.S3_BUCKET ?? process.env.R2_BUCKET ?? "";
+export const R2_PUBLIC_URL = process.env.S3_PUBLIC_URL ?? process.env.R2_PUBLIC_URL; // optional
 
-/** True when the runtime has been configured with R2 credentials. */
+// Explicit endpoint for any S3-compatible provider; otherwise derive the
+// Cloudflare R2 endpoint from R2_ACCOUNT_ID (legacy behaviour).
+const s3Endpoint =
+  process.env.S3_ENDPOINT ??
+  (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : undefined);
+
+/** True when the runtime has been configured with object-storage credentials. */
 export function isR2Configured(): boolean {
-  return Boolean(accountId && accessKeyId && secretAccessKey && R2_BUCKET);
+  return Boolean(s3Endpoint && accessKeyId && secretAccessKey && R2_BUCKET);
 }
 
 let _client: S3Client | null = null;
 
-/** Lazily-constructed S3 client pointing at the R2 endpoint. */
+/** Lazily-constructed S3 client for the configured object store. */
 export function r2(): S3Client {
   if (!isR2Configured()) {
     throw new Error(
-      "Cloudflare R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET in .env.local."
+      "Object storage is not configured. Set S3_ENDPOINT + S3_ACCESS_KEY_ID + " +
+      "S3_SECRET_ACCESS_KEY + S3_BUCKET (or the legacy R2_* equivalents).",
     );
   }
   if (!_client) {
     _client = new S3Client({
-      region: "auto",
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      // R2 uses "auto"; MinIO/Sliplane-style stores often need a real region.
+      region: process.env.S3_REGION ?? "auto",
+      endpoint: s3Endpoint,
+      // Path-style addressing is required by many self-hosted S3 stores.
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
       credentials: {
         accessKeyId: accessKeyId!,
         secretAccessKey: secretAccessKey!,
