@@ -23,10 +23,18 @@ export function getJobQueue(): Boss {
         "DIRECT_DATABASE_URL (or DATABASE_URL) must be set to initialise the job queue.",
       );
     }
-    _boss = new PgBoss({
+    const config: ConstructorParameters<typeof PgBoss>[0] = {
       connectionString: connString,
       ssl: { rejectUnauthorized: false },
-    });
+    };
+    // pg-boss forwards this config straight to `new pg.Pool()`, so plain
+    // node-postgres socket options work even though pg-boss's own types don't
+    // declare them. Some managed Postgres hosts silently drop idle TCP
+    // connections after ~60s; without a keepalive, pg-boss's next scheduled
+    // tick hits a dead socket and errors instead of reconnecting.
+    (config as Record<string, unknown>).keepAlive = true;
+    (config as Record<string, unknown>).keepAliveInitialDelayMillis = 10000;
+    _boss = new PgBoss(config);
   }
   return _boss;
 }
