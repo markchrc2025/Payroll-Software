@@ -163,34 +163,26 @@ export default function RemoteKioskPage() {
       return;
     }
 
-    // Try R2 upload first
+    // Try the storage upload first — through our own server (same-origin, no
+    // bucket CORS); it stores the selfie and returns its storage key.
     let r2Succeeded = false;
     try {
-      const presignRes = await fetch("/api/kiosk/presign", {
+      const form = new FormData();
+      form.append("employeeNumber", employeeNumberRef.current.trim());
+      form.append("file", new File([blob], "selfie.jpg", { type: "image/jpeg" }));
+      const uploadRes = await fetch("/api/kiosk/upload", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Kiosk ${deviceTokenRef.current}`,
-        },
-        body: JSON.stringify({
-          employeeNumber: employeeNumberRef.current.trim(),
-          fileName: "selfie.jpg",
-          mimeType: "image/jpeg",
-          fileSize: blob.size,
-        }),
+        headers: { Authorization: `Kiosk ${deviceTokenRef.current}` },
+        body: form,
       });
-      if (presignRes.ok) {
-        const { data: pd } = await presignRes.json();
-        const putRes = await fetch(pd.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": "image/jpeg" },
-          body: blob,
-        });
-        if (putRes.ok) { selfieKey = pd.storageKey; r2Succeeded = true; }
+      if (uploadRes.ok) {
+        const { data: pd } = await uploadRes.json();
+        selfieKey = pd.storageKey;
+        r2Succeeded = true;
       }
     } catch { /* fall through to base64 */ }
 
-    // R2 not available — encode as base64 for direct DB storage
+    // Storage not available — encode as base64 for direct DB storage
     if (!r2Succeeded) {
       const ab = await blob.arrayBuffer();
       const bytes = new Uint8Array(ab);

@@ -6,7 +6,7 @@
  * /api/employees/[id]/{education,work-experience,training}. Designed to be
  * embedded as steps inside the Add/Edit Employee wizard (edit mode), so each
  * section fetches its own list on mount. Training entries can attach a
- * certificate uploaded to R2 via the presigned-PUT flow.
+ * certificate uploaded to object storage via the server-side upload route.
  */
 
 import { useEffect, useState } from "react";
@@ -314,11 +314,14 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
   async function uploadCert() {
     if (!file) return null;
     if (file.size > MAX_FILE_SIZE) throw new Error(`File must be ≤ ${MAX_FILE_SIZE / 1024 / 1024} MB`);
-    const presign = await api("POST", `${base}/presign`, { fileName: file.name, mimeType: file.type, fileSize: file.size });
-    if (!presign.ok) throw new Error(presign.json?.error ?? "Could not start upload");
-    const { uploadUrl, storageKey } = presign.json.data as { uploadUrl: string; storageKey: string };
-    const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-    if (!put.ok) throw new Error(`Upload failed (HTTP ${put.status})`);
+    // Upload through our own server (same-origin, no bucket CORS); it stores
+    // the file and returns its storage key.
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${base}/upload`, { method: "POST", body: form });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(json?.error ?? "Upload failed");
+    const { storageKey } = json.data as { storageKey: string };
     return { certificateKey: storageKey, certificateFileName: file.name, certificateMimeType: file.type, certificateFileSize: file.size };
   }
   async function save() {

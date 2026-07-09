@@ -2,23 +2,17 @@
 
 /**
  * Shared selfie clock-in/out engine — real front-camera capture (WebRTC) +
- * geolocation + timestamp, uploaded to R2 via the presign flow and attached to
- * the punch (/api/ess/clock). Consumed by both the mobile full-screen ClockScreen
- * and the desktop clock modal so the capture/upload behaviour stays identical.
+ * geolocation + timestamp, uploaded to object storage via the server-side
+ * upload route and attached to the punch (/api/ess/clock). Consumed by both
+ * the mobile full-screen ClockScreen and the desktop clock modal so the
+ * capture/upload behaviour stays identical.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { essFetch, type ApiOne } from "./api";
+import { essFetch, essToken, type ApiOne } from "./api";
 import { fmtTime } from "./primitives";
 
 export type SelfieStep = "camera" | "review" | "done";
-
-interface PresignResp {
-  uploadUrl: string;
-  storageKey: string;
-  method: string;
-  headers: Record<string, string>;
-}
 interface ClockResp {
   logId: string;
   outsideGeofence: boolean;
@@ -151,23 +145,22 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
       let selfieKey: string | null = null;
 
       if (shot) {
-        // 1) presign — tolerate "storage not configured" by punching w/o selfie
+        // Upload through our own server (same-origin, no bucket CORS) —
+        // tolerate "storage not configured" by punching w/o selfie. Raw fetch
+        // (not essFetch) because FormData must set its own Content-Type.
         try {
-          const pres = await essFetch<ApiOne<PresignResp>>("/api/ess/clock/presign", {
+          const form = new FormData();
+          form.append("file", new File([shot.blob], "selfie.jpg", { type: "image/jpeg" }));
+          const token = essToken();
+          const res = await fetch("/api/ess/clock/upload", {
             method: "POST",
-            body: JSON.stringify({
-              fileName: "selfie.jpg",
-              mimeType: "image/jpeg",
-              fileSize: shot.blob.size,
-            }),
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            body: form,
           });
-          // 2) upload directly to R2
-          const put = await fetch(pres.data.uploadUrl, {
-            method: pres.data.method || "PUT",
-            headers: pres.data.headers || { "Content-Type": "image/jpeg" },
-            body: shot.blob,
-          });
-          if (put.ok) selfieKey = pres.data.storageKey;
+          if (res.ok) {
+            const json = (await res.json()) as { data?: { storageKey?: string } };
+            selfieKey = json.data?.storageKey ?? null;
+          }
         } catch {
           selfieKey = null; // storage not configured / upload failed — continue
         }

@@ -1,13 +1,12 @@
 /**
  * /api/employees/[id]/documents
  *   GET  — list 201-file documents for an employee
- *   POST — finalize a completed R2 upload (persist metadata after PUT to presigned URL)
+ *   POST — persist metadata for a completed object-storage upload
  *
  * Upload flow:
- *   1. Browser POSTs metadata to /api/employees/[id]/documents/presign
- *      → server returns { uploadUrl, storageKey }
- *   2. Browser PUTs the file directly to uploadUrl (Cloudflare R2)
- *   3. Browser POSTs to this endpoint with the storageKey + metadata
+ *   1. Browser POSTs the file (multipart) to /api/employees/[id]/documents/upload
+ *      → server stores it and returns { storageKey }
+ *   2. Browser POSTs to this endpoint with the storageKey + metadata
  *      → row persisted in EmployeeDocument
  */
 
