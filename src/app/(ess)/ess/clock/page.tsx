@@ -195,19 +195,19 @@ export default function EssClockPage() {
         for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
         const blob = new Blob([ab], { type: "image/jpeg" });
 
-        const presignRes = await fetch("/api/ess/clock/presign", {
+        // Upload through our own server (same-origin, no bucket CORS); it
+        // stores the selfie and returns its storage key.
+        const form = new FormData();
+        form.append("file", new File([blob], "selfie.jpg", { type: "image/jpeg" }));
+        const token = localStorage.getItem("ess_token");
+        const uploadRes = await fetch("/api/ess/clock/upload", {
           method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName: "selfie.jpg", mimeType: "image/jpeg", fileSize: blob.size }),
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+          body: form,
         });
-        if (presignRes.ok) {
-          const { data } = await presignRes.json();
-          const putRes = await fetch(data.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": "image/jpeg" },
-            body: blob,
-          });
-          if (putRes.ok) selfieKey = data.storageKey;
+        if (uploadRes.ok) {
+          const { data } = await uploadRes.json();
+          selfieKey = data.storageKey;
         }
       } catch {
         // Upload failed — proceed without selfie key

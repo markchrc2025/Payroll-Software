@@ -6,9 +6,9 @@
  * employee detail page's Documents tab in Phase C5).
  *
  * Upload flow:
- *   1. POST /api/employees/[id]/documents/presign → { uploadUrl, storageKey }
- *   2. PUT the file directly to uploadUrl (Cloudflare R2)
- *   3. POST /api/employees/[id]/documents → records the row
+ *   1. POST the file (multipart) to /api/employees/[id]/documents/upload —
+ *      the server stores it in object storage and returns { storageKey }
+ *   2. POST /api/employees/[id]/documents → records the row
  */
 
 import { useState } from "react";
@@ -114,43 +114,21 @@ export function DocumentManager({ employeeId, documents }: Props) {
 
     setIsUploading(true);
     try {
-      // Step 1 — ask the server for a presigned PUT URL
-      const presignRes = await fetch(
-        `/api/employees/${employeeId}/documents/presign`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category,
-            title: title.trim(),
-            description: description.trim() || null,
-            isConfidential,
-            fileName: file.name,
-            mimeType: file.type,
-            fileSize: file.size,
-          }),
-        }
+      // Step 1 — upload the file through our own server (same-origin, no
+      // bucket CORS); it stores the file and returns its storage key.
+      const uploadForm = new FormData();
+      uploadForm.append("file", file);
+      const uploadRes = await fetch(
+        `/api/employees/${employeeId}/documents/upload`,
+        { method: "POST", body: uploadForm }
       );
-      const presignJson = await presignRes.json();
-      if (!presignRes.ok) {
-        throw new Error(presignJson?.error ?? "Failed to get upload URL");
+      const uploadJson = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) {
+        throw new Error(uploadJson?.error ?? "Upload failed");
       }
-      const { uploadUrl, storageKey } = presignJson.data as {
-        uploadUrl: string;
-        storageKey: string;
-      };
+      const { storageKey } = uploadJson.data as { storageKey: string };
 
-      // Step 2 — PUT the file directly to Cloudflare R2
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) {
-        throw new Error(`R2 upload failed (HTTP ${putRes.status})`);
-      }
-
-      // Step 3 — record the document in the DB
+      // Step 2 — record the document in the DB
       const finalizeRes = await fetch(
         `/api/employees/${employeeId}/documents`,
         {

@@ -7,7 +7,7 @@
  * forms can send blank inputs without tripping validation.
  */
 import { z } from "zod";
-import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from "./document";
+import { MAX_FILE_SIZE } from "./document";
 
 // ── shared preprocessors ─────────────────────────────────────────────────────
 const optStr = (max: number) =>
@@ -88,17 +88,6 @@ export const trainingSchema = z.object({
   certificateFileSize: z.number().int().positive().max(MAX_FILE_SIZE).nullable().optional(),
   expiresAt: optDate,
   notes: optStr(2000),
-});
-
-/** Browser asks permission to upload a training certificate to R2. */
-export const trainingCertPresignSchema = z.object({
-  fileName: z.string().min(1).max(255),
-  mimeType: z.enum(ALLOWED_MIME_TYPES, { error: "Unsupported file type" }),
-  fileSize: z
-    .number()
-    .int()
-    .positive()
-    .max(MAX_FILE_SIZE, `File must be ≤ ${MAX_FILE_SIZE / 1024 / 1024} MB`),
 });
 
 export type EducationInput = z.infer<typeof educationSchema>;
