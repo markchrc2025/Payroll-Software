@@ -57,6 +57,15 @@ export function r2(): S3Client {
       endpoint: s3Endpoint,
       // Path-style addressing is required by many self-hosted S3 stores.
       forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+      // AWS SDK v3 (>=3.729) adds a default CRC32 integrity checksum to uploads.
+      // Cloudflare R2 and most S3-compatible stores then reject the resulting
+      // presigned PUT with 403 (surfacing as a "network error" in the browser),
+      // because the browser sends a plain PUT without the checksum header the
+      // presigned URL now demands. "WHEN_REQUIRED" restores the pre-3.729
+      // behaviour — only attach a checksum when the operation actually needs
+      // one — so presigned PUT (and GET) URLs work against R2/MinIO again.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       credentials: {
         accessKeyId: accessKeyId!,
         secretAccessKey: secretAccessKey!,
