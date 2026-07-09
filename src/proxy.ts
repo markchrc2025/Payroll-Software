@@ -11,14 +11,6 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth?.user;
   const path = nextUrl.pathname;
 
-  // TEMP DIAGNOSTIC: confirm the healthcheck probe reaches the edge proxy at
-  // all (i.e. the request arrives on the container). Remove once healthy.
-  if (path === "/api/health") {
-    console.log(
-      `[proxy] /api/health seen — method=${req.method} host="${req.headers.get("host") ?? ""}"`,
-    );
-  }
-
   const isPublic =
     path === "/login" ||
     path === "/api/health" ||
