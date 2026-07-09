@@ -202,6 +202,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/assets", label: "Assets", icon: "assets" },
       { href: "/settings/employee-id", label: "Employee ID", icon: "roles" },
       { href: "/settings/ownership", label: "Ownership", icon: "roles" },
+      { href: "/settings/storage", label: "File Storage", icon: "claims" },
       { href: "/levels", label: "Level", icon: "positions" },
       { href: "/approval-roles", label: "Approval Roles", icon: "roles" },
       { href: "/approval-workflows", label: "Approval Workflows", icon: "movements" },
