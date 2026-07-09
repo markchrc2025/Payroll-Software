@@ -41,8 +41,8 @@ export async function GET(
 }
 
 /**
- * PATCH /api/employees/[id]/photo — attach (or clear) a profile photo after the
- * browser has uploaded it to R2 via /api/employees/photo/presign.
+ * PATCH /api/employees/[id]/photo — attach (or clear) a profile photo after it
+ * has been uploaded to object storage via /api/employees/photo/upload.
  * Body: { photoKey: string | null }. Requires EMPLOYEES:UPDATE.
  */
 const patchSchema = z.object({ photoKey: z.string().min(1).max(500).nullable() });

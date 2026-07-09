@@ -75,6 +75,30 @@ export function r2(): S3Client {
   return _client;
 }
 
+/**
+ * Upload bytes to the configured bucket under `key` (server-side).
+ *
+ * Used by the server-side upload routes so the browser never talks to object
+ * storage directly — which avoids needing a CORS policy on the bucket (some
+ * providers, e.g. Sliplane Object Storage, don't let you set one) and the
+ * presigned-PUT checksum pitfalls.
+ */
+export async function putObject(
+  key: string,
+  body: Buffer | Uint8Array,
+  contentType: string,
+): Promise<void> {
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  await r2().send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+}
+
 /** Build a stable storage key for an employee document. */
 export function buildEmployeeDocumentKey(opts: {
   tenantId: string;

@@ -250,21 +250,38 @@ function PlaceholderTab({ label }: { label: string }) {
 // Left panel
 // ---------------------------------------------------------------------------
 
-/** PUT the file to the presigned URL via XHR so we get real upload progress. */
-function putWithProgress(url: string, file: File, onProgress: (fraction: number) => void): Promise<void> {
+/**
+ * POST the file to our own server upload endpoint via XHR (same-origin — no
+ * storage CORS) so we get real upload progress. Resolves with the storage key
+ * the server returns.
+ */
+function uploadWithProgress(url: string, file: File, onProgress: (fraction: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.open("POST", url);
+    // Do NOT set Content-Type — the browser adds the multipart boundary.
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded / e.total);
     };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`Upload to storage failed (HTTP ${xhr.status})`));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const key = JSON.parse(xhr.responseText)?.data?.storageKey as string | undefined;
+          if (key) resolve(key);
+          else reject(new Error("Upload succeeded but no storage key was returned"));
+        } catch {
+          reject(new Error("Unexpected response from the server"));
+        }
+      } else {
+        let msg = `Upload failed (HTTP ${xhr.status})`;
+        try { msg = JSON.parse(xhr.responseText)?.error ?? msg; } catch { /* keep default */ }
+        reject(new Error(msg));
+      }
+    };
     xhr.onerror = () => reject(new Error("Network error during upload"));
-    xhr.send(file);
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
   });
 }
 
@@ -309,17 +326,13 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
     setLocalPreview(file); // show the chosen photo immediately
     setProgress(2);
     try {
-      const presignRes = await fetch("/api/employees/photo/presign", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileSize: file.size }),
-      });
-      const pj = await presignRes.json().catch(() => null);
-      if (!presignRes.ok) throw new Error(pj?.error ?? "Could not start the upload");
-      const { uploadUrl, storageKey } = pj.data as { uploadUrl: string; storageKey: string };
-      setProgress(8);
-
-      // The R2 upload is the bulk of the work: map it to 8→94%.
-      await putWithProgress(uploadUrl, file, (f) => setProgress(8 + Math.round(f * 86)));
+      // Upload through our own server (same-origin — no storage CORS); it stores
+      // the file and returns its key. The upload is the bulk of the work: 2→94%.
+      const storageKey = await uploadWithProgress(
+        "/api/employees/photo/upload",
+        file,
+        (f) => setProgress(2 + Math.round(f * 92)),
+      );
 
       const patch = await fetch(`/api/employees/${employeeId}/photo`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },

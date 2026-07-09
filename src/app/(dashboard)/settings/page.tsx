@@ -127,7 +127,7 @@ export default function CompanyBrandingPage() {
     if (!file) return;
     setUploadingLogo(true);
     try {
-      const storageKey = await uploadImage(file, "/api/settings/tenant/logo/presign");
+      const storageKey = await uploadImage(file, "/api/settings/tenant/logo/upload");
       setLogoPreview(URL.createObjectURL(file));
       // Uploaded logo supersedes any legacy external URL.
       setForm((f) => ({ ...f, logoKey: storageKey, logoUrl: "" }));
