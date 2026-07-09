@@ -156,7 +156,7 @@ export const createEmployeeSchema = z.object({
   // timekeepingTimezoneMode is EMPLOYEE (otherwise the company timezone is used).
   timezone: z.string().max(64).optional().nullable(),
 
-  // R2 object key for an uploaded profile photo (set via /api/employees/photo/presign)
+  // Object storage key for an uploaded profile photo (set via /api/employees/photo/upload)
   photoKey: z.string().max(500).optional().nullable(),
 
   // Contact

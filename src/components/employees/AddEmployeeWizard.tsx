@@ -569,7 +569,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
     if (!file) return;
     setUploadingPhoto(true);
     try {
-      const storageKey = await uploadImage(file, "/api/employees/photo/presign");
+      const storageKey = await uploadImage(file, "/api/employees/photo/upload");
       setPhotoPreview(URL.createObjectURL(file));
       setValue("photoKey", storageKey, { shouldDirty: true });
       toast.success("Photo uploaded");

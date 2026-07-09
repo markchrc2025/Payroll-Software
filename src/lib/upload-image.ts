@@ -1,9 +1,10 @@
 /**
- * Browser-side image upload to Cloudflare R2 via a presigned PUT URL.
+ * Browser-side image upload helper.
  *
- * Asks the given presign endpoint for a short-lived upload URL, PUTs the file
- * straight to R2, and returns the stable storage key to persist on the record.
- * Used by the company-logo and employee-photo upload controls.
+ * Posts the file to one of our own server-side upload endpoints (same-origin,
+ * so no object-storage CORS is required); the server stores it and returns the
+ * stable storage key to persist on the record. Used by the company-logo and
+ * employee-photo upload controls.
  */
 
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -20,37 +21,18 @@ export function validateImage(file: File): void {
   }
 }
 
-/** Uploads `file` through `presignUrl` and resolves to its R2 storage key. */
-export async function uploadImage(file: File, presignUrl: string): Promise<string> {
+/** Uploads `file` to the given server upload endpoint; resolves to its storage key. */
+export async function uploadImage(file: File, uploadUrl: string): Promise<string> {
   validateImage(file);
 
-  const presignRes = await fetch(presignUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fileName: file.name,
-      mimeType: file.type,
-      fileSize: file.size,
-    }),
-  });
-  const presignJson = await presignRes.json().catch(() => null);
-  if (!presignRes.ok) {
-    throw new Error(presignJson?.error ?? "Could not start the upload.");
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(uploadUrl, { method: "POST", body: form });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.error ?? "Upload failed. Please try again.");
   }
 
-  const { uploadUrl, storageKey } = presignJson.data as {
-    uploadUrl: string;
-    storageKey: string;
-  };
-
-  const putRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
-  });
-  if (!putRes.ok) {
-    throw new Error("Upload to storage failed. Please try again.");
-  }
-
-  return storageKey;
+  return (json.data as { storageKey: string }).storageKey;
 }
