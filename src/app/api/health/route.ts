@@ -15,21 +15,9 @@ import { checkCriticalEnv, checkEnvWarnings } from "@/lib/env-check";
 
 export const dynamic = "force-dynamic";
 
-export function GET(request: Request) {
+export function GET() {
   const problems = checkCriticalEnv();
   const warnings = checkEnvWarnings();
-  // TEMP DIAGNOSTIC: log every hit so we can confirm in the platform logs
-  // whether the deploy healthcheck probe actually reaches this route (and with
-  // what Host/User-Agent). Remove once the Sliplane deploy is healthy.
-  // pid + uptime make old vs new container distinguishable in the logs during
-  // a zero-downtime redeploy: the freshly-started container reports a small
-  // `up=` value, the still-running old one a large value. (uptime/pid are safe
-  // here — this route runs on the Node runtime, unlike the edge proxy.)
-  console.log(
-    `[health] GET /api/health reached — pid=${process.pid} up=${Math.round(process.uptime())}s ` +
-      `host="${request.headers.get("host") ?? ""}" ` +
-      `ua="${request.headers.get("user-agent") ?? ""}" ok=${problems.length === 0}`,
-  );
   return NextResponse.json({
     status: problems.length === 0 ? "ok" : "degraded",
     ...(problems.length ? { problems } : {}),
