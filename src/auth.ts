@@ -120,6 +120,24 @@ if (process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_I
   );
 }
 
+if (
+  process.env.AUTH_AUTHENTICIZE_ISSUER &&
+  process.env.AUTH_AUTHENTICIZE_ID &&
+  process.env.AUTH_AUTHENTICIZE_SECRET
+) {
+  oauthProviders.push({
+    // Authenticize — our first-party OIDC provider (see docs/sso-central-portal.md).
+    // Endpoints, PKCE and RS256 id_token keys are all resolved from the issuer's
+    // /.well-known/openid-configuration discovery document.
+    id: "authenticize",
+    name: "Authenticize",
+    type: "oidc",
+    issuer: process.env.AUTH_AUTHENTICIZE_ISSUER,
+    clientId: process.env.AUTH_AUTHENTICIZE_ID,
+    clientSecret: process.env.AUTH_AUTHENTICIZE_SECRET,
+  });
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 /* 8h */ },
   pages: {
@@ -227,7 +245,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!email) return false;
 
       // Only trust an email the IdP marks verified (Google sets this; Entra work
-      // accounts are org-managed and treated as verified).
+      // accounts are org-managed and treated as verified; Authenticize is our own
+      // invite-only platform — every account on it is provisioned by us, so the
+      // email is admin-attested rather than self-asserted).
       if (
         account.provider === "google" &&
         (profile as { email_verified?: boolean })?.email_verified !== true
@@ -235,9 +255,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return false;
       }
 
-      // Optionally fence SSO to the company domain.
+      // Optionally fence SSO to the company domain. Authenticize is exempt: its
+      // accounts are deliberately provisioned and may use a personal email.
       const domain = process.env.CENTRAL_SSO_ALLOWED_DOMAIN?.toLowerCase();
-      if (domain && !email.endsWith(`@${domain}`)) return false;
+      if (
+        domain &&
+        account.provider !== "authenticize" &&
+        !email.endsWith(`@${domain}`)
+      ) {
+        return false;
+      }
 
       const admin = await findCentralAdminByEmail(email);
       return !!admin;
