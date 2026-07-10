@@ -47,6 +47,14 @@ const SSO_PROVIDER_META: Record<
 };
 
 // Resolve the configured ids to renderable buttons (unknown ids get a generic label).
+// Tenant-workspace SSO toggle (build-time). Set NEXT_PUBLIC_TENANT_SSO to a
+// list including "authenticize" to replace the placeholder Google/Microsoft
+// buttons with a working "Continue with Authenticize" button.
+const TENANT_SSO_AUTHENTICIZE = (process.env.NEXT_PUBLIC_TENANT_SSO ?? "")
+  .split(",")
+  .map((p) => p.trim())
+  .includes("authenticize");
+
 const SSO_BUTTONS = CENTRAL_SSO_PROVIDERS.map((id) => {
   const meta = SSO_PROVIDER_META[id];
   return {
@@ -167,6 +175,26 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
 
   function ssoUnavailable() {
     toast.info("Single sign-on isn't available yet. Please sign in with email.");
+  }
+
+  // Tenant SSO is company-code-first: the code chooses the workspace an email
+  // resolves to. Stash it in a short-lived lax cookie the auth callbacks read,
+  // then start the OIDC flow.
+  function tenantSso() {
+    setTouched((t) => ({ ...t, companyCode: true }));
+    if (!companyCode.trim()) {
+      setFormErr("Enter your company code first, then continue with Authenticize.");
+      shake();
+      return;
+    }
+    setFormErr("");
+    // Drop any stale Central Portal marker so a failed tenant SSO bounce to
+    // /login isn't captured and forwarded to /centralportal/login.
+    document.cookie = "central_sso_flow=; path=/; max-age=0; samesite=lax";
+    document.cookie = `tenant_sso_company=${encodeURIComponent(
+      companyCode.trim().toUpperCase(),
+    )}; path=/; max-age=300; samesite=lax`;
+    void signIn("authenticize-tenant", { callbackUrl: redirectTo });
   }
 
   return (
@@ -296,12 +324,25 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
 
             {mode === "tenant" ? (
               <div className="sn-sso">
-                <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
-                  <GoogleIcon /> Google
-                </button>
-                <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
-                  <MicrosoftIcon /> Microsoft
-                </button>
+                {TENANT_SSO_AUTHENTICIZE ? (
+                  <button
+                    type="button"
+                    className="sn-sso-btn sn-sso-wide"
+                    disabled={busy}
+                    onClick={tenantSso}
+                  >
+                    <KeyIcon /> Continue with Authenticize
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
+                      <GoogleIcon /> Google
+                    </button>
+                    <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
+                      <MicrosoftIcon /> Microsoft
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="sn-sso">
@@ -325,6 +366,8 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
                         // Mark this as a Central Portal SSO flow so that if
                         // NextAuth bounces a failure to the global /login page,
                         // it can route the error back to /centralportal/login.
+                        // Drop any stale tenant marker for realm symmetry.
+                        document.cookie = "tenant_sso_company=; path=/; max-age=0; samesite=lax";
                         document.cookie = "central_sso_flow=1; path=/; max-age=300; samesite=lax";
                         void signIn(id, { callbackUrl: "/centralportal/dashboard" });
                       }}

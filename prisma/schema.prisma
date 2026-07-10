@@ -748,6 +748,11 @@ model User {
   // Central Portal role (only meaningful when tenantId IS NULL / systemRole = SUPER_ADMIN)
   centralRoleId String?
 
+  // Authenticize (OIDC IdP) subject linked to this account, set on first SSO
+  // sign-in. Not globally unique — one person may map to accounts in several
+  // tenants — but unique within a tenant (see @@unique below).
+  authenticizeUserId String?
+
   essPinHash String?
 
   isActive    Boolean   @default(true)
@@ -775,6 +780,7 @@ model User {
   centralAuditEvents  CentralAuditEvent[]  @relation("CentralAuditActor")
 
   @@unique([tenantId, email])
+  @@unique([tenantId, authenticizeUserId])
   @@index([tenantId])
   @@index([roleId])
   @@index([centralRoleId])

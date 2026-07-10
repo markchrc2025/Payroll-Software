@@ -18,6 +18,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
+import { resolveTenantSsoUser } from "@/lib/tenant-sso";
 import type { SystemRole } from "@prisma/client";
 
 const credentialsSchema = z.object({
@@ -138,6 +139,41 @@ if (
   });
 }
 
+// Tenant-realm SSO — a SEPARATE Authenticize application (own client_id/secret,
+// own redirect URI /callback/authenticize-tenant) so the tenant and central
+// realms are isolated at the IdP level too. See docs/sso-tenant.md.
+if (
+  process.env.AUTH_AUTHENTICIZE_TENANT_ISSUER &&
+  process.env.AUTH_AUTHENTICIZE_TENANT_ID &&
+  process.env.AUTH_AUTHENTICIZE_TENANT_SECRET
+) {
+  oauthProviders.push({
+    id: "authenticize-tenant",
+    name: "Authenticize",
+    type: "oidc",
+    issuer: process.env.AUTH_AUTHENTICIZE_TENANT_ISSUER,
+    clientId: process.env.AUTH_AUTHENTICIZE_TENANT_ID,
+    clientSecret: process.env.AUTH_AUTHENTICIZE_TENANT_SECRET,
+  });
+}
+
+/**
+ * Read the company code the tenant SSO login screen stashed in a short-lived,
+ * lax cookie before redirecting to Authenticize. Company-code-first is how a
+ * multi-tenant email resolves to one workspace (the SSO flow carries no
+ * password). Dynamically imported so `next/headers` never enters the edge
+ * bundle for src/proxy.ts (which statically imports this module).
+ */
+async function readTenantSsoCompanyCode(): Promise<string | undefined> {
+  try {
+    const { cookies } = await import("next/headers");
+    const value = (await cookies()).get("tenant_sso_company")?.value;
+    return value ? value.trim().toUpperCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 /* 8h */ },
   pages: {
@@ -238,12 +274,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Password sign-ins are already verified in authorize().
       if (!account || account.provider === "credentials") return true;
 
-      // OAuth = Central Portal staff SSO (verify-then-match). The IdP proves the
-      // person owns the email; we then require that it belongs to an existing
-      // Central admin. We never auto-provision accounts.
       const email = (profile?.email ?? user?.email ?? "").toLowerCase();
       if (!email) return false;
 
+      // Tenant realm: match the proven identity to an active tenant user
+      // (company-code-first). Never auto-provisions; on first success the
+      // Authenticize subject is linked to the account for fast future logins.
+      if (account.provider === "authenticize-tenant") {
+        const companyCode = await readTenantSsoCompanyCode();
+        const result = await resolveTenantSsoUser(prismaAdmin, {
+          email,
+          companyCode,
+          authenticizeUserId: account.providerAccountId,
+        });
+        if (!result.ok) return false;
+        // Linking is a non-critical optimisation (the account was already
+        // matched by email). Never let a failed link write — e.g. a rare
+        // same-subject-in-one-tenant unique clash — block a valid login.
+        if (!result.user.authenticizeUserId) {
+          try {
+            await prismaAdmin.user.update({
+              where: { id: result.user.id },
+              data: { authenticizeUserId: account.providerAccountId },
+            });
+          } catch (err) {
+            console.error("[auth] tenant SSO link persist failed:", err);
+          }
+        }
+        return true;
+      }
+
+      // Central Portal staff SSO (verify-then-match). The IdP proves the person
+      // owns the email; we then require that it belongs to an existing Central
+      // admin. We never auto-provision accounts.
+      //
       // Only trust an email the IdP marks verified (Google sets this; Entra work
       // accounts are org-managed and treated as verified; Authenticize is our own
       // invite-only platform — every account on it is provisioned by us, so the
@@ -255,8 +319,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return false;
       }
 
-      // Optionally fence SSO to the company domain. Authenticize is exempt: its
-      // accounts are deliberately provisioned and may use a personal email.
+      // Optionally fence SSO to the company domain. Authenticize (both realms)
+      // is exempt: its accounts are deliberately provisioned and may use a
+      // personal email.
       const domain = process.env.CENTRAL_SSO_ALLOWED_DOMAIN?.toLowerCase();
       if (
         domain &&
@@ -276,6 +341,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.tenantId = (user as { tenantId: string | null }).tenantId;
         token.systemRole = (user as { systemRole: SystemRole }).systemRole;
         token.roleId = (user as { roleId: string | null }).roleId;
+      } else if (account?.provider === "authenticize-tenant") {
+        // Tenant SSO sign-in: hydrate the token with the tenant account we
+        // matched in signIn(), scoped by the same company code.
+        const email = (token.email ?? user?.email ?? "").toLowerCase();
+        const companyCode = await readTenantSsoCompanyCode();
+        const result = await resolveTenantSsoUser(prismaAdmin, {
+          email,
+          companyCode,
+          authenticizeUserId: account.providerAccountId,
+        });
+        if (result.ok) {
+          token.userId = result.user.id;
+          token.tenantId = result.user.tenantId;
+          token.systemRole = result.user.systemRole;
+          token.roleId = result.user.roleId;
+          try {
+            await prismaAdmin.user.update({
+              where: { id: result.user.id },
+              data: { lastLoginAt: new Date() },
+            });
+          } catch (err) {
+            console.error("[auth] tenant SSO lastLoginAt update failed:", err);
+          }
+        }
       } else if (account && account.provider !== "credentials") {
         // OAuth sign-in: load the Central admin we validated in signIn() and
         // hydrate the token with the same claims the credentials flow sets.

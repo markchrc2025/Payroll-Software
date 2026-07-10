@@ -25,7 +25,9 @@ export async function getAuthContext(
   if (!session?.user) return null;
 
   const { id, tenantId, systemRole, roleId } = session.user;
-  if (!tenantId) return null; // SUPER_ADMIN tenant guard
+  if (!id || !tenantId) return null; // SUPER_ADMIN tenant guard + defend against
+  // a malformed token: with strictUndefinedChecks off, an `id: undefined`
+  // filter would be stripped and match an arbitrary tenant user.
 
   // Re-validate against the live account: an 8h JWT must not outlive a user
   // being deactivated or removed from their tenant. Keyed by primary id, so
