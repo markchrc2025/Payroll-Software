@@ -136,6 +136,10 @@ if (
     issuer: process.env.AUTH_AUTHENTICIZE_ISSUER,
     clientId: process.env.AUTH_AUTHENTICIZE_ID,
     clientSecret: process.env.AUTH_AUTHENTICIZE_SECRET,
+    // Force a fresh authentication each time so a session that happens to be
+    // live in the Authenticize dashboard never silently becomes the app login;
+    // the actual staff member always authenticates as themselves.
+    authorization: { params: { prompt: "login" } },
   });
 }
 
@@ -154,6 +158,8 @@ if (
     issuer: process.env.AUTH_AUTHENTICIZE_TENANT_ISSUER,
     clientId: process.env.AUTH_AUTHENTICIZE_TENANT_ID,
     clientSecret: process.env.AUTH_AUTHENTICIZE_TENANT_SECRET,
+    // Force fresh authentication (see the central provider above).
+    authorization: { params: { prompt: "login" } },
   });
 }
 
