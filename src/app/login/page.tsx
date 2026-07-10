@@ -32,8 +32,13 @@ export default async function LoginPage({
   //      clicked (covers OAuthCallbackError bounces, which drop the callbackUrl).
   // The cookie path is gated on ?error so a deliberate visit to the tenant
   // /login (no error) is never hijacked while the short-lived cookie lingers.
+  // A concurrent tenant SSO attempt (tenant_sso_company present) must not be
+  // forwarded to the Central Portal even if a stale central marker lingers —
+  // an explicit central callbackUrl still wins.
+  const store = await cookies();
+  const tenantSsoInFlight = !!store.get("tenant_sso_company")?.value;
   const fromCentralCookie =
-    !!error && (await cookies()).get("central_sso_flow")?.value === "1";
+    !!error && !tenantSsoInFlight && store.get("central_sso_flow")?.value === "1";
   if (isCentralCallback(callbackUrl) || fromCentralCookie) {
     redirect(`/centralportal/login${error ? `?error=${encodeURIComponent(error)}` : ""}`);
   }
