@@ -22,12 +22,12 @@ tenant-employee account is reached through the normal tenant login + company cod
 The provider code is **env-gated**: with no OAuth env vars set, nothing changes.
 Set the vars below and the button activates.
 
-## Environment variables (set in Render)
+## Environment variables (set in Sliplane, on the payroll service)
 
 ### Common
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `NEXT_PUBLIC_CENTRAL_SSO` | `authenticize`, `google`, `microsoft-entra-id`, or a comma-separated list | **Build-time** — controls which SSO buttons appear. One value → a single full-width button; a list (e.g. `authenticize,google`) → one button per provider, side by side. Redeploy after changing. |
+| `NEXT_PUBLIC_CENTRAL_SSO` | `authenticize`, `google`, `microsoft-entra-id`, or a comma-separated list | **Build-time** — controls which SSO buttons appear. One value → a single full-width button; a list (e.g. `authenticize,google`) → one button per provider, side by side. On Sliplane, set it **before** triggering the deploy so the build picks it up; changing it requires a redeploy. |
 | `CENTRAL_SSO_ALLOWED_DOMAIN` | `sentire.solutions` | Optional. Fences SSO to this email domain. **Authenticize is exempt** — its accounts are provisioned deliberately on our own platform and may use personal emails. |
 
 > To offer **both** Google and Microsoft on the login screen, set
@@ -66,16 +66,18 @@ Register **exactly** this URL in the OAuth app (swap in your live domain):
 - Google: `https://<app-domain>/api/auth/callback/google`
 - Entra:  `https://<app-domain>/api/auth/callback/microsoft-entra-id`
 
-(e.g. `https://sentire-payroll.onrender.com/api/auth/callback/google`, plus a
-second entry for any custom domain such as `app.sentire.solutions`.)
+(e.g. `https://payroll-software.sliplane.app/api/auth/callback/google` — use the
+exact **Public Endpoint** shown in the Sliplane service info — plus a second
+entry for any custom domain such as `app.sentire.solutions`.)
 
 ## Registration steps
 
 ### Authenticize
 1. Authenticize dashboard → **Applications → Connect an app**.
 2. Name it (e.g. `Sentire Payroll`), type **Web app**, keep **Skip consent** on.
-3. Redirect URIs — one per line:
-   `https://sentire-payroll.onrender.com/api/auth/callback/authenticize`,
+3. Redirect URIs — one per line (use the exact Public Endpoint from the
+   Sliplane service info):
+   `https://payroll-software.sliplane.app/api/auth/callback/authenticize`,
    plus any custom domain (e.g. `https://app.sentire.solutions/api/auth/callback/authenticize`)
    and `http://localhost:3000/api/auth/callback/authenticize` for local dev.
 4. Copy the generated client ID/secret into `AUTH_AUTHENTICIZE_ID` /
