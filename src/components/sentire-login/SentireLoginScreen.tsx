@@ -43,6 +43,7 @@ const SSO_PROVIDER_META: Record<
 > = {
   google: { short: "Google", long: "Continue with Google", Icon: GoogleIcon },
   "microsoft-entra-id": { short: "Microsoft", long: "Continue with Microsoft", Icon: MicrosoftIcon },
+  authenticize: { short: "Authenticize", long: "Continue with Authenticize", Icon: KeyIcon },
 };
 
 // Resolve the configured ids to renderable buttons (unknown ids get a generic label).
