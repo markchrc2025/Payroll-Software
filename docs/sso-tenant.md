@@ -33,11 +33,35 @@ On first success the Authenticize subject is linked to the account
 Accounts are **never auto-provisioned**, and `SUPER_ADMIN` rows are never
 matched here (they have `tenantId = null`).
 
+## Three sign-in options, one Authenticize application
+
+The tenant login offers **Google**, **Microsoft**, and **Authenticize**, plus
+email/password. All three SSO buttons go through the *same* tenant Authenticize
+application — Payroll never holds a Google or Microsoft client secret.
+Authenticize is the broker:
+
+- **Continue with Authenticize** starts the flow and lets the user pick any
+  method Authenticize offers for this app (email/password, passkey, or a social
+  provider).
+- **Google** / **Microsoft** pass a `provider_hint` so Authenticize jumps
+  straight to that provider — the user never sees Authenticize's own page. The
+  hint is a plain provider name; Authenticize still decides whether that
+  provider is enabled for the app, and Payroll still authorises the resulting
+  email against its own `User` table.
+
+For Google/Microsoft to appear one-click, the tenant application in Authenticize
+must have those providers enabled (Applications → the tenant app → Sign-in
+methods), and Authenticize must be configured to provision a brokered social
+identity (its `SOCIAL_ALLOW_SIGNUP` / open-broker setting) — otherwise a brand
+new Google user has no Authenticize identity to prove. Access to Payroll is
+unaffected either way: it is always gated by an existing tenant `User` with a
+matching email.
+
 ## Environment variables (Sliplane, payroll service)
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `NEXT_PUBLIC_TENANT_SSO` | `authenticize` | **Build-time.** Replaces the placeholder Google/Microsoft buttons on `/login` with a working "Continue with Authenticize" button. Set before deploying. |
+| `NEXT_PUBLIC_TENANT_SSO` | `authenticize` | **Build-time.** Turns the placeholder buttons on `/login` into three working, Authenticize-brokered SSO buttons (Google / Microsoft / Authenticize). Set before deploying. |
 | `AUTH_AUTHENTICIZE_TENANT_ISSUER` | `https://auth.sentire.solutions` | The Authenticize issuer. |
 | `AUTH_AUTHENTICIZE_TENANT_ID` | client ID | From the **tenant** application in the Authenticize dashboard. |
 | `AUTH_AUTHENTICIZE_TENANT_SECRET` | client secret | Shown once; rotatable. |
@@ -63,10 +87,15 @@ Central Portal one):
 3. Copy the client ID/secret into `AUTH_AUTHENTICIZE_TENANT_ID` /
    `AUTH_AUTHENTICIZE_TENANT_SECRET`, set `AUTH_AUTHENTICIZE_TENANT_ISSUER`, and
    add `authenticize` to `NEXT_PUBLIC_TENANT_SSO`.
-4. Deploy. On `/login`, a user enters their **company code**, clicks **Continue
-   with Authenticize**, signs in on Authenticize, and returns to their
-   workspace — provided an active tenant account with that email exists in that
-   company. Password login stays available as a fallback throughout.
+4. (Optional, for one-click Google/Microsoft) In the Authenticize dashboard,
+   enable Google and/or Microsoft on the **tenant** application's sign-in
+   methods, and make sure Authenticize can provision a brokered social identity
+   (open-broker / `SOCIAL_ALLOW_SIGNUP`).
+5. Deploy. On `/login`, a user enters their **company code**, then clicks
+   **Google**, **Microsoft**, or **Continue with Authenticize**, signs in, and
+   returns to their workspace — provided an active tenant account with that
+   email exists in that company. Password login stays available as a fallback
+   throughout.
 
 ## Migrating tenant users
 
