@@ -179,11 +179,15 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
 
   // Tenant SSO is company-code-first: the code chooses the workspace an email
   // resolves to. Stash it in a short-lived lax cookie the auth callbacks read,
-  // then start the OIDC flow.
-  function tenantSso() {
+  // then start the OIDC flow. All three tenant options go through the ONE
+  // Authenticize application (our identity broker) — Payroll never holds any
+  // Google/Microsoft client secret. `providerHint` asks Authenticize to jump
+  // straight to Google/Microsoft instead of showing its own sign-in page, so
+  // each button behaves like a native provider button.
+  function tenantSso(providerHint?: "google" | "microsoft") {
     setTouched((t) => ({ ...t, companyCode: true }));
     if (!companyCode.trim()) {
-      setFormErr("Enter your company code first, then continue with Authenticize.");
+      setFormErr("Enter your company code first, then choose how to sign in.");
       shake();
       return;
     }
@@ -194,7 +198,11 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
     document.cookie = `tenant_sso_company=${encodeURIComponent(
       companyCode.trim().toUpperCase(),
     )}; path=/; max-age=300; samesite=lax`;
-    void signIn("authenticize-tenant", { callbackUrl: redirectTo });
+    void signIn(
+      "authenticize-tenant",
+      { callbackUrl: redirectTo },
+      providerHint ? { provider_hint: providerHint } : undefined,
+    );
   }
 
   return (
@@ -325,14 +333,32 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
             {mode === "tenant" ? (
               <div className="sn-sso">
                 {TENANT_SSO_AUTHENTICIZE ? (
-                  <button
-                    type="button"
-                    className="sn-sso-btn sn-sso-wide"
-                    disabled={busy}
-                    onClick={tenantSso}
-                  >
-                    <KeyIcon /> Continue with Authenticize
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="sn-sso-btn"
+                      disabled={busy}
+                      onClick={() => tenantSso("google")}
+                    >
+                      <GoogleIcon /> Google
+                    </button>
+                    <button
+                      type="button"
+                      className="sn-sso-btn"
+                      disabled={busy}
+                      onClick={() => tenantSso("microsoft")}
+                    >
+                      <MicrosoftIcon /> Microsoft
+                    </button>
+                    <button
+                      type="button"
+                      className="sn-sso-btn sn-sso-wide"
+                      disabled={busy}
+                      onClick={() => tenantSso()}
+                    >
+                      <KeyIcon /> Continue with Authenticize
+                    </button>
+                  </>
                 ) : (
                   <>
                     <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
