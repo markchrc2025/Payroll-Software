@@ -5,30 +5,31 @@
  * The JWT carries: userId, tenantId, systemRole, roleId so server routes can authorize
  * without an extra DB lookup on every request.
  *
+ * Sentire Payroll owns its own users and credentials — sign-in is email/password
+ * only. (Google/Microsoft appear on the login screen as placeholders for now.)
+ *
  * Used by:
  *  - src/app/api/auth/[...nextauth]/route.ts  → exposes handlers
  *  - src/proxy.ts                              → route protection
  *  - src/lib/auth.ts                           → getAuthContext()
  */
 
-import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
+import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
-import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
-import { resolveTenantSsoUser } from "@/lib/tenant-sso";
 import type { SystemRole } from "@prisma/client";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  // Legacy/explicit tenant scoping; the redesigned tenant login omits it.
+  // Tenant workspace scoping; the company code disambiguates an email that
+  // exists in more than one tenant.
   companyCode: z.string().optional(),
   // Which login screen the request came from: "admin" (Central Portal) is
   // restricted to SUPER_ADMIN accounts; "tenant" (or unset) resolves the
-  // account by email across tenants.
+  // account by email (optionally scoped by company code).
   scope: z.enum(["tenant", "admin"]).optional(),
 });
 
@@ -42,26 +43,6 @@ const USER_SELECT = {
   systemRole: true,
   roleId: true,
 } as const;
-
-/**
- * Resolve a Central Portal administrator (SUPER_ADMIN, no tenant) by email.
- * Used by both the password flow and OAuth SSO. SSO never creates accounts —
- * a person must already be provisioned as a Central admin to sign in, which is
- * also what keeps a Sentire admin account distinct from any tenant-employee
- * account that happens to share the same email.
- */
-async function findCentralAdminByEmail(email: string) {
-  return prismaAdmin.user.findFirst({
-    where: {
-      email: email.toLowerCase(),
-      systemRole: "SUPER_ADMIN",
-      tenantId: null,
-      isActive: true,
-      deletedAt: null,
-    },
-    select: USER_SELECT,
-  });
-}
 
 declare module "next-auth" {
   interface Session {
@@ -80,103 +61,6 @@ declare module "@auth/core/jwt" {
     tenantId: string | null;
     systemRole: SystemRole;
     roleId: string | null;
-  }
-}
-
-/**
- * Central Portal SSO providers. Each is added only when its credentials are
- * present in the environment, so nothing changes in production until the OAuth
- * app is registered and the env vars are set. These back the "Continue with
- * company SSO" button on /centralportal/login (admin scope only for now).
- */
-const oauthProviders: NonNullable<NextAuthConfig["providers"]> = [];
-
-if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
-  oauthProviders.push(
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      authorization: {
-        params: {
-          prompt: "select_account",
-          // Restrict the Google account chooser to the company's Workspace
-          // domain when CENTRAL_SSO_ALLOWED_DOMAIN is set (e.g. sentire.solutions).
-          ...(process.env.CENTRAL_SSO_ALLOWED_DOMAIN
-            ? { hd: process.env.CENTRAL_SSO_ALLOWED_DOMAIN }
-            : {}),
-        },
-      },
-    }),
-  );
-}
-
-if (process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
-  oauthProviders.push(
-    MicrosoftEntraID({
-      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
-      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
-      // Single-tenant issuer, e.g. https://login.microsoftonline.com/<tenant-id>/v2.0
-      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
-    }),
-  );
-}
-
-if (
-  process.env.AUTH_AUTHENTICIZE_ISSUER &&
-  process.env.AUTH_AUTHENTICIZE_ID &&
-  process.env.AUTH_AUTHENTICIZE_SECRET
-) {
-  oauthProviders.push({
-    // Authenticize — our first-party OIDC provider (see docs/sso-central-portal.md).
-    // Endpoints, PKCE and RS256 id_token keys are all resolved from the issuer's
-    // /.well-known/openid-configuration discovery document.
-    id: "authenticize",
-    name: "Authenticize",
-    type: "oidc",
-    issuer: process.env.AUTH_AUTHENTICIZE_ISSUER,
-    clientId: process.env.AUTH_AUTHENTICIZE_ID,
-    clientSecret: process.env.AUTH_AUTHENTICIZE_SECRET,
-    // Force a fresh authentication each time so a session that happens to be
-    // live in the Authenticize dashboard never silently becomes the app login;
-    // the actual staff member always authenticates as themselves.
-    authorization: { params: { prompt: "login" } },
-  });
-}
-
-// Tenant-realm SSO — a SEPARATE Authenticize application (own client_id/secret,
-// own redirect URI /callback/authenticize-tenant) so the tenant and central
-// realms are isolated at the IdP level too. See docs/sso-tenant.md.
-if (
-  process.env.AUTH_AUTHENTICIZE_TENANT_ISSUER &&
-  process.env.AUTH_AUTHENTICIZE_TENANT_ID &&
-  process.env.AUTH_AUTHENTICIZE_TENANT_SECRET
-) {
-  oauthProviders.push({
-    id: "authenticize-tenant",
-    name: "Authenticize",
-    type: "oidc",
-    issuer: process.env.AUTH_AUTHENTICIZE_TENANT_ISSUER,
-    clientId: process.env.AUTH_AUTHENTICIZE_TENANT_ID,
-    clientSecret: process.env.AUTH_AUTHENTICIZE_TENANT_SECRET,
-    // Force fresh authentication (see the central provider above).
-    authorization: { params: { prompt: "login" } },
-  });
-}
-
-/**
- * Read the company code the tenant SSO login screen stashed in a short-lived,
- * lax cookie before redirecting to Authenticize. Company-code-first is how a
- * multi-tenant email resolves to one workspace (the SSO flow carries no
- * password). Dynamically imported so `next/headers` never enters the edge
- * bundle for src/proxy.ts (which statically imports this module).
- */
-async function readTenantSsoCompanyCode(): Promise<string | undefined> {
-  try {
-    const { cookies } = await import("next/headers");
-    const value = (await cookies()).get("tenant_sso_company")?.value;
-    return value ? value.trim().toUpperCase() : undefined;
-  } catch {
-    return undefined;
   }
 }
 
@@ -227,7 +111,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: USER_SELECT,
           });
         } else if (companyCode && companyCode.trim()) {
-          // Legacy/explicit tenant login — verify company code, scope the lookup.
+          // Tenant login scoped to the workspace named by the company code.
           const tenant = await prismaAdmin.tenant.findFirst({
             where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
             select: { id: true },
@@ -273,119 +157,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
-    ...oauthProviders,
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // Password sign-ins are already verified in authorize().
-      if (!account || account.provider === "credentials") return true;
-
-      const email = (profile?.email ?? user?.email ?? "").toLowerCase();
-      if (!email) return false;
-
-      // Tenant realm: match the proven identity to an active tenant user
-      // (company-code-first). Never auto-provisions; on first success the
-      // Authenticize subject is linked to the account for fast future logins.
-      if (account.provider === "authenticize-tenant") {
-        const companyCode = await readTenantSsoCompanyCode();
-        const result = await resolveTenantSsoUser(prismaAdmin, {
-          email,
-          companyCode,
-          authenticizeUserId: account.providerAccountId,
-        });
-        if (!result.ok) return false;
-        // Linking is a non-critical optimisation (the account was already
-        // matched by email). Never let a failed link write — e.g. a rare
-        // same-subject-in-one-tenant unique clash — block a valid login.
-        if (!result.user.authenticizeUserId) {
-          try {
-            await prismaAdmin.user.update({
-              where: { id: result.user.id },
-              data: { authenticizeUserId: account.providerAccountId },
-            });
-          } catch (err) {
-            console.error("[auth] tenant SSO link persist failed:", err);
-          }
-        }
-        return true;
-      }
-
-      // Central Portal staff SSO (verify-then-match). The IdP proves the person
-      // owns the email; we then require that it belongs to an existing Central
-      // admin. We never auto-provision accounts.
-      //
-      // Only trust an email the IdP marks verified (Google sets this; Entra work
-      // accounts are org-managed and treated as verified; Authenticize is our own
-      // invite-only platform — every account on it is provisioned by us, so the
-      // email is admin-attested rather than self-asserted).
-      if (
-        account.provider === "google" &&
-        (profile as { email_verified?: boolean })?.email_verified !== true
-      ) {
-        return false;
-      }
-
-      // Optionally fence SSO to the company domain. Authenticize (both realms)
-      // is exempt: its accounts are deliberately provisioned and may use a
-      // personal email.
-      const domain = process.env.CENTRAL_SSO_ALLOWED_DOMAIN?.toLowerCase();
-      if (
-        domain &&
-        account.provider !== "authenticize" &&
-        !email.endsWith(`@${domain}`)
-      ) {
-        return false;
-      }
-
-      const admin = await findCentralAdminByEmail(email);
-      return !!admin;
-    },
-    async jwt({ token, user, account }) {
-      if (user && (!account || account.provider === "credentials")) {
+    async jwt({ token, user }) {
+      if (user) {
         // user is the object returned from authorize() — only on initial sign-in
         token.userId = user.id as string;
         token.tenantId = (user as { tenantId: string | null }).tenantId;
         token.systemRole = (user as { systemRole: SystemRole }).systemRole;
         token.roleId = (user as { roleId: string | null }).roleId;
-      } else if (account?.provider === "authenticize-tenant") {
-        // Tenant SSO sign-in: hydrate the token with the tenant account we
-        // matched in signIn(), scoped by the same company code.
-        const email = (token.email ?? user?.email ?? "").toLowerCase();
-        const companyCode = await readTenantSsoCompanyCode();
-        const result = await resolveTenantSsoUser(prismaAdmin, {
-          email,
-          companyCode,
-          authenticizeUserId: account.providerAccountId,
-        });
-        if (result.ok) {
-          token.userId = result.user.id;
-          token.tenantId = result.user.tenantId;
-          token.systemRole = result.user.systemRole;
-          token.roleId = result.user.roleId;
-          try {
-            await prismaAdmin.user.update({
-              where: { id: result.user.id },
-              data: { lastLoginAt: new Date() },
-            });
-          } catch (err) {
-            console.error("[auth] tenant SSO lastLoginAt update failed:", err);
-          }
-        }
-      } else if (account && account.provider !== "credentials") {
-        // OAuth sign-in: load the Central admin we validated in signIn() and
-        // hydrate the token with the same claims the credentials flow sets.
-        const email = (token.email ?? user?.email ?? "").toLowerCase();
-        const admin = email ? await findCentralAdminByEmail(email) : null;
-        if (admin) {
-          token.userId = admin.id;
-          token.tenantId = admin.tenantId;
-          token.systemRole = admin.systemRole;
-          token.roleId = admin.roleId;
-          await prismaAdmin.user.update({
-            where: { id: admin.id },
-            data: { lastLoginAt: new Date() },
-          });
-        }
       }
       return token;
     },
@@ -397,14 +177,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     authorized({ auth: a, request }) {
-        const { pathname } = request.nextUrl;
-        const PUBLIC_CENTRAL_PATHS = [
-              "/centralportal/accept-invite",
-              "/centralportal/reset-password",
-            ];
-        if (PUBLIC_CENTRAL_PATHS.some((p) => pathname.startsWith(p))) return true;
-        // Used by the middleware/proxy below to gate access
-        return !!a?.user;
+      const { pathname } = request.nextUrl;
+      const PUBLIC_CENTRAL_PATHS = [
+        "/centralportal/accept-invite",
+        "/centralportal/reset-password",
+      ];
+      if (PUBLIC_CENTRAL_PATHS.some((p) => pathname.startsWith(p))) return true;
+      // Used by the middleware/proxy below to gate access
+      return !!a?.user;
     },
   },
 });

@@ -11,7 +11,6 @@ import {
   PayrollGlyph,
   GoogleIcon,
   MicrosoftIcon,
-  KeyIcon,
   Spinner,
   MailIcon,
   LockIcon,
@@ -26,56 +25,8 @@ import "./sentire-login.css";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CORE = "#E8693A";
 
-// Which Central Portal SSO providers are live (set at build time). Accepts a
-// comma-separated list — e.g. "google,microsoft-entra-id" — so more than one
-// IdP can be offered at once. Empty until an OAuth app is configured, in which
-// case the button falls back to an "unavailable" toast.
-const CENTRAL_SSO_PROVIDERS = (process.env.NEXT_PUBLIC_CENTRAL_SSO ?? "")
-  .split(",")
-  .map((p) => p.trim())
-  .filter(Boolean);
-
-// Per-provider button presentation. `long` is used when a provider is the only
-// option (full-width button); `short` is used when several sit side by side.
-const SSO_PROVIDER_META: Record<
-  string,
-  { short: string; long: string; Icon: () => ReturnType<typeof GoogleIcon> }
-> = {
-  google: { short: "Google", long: "Continue with Google", Icon: GoogleIcon },
-  "microsoft-entra-id": { short: "Microsoft", long: "Continue with Microsoft", Icon: MicrosoftIcon },
-  authenticize: { short: "Authenticize", long: "Continue with Authenticize", Icon: KeyIcon },
-};
-
-// Resolve the configured ids to renderable buttons (unknown ids get a generic label).
-// Tenant-workspace SSO toggle (build-time). Set NEXT_PUBLIC_TENANT_SSO to a
-// list including "authenticize" to replace the placeholder Google/Microsoft
-// buttons with a working "Continue with Authenticize" button.
-const TENANT_SSO_AUTHENTICIZE = (process.env.NEXT_PUBLIC_TENANT_SSO ?? "")
-  .split(",")
-  .map((p) => p.trim())
-  .includes("authenticize");
-
-const SSO_BUTTONS = CENTRAL_SSO_PROVIDERS.map((id) => {
-  const meta = SSO_PROVIDER_META[id];
-  return {
-    id,
-    short: meta?.short ?? "Company SSO",
-    long: meta?.long ?? "Continue with company SSO",
-    Icon: meta?.Icon ?? KeyIcon,
-  };
-});
-
 type Mode = "tenant" | "admin";
 type Status = "idle" | "loading" | "error" | "success";
-
-/** Friendly message for a NextAuth ?error= bounce after a failed SSO attempt. */
-function ssoErrorMessage(code: string | null, mode: Mode): string {
-  if (!code) return "";
-  if (mode === "admin") {
-    return "That account isn't authorized for the Central Portal. Single sign-on is limited to provisioned Sentire administrators.";
-  }
-  return "We couldn't complete single sign-on. Please try again, or sign in with your email and password.";
-}
 
 export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const searchParams = useSearchParams();
@@ -95,9 +46,7 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const [remember, setRemember] = useState(mode === "tenant");
   const [touched, setTouched] = useState<{ companyCode?: boolean; email?: boolean; pw?: boolean }>({});
   const [status, setStatus] = useState<Status>("idle");
-  const [formErr, setFormErr] = useState(() =>
-    ssoErrorMessage(searchParams.get("error"), mode),
-  );
+  const [formErr, setFormErr] = useState("");
   const shakeRef = useRef<HTMLFormElement>(null);
 
   const companyCodeErr =
@@ -175,34 +124,6 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
 
   function ssoUnavailable() {
     toast.info("Single sign-on isn't available yet. Please sign in with email.");
-  }
-
-  // Tenant SSO is company-code-first: the code chooses the workspace an email
-  // resolves to. Stash it in a short-lived lax cookie the auth callbacks read,
-  // then start the OIDC flow. All three tenant options go through the ONE
-  // Authenticize application (our identity broker) — Payroll never holds any
-  // Google/Microsoft client secret. `providerHint` asks Authenticize to jump
-  // straight to Google/Microsoft instead of showing its own sign-in page, so
-  // each button behaves like a native provider button.
-  function tenantSso(providerHint?: "google" | "microsoft") {
-    setTouched((t) => ({ ...t, companyCode: true }));
-    if (!companyCode.trim()) {
-      setFormErr("Enter your company code first, then choose how to sign in.");
-      shake();
-      return;
-    }
-    setFormErr("");
-    // Drop any stale Central Portal marker so a failed tenant SSO bounce to
-    // /login isn't captured and forwarded to /centralportal/login.
-    document.cookie = "central_sso_flow=; path=/; max-age=0; samesite=lax";
-    document.cookie = `tenant_sso_company=${encodeURIComponent(
-      companyCode.trim().toUpperCase(),
-    )}; path=/; max-age=300; samesite=lax`;
-    void signIn(
-      "authenticize-tenant",
-      { callbackUrl: redirectTo },
-      providerHint ? { provider_hint: providerHint } : undefined,
-    );
   }
 
   return (
@@ -330,80 +251,16 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
               </p>
             </div>
 
-            {mode === "tenant" ? (
-              <div className="sn-sso">
-                {TENANT_SSO_AUTHENTICIZE ? (
-                  <>
-                    <button
-                      type="button"
-                      className="sn-sso-btn"
-                      disabled={busy}
-                      onClick={() => tenantSso("google")}
-                    >
-                      <GoogleIcon /> Google
-                    </button>
-                    <button
-                      type="button"
-                      className="sn-sso-btn"
-                      disabled={busy}
-                      onClick={() => tenantSso("microsoft")}
-                    >
-                      <MicrosoftIcon /> Microsoft
-                    </button>
-                    <button
-                      type="button"
-                      className="sn-sso-btn sn-sso-wide"
-                      disabled={busy}
-                      onClick={() => tenantSso()}
-                    >
-                      <KeyIcon /> Continue with Authenticize
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
-                      <GoogleIcon /> Google
-                    </button>
-                    <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
-                      <MicrosoftIcon /> Microsoft
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="sn-sso">
-                {SSO_BUTTONS.length === 0 ? (
-                  <button
-                    type="button"
-                    className="sn-sso-btn sn-sso-wide"
-                    disabled={busy}
-                    onClick={ssoUnavailable}
-                  >
-                    <KeyIcon /> Continue with company SSO
-                  </button>
-                ) : (
-                  SSO_BUTTONS.map(({ id, short, long, Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      className={"sn-sso-btn" + (SSO_BUTTONS.length === 1 ? " sn-sso-wide" : "")}
-                      disabled={busy}
-                      onClick={() => {
-                        // Mark this as a Central Portal SSO flow so that if
-                        // NextAuth bounces a failure to the global /login page,
-                        // it can route the error back to /centralportal/login.
-                        // Drop any stale tenant marker for realm symmetry.
-                        document.cookie = "tenant_sso_company=; path=/; max-age=0; samesite=lax";
-                        document.cookie = "central_sso_flow=1; path=/; max-age=300; samesite=lax";
-                        void signIn(id, { callbackUrl: "/centralportal/dashboard" });
-                      }}
-                    >
-                      <Icon /> {SSO_BUTTONS.length === 1 ? long : short}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+            {/* Google / Microsoft are placeholders for now — sign-in is
+                email/password. The buttons show an "not available yet" toast. */}
+            <div className="sn-sso">
+              <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
+                <GoogleIcon /> Google
+              </button>
+              <button type="button" className="sn-sso-btn" disabled={busy} onClick={ssoUnavailable}>
+                <MicrosoftIcon /> Microsoft
+              </button>
+            </div>
 
             <div className="sn-or">
               <span>{mode === "tenant" ? "or sign in with email" : "or use admin credentials"}</span>
