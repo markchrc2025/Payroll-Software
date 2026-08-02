@@ -12,15 +12,34 @@
  */
 import { NextResponse } from "next/server";
 import { checkCriticalEnv, checkEnvWarnings } from "@/lib/env-check";
+import { getBackupFreshness } from "@/lib/backup-status";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
+export async function GET() {
   const problems = checkCriticalEnv();
   const warnings = checkEnvWarnings();
+
+  // Best-effort off-platform-backup freshness. MUST NOT affect liveness:
+  // getBackupFreshness() is cached, timeout-bounded and swallows every error
+  // (returns "unknown"), so a DB blip or a not-yet-applied migration can never
+  // flip this endpoint off HTTP 200. A stale/absent backup is surfaced only as
+  // a warning + the `backup` body field, never as a hard failure.
+  const backup = await getBackupFreshness();
+  if (backup.status === "stale" || backup.status === "never") {
+    warnings.push({
+      name: "DATABASE_BACKUP",
+      detail:
+        backup.status === "never"
+          ? "No successful off-platform database backup has been recorded yet."
+          : `Latest off-platform backup is ${backup.ageHours}h old (threshold ${backup.maxAgeHours}h).`,
+    });
+  }
+
   return NextResponse.json({
     status: problems.length === 0 ? "ok" : "degraded",
     ...(problems.length ? { problems } : {}),
     ...(warnings.length ? { warnings } : {}),
+    backup,
   });
 }

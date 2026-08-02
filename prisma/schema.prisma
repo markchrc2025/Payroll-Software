@@ -2053,6 +2053,29 @@ model AuditLog {
   @@index([actorUserId])
 }
 
+/// Heartbeat + audit trail for the off-platform database backup
+/// (.github/workflows/db-backup.yml, docs/BACKUPS.md). Deliberately a GLOBAL
+/// ops table: no `tenantId` and no RLS policy — it holds only timestamps, the
+/// dump's object key, byte size, and three sanity row-counts, never tenant PII.
+/// Written by the GitHub Actions backup runner (owner/BYPASSRLS role); read by
+/// /api/health via the admin client for a best-effort freshness signal, so the
+/// app itself never holds any backup credentials.
+model BackupRun {
+  id                String    @id @default(uuid())
+  startedAt         DateTime
+  finishedAt        DateTime?
+  ok                Boolean   @default(false)
+  objectKey         String?
+  sizeBytes         BigInt?
+  employeeCount     Int?
+  payrollSheetCount Int?
+  invoiceCount      Int?
+  error             String?
+  createdAt         DateTime  @default(now())
+
+  @@index([finishedAt])
+}
+
 // =============================================================================
 // CONSENT RECORD — DPA 10173 compliance for biometric/location capture
 // =============================================================================
