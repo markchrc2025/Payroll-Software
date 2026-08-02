@@ -1,0 +1,160 @@
+name: DB Backup (off-platform, encrypted)
+
+# Independent, off-platform, encrypted backup of the Sentire Payroll database to
+# Cloudflare R2 (S3-compatible), on a schedule and on demand.
+#
+# Runs on a GitHub runner — NOT in the app — because the app image is a Railpack
+# native build with no `pg_dump`, and because a backup must keep working even if
+# the app (or the whole Sliplane account) is down. Three independent parties hold
+# the pieces: GitHub runs it, Sliplane holds the live DB, Cloudflare R2 holds the
+# copy. See docs/BACKUPS.md.
+#
+# Safety: `pg_dump` only READS, via the owner (BYPASSRLS) role — no RLS policy or
+# DB role is ever altered. The dump is gpg AES-256 encrypted before it leaves the
+# runner. The app never holds any backup credential.
+
+on:
+  schedule:
+    # FAIL-SAFE DEFAULT: every 6 hours → ~6h RPO on the independent copy.
+    # If Sliplane native PITR is ON, the R2 dump is only the provider-loss floor
+    # and you MAY reduce this to daily — replace the line below with:
+    #   - cron: "0 3 * * *"   # 03:00 UTC daily
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # R2 rejects the default CRC32 trailer the AWS tooling adds (the same gotcha we
+  # hit in the app). Force checksums off unless an operation genuinely requires them.
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+  AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — required secrets present
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          missing=0
+          for v in BACKUP_DATABASE_URL BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET \
+                   AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION BACKUP_GPG_PASSPHRASE; do
+            if [ -z "${!v}" ]; then echo "::error::repo secret for $v is not set"; missing=1; fi
+          done
+          [ "$missing" = 0 ] || exit 1
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (for the prune script)
+        run: npm ci
+
+      - name: Configure aws-cli for R2 (path-style addressing)
+        run: aws configure set default.s3.addressing_style path
+
+      - name: Dump, count, encrypt, upload
+        id: dump
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          DUMP_KEY="db/${TS}.dump.gpg"
+          MANIFEST_KEY="db/${TS}.dump.manifest.json"
+
+          # 1) full, consistent custom-format dump. Owner/BYPASSRLS role => all rows.
+          pg_dump -Fc "$BACKUP_DATABASE_URL" > db.dump
+          SIZE_PLAIN=$(stat -c%s db.dump)
+
+          # 2) sanity row counts for the manifest (owner bypasses RLS)
+          EMP=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Employee"')
+          PS=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "PayrollSheet"')
+          INV=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Invoice"')
+
+          # 3) encrypt at rest (AES-256 symmetric) BEFORE it leaves the runner
+          gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$BACKUP_GPG_PASSPHRASE" \
+              --symmetric --cipher-algo AES256 \
+              -o db.dump.gpg db.dump
+          SIZE_ENC=$(stat -c%s db.dump.gpg)
+
+          # 4) manifest travels next to the dump; the restore drill checks against it
+          printf '{"ts":"%s","objectKey":"%s","sizeBytesEncrypted":%s,"sizeBytesPlain":%s,"employeeCount":%s,"payrollSheetCount":%s,"invoiceCount":%s}\n' \
+            "$TS" "$DUMP_KEY" "$SIZE_ENC" "$SIZE_PLAIN" "$EMP" "$PS" "$INV" > manifest.json
+
+          # 5) upload encrypted dump + manifest to R2
+          aws s3 cp db.dump.gpg  "s3://${BACKUP_S3_BUCKET}/${DUMP_KEY}"     --endpoint-url "$BACKUP_S3_ENDPOINT"
+          aws s3 cp manifest.json "s3://${BACKUP_S3_BUCKET}/${MANIFEST_KEY}" --endpoint-url "$BACKUP_S3_ENDPOINT"
+
+          {
+            echo "key=$DUMP_KEY"
+            echo "size=$SIZE_ENC"
+            echo "emp=$EMP"
+            echo "ps=$PS"
+            echo "inv=$INV"
+          } >> "$GITHUB_OUTPUT"
+          echo "Backed up $DUMP_KEY (${SIZE_ENC} bytes encrypted): Employee=$EMP PayrollSheet=$PS Invoice=$INV"
+
+      - name: Prune old backups (GFS, lock-aware)
+        env:
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+        run: npx tsx scripts/prune-backups.ts
+
+      - name: Record success heartbeat (BackupRun)
+        if: success()
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          KEY: ${{ steps.dump.outputs.key }}
+          SIZE: ${{ steps.dump.outputs.size }}
+          EMP: ${{ steps.dump.outputs.emp }}
+          PS: ${{ steps.dump.outputs.ps }}
+          INV: ${{ steps.dump.outputs.inv }}
+        run: |
+          ID="$(cat /proc/sys/kernel/random/uuid)"
+          psql "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
+            "INSERT INTO \"BackupRun\" (\"id\",\"startedAt\",\"finishedAt\",\"ok\",\"objectKey\",\"sizeBytes\",\"employeeCount\",\"payrollSheetCount\",\"invoiceCount\") \
+             VALUES ('$ID', now(), now(), true, '$KEY', $SIZE, $EMP, $PS, $INV)" \
+            || echo "::warning::BackupRun table not present yet — apply migration 20260802000000_backup_run via the db-migrate workflow; heartbeat skipped."
+
+      - name: Record failure heartbeat (BackupRun)
+        if: failure()
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          ID="$(cat /proc/sys/kernel/random/uuid)"
+          psql "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
+            "INSERT INTO \"BackupRun\" (\"id\",\"startedAt\",\"finishedAt\",\"ok\",\"error\") \
+             VALUES ('$ID', now(), now(), false, 'backup workflow failed — see the GitHub Actions run')" \
+            || true
