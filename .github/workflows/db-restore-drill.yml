@@ -10,9 +10,13 @@ name: DB Restore Drill
 # scratch service — never production. See docs/BACKUPS.md and
 # scripts/restore-from-backup.md.
 
+# ⚠️ DISABLED — depends on the (currently disabled) db-backup workflow; there is
+# no dump in R2 to restore yet. Backups are a HARD Phase-2 launch gate. The
+# monthly schedule is removed so it does not fail; still manually dispatchable
+# once real backups exist. See the STATUS banner in docs/BACKUPS.md.
 on:
-  schedule:
-    - cron: "0 4 1 * *" # 04:00 UTC on the 1st of each month
+  # schedule:
+  #   - cron: "0 4 1 * *"   # RE-ENABLE for Phase 2 (1st of each month, 04:00 UTC)
   workflow_dispatch:
 
 concurrency:

@@ -1,5 +1,32 @@
 # Database Backups — Sentire Payroll
 
+> ## ⚠️ STATUS: NOT OPERATIONAL — HARD Phase-2 launch gate
+>
+> **There is no working database backup today.** Neither layer below is active:
+> - The **off-platform copy** (this doc's workflows) is **disabled**. It needs a
+>   `BYPASSRLS`/superuser DB role for `pg_dump`, and Sliplane's managed Postgres
+>   does not expose one without the `postgres` superuser (see "Backup DB role"
+>   below). Rather than block on it, we deferred it.
+> - **Sliplane native PITR is not active** either — it likely requires a
+>   dedicated/upgraded DB tier.
+>
+> **Why this is acceptable right now:** we are **pre-beta with zero customer
+> data**. A total DB loss today costs only seed/test data.
+>
+> **This is a HARD gate for Phase 2.** A working, *restore-tested* backup MUST be
+> in place **before the first beta tenant** (any real customer data). Acceptable
+> ways to clear the gate:
+> 1. **Sliplane native PITR** on an upgraded DB tier, and/or
+> 2. **Revive the off-platform copy** — have Sliplane/superuser create a dedicated
+>    `backup_ro` (`LOGIN BYPASSRLS` + `pg_read_all_data`) role and point
+>    `BACKUP_DATABASE_URL` at it (see "Backup DB role"), and/or
+> 3. **Copy Sliplane's native backup artifact to R2** on a schedule (provider-loss
+>    protection without needing `pg_dump` bypass).
+>
+> The `db-backup` and `db-restore-drill` workflows are **built and validated but
+> their schedules are disabled** — they remain as ready-to-enable scaffolding.
+> Everything below documents how they work once a qualifying role exists.
+
 Two independent layers protect the production database:
 
 1. **Sliplane native backups / PITR** — protects against disk failure *within*
