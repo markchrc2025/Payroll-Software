@@ -13,13 +13,15 @@ name: DB Backup (off-platform, encrypted)
 # DB role is ever altered. The dump is gpg AES-256 encrypted before it leaves the
 # runner. The app never holds any backup credential.
 
+# ⚠️ DISABLED — backups are a HARD Phase-2 launch gate and NOT operational yet.
+# This workflow requires a BYPASSRLS/superuser DB role for pg_dump, which managed
+# Sliplane Postgres does not expose without the `postgres` superuser. The
+# scheduled trigger is intentionally removed so it does not fail every 6h. It
+# stays manually dispatchable for when the backup role is created. See the STATUS
+# banner in docs/BACKUPS.md before re-enabling the schedule below.
 on:
-  schedule:
-    # FAIL-SAFE DEFAULT: every 6 hours → ~6h RPO on the independent copy.
-    # If Sliplane native PITR is ON, the R2 dump is only the provider-loss floor
-    # and you MAY reduce this to daily — replace the line below with:
-    #   - cron: "0 3 * * *"   # 03:00 UTC daily
-    - cron: "0 */6 * * *"
+  # schedule:
+  #   - cron: "0 */6 * * *"   # RE-ENABLE for Phase 2 (every 6h; or "0 3 * * *" daily if PITR is on)
   workflow_dispatch:
 
 concurrency:
