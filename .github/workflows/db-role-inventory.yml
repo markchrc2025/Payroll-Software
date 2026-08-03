@@ -1,0 +1,59 @@
+name: DB Role Inventory (diagnostic)
+
+# One-off, READ-ONLY diagnostic to answer: which roles on the live database have
+# superuser / BYPASSRLS, and which RLS tables are missing the admin_bypass policy?
+# Needed to choose the correct role for the off-platform backup's pg_dump (which
+# requires a superuser or BYPASSRLS-attribute role — a permissive RLS policy is
+# not enough). Prints only catalog metadata (role names + booleans, table names);
+# no secrets and no data rows. Safe to delete once the backup role is settled.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — BACKUP_DATABASE_URL present
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: '[ -n "$BACKUP_DATABASE_URL" ] || { echo "::error::BACKUP_DATABASE_URL secret not set"; exit 1; }'
+
+      - name: Role + RLS inventory
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          echo "== Connection identity + server version =="
+          psql "$BACKUP_DATABASE_URL" -P pager=off -c \
+            "SELECT current_user AS connected_as,
+                    (SELECT rolsuper      FROM pg_roles WHERE rolname = current_user) AS is_superuser,
+                    (SELECT rolbypassrls  FROM pg_roles WHERE rolname = current_user) AS has_bypassrls,
+                    current_setting('server_version') AS server_version;"
+
+          echo "== All roles: rolname, rolsuper, rolbypassrls, rolcanlogin =="
+          psql "$BACKUP_DATABASE_URL" -P pager=off -c \
+            "SELECT rolname, rolsuper, rolbypassrls, rolcanlogin
+               FROM pg_roles
+              ORDER BY rolsuper DESC, rolbypassrls DESC, rolname;"
+
+          echo "== Any role usable for pg_dump (superuser OR bypassrls)? =="
+          psql "$BACKUP_DATABASE_URL" -P pager=off -c \
+            "SELECT rolname, rolsuper, rolbypassrls
+               FROM pg_roles
+              WHERE (rolsuper OR rolbypassrls) AND rolcanlogin
+              ORDER BY rolname;"
+
+          echo "== RLS tables MISSING the admin_bypass policy (blind spots) =="
+          psql "$BACKUP_DATABASE_URL" -P pager=off -c \
+            "SELECT t.tablename
+               FROM (SELECT DISTINCT tablename FROM pg_policies WHERE schemaname='public') t
+              WHERE NOT EXISTS (
+                      SELECT 1 FROM pg_policies p
+                       WHERE p.schemaname='public'
+                         AND p.tablename = t.tablename
+                         AND p.policyname = 'admin_bypass')
+              ORDER BY 1;"
