@@ -110,10 +110,15 @@ jobs:
 
       - name: Pre-create prod roles in scratch (so policies/grants restore cleanly)
         run: |
-          "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
-            "DO \$\$ BEGIN CREATE ROLE payroll_user; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
-          "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
-            "DO \$\$ BEGIN CREATE ROLE payroll_app; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+          # Roles the live Sliplane dump references, confirmed via the
+          # db-role-inventory diagnostic: the admin_bypass policy is TO "owner",
+          # and GRANTs go to payroll_app / sentire_books_app. --no-owner remaps
+          # ownership to the scratch superuser, so these only need to EXIST for the
+          # CREATE POLICY / GRANT statements to restore without error.
+          for r in owner payroll_app sentire_books_app; do
+            "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+              "DO \$\$ BEGIN CREATE ROLE \"$r\"; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+          done
 
       - name: Restore into scratch
         run: |

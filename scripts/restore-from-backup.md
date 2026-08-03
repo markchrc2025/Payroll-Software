@@ -43,9 +43,11 @@ aws s3 cp "s3://$BACKUP_S3_BUCKET/${KEY%.gpg}.manifest.json" manifest.json --end
 # 2) decrypt
 gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_GPG_PASSPHRASE" -o db.dump -d db.dump.gpg
 
-# 3) roles so policies/grants restore, then restore
-psql "$SCRATCH_DATABASE_URL" -c "DO \$\$ BEGIN CREATE ROLE payroll_user; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
-psql "$SCRATCH_DATABASE_URL" -c "DO \$\$ BEGIN CREATE ROLE payroll_app;  EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+# 3) roles the dump references (owner = admin_bypass policy; payroll_app /
+#    sentire_books_app = GRANTs), then restore
+for r in owner payroll_app sentire_books_app; do
+  psql "$SCRATCH_DATABASE_URL" -c "DO \$\$ BEGIN CREATE ROLE \"$r\"; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+done
 pg_restore --no-owner -d "$SCRATCH_DATABASE_URL" db.dump || echo "warnings are non-fatal"
 
 # 4) verify
@@ -75,13 +77,14 @@ Restore into a **fresh, empty** database — never over a live one you still tru
    gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_GPG_PASSPHRASE" -o db.dump -d db.dump.gpg
    ```
 
-4. **Recreate the DB roles** the dump references, then restore. The dump owns
-   objects as `payroll_user` and its RLS policies grant to `payroll_app`, so both
-   roles must exist first (set real passwords/attributes to match your
-   environment — including `BYPASSRLS` on the owner, as in production):
+4. **Recreate the DB roles** the dump references, then restore. Objects are owned
+   by `owner`, the `admin_bypass` RLS policies are `TO owner`, and GRANTs go to
+   `payroll_app` / `sentire_books_app`, so those roles must exist first (set real
+   passwords/attributes to match your environment):
    ```bash
-   psql "$NEW_DATABASE_URL" -c "CREATE ROLE payroll_user LOGIN BYPASSRLS PASSWORD '<owner-pw>';"
-   psql "$NEW_DATABASE_URL" -c "CREATE ROLE payroll_app  LOGIN PASSWORD '<app-pw>';"
+   psql "$NEW_DATABASE_URL" -c "CREATE ROLE owner             LOGIN PASSWORD '<owner-pw>';"
+   psql "$NEW_DATABASE_URL" -c "CREATE ROLE payroll_app       LOGIN PASSWORD '<app-pw>';"
+   psql "$NEW_DATABASE_URL" -c "CREATE ROLE sentire_books_app LOGIN PASSWORD '<books-pw>';"
    pg_restore -d "$NEW_DATABASE_URL" db.dump        # keep ownership/policies for a faithful restore
    ```
 
