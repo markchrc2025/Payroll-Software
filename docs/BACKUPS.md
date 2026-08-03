@@ -54,7 +54,7 @@ Set under **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |---|---|
-| `BACKUP_DATABASE_URL` | Sliplane **session-pooler** connection string (owner/BYPASSRLS role), reachable from GitHub runners. |
+| `BACKUP_DATABASE_URL` | Sliplane connection string for a **superuser or `BYPASSRLS` role** (see "Backup DB role" below), reachable from GitHub runners. **The `owner` role does NOT work** — every table uses `FORCE ROW LEVEL SECURITY` and `owner` lacks `BYPASSRLS`, so `pg_dump` refuses. |
 | `BACKUP_S3_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
 | `BACKUP_S3_REGION` | `auto` |
 | `BACKUP_S3_BUCKET` | `sentire-payroll-backups` |
@@ -64,6 +64,37 @@ Set under **Settings → Secrets and variables → Actions**:
 
 Optional tuning (workflow env, defaults shown): `BACKUP_KEEP_INTRADAY_HOURS=48`,
 `BACKUP_RETENTION_DAILY=14`, `BACKUP_RETENTION_WEEKLY=8`.
+
+### Backup DB role (why `owner` fails, and what to use)
+
+Every tenant table uses `FORCE ROW LEVEL SECURITY`. `pg_dump` runs `row_security =
+off` to guarantee a complete dump, and Postgres only allows that for a
+**superuser** or a role with the **`BYPASSRLS` attribute**. The app's "admin
+bypass" is an RLS *policy* (`admin_bypass USING(true)`), **not** the role
+attribute — so it does not satisfy `pg_dump`. The `owner` role the app runs as has
+neither attribute, which is why the first backup failed on `Announcement`.
+
+Per the live `pg_roles` inventory, the only qualifying login role is the
+`postgres` **superuser** (`rolsuper = t, rolbypassrls = t`). Two ways to fix,
+both requiring `postgres` (superuser) at least once:
+
+- **Recommended — dedicated least-privilege backup role.** As `postgres`, run:
+  ```sql
+  CREATE ROLE backup_ro WITH LOGIN PASSWORD '<strong-random>' BYPASSRLS;
+  GRANT pg_read_all_data TO backup_ro;   -- PG14+ : SELECT on all current & future tables
+  ```
+  Then point `BACKUP_DATABASE_URL` at `backup_ro`. This is read-only and RLS-
+  bypassing — a much smaller blast radius than superuser if the secret ever leaks.
+- **Fastest — use `postgres` directly** in `BACKUP_DATABASE_URL`. Works with no
+  DDL, but the backup job then holds superuser credentials.
+
+> Do **not** work around this with `pg_dump --enable-row-security` as `owner`: that
+> depends on `admin_bypass` staying complete on every present and future table and
+> would **silently drop rows** the day a table lacks it. A `BYPASSRLS`/superuser
+> role is the only robust choice for a payroll backup.
+
+Keep the host/port/database/`sslmode` identical to the current value; change only
+the **user and password** to the chosen role.
 
 ### App env (optional)
 
