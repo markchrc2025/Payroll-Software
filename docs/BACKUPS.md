@@ -20,7 +20,7 @@ Two independent layers protect the production database:
 |---|---|---|
 | Scheduled encrypted backup | `.github/workflows/db-backup.yml` | GitHub Actions |
 | GFS retention prune (lock-aware) | `scripts/prune-backups.ts` | inside the backup job |
-| Monthly + manual restore drill | `.github/workflows/db-restore-drill.yml` | GitHub Actions (throwaway `postgres:17`) |
+| Monthly + manual restore drill | `.github/workflows/db-restore-drill.yml` | GitHub Actions (throwaway `postgres:18`) |
 | Restore verifier | `scripts/verify-backup.ts` | inside the drill job |
 | Freshness heartbeat | `BackupRun` table → `/api/health` | written by the job, read by the app |
 | Manual restore runbook | `scripts/restore-from-backup.md` | you, when recovering |
@@ -34,6 +34,17 @@ copy.
 **RLS / role safety:** `pg_dump` only *reads*, via the owner (`BYPASSRLS`) role,
 so it captures every row without weakening anything. No RLS policy or DB role is
 altered. Restores only ever touch a throwaway scratch database.
+
+**PostgreSQL version:** the Sliplane server is **PostgreSQL 18.4**. Both
+workflows install the **v18** client from PGDG and invoke `pg_dump` / `pg_restore`
+/ `psql` by absolute path (`$PG_BIN=/usr/lib/postgresql/18/bin`) so the runner's
+older default `pg_dump` (16.x) on `PATH` can't shadow it — `pg_dump` refuses to
+dump a server newer than itself. The restore drill's scratch service is
+`postgres:18` to match. A guard step in `db-backup.yml` fails early with a clear
+message if `pg_dump`'s major version is ever older than the live server's, so a
+tooling regression can't silently produce a broken backup. **If Sliplane later
+upgrades the server major, bump `postgresql-client-<N>`, `$PG_BIN`, and the
+`postgres:<N>` scratch image together.**
 
 ---
 
@@ -145,7 +156,7 @@ cached (60s), timeout-bounded, and fully guarded, so it can **never** flip
 - **Automatic:** the 1st of each month (`db-restore-drill.yml`).
 - **Manual:** GitHub → Actions → **DB Restore Drill** → *Run workflow*.
 
-It pulls the newest dump, decrypts, restores into a throwaway `postgres:17`, and
+It pulls the newest dump, decrypts, restores into a throwaway `postgres:18`, and
 runs `scripts/verify-backup.ts`, which asserts the restored Employee /
 PayrollSheet / Invoice counts equal the dump-time manifest. Green = your backup
 is real and restorable. For a real (production) restore, follow

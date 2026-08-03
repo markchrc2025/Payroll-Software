@@ -37,6 +37,11 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
   AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+  # The Sliplane server is PostgreSQL 18.4, so the tooling MUST be v18: pg_dump
+  # refuses to dump a server newer than itself. Invoke every pg binary through
+  # this absolute path so the runner's older default pg_dump/psql on PATH (16.x)
+  # can never shadow it.
+  PG_BIN: /usr/lib/postgresql/18/bin
 
 jobs:
   backup:
@@ -58,12 +63,27 @@ jobs:
           done
           [ "$missing" = 0 ] || exit 1
 
-      - name: Install PostgreSQL 17 client
+      - name: Install PostgreSQL 18 client
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
+          sudo apt-get install -y postgresql-client-18
+          "$PG_BIN/pg_dump" --version
+
+      - name: Guard — pg_dump major must not be older than the server
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          DUMP_MAJOR="$("$PG_BIN/pg_dump" --version | grep -oE '[0-9]+' | head -1)"
+          SERVER_NUM="$("$PG_BIN/psql" "$BACKUP_DATABASE_URL" -tAc 'SHOW server_version_num')"
+          SERVER_MAJOR=$(( SERVER_NUM / 10000 ))
+          echo "pg_dump major=$DUMP_MAJOR, server major=$SERVER_MAJOR (server_version_num=$SERVER_NUM)"
+          if [ "$DUMP_MAJOR" -lt "$SERVER_MAJOR" ]; then
+            echo "::error::pg_dump $DUMP_MAJOR is OLDER than the PostgreSQL server ($SERVER_MAJOR) — the dump would be rejected or incomplete. Install postgresql-client-$SERVER_MAJOR and invoke it via \$PG_BIN (absolute path)."
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -91,13 +111,14 @@ jobs:
           MANIFEST_KEY="db/${TS}.dump.manifest.json"
 
           # 1) full, consistent custom-format dump. Owner/BYPASSRLS role => all rows.
-          pg_dump -Fc "$BACKUP_DATABASE_URL" > db.dump
+          #    Absolute path so the runner's older default pg_dump can't shadow v18.
+          "$PG_BIN/pg_dump" -Fc "$BACKUP_DATABASE_URL" > db.dump
           SIZE_PLAIN=$(stat -c%s db.dump)
 
           # 2) sanity row counts for the manifest (owner bypasses RLS)
-          EMP=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Employee"')
-          PS=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "PayrollSheet"')
-          INV=$(psql "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Invoice"')
+          EMP=$("$PG_BIN/psql" "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Employee"')
+          PS=$("$PG_BIN/psql" "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "PayrollSheet"')
+          INV=$("$PG_BIN/psql" "$BACKUP_DATABASE_URL" -tAc 'SELECT count(*) FROM "Invoice"')
 
           # 3) encrypt at rest (AES-256 symmetric) BEFORE it leaves the runner
           gpg --batch --yes --pinentry-mode loopback \
@@ -143,7 +164,7 @@ jobs:
           INV: ${{ steps.dump.outputs.inv }}
         run: |
           ID="$(cat /proc/sys/kernel/random/uuid)"
-          psql "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
+          "$PG_BIN/psql" "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
             "INSERT INTO \"BackupRun\" (\"id\",\"startedAt\",\"finishedAt\",\"ok\",\"objectKey\",\"sizeBytes\",\"employeeCount\",\"payrollSheetCount\",\"invoiceCount\") \
              VALUES ('$ID', now(), now(), true, '$KEY', $SIZE, $EMP, $PS, $INV)" \
             || echo "::warning::BackupRun table not present yet — apply migration 20260802000000_backup_run via the db-migrate workflow; heartbeat skipped."
@@ -154,7 +175,7 @@ jobs:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           ID="$(cat /proc/sys/kernel/random/uuid)"
-          psql "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
+          "$PG_BIN/psql" "$BACKUP_DATABASE_URL" -v ON_ERROR_STOP=0 -c \
             "INSERT INTO \"BackupRun\" (\"id\",\"startedAt\",\"finishedAt\",\"ok\",\"error\") \
              VALUES ('$ID', now(), now(), false, 'backup workflow failed — see the GitHub Actions run')" \
             || true

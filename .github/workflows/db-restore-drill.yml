@@ -2,8 +2,9 @@ name: DB Restore Drill
 
 # Monthly (and on-demand) PROOF that the latest off-platform backup actually
 # restores. Pulls the newest encrypted dump from R2, decrypts it, `pg_restore`s
-# into a throwaway postgres:17 service, and asserts the Employee / PayrollSheet /
-# Invoice row counts exactly match the dump-time manifest.
+# into a throwaway postgres:18 service (matching the Sliplane server major), and
+# asserts the Employee / PayrollSheet / Invoice row counts exactly match the
+# dump-time manifest.
 #
 # "A backup you have never restored is not a backup." This touches ONLY the
 # scratch service — never production. See docs/BACKUPS.md and
@@ -28,13 +29,16 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
   AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
   SCRATCH_DATABASE_URL: postgresql://postgres:scratch@localhost:5432/verifydb
+  # Must match the Sliplane server major (18). pg_restore/psql via absolute path
+  # so the runner's older default binaries on PATH can't shadow v18.
+  PG_BIN: /usr/lib/postgresql/18/bin
 
 jobs:
   restore-drill:
     runs-on: ubuntu-latest
     services:
       scratch:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: scratch
           POSTGRES_DB: verifydb
@@ -58,12 +62,13 @@ jobs:
             if [ -z "${!v}" ]; then echo "::error::repo secret for $v is not set"; exit 1; fi
           done
 
-      - name: Install PostgreSQL 17 client
+      - name: Install PostgreSQL 18 client
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
+          sudo apt-get install -y postgresql-client-18
+          "$PG_BIN/pg_restore" --version
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -105,9 +110,9 @@ jobs:
 
       - name: Pre-create prod roles in scratch (so policies/grants restore cleanly)
         run: |
-          psql "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+          "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
             "DO \$\$ BEGIN CREATE ROLE payroll_user; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
-          psql "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+          "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
             "DO \$\$ BEGIN CREATE ROLE payroll_app; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
 
       - name: Restore into scratch
@@ -115,7 +120,7 @@ jobs:
           # --no-owner: objects owned by the scratch superuser (which bypasses the
           # restored RLS policies), so the verifier sees every row. Non-fatal
           # warnings are fine — the count verifier below is the authoritative gate.
-          pg_restore --no-owner -d "$SCRATCH_DATABASE_URL" db.dump \
+          "$PG_BIN/pg_restore" --no-owner -d "$SCRATCH_DATABASE_URL" db.dump \
             || echo "pg_restore finished with warnings (non-fatal; verifier is the gate)"
 
       - name: Verify restored row counts vs manifest
@@ -126,6 +131,6 @@ jobs:
       - name: Extension parity check
         run: |
           echo "Extensions present in the restored scratch DB:"
-          psql "$SCRATCH_DATABASE_URL" -tAc "SELECT extname FROM pg_extension ORDER BY 1"
+          "$PG_BIN/psql" "$SCRATCH_DATABASE_URL" -tAc "SELECT extname FROM pg_extension ORDER BY 1"
           echo "Production declares no non-default extensions (no CREATE EXTENSION in prisma/migrations),"
-          echo "so the stock postgres:17 image restores it faithfully. If prod ever adds one, install it here."
+          echo "so the stock postgres:18 image restores it faithfully. If prod ever adds one, install it here."
