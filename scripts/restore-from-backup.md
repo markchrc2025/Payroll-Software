@@ -19,15 +19,16 @@ with a `db/<timestamp>.dump.manifest.json` beside it.
 ## A. Restore drill (routine)
 
 **Easiest — no local setup:** GitHub → **Actions → DB Restore Drill → Run
-workflow**. It restores the newest dump into a throwaway `postgres:17` and
+workflow**. It restores the newest dump into a throwaway `postgres:18` and
 asserts row counts. Success ends with `RESTORE VERIFICATION PASSED`.
 
-**Locally** (needs Docker, PostgreSQL 17 client, aws-cli, gpg, and the `BACKUP_*`
-values in your shell):
+**Locally** (needs Docker, PostgreSQL 18 client, aws-cli, gpg, and the `BACKUP_*`
+values in your shell). The client must be **v18** to match the Sliplane server —
+a v17 `pg_restore` cannot read an 18-created dump:
 
 ```bash
-# 0) scratch Postgres 17
-docker run -d --name scratch-pg -e POSTGRES_PASSWORD=scratch -e POSTGRES_DB=verifydb -p 5433:5432 postgres:17
+# 0) scratch Postgres 18 (matches the Sliplane server major)
+docker run -d --name scratch-pg -e POSTGRES_PASSWORD=scratch -e POSTGRES_DB=verifydb -p 5433:5432 postgres:18
 export SCRATCH_DATABASE_URL="postgresql://postgres:scratch@localhost:5433/verifydb"
 
 # 1) newest dump + manifest from R2
@@ -59,8 +60,8 @@ docker rm -f scratch-pg   # cleanup
 
 Restore into a **fresh, empty** database — never over a live one you still trust.
 
-1. **Provision a new Postgres 17** (new Sliplane DB, or elsewhere) and get its
-   owner connection string as `NEW_DATABASE_URL`.
+1. **Provision a new Postgres 18** (new Sliplane DB, or elsewhere — match the
+   source server major) and get its owner connection string as `NEW_DATABASE_URL`.
 
 2. **Pick the dump.** Newest is shown by the drill's list command above; for a
    specific point in time, list and choose:
