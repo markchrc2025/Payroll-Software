@@ -6,6 +6,8 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 
+import { authErrorMessage } from "@/lib/auth-error-messages";
+
 import {
   NexusMark,
   PayrollGlyph,
@@ -38,6 +40,11 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
       ? rawCallback
       : "/dashboard";
   const redirectTo = mode === "admin" ? "/centralportal/dashboard" : callbackUrl;
+
+  // NextAuth redirects here with ?error=<code> when a sign-in fails server-side
+  // (unit 0.4). Without this the code is silently dropped and the user sees a
+  // login form with no explanation of what just went wrong.
+  const redirectErr = authErrorMessage(searchParams.get("error"));
 
   const [companyCode, setCompanyCode] = useState("");
   const [email, setEmail] = useState("");
@@ -266,10 +273,10 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
               <span>{mode === "tenant" ? "or sign in with email" : "or use admin credentials"}</span>
             </div>
 
-            {formErr && (
+            {(formErr || redirectErr) && (
               <div className="sn-alert" role="alert">
                 <AlertIcon />
-                <span>{formErr}</span>
+                <span>{formErr || redirectErr}</span>
               </div>
             )}
 

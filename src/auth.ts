@@ -64,11 +64,125 @@ declare module "@auth/core/jwt" {
   }
 }
 
+/**
+ * Credentials `authorize` — exported so the sign-in path can be exercised
+ * directly by tests without standing up the whole NextAuth request pipeline.
+ *
+ * Returns the user object on success, or null for any credential failure.
+ * THROWING from here is not a "wrong password" — @auth/core wraps any throw in
+ * a CallbackRouteError, which is not client-safe and so surfaces as
+ * `?error=Configuration` on the error page. Everything non-essential in here
+ * must therefore be fail-soft.
+ */
+export const authorizeCredentials = async (raw: unknown) => {
+  const parsed = credentialsSchema.safeParse(raw);
+  if (!parsed.success) return null;
+
+  const { email, password, companyCode, scope } = parsed.data;
+  const emailLc = email.toLowerCase();
+
+  // Build the set of accounts this sign-in is allowed to match against.
+  // The actual account is then chosen by which one's password verifies —
+  // this disambiguates an email that exists in more than one tenant.
+  let candidates: Array<{
+    id: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    tenantId: string | null;
+    systemRole: SystemRole;
+    roleId: string | null;
+  }> = [];
+
+  if (scope === "admin") {
+    // Central Portal: SUPER_ADMIN accounts only.
+    candidates = await prismaAdmin.user.findMany({
+      where: {
+        email: emailLc,
+        systemRole: "SUPER_ADMIN",
+        tenantId: null,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: USER_SELECT,
+    });
+  } else if (companyCode && companyCode.trim()) {
+    // Tenant login scoped to the workspace named by the company code.
+    const tenant = await prismaAdmin.tenant.findFirst({
+      where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
+      select: { id: true },
+    });
+    if (tenant) {
+      candidates = await prismaAdmin.user.findMany({
+        where: { email: emailLc, tenantId: tenant.id, isActive: true, deletedAt: null },
+        select: USER_SELECT,
+      });
+    }
+  } else {
+    // Tenant workspace login by email alone. An email may belong to more
+    // than one account (multiple tenants, or a super admin); the password
+    // check below selects the right one.
+    candidates = await prismaAdmin.user.findMany({
+      where: { email: emailLc, isActive: true, deletedAt: null },
+      select: USER_SELECT,
+    });
+  }
+
+  let user: (typeof candidates)[number] | null = null;
+  for (const c of candidates) {
+    if (await bcrypt.compare(password, c.passwordHash)) {
+      user = c;
+      break;
+    }
+  }
+  if (!user) return null;
+
+  // lastLoginAt is BOOKKEEPING, not authorization: it records when someone last
+  // signed in and says nothing about whether they may. A failure here must never
+  // turn a valid credential into a failed sign-in — @auth/core wraps any throw
+  // from authorize() in a CallbackRouteError, which is not in its client-safe
+  // set, so the user would be bounced to `?error=Configuration` by a transient
+  // DB blip. Best-effort, same as our email sends: fail soft, but log loudly —
+  // swallowing this would trade a visible failure for an invisible one.
+  try {
+    await prismaAdmin.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+  } catch (e) {
+    console.error("[auth] failed to record lastLoginAt for user", user.id, e);
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: `${user.firstName} ${user.lastName}`.trim(),
+    tenantId: user.tenantId,
+    systemRole: user.systemRole,
+    roleId: user.roleId,
+  };
+};
+
+/**
+ * Custom pages (unit 0.4). `error` MUST be set — without it @auth/core falls
+ * back to `${basePath}/error`, its own unbranded page, which is where a failed
+ * sign-in currently lands. Both keys point at /login: @auth/core routes by the
+ * error's `kind` ("signIn" -> pages.signIn, "error" -> pages.error), and sending
+ * both to the login screen means every failure arrives somewhere the user can
+ * immediately retry, with one banner handling both sets of codes.
+ *
+ * /login is already public in src/proxy.ts, which also avoids the ErrorPageLoop
+ * @auth/core raises when the configured error page itself requires auth.
+ */
+export const AUTH_PAGES = {
+  signIn: "/login",
+  error: "/login",
+} as const;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 /* 8h */ },
-  pages: {
-    signIn: "/login",
-  },
+  pages: AUTH_PAGES,
   providers: [
     Credentials({
       name: "Credentials",
@@ -77,85 +191,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
         companyCode: { label: "Company Code", type: "text" },
       },
-      authorize: async (raw) => {
-        const parsed = credentialsSchema.safeParse(raw);
-        if (!parsed.success) return null;
-
-        const { email, password, companyCode, scope } = parsed.data;
-        const emailLc = email.toLowerCase();
-
-        // Build the set of accounts this sign-in is allowed to match against.
-        // The actual account is then chosen by which one's password verifies —
-        // this disambiguates an email that exists in more than one tenant.
-        let candidates: Array<{
-          id: string;
-          email: string;
-          passwordHash: string;
-          firstName: string;
-          lastName: string;
-          tenantId: string | null;
-          systemRole: SystemRole;
-          roleId: string | null;
-        }> = [];
-
-        if (scope === "admin") {
-          // Central Portal: SUPER_ADMIN accounts only.
-          candidates = await prismaAdmin.user.findMany({
-            where: {
-              email: emailLc,
-              systemRole: "SUPER_ADMIN",
-              tenantId: null,
-              isActive: true,
-              deletedAt: null,
-            },
-            select: USER_SELECT,
-          });
-        } else if (companyCode && companyCode.trim()) {
-          // Tenant login scoped to the workspace named by the company code.
-          const tenant = await prismaAdmin.tenant.findFirst({
-            where: { companyCode: companyCode.trim().toUpperCase(), deletedAt: null },
-            select: { id: true },
-          });
-          if (tenant) {
-            candidates = await prismaAdmin.user.findMany({
-              where: { email: emailLc, tenantId: tenant.id, isActive: true, deletedAt: null },
-              select: USER_SELECT,
-            });
-          }
-        } else {
-          // Tenant workspace login by email alone. An email may belong to more
-          // than one account (multiple tenants, or a super admin); the password
-          // check below selects the right one.
-          candidates = await prismaAdmin.user.findMany({
-            where: { email: emailLc, isActive: true, deletedAt: null },
-            select: USER_SELECT,
-          });
-        }
-
-        let user: (typeof candidates)[number] | null = null;
-        for (const c of candidates) {
-          if (await bcrypt.compare(password, c.passwordHash)) {
-            user = c;
-            break;
-          }
-        }
-        if (!user) return null;
-
-        // Update lastLoginAt (fire-and-forget acceptable; await for correctness)
-        await prismaAdmin.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`.trim(),
-          tenantId: user.tenantId,
-          systemRole: user.systemRole,
-          roleId: user.roleId,
-        };
-      },
+      authorize: authorizeCredentials,
     }),
   ],
   callbacks: {
