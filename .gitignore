@@ -33,6 +33,28 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Database dumps & backup artefacts — NEVER commit. A dump is the ENTIRE payroll
+# database in plaintext, so committing one is strictly worse than leaking the
+# credential that protects it. docs/MIGRATION_SLIPLANE.md and
+# scripts/restore-from-backup.md both instruct `pg_dump -f payroll.dump` with the
+# repo as the working directory, so these land in the tree by default.
+# NOTE: deliberately NOT *.sql — prisma/migrations/**/migration.sql is tracked.
+*.dump
+*.sql.gz
+*.sql.zst
+*.sql.bz2
+*.gpg
+*.bak
+
+# Credential-shaped files
+.pgpass
+*.key
+*.p12
+*.pfx
+id_rsa*
+secrets.json
+credentials.json
+
 # vercel
 .vercel
 
