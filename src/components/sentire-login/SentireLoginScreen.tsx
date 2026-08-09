@@ -7,6 +7,11 @@ import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 
 import { authErrorMessage } from "@/lib/auth-error-messages";
+import {
+  loginBannerMessage,
+  postLoginDestination,
+  submitCredentials,
+} from "@/lib/login-redirect";
 
 import {
   NexusMark,
@@ -32,19 +37,20 @@ type Status = "idle" | "loading" | "error" | "success";
 
 export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const searchParams = useSearchParams();
-  // Tenant honours ?callbackUrl (relative only, to block open redirects).
-  // Missing or bare "/" lands on the dashboard, not the bare root.
-  const rawCallback = searchParams.get("callbackUrl");
-  const callbackUrl =
-    rawCallback && rawCallback.startsWith("/") && rawCallback !== "/"
-      ? rawCallback
-      : "/dashboard";
-  const redirectTo = mode === "admin" ? "/centralportal/dashboard" : callbackUrl;
+  // Tenant honours ?callbackUrl (same-origin app paths only — see
+  // safeCallbackUrl); Central Portal always lands on its own dashboard.
+  const redirectTo = postLoginDestination(mode, searchParams.get("callbackUrl"));
 
   // NextAuth redirects here with ?error=<code> when a sign-in fails server-side
   // (unit 0.4). Without this the code is silently dropped and the user sees a
   // login form with no explanation of what just went wrong.
-  const redirectErr = authErrorMessage(searchParams.get("error"));
+  //
+  // It is suppressed the moment a new attempt is submitted (unit 0.12): the
+  // param stays in the URL for the whole visit, so without this the banner keeps
+  // describing an earlier attempt while the user is looking at the result of a
+  // newer one.
+  const [urlErrDismissed, setUrlErrDismissed] = useState(false);
+  const urlErr = authErrorMessage(searchParams.get("error"));
 
   const [companyCode, setCompanyCode] = useState("");
   const [email, setEmail] = useState("");
@@ -73,6 +79,9 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
         : "Password is required."
       : "";
   const busy = status === "loading";
+  // Single source of truth for the banner: the latest attempt wins, and the URL
+  // error is dropped once the user has submitted again (unit 0.12).
+  const bannerMsg = loginBannerMessage(urlErr, formErr, urlErrDismissed);
 
   // After a successful sign-in, let the success animation play, then navigate.
   // Full browser navigation so the session cookie is in the first request.
@@ -95,7 +104,10 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setTouched({ companyCode: true, email: true, pw: true });
+    // Clear BOTH error sources, so the banner always describes this attempt and
+    // not a stale ?error= left in the URL by an earlier one (unit 0.12).
     setFormErr("");
+    setUrlErrDismissed(true);
     const tenantCodeMissing = mode === "tenant" && !companyCode.trim();
     if (tenantCodeMissing || !EMAIL_RE.test(email) || pw.length < 8) {
       setStatus("error");
@@ -104,14 +116,14 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
     }
     setStatus("loading");
     try {
-      const res = await signIn("credentials", {
+      const outcome = await submitCredentials(signIn, {
+        mode,
         email,
         password: pw,
-        ...(mode === "tenant" ? { companyCode: companyCode.trim().toUpperCase() } : {}),
-        scope: mode,
-        redirect: false,
+        companyCode: mode === "tenant" ? companyCode.trim().toUpperCase() : undefined,
+        destination: redirectTo,
       });
-      if (!res || res.error) {
+      if (!outcome.ok) {
         setStatus("error");
         setFormErr(
           mode === "admin"
@@ -273,10 +285,10 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
               <span>{mode === "tenant" ? "or sign in with email" : "or use admin credentials"}</span>
             </div>
 
-            {(formErr || redirectErr) && (
+            {bannerMsg && (
               <div className="sn-alert" role="alert">
                 <AlertIcon />
-                <span>{formErr || redirectErr}</span>
+                <span>{bannerMsg}</span>
               </div>
             )}
 
