@@ -1,0 +1,5 @@
+# The decision log is append-only. Union merge keeps BOTH sides of concurrent
+# appends instead of raising a conflict, so parallel units can each add their
+# line without serialising on each other. Requires every entry to be one
+# self-contained line (see docs/DECISIONS.md).
+docs/DECISIONS.md merge=union
