@@ -1,14 +1,15 @@
-name: DB Migrate (manual)
+name: DB Migrate (manual break-glass / status)
 
-# Applies pending Prisma migrations to the production database from a GitHub
-# runner. Needed because the Claude Code sandbox has no network route to the
-# Supabase host (IPv6-only direct endpoint; DB ports blocked by egress policy),
-# whereas GitHub runners can reach the IPv4 session-mode pooler.
+# Migrations now apply AUTOMATICALLY on every deploy — `prisma migrate deploy`
+# runs before `next start` (see scripts/start.sh). This workflow is retained as:
+#   • a break-glass way to apply migrations out-of-band, and
+#   • a dry-run status check (dry_run=true → `prisma migrate status`).
 #
-# Requires repo secret MIGRATE_DATABASE_URL = the Supabase **session-mode
-# pooler** connection string (Database → Connection string → "Session pooler").
-# Prisma reads it via DIRECT_DATABASE_URL (see prisma.config.ts), which uses the
-# owner role and bypasses RLS so ALTER TABLE / backfills succeed.
+# Requires repo secret MIGRATE_DATABASE_URL = the Sliplane OWNER connection
+# string — a DIRECT/session connection (Prisma migrations take a session-scoped
+# advisory lock, so a transaction pooler would hang). Prisma reads it via
+# DIRECT_DATABASE_URL (see prisma.config.ts); the owner role's admin_bypass
+# policy lets ALTER TABLE / backfills touch every tenant's rows.
 
 on:
   workflow_dispatch:

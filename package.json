@@ -14,7 +14,7 @@
     "build": "next build",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "start": "next start",
+    "start": "bash scripts/start.sh",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
