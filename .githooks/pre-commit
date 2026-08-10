@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Sentire Payroll — pre-commit secret scan (unit 0.9).
+#
+# Scans ONLY what you are about to commit (`git diff --staged`) with gitleaks,
+# and refuses the commit if a credential is found.
+#
+# This file is TRACKED. `.git/hooks/pre-commit` is a two-line shim that execs
+# this script, so the logic is versioned and reviewable while git-lfs's own
+# hooks in .git/hooks keep working untouched (setting core.hooksPath would have
+# silently disabled them).
+#
+# EMERGENCY BYPASS — both are equivalent and both are fine to use when you have
+# looked at the finding and know it is not a credential:
+#     git commit --no-verify -m "…"
+#     SKIP_SECRET_SCAN=1 git commit -m "…"
+# A hook you cannot skip gets deleted, and a deleted hook protects nothing.
+#
+# See docs/SECRET_SCANNING.md for what this covers and — importantly — what it
+# does NOT (PII, for one; unit 0.8's actual leak would have sailed through).
+set -uo pipefail
+
+if [ "${SKIP_SECRET_SCAN:-}" = "1" ]; then
+  printf '\033[33m[secret-scan] SKIPPED via SKIP_SECRET_SCAN=1.\033[0m\n' >&2
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 0
+
+CONFIG="$REPO_ROOT/.gitleaks.toml"
+
+# ── Resolve a gitleaks binary ───────────────────────────────────────────────
+# 1. explicit override  2. the pinned cached copy  3. one already on PATH
+# 4. fetch the pinned one (first commit after a fresh clone)
+resolve_gitleaks() {
+  if [ -n "${GITLEAKS_BIN:-}" ] && [ -x "$GITLEAKS_BIN" ]; then
+    printf '%s\n' "$GITLEAKS_BIN"; return 0
+  fi
+
+  local pinned
+  pinned="${SENTIRE_GITLEAKS_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/sentire-gitleaks}/8.30.1/gitleaks"
+  if [ -x "$pinned" ]; then printf '%s\n' "$pinned"; return 0; fi
+
+  if command -v gitleaks >/dev/null 2>&1; then
+    command -v gitleaks; return 0
+  fi
+
+  bash "$REPO_ROOT/scripts/install-gitleaks.sh" 2>/dev/null | tail -n 1
+}
+
+BIN="$(resolve_gitleaks)"
+
+if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
+  cat >&2 <<'EOF'
+
+[secret-scan] BLOCKED — gitleaks is not available and could not be installed.
+
+  This hook fails CLOSED. Committing without the scan is a decision, not a
+  default: the repository is private, so GitHub's own secret scanning and push
+  protection are off (they are paid on a private personal-account repo), and
+  this hook is the only credential check between you and a published secret.
+
+  Fix it:      bash scripts/install-gitleaks.sh        (needs network, ~7 MB)
+  Or point at your own copy:   export GITLEAKS_BIN=/path/to/gitleaks
+  Or commit anyway, deliberately:
+               git commit --no-verify
+
+EOF
+  exit 1
+fi
+
+# ── Scan the staged diff ────────────────────────────────────────────────────
+# --staged limits the scan to what `git diff --staged` produces, so the cost is
+# proportional to the change, not to the repository (typically well under a
+# second). A slow hook is a bypassed hook.
+#
+# The template report is what makes the block ACTIONABLE: gitleaks' own console
+# output says only "leaks found: 1" and never names the file, line or rule, and
+# a block you cannot act on is a block you learn to bypass reflexively.
+# --redact keeps the secret itself out of the terminal and its scrollback.
+OUTPUT="$("$BIN" git --pre-commit --staged \
+  --config "$CONFIG" \
+  --no-banner --redact --log-level error \
+  --report-format template \
+  --report-template "$REPO_ROOT/.githooks/gitleaks-report.tmpl" \
+  --report-path - \
+  "$REPO_ROOT" 2>&1)"
+STATUS=$?
+
+if [ $STATUS -eq 0 ]; then
+  exit 0
+fi
+
+printf '\n\033[1;31m[secret-scan] COMMIT BLOCKED — gitleaks found a credential in the staged changes.\033[0m\n\n' >&2
+printf '%s\n' "$OUTPUT" >&2
+cat >&2 <<'EOF'
+
+WHAT TO DO
+  1. Remove the secret from the file, then `git add` it again and re-commit.
+  2. If the value is already live, ROTATE IT — it is on this machine's disk and
+     may be in your editor history. See docs/RUNBOOK_CREDENTIAL_ROTATION.md.
+  3. If this is a FALSE POSITIVE, add a narrow entry to .gitleaks.toml (path or
+     regex, never a blanket rule) and say why in the comment — then re-commit.
+  4. Genuine emergency, and you have READ the finding above:
+         git commit --no-verify
+
+Do not "fix" this by deleting the hook.
+EOF
+
+exit 1
