@@ -61,6 +61,9 @@ describe("checkEnvWarnings", () => {
 
   it("no warning when RESEND_API_KEY is set", () => {
     process.env.RESEND_API_KEY = "re_test_key";
+    // ALERT_EMAIL_TO joined the warning set in unit 0.6; this test asserts
+    // "nothing warns once everything is configured", so it has to be set too.
+    process.env.ALERT_EMAIL_TO = "ops@example.test";
     expect(checkEnvWarnings()).toEqual([]);
   });
 

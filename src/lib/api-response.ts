@@ -3,6 +3,8 @@
  * All route handlers return consistent JSON envelopes.
  */
 
+import { captureError } from "@/lib/observability";
+
 export type ApiSuccess<T> = {
   data: T;
   message?: string;
@@ -60,5 +62,8 @@ export function notFound(resource = "Resource"): Response {
 
 export function serverError(e: unknown): Response {
   console.error(e);
+  // Best-effort capture (unit 0.6). Deliberately not awaited and never allowed
+  // to reject, so reporting an error can't delay or break the error response.
+  void captureError(e, { scope: "route" });
   return err("Internal server error", 500);
 }
