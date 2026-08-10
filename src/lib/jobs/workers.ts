@@ -84,10 +84,21 @@ export async function registerWorkers(): Promise<void> {
     async (jobs) => { for (const job of jobs) await publishPayslip(job); },
   );
 
-  // Monthly leave accrual cron — 1st of every month at 00:05 PH time (UTC 16:05 prev day)
+  // Leave accrual — runs DAILY at 16:05 UTC (00:05 PH time the next day).
+  //
+  // Daily is deliberate, not a mistake (unit 0.13). Every grant is keyed
+  // (entitlementId, type, periodKey) under a UNIQUE constraint, so a repeat run
+  // is a no-op and the daily cadence is a self-healing sweep: if one day's run
+  // fails, any later day in the same period still grants it. A monthly cron
+  // would be strictly worse — pg-boss drops a scheduled occurrence it does not
+  // see within 60s of its due time (timekeeper.js `shouldSendIt`), so a missed
+  // monthly slot loses the entire month with no back-fill.
+  //
+  // Period boundaries follow each tenant's own timezone, so this schedule only
+  // decides how often we LOOK, never which period is granted.
   await boss.schedule(
     JOB_NAMES.LEAVE_ACCRUAL,
-    "5 16 * * *", // equivalent to 00:05 PH time (UTC+8)
+    "5 16 * * *",
     {},
     { tz: "UTC" },
   );

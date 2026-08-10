@@ -653,6 +653,7 @@ model Tenant {
   geofences               Geofence[]
   kiosks                  Kiosk[]
   leaveTypes              LeaveType[]
+  leaveEntitlements       LeaveEntitlement[]
   approvalWorkflows       ApprovalWorkflow[]
   leaveTransactions       LeaveTransaction[]
   dtrApprovalConfig       DTRApprovalConfig?
@@ -1294,6 +1295,7 @@ model Employee {
   trainings               EmployeeTraining[]
   leaveBalances           LeaveBalance[]
   leaveTransactions       LeaveTransaction[]
+  leaveEntitlements       LeaveEntitlement[]
   consentRecords          ConsentRecord[]
   payComponentAssignments EmployeePayComponent[]
   periodInputs            PeriodInput[]
@@ -1857,6 +1859,7 @@ model LeaveType {
   tenant       Tenant             @relation(fields: [tenantId], references: [id])
   balances     LeaveBalance[]
   transactions LeaveTransaction[]
+  entitlements LeaveEntitlement[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1964,14 +1967,71 @@ model LeaveTransaction {
   createdByUserId String?
   createdAt       DateTime @default(now())
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
-  employee   Employee    @relation(fields: [employeeId], references: [id])
-  leaveType  LeaveType   @relation(fields: [leaveTypeId], references: [id])
-  dtrRecords DTRRecord[]
+  /// Unit 0.13 — set on ACCRUAL rows only; the entitlement the grant belongs to.
+  entitlementId String?
+  /// Unit 0.13 — the period this ACCRUAL covers: "2026-02" (MONTHLY),
+  /// "2026-Q1" (QUARTERLY), "2026" (ANNUALLY), or "LUMP" (once per entitlement).
+  /// NULL on every non-accrual row, which is what keeps the unique constraint
+  /// below from ever applying to USAGE/ADJUSTMENT/etc: in Postgres NULLs are
+  /// distinct, so those rows can never collide with each other.
+  periodKey String?
 
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  employee    Employee          @relation(fields: [employeeId], references: [id])
+  leaveType   LeaveType         @relation(fields: [leaveTypeId], references: [id])
+  entitlement LeaveEntitlement? @relation(fields: [entitlementId], references: [id])
+  dtrRecords  DTRRecord[]
+
+  /// THE idempotency guarantee for unit 0.13. A grant is attempted
+  /// unconditionally and a unique violation means "already granted" — atomic,
+  /// so it is immune to pg-boss retries and concurrent runs in a way that a
+  /// read-then-write check is not.
+  @@unique([entitlementId, type, periodKey])
   @@index([tenantId])
   @@index([employeeId, leaveTypeId])
   @@index([approvalStatus])
+}
+
+/// A per-employee, per-leave-type ENTITLEMENT PERIOD (unit 0.13).
+///
+/// Accrual is anchored to `startDate`, not the calendar: an entitlement running
+/// 2026-02-14 → 2026-12-31 has a partial first period. Without this model the
+/// accrual job had no notion of a window at all and simply iterated every active
+/// leave type × every non-resigned employee on every run.
+model LeaveEntitlement {
+  id          String @id @default(cuid())
+  tenantId    String
+  employeeId  String
+  leaveTypeId String
+
+  /// Inclusive. The accrual anchor.
+  startDate DateTime
+  /// Inclusive. NULL = open-ended.
+  endDate   DateTime?
+
+  /// Per-entitlement, NOT a global rule: whether a partial period is pro-rated.
+  proRate Boolean @default(false)
+
+  /// SNAPSHOT at issue — deliberately not read live from LeaveType, so editing
+  /// the policy cannot silently restate what past periods were worth.
+  accrualAmount    Decimal          @db.Decimal(6, 4)
+  /// Snapshotted for the same reason: switching a type MONTHLY→QUARTERLY
+  /// mid-entitlement would otherwise change what a period IS, and with it the
+  /// period keys already written.
+  accrualFrequency AccrualFrequency
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  employee     Employee           @relation(fields: [employeeId], references: [id])
+  leaveType    LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  transactions LeaveTransaction[]
+
+  @@index([tenantId])
+  @@index([employeeId, leaveTypeId])
+  @@index([deletedAt])
 }
 
 // =============================================================================
