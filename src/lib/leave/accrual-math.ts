@@ -16,16 +16,30 @@ import Decimal from "decimal.js";
 export const QUARTER = new Decimal("0.25");
 
 /**
- * Round a computed amount to the nearest quarter, ties UP (D-A).
+ * Round a computed amount to the nearest quarter, ties UP (D-A, R38).
  *
- * There is NO forfeiture floor — the earlier below-0.49→0 rule is withdrawn.
- * Instead a strictly-positive amount never rounds away to nothing: it earns at
- * least one quarter. Exactly zero stays zero.
+ * PURE nearest-quarter: no forfeiture floor (Mark's original below-0.49→0 rule
+ * is withdrawn) and, equally, no minimum. An amount below the midpoint rounds to
+ * zero like any other. An earlier draft floored a positive amount at 0.25, which
+ * turned a computed 0.042 into a 6× grant; R38 withdrew that floor.
  *
+ * The effective cutoff is therefore **0.125** — below it a period earns nothing;
+ * at or above it the first quarter is earned, 0.125 itself being a tie that goes
+ * up. For a 1.25 days/month entitlement in a 28-day February that is 3 days
+ * served (2 days computes 0.0893 → 0; 3 days computes 0.1339 → 0.25).
+ *
+ * Ties round UP by design (R40): leave converts to cash, and rounding in the
+ * employee's favour is the defensible default in a dispute.
+ *
+ *   0.12   → 0       0.125 → 0.25 (tie, up)    0.13   → 0.25
  *   0.3125 → 0.25    0.625 → 0.75 (tie, up)    0.6696 → 0.75
  *   1.25   → 1.25    1.30  → 1.25              1.875  → 2.00 (tie, up)
- *   0.10   → 0.25    (floor: positive never becomes zero)
  *   0      → 0
+ *
+ * NOT AN INVARIANT (R41): a stored balance is NOT guaranteed to be a multiple of
+ * 0.25. `maxAccruableBalance` wins over this banding, so a grant clipped to the
+ * cap can land off-quarter — a cap of 10.10 against 9.50 already earned stores
+ * 0.60. Nothing downstream may assume quarter-day balances.
  */
 export function roundToQuarter(value: Decimal.Value): Decimal {
   const d = new Decimal(value);
@@ -33,10 +47,7 @@ export function roundToQuarter(value: Decimal.Value): Decimal {
 
   // ROUND_HALF_CEIL rounds a .5 tie towards +Infinity, which is "ties up" for
   // the positive amounts this function is defined over.
-  const rounded = d.dividedBy(QUARTER).toDecimalPlaces(0, Decimal.ROUND_HALF_CEIL).times(QUARTER);
-
-  // A positive entitlement is never rounded away to nothing.
-  return rounded.isZero() ? QUARTER : rounded;
+  return d.dividedBy(QUARTER).toDecimalPlaces(0, Decimal.ROUND_HALF_CEIL).times(QUARTER);
 }
 
 // ---------------------------------------------------------------------------

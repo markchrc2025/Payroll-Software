@@ -38,8 +38,29 @@ describe("unit 0.13 — rounding to the nearest quarter, ties up (T3)", () => {
     expect(roundToQuarter("1.25").toString()).toBe("1.25");
   });
 
-  it("T3: 0.10 → 0.25 (a positive amount is never rounded away to nothing)", () => {
-    expect(roundToQuarter("0.10").toString()).toBe("0.25");
+  // R38 withdrew the 0.25 floor: PURE nearest-quarter, so a small amount rounds
+  // away to zero like any other. These four vectors pin the 0.125 cutoff.
+  it("T3: 0.10 → 0 (no floor — below the midpoint rounds away)", () => {
+    expect(roundToQuarter("0.10").toString()).toBe("0");
+  });
+
+  it("T3: 0.12 → 0 (just below the cutoff)", () => {
+    expect(roundToQuarter("0.12").toString()).toBe("0");
+  });
+
+  it("T3: 0.125 → 0.25 (exactly the cutoff — a tie, and ties go up)", () => {
+    expect(roundToQuarter("0.125").toString()).toBe("0.25");
+  });
+
+  it("T3: 0.13 → 0.25 (just above the cutoff)", () => {
+    expect(roundToQuarter("0.13").toString()).toBe("0.25");
+  });
+
+  it("T3: the human consequence — 1.25/month over a 28-day February", () => {
+    // 2 days served computes 0.0893 → nothing; 3 days computes 0.1339 → 0.25.
+    const rate = new Decimal("1.25");
+    expect(roundToQuarter(new Decimal(2).dividedBy(28).times(rate)).toString()).toBe("0");
+    expect(roundToQuarter(new Decimal(3).dividedBy(28).times(rate)).toString()).toBe("0.25");
   });
 
   it("T3: above 1.00 — 1.30 → 1.25", () => {
