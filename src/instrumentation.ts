@@ -37,20 +37,27 @@ export async function register() {
   // healthcheck on /api/health never passes and the deploy is rolled back.
   //
   // Firing registration off in the background lets the HTTP server (and the
-  // healthcheck) come up immediately. pg-boss connects on its own once the old
-  // container tears down and frees connections; any jobs enqueued in the
-  // meantime start pg-boss on-demand via the enqueue helpers.
+  // healthcheck) come up immediately, and it is RETRIED with backoff (unit 0.5)
+  // so a connection that is merely slow — rather than broken — still ends with
+  // workers attached.
+  //
+  // Retrying matters because there is no other recovery. An earlier version of
+  // this comment claimed "any jobs enqueued in the meantime start pg-boss
+  // on-demand via the enqueue helpers", which is only half true: the enqueue
+  // helpers call startJobQueue(), which starts pg-boss but never re-runs
+  // registerWorkers(). No boss.work() handler would be attached, so jobs would
+  // be accepted into the queue and silently never consumed.
   void registerWorkersInBackground();
 }
 
 async function registerWorkersInBackground(): Promise<void> {
   try {
     const { registerWorkers } = await import("./lib/jobs/workers");
-    await registerWorkers();
+    const { registerWorkersWithRetry } = await import("./lib/jobs/retry");
+    await registerWorkersWithRetry(() => registerWorkers());
   } catch (err) {
-    // Non-fatal: if the DB is unreachable at startup (e.g. cold dev start or a
-    // redeploy overlap), jobs won't be processed yet.  Routes that enqueue jobs
-    // will start pg-boss on-demand when the first job is sent.
+    // Backstop only — registerWorkersWithRetry already swallows registration
+    // failures. This catches a failure to even load the modules.
     console.error("[instrumentation] Failed to register job workers:", err);
   }
 }

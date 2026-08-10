@@ -6,6 +6,7 @@
  */
 
 import { startJobQueue } from "./client";
+import { withJobErrorCapture } from "@/lib/observability";
 import { handlePayrollRun, PayrollRunJobData } from "./handlers/payroll-run";
 import { handleOtApproved, OtApprovedJobData } from "./handlers/ot-approved";
 import { handleDtrSubmitted, DtrSubmittedJobData } from "./handlers/dtr-submitted";
@@ -41,11 +42,19 @@ export async function registerWorkers(): Promise<void> {
     )
   );
 
-  // Payroll gross-to-net computation
+  // Payroll gross-to-net computation.
+  // MONEY-CRITICAL: wrapped so a failure raises an explicit alert rather than a
+  // log line nobody reads (unit 0.6). The error is still rethrown, so pg-boss
+  // retries exactly as before.
+  const runPayroll = withJobErrorCapture(
+    JOB_NAMES.PAYROLL_RUN,
+    (job: Parameters<typeof handlePayrollRun>[0]) => handlePayrollRun(job),
+    { critical: true },
+  );
   await boss.work<PayrollRunJobData>(
     JOB_NAMES.PAYROLL_RUN,
     { localConcurrency: 2 },
-    async (jobs) => { for (const job of jobs) await handlePayrollRun(job); },
+    async (jobs) => { for (const job of jobs) await runPayroll(job); },
   );
 
   // OT approved employee notification
@@ -62,11 +71,17 @@ export async function registerWorkers(): Promise<void> {
     async (jobs) => { for (const job of jobs) await handleDtrSubmitted(job); },
   );
 
-  // Payslip PDF generation + R2 upload
+  // Payslip PDF generation + R2 upload.
+  // MONEY-CRITICAL: see the payroll.run note above.
+  const publishPayslip = withJobErrorCapture(
+    JOB_NAMES.PAYSLIP_PUBLISH,
+    (job: Parameters<typeof handlePayslipPublish>[0]) => handlePayslipPublish(job),
+    { critical: true },
+  );
   await boss.work<PayslipPublishJobData>(
     JOB_NAMES.PAYSLIP_PUBLISH,
     { localConcurrency: 3 },
-    async (jobs) => { for (const job of jobs) await handlePayslipPublish(job); },
+    async (jobs) => { for (const job of jobs) await publishPayslip(job); },
   );
 
   // Monthly leave accrual cron — 1st of every month at 00:05 PH time (UTC 16:05 prev day)

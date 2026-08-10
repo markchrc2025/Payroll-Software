@@ -77,6 +77,25 @@ export function checkEnvWarnings(): EnvProblem[] {
     });
   }
 
+  // ALERT_EMAIL_TO — where money-critical job failures (payroll.run,
+  // payslip.publish) are alerted to (unit 0.6). WARNING, not critical: without
+  // it the app runs normally and failures are still logged — you just find out
+  // from the customer instead of from an email.
+  if (!process.env.ALERT_EMAIL_TO) {
+    warnings.push({
+      name: "ALERT_EMAIL_TO",
+      detail:
+        "Not set — failures of payroll.run and payslip.publish are logged but " +
+        "nobody is notified. Set it to an inbox you actually read.",
+    });
+  } else if (!process.env.RESEND_API_KEY) {
+    warnings.push({
+      name: "ALERT_EMAIL_TO",
+      detail:
+        "Set, but RESEND_API_KEY is missing — alert emails cannot be delivered.",
+    });
+  }
+
   // EMAIL_ASSET_BASE_URL — absolute base for transactional-email images (logo +
   // monoline icons). Mail clients drop relative paths, so the <img> src must be
   // absolute. The assets are bundled at public/email-assets/, so they're served
