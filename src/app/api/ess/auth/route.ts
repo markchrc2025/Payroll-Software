@@ -18,6 +18,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { err, ok, serverError } from "@/lib/api-response";
 import { createEssSession, verifyEssPin, verifyEssPassword } from "@/lib/ess-auth";
+import { captureError } from "@/lib/observability";
 import prismaAdmin from "@/lib/prisma-admin";
 
 const LoginSchema = z
@@ -141,16 +142,59 @@ export async function POST(req: NextRequest) {
       return err("Invalid credentials", 401);
     }
 
-    // First successful login flips INVITED → ACTIVE; always record last login.
-    await prismaAdmin.employee.update({
-      where: { id: emp.id },
-      data: {
-        essLastLoginAt: new Date(),
-        ...(emp.essAccessStatus === "INVITED"
-          ? { essAccessStatus: "ACTIVE", essActivatedAt: new Date() }
-          : {}),
-      },
-    });
+    // ---------------------------------------------------------------------
+    // Two writes, two opposite guarantees (unit 0.10).
+    //
+    // These used to be ONE `employee.update`, which forced a single failure
+    // policy onto two things that need different ones. Unguarded, a blip on
+    // either half fell through to the outer catch and returned 500 — a valid
+    // credential denied. But wrapping the combined call in try/catch, the way
+    // unit 0.3 guards the tenant `lastLoginAt`, would have been worse: an
+    // INVITED employee could be handed a session while their activation
+    // silently never happened, leaving them logged in and stuck at INVITED
+    // forever, with no error anywhere. Splitting is what lets each half get
+    // the policy it actually needs.
+    // ---------------------------------------------------------------------
+
+    // 1. ACTIVATION — account state, not bookkeeping. This is the record that
+    //    the invitation was accepted, and everything downstream (HR's ESS
+    //    portal, the deactivation sweep, reporting) reads it. It goes FIRST and
+    //    it MUST fail the login: better to deny a login that can be retried
+    //    than to issue a session for an account that never activated.
+    if (emp.essAccessStatus === "INVITED") {
+      try {
+        await prismaAdmin.employee.update({
+          where: { id: emp.id },
+          data: { essAccessStatus: "ACTIVE", essActivatedAt: new Date() },
+        });
+      } catch (e) {
+        await captureError(e, {
+          scope: "ess/auth:activation",
+          critical: true,
+          tenantId,
+          employeeId: emp.id,
+        });
+        return serverError(e);
+      }
+    }
+
+    // 2. BOOKKEEPING — `essLastLoginAt` records when someone last signed in and
+    //    says nothing about whether they may. Best-effort, same as unit 0.3:
+    //    fail soft, but report it — swallowing this would trade a visible
+    //    failure for an invisible one. A lost timestamp is not worth a denied
+    //    login.
+    try {
+      await prismaAdmin.employee.update({
+        where: { id: emp.id },
+        data: { essLastLoginAt: new Date() },
+      });
+    } catch (e) {
+      await captureError(e, {
+        scope: "ess/auth:lastLogin",
+        tenantId,
+        employeeId: emp.id,
+      });
+    }
 
     const rawToken = await createEssSession(tenantId, emp.id);
     return ok({ token: rawToken, employeeId: emp.id }, "Login successful");
