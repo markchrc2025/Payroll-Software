@@ -112,7 +112,15 @@ jobs:
               .then(() => c.query("select version()"))
               .then((r) => { console.log("connected:", r.rows[0].version.split(",")[0]); return c.end(); })
               .catch((e) => {
-                console.error("::error::Database at TEST_DATABASE_URL did not answer: " + e.message);
+                // pg raises an AggregateError for a refused connection whose
+                // own `.message` is empty — the useful text is in .code and in
+                // the nested .errors. T2 proved this fires; it must also SAY
+                // something when it does.
+                const detail =
+                  [e.code, e.message, ...(e.errors || []).map((x) => x.code || x.message)]
+                    .filter(Boolean)
+                    .join(" ") || String(e);
+                console.error("::error::Database at TEST_DATABASE_URL did not answer: " + detail);
                 process.exit(1);
               });
           '

@@ -44,6 +44,7 @@ The job stops at the first failure, so fix them top-down.
 | 1 | `npm ci` installs cleanly | yes | `npm ci` |
 | 2 | `TEST_DATABASE_URL` is set | yes | see below |
 | 3 | The database actually answers | yes | see below |
+| 3b | Migration roles exist | yes | see below |
 | 4 | `prisma migrate deploy` succeeds | yes | `npx prisma migrate deploy` |
 | 5 | No migration pending | yes | `npx prisma migrate status` |
 | 6 | Test suite passes | yes | `npm test` |
@@ -66,6 +67,13 @@ docker run -d --name payroll-ci-db \
 export TEST_DATABASE_URL=postgresql://postgres:ci@localhost:5432/payroll_ci
 export DATABASE_URL=$TEST_DATABASE_URL
 export DIRECT_DATABASE_URL=$TEST_DATABASE_URL
+
+# The migration set is NOT self-contained — see below. Without this you get
+#   ERROR: role "payroll_app" does not exist   at migration 4 of 87.
+for r in owner payroll_app sentire_books_app; do
+  docker exec payroll-ci-db psql -U postgres -d payroll_ci \
+    -c "DO \$\$ BEGIN CREATE ROLE \"$r\"; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+done
 
 npx prisma migrate deploy
 npx prisma migrate status
@@ -92,6 +100,30 @@ git fetch origin main
 CHANGED=$(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- '*.ts' '*.tsx' '*.mjs' '*.cjs')
 npx eslint --max-warnings 0 --no-error-on-unmatched-pattern $CHANGED
 ```
+
+---
+
+## The migration set is not self-contained (found by CI's first run)
+
+The very first run of this pipeline failed at migration 4 of 87:
+
+```
+Error: P3018 — Database error code: 42704
+ERROR: role "payroll_app" does not exist
+```
+
+35 statements across `prisma/migrations` `GRANT` to `payroll_app`, and the
+`admin_bypass` policies reference `owner`. Neither role is created by any
+migration, so **no fresh database can be migrated from the repository alone.**
+The only place that knowledge was written down is
+`scripts/restore-from-backup.md:48-50`, as a manual step in a runbook — which is
+why it went unnoticed: production and staging were both restored from dumps that
+already had the roles.
+
+CI now performs the same idempotent pre-creation the restore drill does, so the
+two agree and neither can drift without the other going red. The proper fix — a
+migration that creates the roles, or a documented bootstrap script — belongs to
+whoever owns `prisma/`.
 
 ---
 
