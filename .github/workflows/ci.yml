@@ -33,10 +33,10 @@ jobs:
     # Pattern copied from db-restore-drill.yml (unit 0.1) rather than written
     # fresh — it is a known-working in-repo service block, pinned to the same
     # PostgreSQL 18 the Sliplane server runs.
-    services:
-      postgres:
-        image: postgres:18
-        env:
+    # T2 (TEMPORARY): the postgres service block is deliberately REMOVED to prove
+    # the anti-vacuity assertion fails loudly instead of degrading to silent skips.
+
+    env:
           POSTGRES_PASSWORD: ci
           POSTGRES_DB: payroll_ci
         ports:
