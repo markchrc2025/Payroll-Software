@@ -269,6 +269,32 @@ interface RuleSpec {
 // `tenantId = NULL` cannot enforce uniqueness for global rows. We therefore
 // hand-roll the upsert: lookup by (NULL, category, version) and create-or-update
 // by primary key.
+/**
+ * Order-independent deep comparison of two statutory payloads (unit 1.2).
+ *
+ * Prisma returns `Json` columns with keys in storage order, which need not match
+ * the literal order in this file, so a naive JSON.stringify comparison would
+ * report a difference where none exists and block a legitimate re-run.
+ */
+function payloadsEqual(a: unknown, b: unknown): boolean {
+  return stableStringify(a) === stableStringify(b);
+}
+
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  const obj = v as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
+/** Suggest the next version tag, purely for the error message. */
+function nextVersionHint(version: string): string {
+  const m = version.match(/^(.*?)(\d+)$/);
+  if (!m) return `${version}-v2`;
+  return `${m[1]}${Number(m[2]) + 1}`;
+}
+
 async function upsertGlobalSafe(spec: RuleSpec) {
   parseStatutoryPayload(spec.category, spec.payload);
 
@@ -278,17 +304,42 @@ async function upsertGlobalSafe(spec: RuleSpec) {
       category: spec.category,
       version: spec.version,
     },
-    select: { id: true },
+    select: { id: true, payload: true },
   });
 
   if (existing) {
+    // Unit 1.2: a PUBLISHED payload is immutable. The editor's PATCH already
+    // enforces this — its zod schema admits only `effectiveTo` and `legalBasis`,
+    // never `payload` — and this script must not be the back door around it.
+    // Rewriting the math of a version that has already priced payslips
+    // retroactively falsifies documents that were correct when issued, and does
+    // so silently, because nothing records which version produced a sheet.
+    if (!payloadsEqual(existing.payload, spec.payload)) {
+      throw new Error(
+        `REFUSING to rewrite a published statutory payload.\n` +
+          `  category: ${spec.category}\n` +
+          `  version : ${spec.version}\n` +
+          `The row already in the database has a DIFFERENT payload from this file.\n` +
+          `Statutory versions are immutable once published: a payroll period may\n` +
+          `already have been computed against the stored values, and changing them\n` +
+          `would silently restate figures that were correct when issued.\n` +
+          `\n` +
+          `To change the math, publish a NEW version instead:\n` +
+          `  1. give the new rule a distinct \`version\` (e.g. "${spec.version}" -> "${nextVersionHint(spec.version)}")\n` +
+          `  2. set the OLD rule's \`effectiveTo\` to the new rule's \`effectiveFrom\`\n` +
+          `  3. re-run this script\n`,
+      );
+    }
+
     await prisma.statutoryRule.update({
       where: { id: existing.id },
       data: {
         effectiveFrom: spec.effectiveFrom,
         effectiveTo: spec.effectiveTo ?? null,
         legalBasis: spec.legalBasis,
-        payload: spec.payload as never,
+        // `payload` is deliberately NOT updated — see the guard above. Dates and
+        // the citation stay refreshable because they describe the rule's
+        // applicability and provenance, not the money it computes.
       },
     });
     console.log(
