@@ -13,6 +13,8 @@
     "dev:logs": "bash scripts/dev-keepalive.sh logs",
     "build": "next build",
     "postinstall": "prisma generate",
+    "prepare": "bash scripts/install-git-hooks.sh || true",
+    "scan:secrets": "bash scripts/scan-secrets.sh",
     "db:migrate": "prisma migrate deploy",
     "start": "bash scripts/start.sh",
     "lint": "eslint",

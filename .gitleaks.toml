@@ -1,0 +1,171 @@
+# Sentire Payroll — gitleaks configuration (unit 0.9)
+#
+# WHY THIS FILE EXISTS
+# Making the repo private (unit 0.8) stopped an ongoing log disclosure but also
+# switched OFF GitHub secret scanning and push protection, which are free only on
+# public repos under a personal account. This config + the .githooks/pre-commit
+# hook are the free, plan-independent compensating control: the scan moved from
+# the server to the developer's machine, and it now runs BEFORE the commit exists
+# rather than after it is pushed.
+#
+# TWO JOBS:
+#   1. [[rules]]   — ADD detections the stock ruleset misses. Measured, not
+#                    assumed: stock gitleaks 8.30.1 does NOT flag a Postgres URI
+#                    with an embedded password, nor AUTH_SECRET=, nor a GPG
+#                    passphrase. Those are exactly this project's crown jewels,
+#                    so the stock config alone would have been theatre.
+#   2. [allowlist] — SUPPRESS known-safe placeholders. A scanner that cries wolf
+#                    gets disabled within a week, so every false positive here is
+#                    a real threat to the control itself.
+#
+# Test it after any edit:  bash scripts/u09-secret-scan-tests.sh
+
+# Inherit the ~170 stock provider rules (Stripe, AWS, GitHub, Slack, private
+# keys, …). We only add to them.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# RULE 1 — database / broker URI with an embedded password.
+#
+# This is the single most valuable secret in the project: the OWNER Postgres
+# connection string (DIRECT_DATABASE_URL). Stock gitleaks misses it entirely.
+#
+# The password class deliberately excludes < and > so documentation placeholders
+# (`postgresql://postgres:<pw>@host`) never match, and requires 8+ characters so
+# throwaway literals like `postgresql://u:p@h:6543/db` in unit tests do not.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "sentire-db-uri-password"
+description = "Database or broker connection URI with an embedded password"
+regex = '''\b(?i:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis[s]?|amqps?|clickhouse)://[A-Za-z0-9_.\-]{1,64}:([^\s:@/<>"']{8,})@[A-Za-z0-9_.\-]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://", "mysql://", "mariadb://", "mongodb://", "mongodb+srv://", "redis://", "rediss://", "amqp://", "amqps://", "clickhouse://"]
+
+[rules.allowlist]
+regexTarget = "match"
+regexes = [
+  # Documentation placeholders of every shape we actually use.
+  '''://[^\s@]*:(<[^>]*>|\$\{?[A-Z_]+\}?|\*+|x{3,}|PASSWORD|password|CHANGEME|changeme|REDACTED|placeholder)@''',
+  # Loopback and the RFC 2606 example hosts — never a real target. Anchored to
+  # the end of the host so `@db.internal.sliplane.app` is NOT read as `@db`.
+  '''@(localhost|127\.0\.0\.1|0\.0\.0\.0|host|db|postgres|localhost\.localdomain)(:[0-9]+)?([/?#].*)?$''',
+  '''@([A-Za-z0-9.-]+\.)?example\.(com|org|net)\b''',
+]
+
+# ---------------------------------------------------------------------------
+# RULE 2 — high-value application secrets assigned by name.
+#
+# ENCRYPTION_KEY, AUTH_SECRET and the backup GPG passphrase are the three
+# credentials docs/RUNBOOK_CREDENTIAL_ROTATION.md exists to rotate. Stock
+# gitleaks catches ENCRYPTION_KEY (by entropy) but not AUTH_SECRET or a
+# word-based passphrase, so name them explicitly.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "sentire-named-app-secret"
+description = "Named application secret (AUTH_SECRET, ENCRYPTION_KEY, passphrase, …) assigned a literal value"
+regex = '''(?i)\b(?:(?:auth|nextauth|jwt|session|cookie|webhook|cron)_secret|(?:encryption|signing|master)_key|(?:gpg|backup|restore)_passphrase|passphrase|pgpassword)\s*[:=]\s*["']?([^\s"'`,;<>${}]{12,})["']?'''
+secretGroup = 1
+keywords = ["auth_secret", "AUTH_SECRET", "nextauth_secret", "NEXTAUTH_SECRET", "jwt_secret", "JWT_SECRET", "session_secret", "SESSION_SECRET", "cookie_secret", "webhook_secret", "cron_secret", "CRON_SECRET", "encryption_key", "ENCRYPTION_KEY", "signing_key", "master_key", "passphrase", "PASSPHRASE", "PGPASSWORD", "pgpassword"]
+
+[rules.allowlist]
+regexTarget = "secret"
+regexes = [
+  # A code expression, not a literal — e.g. `ENCRYPTION_KEY = Buffer.alloc(32)
+  # .toString("base64")` in src/__tests__/u06-health-liveness.test.ts. No real
+  # base64/hex credential contains a parenthesis.
+  '''[()]''',
+  # Env-var indirection, placeholders and obvious non-values.
+  '''^(?:\$|process\.env|secrets\.|env\.|vars\.|<|\{\{|"\$|randomBytes|process|Buffer)''',
+  '''^(?:changeme|CHANGEME|redacted|REDACTED|placeholder|PLACEHOLDER|xxx+|X{3,}|\*{3,}|your-.*|my-.*|some-.*|example.*|test[-_].*|dummy.*|fake.*)$''',
+  '''^[A-Za-z0-9_]*(?:_KEY|_SECRET|_PASSPHRASE|_PASSWORD)$''',  # a var name, not a value
+]
+
+# ---------------------------------------------------------------------------
+# GLOBAL ALLOWLIST — known-safe paths and placeholders.
+#
+# Every entry below was verified against the real file before being added; the
+# list is deliberately narrow, because a broad allowlist is indistinguishable
+# from no scanner at all.
+#
+# Split into several [[allowlists]] blocks because each block carries its own
+# `regexTarget`: matching a placeholder against the extracted secret and matching
+# a React `key:` prop against the whole source line need different targets, and a
+# line-scoped regex applied globally would silently mute far too much.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Known-safe paths: build artefacts, design mockups, credential docs, fixtures"
+
+paths = [
+  # --- Build output and dependencies. Untracked (see .gitignore) and therefore
+  # never staged, but `gitleaks dir .` walks them and finds Next.js's generated
+  # previewModeSigningKey / server-reference encryptionKey. Excluded so the
+  # full-tree scan in docs/SECRET_SCANNING.md returns a usable result.
+  '''(^|/)\.next/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.git/''',
+  '''\.tsbuildinfo$''',
+
+  # --- Static design handoffs: hand-written HTML email mockups containing a
+  # fabricated 40-hex reset token in the button href. Nothing here is executed
+  # or deployed; it is a picture of an email.
+  '''^docs/design_handoff_emails/emails/''',
+
+  # --- Documentation that TEACHES the credential shapes. Every value is a
+  # <placeholder>; these files are the rotation runbook and the migration and
+  # restore guides, so they must be free to spell out a connection string.
+  '''^docs/RUNBOOK_CREDENTIAL_ROTATION\.md$''',
+  '''^docs/MIGRATION_SLIPLANE\.md$''',
+  '''^scripts/restore-from-backup\.md$''',
+  '''^docs/SECRET_SCANNING\.md$''',
+
+  # --- Throwaway localhost credentials for a scratch Postgres container that
+  # exists for ~2 minutes inside a CI runner and is never reachable.
+  '''^\.github/workflows/db-restore-drill\.yml$''',
+
+  # --- Unit-test fixtures: synthetic env values (`postgresql://u:p@h:6543/db`,
+  # `re_test_key`, randomBytes()) used to exercise the env checker.
+  '''^src/lib/__tests__/env-check\.test\.ts$''',
+
+  # --- This unit's own test harness: it stages a deliberately realistic
+  # Postgres URI to prove the hook blocks it. Allowlisted by path so the file
+  # can live in the tree; the STAGED COPY it writes under a scratch path is not
+  # allowlisted, which is what makes T1 a real test.
+  '''^scripts/u09-secret-scan-tests\.sh$''',
+]
+
+[[allowlists]]
+description = "Placeholder VALUES — matched against the extracted secret only"
+regexTarget = "secret"
+regexes = [
+  # Angle-bracket placeholders wherever they appear as the value itself:
+  # <pw>, <owner-pw>, <app-pw>, <books-pw>, <HOST>, <DB>.
+  '''^<[a-zA-Z][a-zA-Z0-9_ .-]{0,40}>$''',
+  '''^["']?<[^>]{1,40}>''',
+]
+stopwords = [
+  "placeholder",
+  "changeme",
+  "redacted",
+]
+
+[[allowlists]]
+description = "Known-safe LINES — matched against the whole source line"
+regexTarget = "line"
+regexes = [
+  # The throwaway password of the scratch Postgres container in the restore
+  # drill and its runbook (`POSTGRES_PASSWORD: scratch`). Reachable only from
+  # inside a CI runner, for about two minutes.
+  '''(?i)POSTGRES_PASSWORD\s*[=:]\s*["']?scratch\b''',
+  # A React/TS object literal whose property is literally named `key` — the one
+  # stock-ruleset false positive in application code
+  # (src/app/(dashboard)/pay-components/page.tsx:367 `key: "includeIn13thMonth"`).
+  '''\bkey:\s*"includeIn[A-Za-z0-9]+"''',
+  # CREATE ROLE … LOGIN PASSWORD '<x-pw>' — the documented restore procedure.
+  '''LOGIN PASSWORD\s*'<[^>]+>' *;?''',
+  # HISTORY ONLY: `selfieKey: "smoke-z16-selfie-recent"` in the long-deleted
+  # scripts/smoke-z.ts (commit 63a07fb, 2026-05-29). An R2 object key from a
+  # smoke test, not a credential — the sole hit in a full-history scan.
+  '''selfieKey"?\s*[:=]{1,3}\s*"smoke-[a-z0-9-]+"''',
+]
