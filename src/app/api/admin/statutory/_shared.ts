@@ -199,8 +199,76 @@ export async function patchStatutoryRule(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE — hard-delete (statutory rules are reference data; soft-delete not needed)
+// DELETE — hard-delete, REFUSED once the rule's window overlaps a payroll period
 // ---------------------------------------------------------------------------
+
+/**
+ * Find a PayrollBook whose period overlaps this rule's effective window (unit 1.2).
+ *
+ * Reference data stops being reference data the moment it has priced a payslip:
+ * deleting such a rule makes the period it covered unrecomputable, which
+ * retroactively falsifies documents that were correct when issued.
+ *
+ * OVERLAP, not exact match, and deliberately conservative. The resolver selects
+ * on `periodEnd` alone (asOf = periodEnd), so the tightest possible test would be
+ * "is any book's periodEnd inside [effectiveFrom, effectiveTo)". We use the wider
+ * overlap test because a tenant override can shadow a global rule for part of a
+ * window, so a narrow test could clear a rule that did in fact price something.
+ * For a destructive, irreversible operation, refusing too often is the correct
+ * direction to be wrong in.
+ *
+ * NOTE — this is a PROXY, not a fact. Nothing on PayrollBook or PayrollSheet
+ * records which StatutoryRule version produced a given sheet (there is no FK and
+ * no version string in `statutoryBreakdown`), so "this rule priced a payslip"
+ * cannot currently be answered exactly. See the unit report.
+ */
+export type BookClient = {
+  payrollBook: {
+    findFirst: (args: {
+      where: Record<string, unknown>;
+      select: Record<string, boolean>;
+      orderBy?: Record<string, string>;
+    }) => Promise<{
+      id: string;
+      tenantId: string;
+      periodStart: Date;
+      periodEnd: Date;
+      status: string;
+      runType: string;
+    } | null>;
+  };
+};
+
+export async function findConflictingBook(
+  rule: {
+    tenantId: string | null;
+    effectiveFrom: Date;
+    effectiveTo: Date | null;
+  },
+  client: BookClient = prismaAdmin as unknown as BookClient,
+) {
+  return client.payrollBook.findFirst({
+    where: {
+      // A global rule (tenantId NULL) applies to every tenant; a tenant override
+      // only to its own.
+      ...(rule.tenantId ? { tenantId: rule.tenantId } : {}),
+      // A CANCELLED book never priced anything.
+      status: { not: "CANCELLED" },
+      periodEnd: { gte: rule.effectiveFrom },
+      ...(rule.effectiveTo ? { periodStart: { lt: rule.effectiveTo } } : {}),
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      periodStart: true,
+      periodEnd: true,
+      status: true,
+      runType: true,
+    },
+    orderBy: { periodEnd: "asc" },
+  });
+}
+
 export async function deleteStatutoryRule(
   req: NextRequest,
   id: string,
@@ -211,11 +279,27 @@ export async function deleteStatutoryRule(
 
   const existing = await prismaAdmin.statutoryRule.findFirst({
     where: { id, category, tenantId: null },
-    select: { id: true },
+    select: { id: true, tenantId: true, version: true, effectiveFrom: true, effectiveTo: true },
   });
   if (!existing) return notFound("StatutoryRule");
 
   try {
+    const conflict = await findConflictingBook(existing);
+    if (conflict) {
+      const from = existing.effectiveFrom.toISOString().slice(0, 10);
+      const to = existing.effectiveTo ? existing.effectiveTo.toISOString().slice(0, 10) : "open-ended";
+      const bookFrom = conflict.periodStart.toISOString().slice(0, 10);
+      const bookTo = conflict.periodEnd.toISOString().slice(0, 10);
+      return err(
+        `Cannot delete ${category} rule "${existing.version}" (effective ${from} → ${to}): ` +
+          `its window overlaps payroll book ${conflict.id} ` +
+          `(tenant ${conflict.tenantId}, ${conflict.runType}, ${conflict.status}, period ${bookFrom} → ${bookTo}). ` +
+          `Deleting it would make that period unrecomputable. ` +
+          `To supersede this rule, publish a NEW version and set this one's effectiveTo instead.`,
+        409,
+      );
+    }
+
     await prismaAdmin.statutoryRule.delete({ where: { id } });
     return ok({ id }, "Statutory rule deleted");
   } catch (e) {
