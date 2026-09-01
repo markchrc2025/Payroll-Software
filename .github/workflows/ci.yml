@@ -1,0 +1,240 @@
+# Unit 0.17 — the first workflow in this repository that runs any code gate.
+#
+# Before this, four workflows existed (db-backup, db-migrate, db-restore-drill,
+# db-role-inventory); every one is workflow_dispatch/schedule and none runs
+# vitest, tsc, ESLint or a build. `gh run list` confirms no run has EVER been
+# triggered by `pull_request` or `push`. Every gate in every unit so far was
+# hand-run by an agent, and the auto-squash-merge flow had nothing behind it.
+#
+# See docs/CI.md for what gates a PR and how to reproduce each locally.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A force-push or a rapid second push should not leave two runs racing; the
+# newest commit is the only one whose verdict matters.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Pattern copied from db-restore-drill.yml (unit 0.1) rather than written
+    # fresh — it is a known-working in-repo service block, pinned to the same
+    # PostgreSQL 18 the Sliplane server runs.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: payroll_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Throwaway credentials for a container that exists for the length of one
+      # job on one runner and is reachable only from that runner's localhost.
+      TEST_DATABASE_URL: postgresql://postgres:ci@localhost:5432/payroll_ci
+      # prisma.config.ts resolves migrations through DIRECT_DATABASE_URL, then
+      # DATABASE_URL. Both point at the same throwaway container here.
+      DATABASE_URL: postgresql://postgres:ci@localhost:5432/payroll_ci
+      DIRECT_DATABASE_URL: postgresql://postgres:ci@localhost:5432/payroll_ci
+      # Deterministic, and matches the app's Philippine payroll domain.
+      TZ: Asia/Manila
+
+    steps:
+      - name: Checkout (full history — the lint gate diffs against the base)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Also exercises unit 0.9's `prepare` hook installer and unit 0.2's
+      # `postinstall: prisma generate` in a clean environment — if either ever
+      # breaks `npm ci`, this step goes red instead of the production build.
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      # ────────────────────────────────────────────────────────────────────
+      # THE ANTI-VACUITY GATE (B3).
+      #
+      # A test suite that quietly skips its database-backed cases when the
+      # service block is broken is worse than no CI at all: it is a green tick
+      # that means nothing. Three layers, because checking the variable alone
+      # would only catch the least likely failure:
+      #
+      #   1. TEST_DATABASE_URL is set and non-empty.
+      #   2. The database actually ANSWERS — a service block can start and
+      #      still be unusable (wrong port, wrong database, wrong password).
+      #   3. After the suite runs, the skip count must be ZERO (below).
+      #
+      # Layer 3 is the one that holds when someone later adds a DB-backed test
+      # with its own skip guard. Today the suite has no skip-gated tests at all
+      # (measured: 0 `skipIf`/`runIf`/`describe.skip`), so layers 1–2 are what
+      # keep the database honest and layer 3 keeps it that way.
+      # ────────────────────────────────────────────────────────────────────
+      - name: ASSERT TEST_DATABASE_URL is set
+        run: |
+          if [ -z "${TEST_DATABASE_URL:-}" ]; then
+            echo "::error::TEST_DATABASE_URL is empty. The test suite must NEVER run without a database — a broken service block would degrade to silent skips and this gate would be vacuous."
+            exit 1
+          fi
+          # Print the host/port only. Never echo the whole URL.
+          echo "TEST_DATABASE_URL is set (host: $(printf '%s' "$TEST_DATABASE_URL" | sed -E 's|.*@([^/]*)/.*|\1|'))"
+
+      - name: ASSERT the database actually answers
+        run: |
+          node -e '
+            const { Client } = require("pg");
+            const c = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+            c.connect()
+              .then(() => c.query("select version()"))
+              .then((r) => { console.log("connected:", r.rows[0].version.split(",")[0]); return c.end(); })
+              .catch((e) => {
+                // pg raises an AggregateError for a refused connection whose
+                // own `.message` is empty — the useful text is in .code and in
+                // the nested .errors. T2 proved this fires; it must also SAY
+                // something when it does.
+                const detail =
+                  [e.code, e.message, ...(e.errors || []).map((x) => x.code || x.message)]
+                    .filter(Boolean)
+                    .join(" ") || String(e);
+                console.error("::error::Database at TEST_DATABASE_URL did not answer: " + detail);
+                process.exit(1);
+              });
+          '
+
+      # The migration set is NOT self-contained: 35 statements across
+      # prisma/migrations GRANT to `payroll_app`, and the admin_bypass policies
+      # reference `owner`. Neither role exists in a fresh container, so
+      # `migrate deploy` dies on migration 4 of 87 with
+      # `ERROR: role "payroll_app" does not exist` (found by this pipeline's
+      # very first run). Same idempotent pre-creation the restore drill uses —
+      # scripts/restore-from-backup.md:48-50 — so CI and the drill agree.
+      # No password: these are NOLOGIN grant targets inside a throwaway
+      # container, never authenticated against.
+      - name: Pre-create the roles the migrations GRANT to
+        run: |
+          node -e '
+            const { Client } = require("pg");
+            const roles = ["owner", "payroll_app", "sentire_books_app"];
+            const c = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+            (async () => {
+              await c.connect();
+              for (const r of roles) {
+                await c.query(
+                  `DO $$ BEGIN CREATE ROLE "${r}"; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`
+                );
+                console.log("role ready:", r);
+              }
+              await c.end();
+            })().catch((e) => {
+              console.error("::error::Could not pre-create migration roles: " + e.message);
+              process.exit(1);
+            });
+          '
+
+      - name: Apply migrations to the CI database
+        run: npx prisma migrate deploy
+
+      - name: ASSERT no migration is pending
+        run: npx prisma migrate status
+
+      # ── Gate 1: the test suite ──────────────────────────────────────────
+      - name: Test suite (vitest)
+        run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-results.json
+
+      - name: ASSERT zero skipped tests
+        run: |
+          node -e '
+            const r = require("./vitest-results.json");
+            const skipped = (r.numPendingTests || 0) + (r.numTodoTests || 0);
+            console.log(
+              `tests: ${r.numTotalTests} total, ${r.numPassedTests} passed, ` +
+              `${r.numFailedTests} failed, ${skipped} skipped`
+            );
+            if (skipped > 0) {
+              console.error(
+                "::error::" + skipped + " test(s) were SKIPPED. A green run with skips is a FAILURE: " +
+                "it usually means a database-backed suite silently opted out. Fix the environment, " +
+                "not the assertion."
+              );
+              process.exit(1);
+            }
+            if (r.numTotalTests === 0) {
+              console.error("::error::Zero tests ran. The suite did not execute.");
+              process.exit(1);
+            }
+          '
+
+      # ── Gate 2: types ───────────────────────────────────────────────────
+      # `next build` is deliberately NOT run here — see docs/CI.md. Measured on
+      # a 2-core/7.9 GB box: it compiles in 104s and is then SIGTERM-killed in
+      # its TypeScript phase at ~7.0 GB peak. The identical type check standing
+      # alone costs 877 MB and passes in 57s. A GitHub-hosted standard runner
+      # on a private repo has 2 cores and 7 GB — less headroom than the box
+      # that already fails — and a flaky-red gate gets ignored.
+      - name: Type check (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      # ── Gate 3: lint, scoped to what the PR actually changed ────────────
+      # `npm run lint` reports 851 problems (772 errors) on pristine main, of
+      # which 803 problems / 765 errors are in docs/ design-handoff .jsx
+      # mockups that are never built or deployed. src/ carries 48 problems and
+      # 7 errors. A whole-repo gate would therefore be red on arrival and get
+      # ignored, so the blocking gate is the diff: code you touched must be
+      # clean. The repo-wide number is printed for visibility, not enforced.
+      - name: Lint changed files (blocking)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No usable diff base ($BASE) — falling back to the previous commit."
+            BASE="$(git rev-parse HEAD~1 2>/dev/null || echo '')"
+          fi
+
+          if [ -z "$BASE" ]; then
+            echo "Still no diff base; skipping the changed-files lint (nothing to compare)."
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' '*.mjs' '*.cjs' | tr '\n' ' ')"
+          if [ -z "$CHANGED" ]; then
+            echo "No lintable files changed."
+            exit 0
+          fi
+
+          echo "Linting changed files:"
+          printf '  %s\n' $CHANGED
+          npx eslint --max-warnings 0 --no-error-on-unmatched-pattern $CHANGED
+
+      - name: Repo-wide lint total (informational, never blocks)
+        if: always()
+        run: |
+          npx eslint --format stylish . > eslint-full.txt 2>&1 || true
+          tail -n 3 eslint-full.txt || true
+          echo "Informational only — see docs/CI.md for why the whole-repo count is not a gate."
