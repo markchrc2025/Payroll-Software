@@ -238,3 +238,134 @@ jobs:
           npx eslint --format stylish . > eslint-full.txt 2>&1 || true
           tail -n 3 eslint-full.txt || true
           echo "Informational only — see docs/CI.md for why the whole-repo count is not a gate."
+
+  # ════════════════════════════════════════════════════════════════════════
+  # SERVER-SIDE SECRET SCAN (unit 0.9 Amendment 2).
+  #
+  # Unit 0.9 put gitleaks in a pre-commit hook. Two holes remained, both of
+  # which only a server-side scan can close:
+  #
+  #   1. MERGE COMMITS. Git fires `pre-merge-commit` for an automatic merge,
+  #      not `pre-commit`, and no such hook is installed. Track B proved it:
+  #      a credential committed on a branch with --no-verify, then merged with
+  #      no bypass flag at all, landed at exit 0 unblocked.
+  #   2. --no-verify itself, and any machine where `npm install` never ran.
+  #
+  # Runs as its own job so it reports separately and in parallel with `gates`.
+  # ════════════════════════════════════════════════════════════════════════
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (full history — the range scan walks the PR's commits)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Uses the repository's OWN installer, so CI runs the same pinned,
+      # sha256-verified gitleaks 8.30.1 as the local hook. If the download or
+      # the checksum fails, the script exits non-zero and this step goes red —
+      # there is deliberately no `|| true` anywhere in this job.
+      - name: Install gitleaks (pinned + checksum-verified, same as the hook)
+        id: gitleaks
+        run: |
+          BIN="$(bash scripts/install-gitleaks.sh | tail -n 1)"
+          if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
+            echo "::error::gitleaks could not be installed. This job FAILS rather than skipping: a secret scan that silently no-ops is worse than none, because it reports a green tick."
+            exit 1
+          fi
+          echo "bin=$BIN" >> "$GITHUB_OUTPUT"
+
+      # B3: prove the scanner and its config are actually usable before trusting
+      # any verdict they produce. Same principle as the zero-skip assertion in
+      # unit 0.17 — the tool must be shown to have run, not assumed to have.
+      - name: ASSERT gitleaks runs and the config is present
+        run: |
+          BIN='${{ steps.gitleaks.outputs.bin }}'
+          "$BIN" version || { echo "::error::gitleaks binary is present but will not execute."; exit 1; }
+          if [ ! -f .gitleaks.toml ]; then
+            echo "::error::.gitleaks.toml is missing. CI must scan with the SAME config as the local hook; two configs that drift are worse than one that is imperfect, because a commit that passes locally and fails here teaches people to bypass locally."
+            exit 1
+          fi
+          echo "config: $(wc -l < .gitleaks.toml) lines, $(grep -c '^\[\[rules\]\]' .gitleaks.toml) custom rules on top of the stock set"
+
+      - name: Resolve the commit range this change introduces
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+
+          # A branch's first push reports an all-zero "before".
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE="$(git rev-parse "$HEAD~1" 2>/dev/null || echo '')"
+          fi
+
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+          echo "range: ${BASE:-<none>}..$HEAD"
+
+      # THE VACUITY GUARD, and the direct analogue of unit 0.17's zero-skip
+      # assertion: an empty commit range scans nothing and passes trivially.
+      - name: ASSERT the commit range is non-empty
+        run: |
+          BASE='${{ steps.range.outputs.base }}'
+          HEAD='${{ steps.range.outputs.head }}'
+          if [ -z "$BASE" ]; then
+            echo "::error::Could not resolve a base commit. Refusing to report a green secret scan over an unknown range."
+            exit 1
+          fi
+          COUNT="$(git rev-list --count "$BASE..$HEAD")"
+          echo "$COUNT commit(s) in range"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::The commit range $BASE..$HEAD is EMPTY, so the range scan would pass without inspecting anything. Fix the range, not the assertion."
+            exit 1
+          fi
+
+      # Scan 1 — the tree we would merge. Catches a secret that is PRESENT in
+      # the code, including one committed before this PR and never removed.
+      # Measured on main: clean, 5.79 MB in 1.7s.
+      - name: Scan the working tree
+        run: |
+          '${{ steps.gitleaks.outputs.bin }}' dir . \
+            --config .gitleaks.toml --no-banner --redact --log-level error \
+            --report-format template --report-template .githooks/gitleaks-report.tmpl \
+            --report-path -
+
+      # Scan 2 — every commit this change introduces. Catches a secret that was
+      # added and then DELETED again within the same PR: the tree is clean but
+      # the blob still merges into main's history and is still leaked. Measured
+      # locally: the tree scan misses that case, this one catches it. Neither
+      # scan is sound alone.
+      - name: Scan every commit in the range
+        run: |
+          '${{ steps.gitleaks.outputs.bin }}' git . \
+            --log-opts="${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}" \
+            --config .gitleaks.toml --no-banner --redact --log-level error \
+            --report-format template --report-template .githooks/gitleaks-report.tmpl \
+            --report-path -
+
+      - name: What to do if this job is red
+        if: failure()
+        run: |
+          cat >&2 <<'EOF'
+          A credential was found, or the scanner could not be trusted to run.
+
+            1. Remove the secret and force-push the branch. Deleting it in a
+               LATER commit is not enough — the range scan exists because the
+               blob still merges into main's history.
+            2. If the value is real, ROTATE IT. See docs/RUNBOOK_CREDENTIAL_ROTATION.md.
+            3. If it is a false positive, add a narrow entry to .gitleaks.toml
+               (path or regex, never a blanket rule) and say why.
+
+          This job cannot be bypassed with --no-verify. That is the point:
+          the local hook missed merge commits entirely.
+          EOF
+          exit 1

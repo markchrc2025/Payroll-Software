@@ -82,6 +82,45 @@ regexes = [
 ]
 
 # ---------------------------------------------------------------------------
+# RULE 3 — AWS / S3-compatible access key ID, broader than the stock rule.
+#
+# WHY THIS EXISTS (unit 0.9 Amendment 2). A test fixture of the shape
+# AKIAZ7X4Q9W2E5R8T1Y3 was reported as an unmatched rule. It is not.
+# The stock gitleaks 8.30.1 rule, extracted from the binary, is:
+#
+#     \b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b
+#
+# The suffix class is [A-Z2-7] — the RFC 4648 base32 alphabet, which excludes
+# the digits 0, 1, 8 and 9. Real AWS access key IDs are base32 (they encode an
+# account id and a checksum), so the stock rule is CORRECT for real keys and
+# the fixture simply is not a well-formed one: it contains 9, 8 and 1.
+#
+# We widen it to [A-Z0-9] anyway, deliberately. A 20-character token beginning
+# AKIA/ASIA/ABIA/ACCA is essentially never innocent, and we would rather flag a
+# malformed or transcribed key than reason about base32 at 2am. Note this is an
+# access key ID — an identifier, not the secret — but it names the AWS account
+# and the matching secret is usually a line away, which is also why stock
+# gitleaks flags it. This rule is a superset of the stock one, so a real key may
+# be reported twice; two findings for one secret is noise we accept.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "sentire-aws-access-key-id"
+description = "AWS (or S3-compatible) access key ID"
+regex = '''\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16})\b'''
+secretGroup = 1
+keywords = ["AKIA", "ASIA", "ABIA", "ACCA", "A3T"]
+
+[rules.allowlist]
+regexTarget = "secret"
+regexes = [
+  # AWS's own documented placeholder, AKIAIOSFODNN7EXAMPLE, and anything else
+  # that shouts EXAMPLE. Note RE2 has no backreferences, so a "all one repeated
+  # character" filter cannot be written here; such strings are not credentials
+  # and the stock config already stopwords most of them.
+  '''EXAMPLE''',
+]
+
+# ---------------------------------------------------------------------------
 # GLOBAL ALLOWLIST — known-safe paths and placeholders.
 #
 # Every entry below was verified against the real file before being added; the
