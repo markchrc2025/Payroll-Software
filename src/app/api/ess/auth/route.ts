@@ -17,6 +17,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { err, ok, serverError } from "@/lib/api-response";
+import { activateInvitedEssAccount, evaluateEssAccess } from "@/lib/ess-access-gate";
 import { createEssSession, verifyEssPin, verifyEssPassword } from "@/lib/ess-auth";
 import { captureError } from "@/lib/observability";
 import prismaAdmin from "@/lib/prisma-admin";
@@ -85,23 +86,24 @@ export async function POST(req: NextRequest) {
 
     const emp = employee[0]!;
 
-    // Block terminated / deleted employees
-    if (emp.deletedAt !== null) {
-      return err("Invalid credentials", 401);
-    }
-    if (["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus)) {
-      return err("Access denied — inactive employee", 403);
-    }
-
-    // ESS access gate — employees do NOT have access by default; HR must grant
-    // it. NOT_INVITED / DISABLED cannot sign in.
-    if (emp.essAccessStatus === "NOT_INVITED" || emp.essAccessStatus === "DISABLED") {
-      return err("Employee Self-Service access isn't enabled for your account — please contact HR.", 403);
-    }
-    // Scheduled deactivation is authoritative even if the hourly sweep hasn't
-    // run yet: once the time passes, access is denied.
-    if (emp.essDeactivateAt && emp.essDeactivateAt.getTime() <= Date.now()) {
-      return err("Your Employee Self-Service access has ended — please contact HR.", 403);
+    // Access gate — soft-delete, employment status, ESS grant and scheduled
+    // deactivation. Shared with the passkey sign-in (unit 0.14): these checks
+    // used to live inline here, which is exactly why
+    // /api/ess/webauthn/authenticate/finish drifted without any of them.
+    //
+    // This runs BEFORE the credential is verified, so a refusal here says
+    // nothing about who was knocking — anyone can POST an employee number. It
+    // is logged, never alerted; see the passkey path for the case where
+    // identity is already proven.
+    const access = evaluateEssAccess(emp);
+    if (!access.allowed) {
+      await captureError(new Error(`ESS sign-in refused: ${access.reason}`), {
+        scope: "ess/auth:refused",
+        reason: access.reason,
+        tenantId,
+        employeeId: emp.id,
+      });
+      return err(access.message, access.status);
     }
 
     let authenticated = false;
@@ -161,12 +163,9 @@ export async function POST(req: NextRequest) {
     //    portal, the deactivation sweep, reporting) reads it. It goes FIRST and
     //    it MUST fail the login: better to deny a login that can be retried
     //    than to issue a session for an account that never activated.
-    if (emp.essAccessStatus === "INVITED") {
+    if (access.needsActivation) {
       try {
-        await prismaAdmin.employee.update({
-          where: { id: emp.id },
-          data: { essAccessStatus: "ACTIVE", essActivatedAt: new Date() },
-        });
+        await activateInvitedEssAccount(emp.id);
       } catch (e) {
         await captureError(e, {
           scope: "ess/auth:activation",
