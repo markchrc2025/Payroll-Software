@@ -17,7 +17,7 @@
 #   staged by an over-eager `git add -A` — the very mistake unit 0.8 cleaned up.
 set -euo pipefail
 
-GITLEAKS_VERSION="0.0.0-does-not-exist"
+GITLEAKS_VERSION="8.30.1"
 
 # sha256 of the official release tarballs for v8.30.1, taken from
 # https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt
