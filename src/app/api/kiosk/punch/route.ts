@@ -28,7 +28,6 @@ import { executePunch } from "@/lib/attendance/punch";
 import { evaluateEmploymentAccess } from "@/lib/ess-access-gate";
 import { captureError } from "@/lib/observability";
 import { err, ok } from "@/lib/api-response";
-import { isR2Configured } from "@/lib/r2";
 
 const bodySchema = z.object({
   employeeNumber: z.string().min(1),
