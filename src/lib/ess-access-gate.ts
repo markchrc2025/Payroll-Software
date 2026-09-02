@@ -23,7 +23,26 @@
  * NOT AN AUTHENTICATION CHECK. This answers "may this employee hold a
  * session?", never "is this really them?". Callers prove identity themselves —
  * password/PIN/birth date on the credential path, a WebAuthn assertion on the
- * passkey path — and the two questions must stay separate.
+ * passkey path, a kiosk PIN at a kiosk — and the two questions must stay
+ * separate.
+ *
+ * TWO LAYERS (unit 0.18). The checks are NOT all universal, so the ESS gate is
+ * COMPOSED from a smaller one rather than applied wholesale:
+ *
+ *   evaluateEmploymentAccess  — deletedAt + employmentStatus. Universal: an
+ *                               ex-employee may not transact with the system
+ *                               on ANY surface.
+ *   evaluateEssAccess         — the above PLUS essAccessStatus and
+ *                               essDeactivateAt, which are ESS-specific.
+ *
+ * The distinction is load-bearing, not tidiness: an employee whose ESS access
+ * is DISABLED is still employed and must still be able to clock in at a kiosk.
+ * Applying the whole ESS gate to the kiosk would lock working staff out of the
+ * time clock — a worse outage than the hole it closes.
+ *
+ * FILENAME. Historical: this module predates the split and is still imported as
+ * `ess-access-gate` by unit 0.14's tests, which are a regression guard and must
+ * not be edited. It hosts both layers.
  */
 
 import prismaAdmin from "@/lib/prisma-admin";
@@ -32,13 +51,19 @@ import prismaAdmin from "@/lib/prisma-admin";
 export const ENDED_EMPLOYMENT_STATUSES = ["RESIGNED", "TERMINATED", "RETIRED"] as const;
 
 /**
- * The employee fields the gate reads. Every sign-in path must select all of
- * them — a path that selects fewer silently loses a gate, which is the exact
- * failure this module exists to prevent.
+ * The fields the UNIVERSAL gate reads. Any surface that authenticates an
+ * employee must select both — a surface selecting fewer silently loses a gate,
+ * which is the exact failure this module exists to prevent.
  */
-export type EssAccessSubject = {
+export type EmploymentSubject = {
   deletedAt: Date | null;
   employmentStatus: string;
+};
+
+/**
+ * The fields the ESS gate reads: the universal pair plus the ESS-specific pair.
+ */
+export type EssAccessSubject = EmploymentSubject & {
   essAccessStatus: string;
   essDeactivateAt: Date | null;
 };
@@ -49,6 +74,15 @@ export type EssRefusalReason =
   | "employment_ended"
   | "access_not_enabled"
   | "access_ended";
+
+export type EmploymentDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason: "unknown_employee" | "deleted" | "employment_ended";
+      status: number;
+      message: string;
+    };
 
 export type EssAccessDecision =
   | {
@@ -66,27 +100,29 @@ export type EssAccessDecision =
     };
 
 /**
- * Decide whether `emp` may hold an ESS session.
+ * The UNIVERSAL gate (unit 0.18): may this employee transact with the system at
+ * all? Soft-delete and employment status only — nothing ESS-specific.
  *
- * Pure and synchronous — `now` is injectable so the `essDeactivateAt` boundary
- * is testable without clock games.
+ * Every employee-authenticating surface calls this, directly or through a
+ * composed gate. `/api/kiosk/punch` checked `deletedAt` alone and never
+ * `employmentStatus`, and because termination sets the status rather than
+ * `deletedAt`, a terminated employee kept a working time clock: fabricated
+ * attendance flowing into DTR and then into payroll.
  *
- * Order is deliberate and mirrors the credential path exactly: existence, then
- * soft-delete, then employment, then ESS grant, then scheduled deactivation.
- * A soft-deleted or unknown employee is answered with the SAME "Invalid
- * credentials" 401 a wrong password gets, so the endpoint cannot be used to
- * enumerate who works here.
+ * Returns the reason plus DEFAULT copy. Surfaces whose wording must differ
+ * override it — the ESS gate does, because a sign-in endpoint answers unknown
+ * and soft-deleted employees with the same "Invalid credentials" a wrong
+ * password gets, so it cannot be used to enumerate who works here.
  */
-export function evaluateEssAccess(
-  emp: EssAccessSubject | null | undefined,
-  now: Date = new Date(),
-): EssAccessDecision {
+export function evaluateEmploymentAccess(
+  emp: EmploymentSubject | null | undefined,
+): EmploymentDecision {
   if (!emp) {
     return {
       allowed: false,
       reason: "unknown_employee",
-      status: 401,
-      message: "Invalid credentials",
+      status: 404,
+      message: "Employee not found",
     };
   }
 
@@ -94,8 +130,8 @@ export function evaluateEssAccess(
     return {
       allowed: false,
       reason: "deleted",
-      status: 401,
-      message: "Invalid credentials",
+      status: 404,
+      message: "Employee not found",
     };
   }
 
@@ -104,12 +140,48 @@ export function evaluateEssAccess(
       allowed: false,
       reason: "employment_ended",
       status: 403,
-      message: "Access denied — inactive employee",
+      message: "This employee is no longer active. Please contact HR.",
     };
   }
 
+  return { allowed: true };
+}
+
+/** ESS-specific copy for the universal refusals — see the note above. */
+const ESS_REFUSAL_COPY: Record<
+  "unknown_employee" | "deleted" | "employment_ended",
+  { status: number; message: string }
+> = {
+  unknown_employee: { status: 401, message: "Invalid credentials" },
+  deleted: { status: 401, message: "Invalid credentials" },
+  employment_ended: { status: 403, message: "Access denied — inactive employee" },
+};
+
+/**
+ * Decide whether `emp` may hold an ESS session.
+ *
+ * COMPOSED: the universal gate first, then the two ESS-specific checks. Pure
+ * and synchronous — `now` is injectable so the `essDeactivateAt` boundary is
+ * testable without clock games.
+ *
+ * Order is deliberate and unchanged from unit 0.14: existence, then
+ * soft-delete, then employment, then ESS grant, then scheduled deactivation.
+ */
+export function evaluateEssAccess(
+  emp: EssAccessSubject | null | undefined,
+  now: Date = new Date(),
+): EssAccessDecision {
+  const core = evaluateEmploymentAccess(emp);
+  if (!core.allowed) {
+    const copy = ESS_REFUSAL_COPY[core.reason];
+    return { allowed: false, reason: core.reason, status: copy.status, message: copy.message };
+  }
+
+  // `core.allowed` is only true for a non-null subject.
+  const subject = emp as EssAccessSubject;
+
   // Employees do NOT have ESS access by default; HR must grant it.
-  if (emp.essAccessStatus === "NOT_INVITED" || emp.essAccessStatus === "DISABLED") {
+  if (subject.essAccessStatus === "NOT_INVITED" || subject.essAccessStatus === "DISABLED") {
     return {
       allowed: false,
       reason: "access_not_enabled",
@@ -121,7 +193,7 @@ export function evaluateEssAccess(
 
   // A scheduled deactivation is authoritative the moment it passes, even if the
   // hourly sweep hasn't run yet.
-  if (emp.essDeactivateAt && emp.essDeactivateAt.getTime() <= now.getTime()) {
+  if (subject.essDeactivateAt && subject.essDeactivateAt.getTime() <= now.getTime()) {
     return {
       allowed: false,
       reason: "access_ended",
@@ -130,7 +202,7 @@ export function evaluateEssAccess(
     };
   }
 
-  return { allowed: true, needsActivation: emp.essAccessStatus === "INVITED" };
+  return { allowed: true, needsActivation: subject.essAccessStatus === "INVITED" };
 }
 
 /**

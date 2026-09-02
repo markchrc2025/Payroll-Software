@@ -25,8 +25,9 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
 import { executePunch } from "@/lib/attendance/punch";
+import { evaluateEmploymentAccess } from "@/lib/ess-access-gate";
+import { captureError } from "@/lib/observability";
 import { err, ok } from "@/lib/api-response";
-import { isR2Configured } from "@/lib/r2";
 
 const bodySchema = z.object({
   employeeNumber: z.string().min(1),
@@ -77,13 +78,56 @@ export async function POST(req: NextRequest) {
       employeeNumber: d.employeeNumber,
       deletedAt:      null,
     },
-    select: { id: true, kioskPinHash: true, firstName: true, lastName: true },
+    select: {
+      id: true, kioskPinHash: true, firstName: true, lastName: true,
+      // Read by the shared employment gate below (unit 0.18).
+      deletedAt: true, employmentStatus: true,
+    },
   });
   if (!employee) return err("Employee not found", 404);
   if (!employee.kioskPinHash) return err("Kiosk PIN not set for this employee", 422);
 
   const pinOk = await bcrypt.compare(d.pin, employee.kioskPinHash);
   if (!pinOk) return err("Invalid PIN", 401);
+
+  // ---------------------------------------------------------------------
+  // EMPLOYMENT GATE (unit 0.18).
+  //
+  // This path checked `deletedAt` alone — in the query above — and never
+  // `employmentStatus`. Termination sets the status, not `deletedAt`, so a
+  // TERMINATED employee kept a working time clock, and the attendance they
+  // recorded flowed into DTR and from there into payroll.
+  //
+  // The gate is the SHARED one from unit 0.14, but only its universal layer.
+  // `essAccessStatus` and `essDeactivateAt` are deliberately NOT applied: a
+  // kiosk punch is not ESS access, and an employee whose ESS is disabled is
+  // still employed and must still be able to clock in.
+  //
+  // Placed AFTER the PIN verifies, for the same reason unit 0.14 put the ESS
+  // gate after the WebAuthn assertion: a kiosk is a shared device anyone can
+  // walk up to, so refusing earlier would let a passerby enumerate who has
+  // been terminated by typing employee numbers. Behind the PIN, the refusal
+  // reaches only the employee themselves, who is owed a clear reason.
+  //
+  // `deletedAt` is re-checked here even though the query above filters it.
+  // That filter stays — dropping it could match a soft-deleted row when an
+  // employeeNumber has been reused — and the gate remains the single place
+  // the decision is made.
+  const access = evaluateEmploymentAccess(employee);
+  if (!access.allowed) {
+    await captureError(
+      new Error(`Kiosk punch refused: ${access.reason}`),
+      {
+        scope: "kiosk/punch:refused",
+        critical: true,
+        reason: access.reason,
+        tenantId: kiosk.tenantId,
+        employeeId: employee.id,
+        kioskId: kiosk.id,
+      },
+    );
+    return err(access.message, access.status);
+  }
 
   const result = await executePunch({
     tenantId:   kiosk.tenantId,
