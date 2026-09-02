@@ -1,7 +1,17 @@
 # Secret scanning (pre-commit) — unit 0.9
 
-**One line:** every `git commit` in this repository is scanned for credentials
-*before* the commit object exists, by a local gitleaks run over the staged diff.
+**One line:** credentials are scanned twice — locally by a pre-commit hook before
+the commit exists, and again server-side in CI over every pull request, because
+the local hook alone provably missed merge commits.
+
+| | Local hook (unit 0.9) | CI job (unit 0.9 Am 2) |
+|---|---|---|
+| Runs on | `git commit` | every PR, and every push to `main` |
+| Sees | the staged diff | the merged tree **and** every commit in the PR |
+| Catches merge commits | **no** | yes |
+| Bypassable | yes, `--no-verify` | no |
+| Config | `.gitleaks.toml` | the same `.gitleaks.toml` |
+| Blocks a merge | n/a | **no — advisory, see below** |
 
 ---
 
@@ -34,6 +44,7 @@ rebase away, and no window in which the secret sits in your local history.
 | `scripts/install-gitleaks.sh` | Fetches a pinned, checksum-verified gitleaks 8.30.1 into `~/.cache/sentire-gitleaks/`. |
 | `scripts/scan-secrets.sh` | The manual wider sweep — `npm run scan:secrets`. |
 | `scripts/u09-secret-scan-tests.sh` | Acceptance tests: blocks a real secret, allows placeholders, bypass works. |
+| `.github/workflows/ci.yml` (job `secret scan`) | The server-side scan — merge commits and `--no-verify` (unit 0.9 Am 2). |
 
 **A shim, not `core.hooksPath`.** This repository has four live git-lfs hooks in
 `.git/hooks` (`post-checkout`, `post-commit`, `post-merge`, `pre-push`). Setting
@@ -91,6 +102,81 @@ not paste the credential into your terminal scrollback.
 
 ---
 
+## The CI scan (unit 0.9 Amendment 2)
+
+`.github/workflows/ci.yml`, job **`secret scan`**, on every pull request and
+every push to `main`.
+
+### Why a server-side scan was needed
+
+The local hook had two holes, and one of them was demonstrated rather than
+theorised:
+
+1. **Merge commits.** Git fires `pre-merge-commit` for an automatic merge, not
+   `pre-commit`, and no `pre-merge-commit` hook is installed. A credential
+   committed on a branch with `--no-verify` and then merged **with no bypass
+   flag at all** lands unblocked, at exit 0. The local hook never sees it.
+2. **`--no-verify`, and any machine where `npm install` never ran.** The hook is
+   deliberately skippable (see below); a server-side scan is not.
+
+### What it scans, and why it is two scans and not one
+
+| Scan | Catches | Misses |
+|---|---|---|
+| `gitleaks dir .` — the tree that would be merged | a secret **present** in the code, including one committed before this PR and never removed | a secret added and then deleted within the same PR |
+| `gitleaks git --log-opts=BASE..HEAD` — every commit the PR introduces | anything **introduced** by the PR, including added-then-deleted and merge commits | a secret that predates the PR |
+
+Measured, not assumed. Building both cases in a scratch repository:
+
+```
+S1: secret merged in, still present in tree
+  tree scan : leaks found: 1      range scan: leaks found: 1
+S2: secret added then deleted in the SAME branch
+  tree scan : no leaks found      range scan: leaks found: 1
+```
+
+Deleting a secret in a later commit does not unleak it — the blob still merges
+into `main`'s history. **Neither scan is sound alone**, so the job runs both.
+
+The whole-tree scan is affordable because the tree is clean: 5.79 MB in 1.7 s,
+zero findings on `main`, and a full-history scan of all 381 commits is also
+zero. A tree scan only becomes noisy once something real is in the tree — at
+which point being noisy is correct.
+
+### It cannot silently no-op
+
+Three assertions run before any verdict is believed, on the same principle as
+the zero-skip assertion in `docs/CI.md`:
+
+1. **gitleaks installed and executable** — via the repo's own
+   `scripts/install-gitleaks.sh`, so CI uses the identical pinned, sha256-verified
+   8.30.1 as the local hook. A failed download or a checksum mismatch fails the
+   job. There is no `|| true` anywhere in it.
+2. **`.gitleaks.toml` present** — CI must scan with the *same* config as the
+   hook. Two configs that drift are worse than one that is imperfect: a commit
+   that passes locally and fails in CI teaches people to bypass locally.
+3. **The commit range is non-empty** — an empty `BASE..HEAD` would scan nothing
+   and pass trivially. This is the vacuity trap in a new costume, so it is
+   asserted rather than trusted.
+
+### Forks and cold caches
+
+A pull request from a fork runs this job normally: the workflow uses
+`pull_request` (not `pull_request_target`), so it executes against the fork's
+code with a read-only token, which is all the job needs. There is no cached
+binary to be missing — `scripts/install-gitleaks.sh` fetches and verifies the
+pinned release on every run, and if that fetch fails the job goes **red**, never
+green-with-a-skip.
+
+### It is ADVISORY, like every other check here
+
+There are no required status checks on this repository — branch protection needs
+GitHub Pro on a private repo. A red secret scan does **not** prevent
+`gh pr merge --squash`. See the first section of `docs/CI.md`. Until that
+changes, the discipline is human.
+
+---
+
 ## What it does NOT cover
 
 Read this part. The gaps are specific and one of them is the leak that actually
@@ -121,15 +207,24 @@ its own unit — proposed here so it is not forgotten.
 Until then, the honest mitigation is behavioural: **do not `git add -A`.** Stage
 by path, or read `git status` before every commit.
 
-### 2. It only sees the staged diff.
-A secret already in the working tree but never staged is invisible to it, as is
-anything already in history. Use `npm run scan:secrets` (tree) and
-`npm run scan:secrets -- history` (all refs) for those.
+### 2. The LOCAL hook only sees the staged diff — CI is what covers the rest.
+A secret in the working tree but never staged is invisible to the hook, as is
+anything already in history, as are merge commits. The CI job closes the first
+and third of those for anything arriving through a pull request. For history,
+use `npm run scan:secrets` (tree) and `npm run scan:secrets -- history` (all
+refs).
 
-### 3. It runs locally, so it can be bypassed — deliberately.
-See below. Anyone committing with `--no-verify`, or from a machine where
-`npm install` never ran, is unprotected. This is a developer-machine control,
-not a server-side gate.
+### 3. The local hook is bypassable — deliberately. CI is not, but CI cannot block a merge.
+Anyone committing with `--no-verify`, or from a machine where `npm install`
+never ran, is unprotected locally; the CI job catches them at the pull request.
+But CI is **advisory** — no required status checks without GitHub Pro — so a red
+secret scan does not stop `gh pr merge --squash`. The gate reports; a human still
+has to obey it.
+
+### 3b. Nothing scans a direct push to `main` before it lands.
+The CI job runs on `push: main`, which is *after* the commit is already on the
+branch. It will tell you a secret landed; it cannot stop it landing. Pull
+requests are the only path where the scan runs before the merge.
 
 ### 4. It is not a replacement for rotation.
 If it blocks you, the secret is already on your disk and probably in your editor
@@ -140,6 +235,22 @@ history. Blocking the commit is not containment. See
 A high-entropy string with no keyword near it, a password made of dictionary
 words, a credential split across lines — all pass. Detection is pattern
 matching, not comprehension.
+
+### 6. Rules are only as good as their patterns, and stock patterns have edges.
+Two measured examples from this project, both fixed in `.gitleaks.toml` and both
+found only because someone tested rather than assumed:
+
+- The stock ruleset does **not** flag a Postgres connection string with an
+  embedded password — the single most valuable credential here (unit 0.9).
+- The stock AWS rule is `(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}`. The
+  suffix is the **base32** alphabet, so it excludes the digits 0, 1, 8 and 9.
+  Real AWS key IDs are base32, so the rule is right for real keys — but a
+  malformed or transcribed one slips through. Unit 0.9 Am 2 widened it to
+  `[A-Z0-9]{16}` (rule `sentire-aws-access-key-id`).
+
+The lesson generalises: **test a rule against a value you believe it should
+catch before trusting it.** A rule you have never seen fire is a rule you have
+not verified.
 
 ---
 
@@ -192,7 +303,7 @@ the design-handoff email mockups; and `.next/` build output.
 As of unit 0.9, with this configuration:
 
 - **Working tree:** clean — 0 findings.
-- **Full history, all refs (363 commits):** clean — 0 findings. This corroborates
+- **Full history, all refs (381 commits):** clean — 0 findings. This corroborates
   unit 0.8's conclusion that no credential is reachable in history, by a
   different method. The single hit in the raw history scan was
   `selfieKey: "smoke-z16-selfie-recent"` in the long-deleted
