@@ -182,6 +182,24 @@ function toComputeLoan(l: Loan): ComputeLoan {
 // Statutory rule resolution (cached per call)
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve every statutory rule a payroll computation needs, as of one date.
+ *
+ * THE CONVENTION (unit 1.2 — previously undocumented): callers pass the period's
+ * **`periodEnd`**, never `now()`. Two consequences worth stating, because both
+ * are choices rather than laws:
+ *
+ *  1. Re-running a historical period uses THAT PERIOD's rates, not today's. That
+ *     is what makes a recomputed payslip match the one originally issued, and it
+ *     is the property this unit exists to protect.
+ *  2. A rate change effective MID-PERIOD applies to the WHOLE period, because
+ *     selection happens once, at `periodEnd`. A rule taking effect on the 20th is
+ *     therefore used for the entire period containing the 20th. If a statute ever
+ *     requires splitting a period at a rate boundary, this is the line to change.
+ *
+ * The result is cached under a DATE-scoped key, so one period's rates can never
+ * be served to another from cache.
+ */
 export async function resolveAllRules(
   tx: TenantTx,
   tenantId: string,
@@ -192,31 +210,27 @@ export async function resolveAllRules(
     CacheKeys.statutory(tenantId, asOfKey),
     TTL.STATUTORY,
     async () => {
+      // ALL SIX categories are required (unit 1.2). MINIMUM_WAGE_RATE and
+      // DE_MINIMIS_CEILING were previously try/catch'd into `null`, which meant a
+      // period with no seeded minimum wage computed silently — an MWE employee's
+      // exemption simply would not apply, and the payslip would look plausible.
+      // A missing statutory rule is a configuration failure, and the resolver
+      // already throws rather than falling back to hardcoded math; swallowing
+      // that here defeated the point.
       const cats: StatutoryCategory[] = [
         "SSS_SCHEDULE",
         "PHILHEALTH_SCHEDULE",
         "PAGIBIG_SCHEDULE",
         "BIR_WITHHOLDING_TABLE",
+        "MINIMUM_WAGE_RATE",
+        "DE_MINIMIS_CEILING",
       ];
-      const [sss, phic, hdmf, bir] = await Promise.all(
+      const [sss, phic, hdmf, bir, minWageRule, deMinimisRule] = await Promise.all(
         cats.map((c) => getActiveRule(tx, tenantId, c, asOf)),
       );
 
-      // Optional rules — don't fail if not seeded.
-      let minWage: ComputeStatutoryRules["minWage"] = null;
-      try {
-        const r = await getActiveRule(tx, tenantId, "MINIMUM_WAGE_RATE", asOf);
-        minWage = r.payload;
-      } catch {
-        /* ignore — only required when MWE employees exist */
-      }
-      let deMinimis: ComputeStatutoryRules["deMinimis"] = null;
-      try {
-        const r = await getActiveRule(tx, tenantId, "DE_MINIMIS_CEILING", asOf);
-        deMinimis = r.payload;
-      } catch {
-        /* ignore */
-      }
+      const minWage = minWageRule!.payload as ComputeStatutoryRules["minWage"];
+      const deMinimis = deMinimisRule!.payload as ComputeStatutoryRules["deMinimis"];
 
       return {
         sss: sss!.payload as ComputeStatutoryRules["sss"],
