@@ -119,5 +119,3 @@ Nothing here is implemented in unit 0.11; B-list did not cover it.
 
 The first is the highest value per line of code, and the only one that addresses
 the *general* failure rather than today's instances.
-
-<!-- T1a: second push, to supersede the first run -->
