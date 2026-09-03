@@ -4,7 +4,7 @@ Moves the three infrastructure pieces onto Sliplane:
 
 | Piece | From | To |
 |---|---|---|
-| Web service | Render (Node) | Sliplane **App Runtime** (this repo's `Dockerfile`) |
+| Web service | Render (Node) | Sliplane **App Runtime** (Railpack native build; `railpack.json` → `scripts/start.sh`) |
 | Database | Supabase Postgres | Sliplane **Databases** (Postgres) |
 | Object storage | Cloudflare R2 | Sliplane **Object Storage** (S3-compatible) |
 
@@ -18,7 +18,8 @@ Do this **outside business hours**, and keep Render/Supabase/R2 running until th
 
 ## 0. Code prerequisites (already in this repo)
 
-- **`Dockerfile`** — Sliplane builds from it. Runs `prisma migrate deploy` then `next start`. pg-boss runs in-process → **run exactly ONE instance** (or move migrate + job workers to a single instance).
+- **`railpack.json` + `scripts/start.sh`** — Sliplane builds natively with Railpack; `start.sh` runs `prisma migrate deploy` then `next start`, and fails closed if the migration fails (unit 0.2). pg-boss runs in-process → **run exactly ONE instance** (or move migrate + job workers to a single instance).
+  > CORRECTED 2026-09-01 (unit 0.11): this file previously said Sliplane builds from a `Dockerfile`. The `Dockerfile` and `.dockerignore` were deleted in **c9b6cc5** (`revert(infra): remove Dockerfile + .dockerignore, restore native build`, PR #193). Anyone following the old instruction would have configured a build that cannot run.
 - **Configurable S3 endpoint** — `src/lib/r2.ts` now reads `S3_ENDPOINT`, `S3_REGION`, `S3_FORCE_PATH_STYLE`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_PUBLIC_URL`, falling back to the old `R2_*` names. Point these at Sliplane storage.
 
 ---
@@ -62,7 +63,31 @@ Notes:
 - `_prisma_migrations` is included in the dump, so `migrate status` should show **up to date** with no re-run. `migrate deploy` at container start is then a no-op.
 - Confirm the two connection strings you'll set as env:
   - `DATABASE_URL` → **`payroll_app`** role (tenant-scoped, RLS-subject).
-  - `DIRECT_DATABASE_URL` → the **owner** role (used by `prismaAdmin` + migrate). ⚠️ In production the default `prisma` client falls back to `DIRECT_DATABASE_URL` only if set — keep `DATABASE_URL` = `payroll_app` so tenant isolation holds. Mirror exactly what Render uses today.
+  - `DIRECT_DATABASE_URL` → the **owner** role (used by `prismaAdmin` + migrate).
+  > ### ⚠️ CORRECTED 2026-09-01 (unit 0.11) — this line said the opposite of what the code does
+  >
+  > It previously read: *"the default `prisma` client falls back to `DIRECT_DATABASE_URL` only if set — keep `DATABASE_URL` = `payroll_app` so tenant isolation holds."*
+  >
+  > That describes a fallback. The code is a **precedence**, the other way round:
+  >
+  > ```ts
+  > // src/lib/prisma.ts:54  — createPrismaClient(), the DEFAULT runtime client
+  > const connectionString = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!;
+  > ```
+  >
+  > `DIRECT_DATABASE_URL` **wins whenever it is set**, and `scripts/start.sh:20-22`
+  > *refuses to boot production without it*. So setting `DATABASE_URL = payroll_app`
+  > does **not** keep tenant traffic on the app role — `src/lib/with-tenant.ts:18`
+  > imports this same default client and relies on RLS.
+  >
+  > **Whether tenant isolation actually holds at runtime is UNRESOLVED**, because the
+  > repository contradicts itself about the owner role's privileges:
+  > `.github/workflows/db-backup.yml:12` and `docs/SYSTEM_DESIGN.md:206` call it
+  > BYPASSRLS, while `docs/RUNBOOK_CREDENTIAL_ROTATION.md:41` says it has
+  > `FORCE ROW LEVEL SECURITY` and **no** BYPASSRLS. Unit 0.8 already flagged the
+  > role inventory as unverified and built `.github/workflows/db-role-inventory.yml`
+  > to settle it. **Run that inventory before trusting either reading.** Track C
+  > cannot fix this: the fix is in `src/lib/`, which Track C does not own.
 
 ---
 
@@ -83,7 +108,7 @@ Keys are preserved (`tenants/{tenantId}/...`), so nothing in the DB needs rewrit
 
 ## 3. Web service — Sliplane App Runtime
 
-1. In the **Sentire Payroll** project → **Deploy App** → from GitHub repo `markchrc2025/Payroll-Software`, branch `main`, build = **Dockerfile**.
+1. In the **Sentire Payroll** project → **Deploy App** → from GitHub repo `markchrc2025/Payroll-Software`, branch `main`, build = **Railpack (native)**. There is no `Dockerfile` in this repository — it was removed in c9b6cc5.
 2. Set the port to **3000** and **run a single instance** (pg-boss in-process).
 3. **Environment variables** (copy from Render, then change DB + storage):
 

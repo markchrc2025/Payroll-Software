@@ -18,11 +18,18 @@ on:
 permissions:
   contents: read
 
-# A force-push or a rapid second push should not leave two runs racing; the
-# newest commit is the only one whose verdict matters.
+# On a PULL REQUEST, a force-push or a rapid second push should not leave two
+# runs racing: only the newest commit's verdict matters, so cancel the old one.
+#
+# On MAIN, never cancel. Every commit on main is a permanent record and deserves
+# its own verdict. Unit 0.9 Am 2 proved the cost of getting this wrong: cecd6f3
+# was cancelled 43 seconds after it started because the next merge landed, and
+# that commit has no result at all. A commit with no result looks identical in a
+# run list to one that has not run yet, and neither is a green tick — the same
+# vacuity trap as a green suite full of skips, wearing a different costume.
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gates:

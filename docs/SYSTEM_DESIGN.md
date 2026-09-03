@@ -2,7 +2,8 @@
 
 > **Status:** Living document. Describes the system **as built** (not aspirational).
 > **Product:** Multi-tenant HRIS & Payroll SaaS for Philippine SMEs.
-> **Production:** https://payroll.sentire.solutions (Render) · DB on Supabase · Files on Cloudflare R2.
+> **Production:** https://payroll.sentire.solutions (Sliplane) · DB on Sliplane Postgres · Files on Cloudflare R2.
+> *(Corrected 2026-09-01, unit 0.11: this said Render + Supabase. The migration to Sliplane is `docs/MIGRATION_SLIPLANE.md`; the repo builds via `railpack.json` → `scripts/start.sh`.)*
 
 ---
 
@@ -53,7 +54,7 @@ One codebase serves four user-facing surfaces:
 | **pg-boss job runner** | Executes async jobs & crons inside the Node app (see §5.4) |
 | **Resend** | Outbound transactional email (11-template family, §5.5) |
 | **Cloudflare R2** | Object storage: 201 documents, training certificates, employee photos, logos, kiosk selfies (presigned PUT/GET) |
-| **Supabase Postgres** | System of record; enforces tenant isolation via RLS |
+| **Postgres (Sliplane)** | System of record; enforces tenant isolation via RLS — but see the runtime-role caveat in `docs/MIGRATION_SLIPLANE.md` §env |
 
 ### 2.3 ESS access lifecycle (invite-gated)
 
@@ -138,9 +139,9 @@ single-use token.
 | **AuthN** | NextAuth v5 JWT (httpOnly); credentials + Google + Microsoft Entra ID; separate ESS token sessions (hashed tokens, revocable); kiosk PINs bcrypt-hashed. |
 | **Self-protection** | Users cannot edit their own employee record (`isSelf` guard). |
 | **Reliability of async work** | pg-boss with retry (3×, 60s delay); idempotent crons; email sends are best-effort try/catch so business actions never fail on email misconfig. |
-| **Migrations** | Hand-written, idempotent SQL (`IF NOT EXISTS`, guarded enum/FK/policy creation); validated on a throwaway Postgres (`migrate deploy` + `status` + re-run + drift check) before merge. |
+| **Migrations** | Hand-written, idempotent SQL (`IF NOT EXISTS`, guarded enum/FK/policy creation). CI applies them to a throwaway `postgres:18` and runs `migrate status` on every PR (unit 0.17). **NOT IMPLEMENTED: the re-run and drift checks.** Note the migration set is also **not self-contained** — it GRANTs to roles no migration creates, so CI must pre-create `owner`, `payroll_app` and `sentire_books_app` first (unit 0.21, Track A). |
 | **Timezone correctness** | Per-tenant IANA timezone (default Asia/Manila) anchors DTR day boundaries, NSD window, statutory month-end. |
-| **Ops posture** | Auto squash-merge PR workflow; `tsc`, ESLint, Vitest (225+), `next build` green before every merge. Production DB should run on Supabase Pro (no auto-pause, PITR backups). |
+| **Ops posture** | Auto squash-merge PR workflow. CI (`.github/workflows/ci.yml`, unit 0.17) runs `tsc --noEmit`, ESLint **on changed files only**, and Vitest (387 tests, zero skips) on every PR. **`next build` is deliberately NOT run in CI** — it is SIGTERM-killed in its TypeScript phase on a 7 GB runner (see `docs/CI.md`). **These checks are ADVISORY: there are no required status checks, because branch protection needs GitHub Pro on a private repo, so a red PR can still be merged.** *(Corrected 2026-09-01, unit 0.11: this row claimed all four checks were "green before every merge". No CI existed at all until 2026-09-01 — `gh run list` shows no run ever triggered by `pull_request` or `push` before then.)* |
 
 ---
 
@@ -152,14 +153,14 @@ single-use token.
 |---|---|
 | Framework | **Next.js 16** (App Router, RSC; custom build — see `AGENTS.md`) |
 | Language | TypeScript (strict) |
-| ORM / DB | **Prisma 7** (pg adapter) → **Supabase Postgres 17** (RLS) |
+| ORM / DB | **Prisma 7** (pg adapter) → **Postgres 18** on Sliplane (RLS) |
 | Jobs | **pg-boss** (Postgres-backed queue + cron), registered via instrumentation |
 | Auth | NextAuth v5 (JWT) + bespoke ESS token sessions |
 | Storage | **Cloudflare R2** (S3-compatible; zero-egress) via AWS SDK presigned URLs |
 | Email | **Resend**; hand-built HTML template family in `src/lib/emails/` |
 | UI | React + Tailwind + shadcn-style components; TanStack Table; RHF + Zod |
 | Validation | **Zod** schemas per API route (blank→null preprocessors for optional fields) |
-| Hosting | **Render** web service (Node runtime; jobs run in-process) |
+| Hosting | **Sliplane** app runtime (Railpack native build; jobs run in-process) |
 
 ### 4.2 Component diagram
 
