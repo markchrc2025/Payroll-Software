@@ -22,6 +22,8 @@
 import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
+import { evaluateEssAccess } from "@/lib/ess-access-gate";
+import { captureError } from "@/lib/observability";
 import prismaAdmin from "@/lib/prisma-admin";
 import { withTenant } from "@/lib/with-tenant";
 
@@ -120,9 +122,34 @@ export async function revokeEssSession(
 /**
  * Extract the ESS context from an incoming request.
  *
- * Reads the `Authorization: Bearer <rawToken>` header, hashes it, and
- * verifies it against an active (non-expired, non-revoked) `EssSession`.
- * Returns `null` if no valid session is found.
+ * Reads the `Authorization: Bearer <rawToken>` header, hashes it, verifies it
+ * against an active (non-expired, non-revoked) `EssSession`, AND re-checks the
+ * employee's live entitlement. Returns `null` if any of that fails.
+ *
+ * LIVE STATE, NOT A FROZEN SNAPSHOT (unit 0.19). This used to validate only
+ * `tokenHash`, `expiresAt` and `revokedAt`, so the access gates were enforced
+ * at sign-in and never again: an employee terminated mid-session kept full ESS
+ * access until the token expired (8h by default). That is not a narrow
+ * disclosure — `/api/ess/ot-applications` can auto-approve filed overtime
+ * straight onto a `DTRRecord`, so a terminated employee could fabricate paid OT.
+ *
+ * PULL, NOT PUSH. Revoking sessions when employment ends would be cheaper, but
+ * it is only as complete as the list of paths that remember to do it — and that
+ * list is already short: offboarding, the employee PATCH, soft-delete,
+ * movements and bulk import all change employment state today WITHOUT revoking.
+ * Re-checking here cannot be forgotten by a new path, because every ESS route
+ * authenticates through this one function. Existing revocation is kept as
+ * defence in depth; it is an optimisation, not the guarantee.
+ *
+ * COSTS NO EXTRA ROUND TRIP. The employee row joins into the session lookup
+ * that was already happening, so this is the same single query it always was.
+ *
+ * Returning `null` rather than a typed refusal is deliberate: all 29 ESS routes
+ * already answer `null` with 401, and the ESS client clears its token and
+ * redirects to /ess/login on 401. The employee therefore lands on the sign-in
+ * screen, where unit 0.14's gate answers with the specific reason ("no longer
+ * active", "contact HR"). The detailed copy already exists there; this path
+ * only has to stop working.
  */
 export async function getEssContext(
   req: NextRequest,
@@ -140,19 +167,53 @@ export async function getEssContext(
   // before the session is validated).  Use the admin client (BYPASSRLS) so
   // the lookup succeeds, then hand off to the app-scoped client for all
   // subsequent queries.
+  //
+  // The JOIN is what makes the re-check free: `employeeId` is a FK to the
+  // Employee primary key, so this is a single indexed lookup on a query that
+  // had to run anyway.
   const sessions = await prismaAdmin.$queryRaw<
-    Array<{ id: string; tenantId: string; employeeId: string }>
+    Array<{
+      id: string;
+      tenantId: string;
+      employeeId: string;
+      deletedAt: Date | null;
+      employmentStatus: string;
+      essAccessStatus: string;
+      essDeactivateAt: Date | null;
+    }>
   >`
-    SELECT id, "tenantId", "employeeId"
-    FROM "EssSession"
-    WHERE "tokenHash" = ${tokenHash}
-      AND "expiresAt" > ${now}
-      AND "revokedAt" IS NULL
+    SELECT s.id, s."tenantId", s."employeeId",
+           e."deletedAt", e."employmentStatus",
+           e."essAccessStatus", e."essDeactivateAt"
+    FROM "EssSession" s
+    JOIN "Employee" e ON e.id = s."employeeId"
+    WHERE s."tokenHash" = ${tokenHash}
+      AND s."expiresAt" > ${now}
+      AND s."revokedAt" IS NULL
     LIMIT 1
   `;
 
   if (sessions.length === 0) return null;
   const session = sessions[0]!;
+
+  // The SAME gate the sign-in paths use (units 0.14/0.18) — one implementation,
+  // no third copy. A session is only as good as the entitlement behind it.
+  const access = evaluateEssAccess(session, now);
+  if (!access.allowed) {
+    // Someone holding a valid, unexpired token was refused: their entitlement
+    // changed underneath a live session. Security-relevant, not a routine 401.
+    await captureError(
+      new Error(`ESS session refused mid-flight: ${access.reason}`),
+      {
+        scope: "ess/session:refused",
+        critical: true,
+        reason: access.reason,
+        tenantId: session.tenantId,
+        employeeId: session.employeeId,
+      },
+    );
+    return null;
+  }
 
   return { tenantId: session.tenantId, employeeId: session.employeeId };
 }
