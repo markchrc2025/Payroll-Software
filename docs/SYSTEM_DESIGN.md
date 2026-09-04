@@ -201,10 +201,19 @@ flowchart LR
 ### 4.3 Multi-tenancy model
 
 - Single database, single schema; every tenant-owned row carries `tenantId`.
+> **⚠️ CORRECTED 2026-09-01 (unit 0.11, R118) — the two bullets below are AS-DESIGNED, not as-built.**
+> The role inventory (`db-role-inventory.yml`) measured `owner`: `is_superuser = f`,
+> `has_bypassrls = f`. The bypass is not a role attribute — it is an `admin_bypass`
+> POLICY on every RLS table (`TO owner USING (true)`, unit 0.13). Permissive policies
+> are OR'd, and the runtime client connects as `owner` (`src/lib/prisma.ts:54`), so
+> **tenant isolation is NOT enforced at the database layer today**. Fix: unit 0.7.
+> See `docs/DOC_TRUST.md` §3.2. Note `pg_dump` sets `row_security = off`, ignores
+> policies entirely, and therefore ERRORS — the root cause of unit 0.1's failure.
+
 - **RLS enforced at the DB** (policies + `FORCE`), not just app filters. The app role
   (`payroll_app`) is non-superuser; `withTenant` sets
   `app.current_tenant_id` per transaction (`set_config(..., true)`), safe under pooling.
-- `prismaAdmin` (BYPASSRLS role) is reserved for: auth flows, cross-tenant Central
+- `prismaAdmin` (the **owner** role) is reserved for: auth flows, cross-tenant Central
   Portal operations, public token-authenticated endpoints (ESS activate/reset), and
   system jobs — each of which scopes queries explicitly.
 

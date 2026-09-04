@@ -51,7 +51,7 @@ Each correction cites the commit or file:line that proves the new statement.
 | Document | Was | Now | Evidence |
 |---|---|---|---|
 | `MIGRATION_SLIPLANE.md:7,21,86` | builds from a `Dockerfile` | Railpack native build (`railpack.json` → `scripts/start.sh`) | `Dockerfile` deleted in **c9b6cc5** (PR #193); no `Dockerfile` on disk |
-| `MIGRATION_SLIPLANE.md:65` | *"the default client falls back to `DIRECT_DATABASE_URL` only if set — keep `DATABASE_URL` = `payroll_app` so tenant isolation holds"* | precedence, not fallback: `DIRECT_DATABASE_URL` **wins whenever set** | `src/lib/prisma.ts:54`; `scripts/start.sh:20-22`; `src/lib/with-tenant.ts:18` |
+| `MIGRATION_SLIPLANE.md:65` | *"the default client falls back to `DIRECT_DATABASE_URL` only if set — keep `DATABASE_URL` = `payroll_app` so tenant isolation holds"* | precedence, not fallback: `DIRECT_DATABASE_URL` **wins whenever set**, and the isolation it promises does not hold (§3.2) | `src/lib/prisma.ts:54`; `scripts/start.sh:20-22`; `src/lib/with-tenant.ts:18`; `db-role-inventory.yml` output |
 | `SYSTEM_DESIGN.md:5,56,162,183` | Render + Supabase | Sliplane + Sliplane Postgres | `railpack.json`, `docs/MIGRATION_SLIPLANE.md` |
 | `SYSTEM_DESIGN.md:143` | *"`tsc`, ESLint, Vitest (225+), `next build` green before every merge"* | CI exists since unit 0.17, runs tsc/ESLint-on-diff/Vitest; `next build` deliberately excluded; **advisory, not blocking** | `gh run list` shows no `pull_request`/`push` run before 2026-09-01; `docs/CI.md`; suite is 387 tests |
 | `SYSTEM_DESIGN.md:141` | migrations *"validated … + re-run + drift check before merge"* | CI does `migrate deploy` + `status`; **re-run and drift check NOT IMPLEMENTED** | `.github/workflows/ci.yml` |
@@ -59,6 +59,22 @@ Each correction cites the commit or file:line that proves the new statement.
 | `Tech Stack:12,28` | hosted on Render | Sliplane | as above |
 | `Tech Stack:498` | *"Supabase JWT tokens validated on every API route"* | NextAuth v5; **no Supabase anywhere** | `package.json:53`; zero `@supabase` imports in `src/` |
 | `Payroll Engine_Test_Spec.md:18` | *"CI blocks merge on any failing or missing-coverage engine test"* | no coverage gate exists, and CI cannot block a merge | `coverage` absent from `ci.yml`; `docs/CI.md` |
+
+### Provenance of the corrections (R111)
+
+Every row above is verified against **code in this repository** — a commit, a
+`file:line`, or a measured command — with **one exception, flagged deliberately**:
+
+> The **hosting-facts rows** (`SYSTEM_DESIGN.md:5,56,162,183`, `Tech Stack:12,28`
+> → Sliplane / Sliplane Postgres 18) are **DOCUMENT-VERIFIED, NOT CODE-VERIFIED.**
+> They rest on `railpack.json`, `docs/MIGRATION_SLIPLANE.md` and the CI service
+> pin. Nobody with access to the running deployment has confirmed them. If
+> production is not in fact on Sliplane Postgres 18, one confident wrong
+> statement has been replaced with another.
+>
+> **They stay marked this way until someone confirms them against the live
+> deployment.** Per R111, that caution is the ruling, not a caveat to be tidied
+> away.
 
 ---
 
@@ -77,16 +93,61 @@ nothing else; no file in `src/` queries `pg_roles`, `rolsuper` or
 place that depends on it, located in a module that never implemented it. It is
 load-bearing: Track A acted on this comment. **Owner: Track A (prisma/).**
 
-### 3.2 The runtime database role is unresolved, and the repo contradicts itself
+### 3.2 RESOLVED 2026-09-01 — tenant isolation is NOT enforced at the database layer
 
-`src/lib/prisma.ts:54` resolves `DIRECT_DATABASE_URL ?? DATABASE_URL`, and
-`scripts/start.sh` refuses to boot production without `DIRECT_DATABASE_URL`. So
-the client that `with-tenant.ts` uses for tenant-scoped queries connects with the
-**owner** URL in production. Whether tenant isolation still holds depends on the
-owner role's privileges, and the repository says both things:
+**This is no longer a question.** Mark ran `.github/workflows/db-role-inventory.yml`
+— the workflow unit 0.8 built for exactly this and never ran. Result:
 
-| Source | Claim |
-|---|---|
+```
+connected_as | is_superuser | has_bypassrls | server_version
+owner        | f            | f             | 18.4
+
+Any role usable for pg_dump (superuser OR bypassrls)? → postgres only
+RLS tables MISSING admin_bypass                       → 0 rows
+```
+
+So the owner role does **not** carry the `BYPASSRLS` attribute —
+`docs/RUNBOOK_CREDENTIAL_ROTATION.md:41` was right about that. **But the
+attribute is not what grants the bypass.** Every RLS table carries an
+`admin_bypass` policy, created per unit 0.13 as:
+
+```sql
+CREATE POLICY admin_bypass ON <table> TO owner USING (true);
+```
+
+Permissive policies are **OR'd**, so for `owner` every table evaluates
+`tenant_isolation OR true`. And the runtime client connects as `owner`
+(`src/lib/prisma.ts:54` resolves `DIRECT_DATABASE_URL ?? DATABASE_URL`;
+`scripts/start.sh:20-22` refuses to boot production without it;
+`src/lib/with-tenant.ts:18` imports that same client and relies on RLS).
+
+> **Confirmed, not inferred: tenant isolation is not enforced at the database
+> layer.** Whatever isolation exists in production today is application-level
+> filtering. **Fix: unit 0.7 (Track B, in flight).** Track C does not own
+> `src/lib/prisma*.ts`.
+
+#### The policy-versus-attribute distinction is also the root cause of unit 0.1's failure
+
+The earlier claims were wrong about the **mechanism** and right about the
+**effect** — but only for reads, and that difference is what broke backups:
+
+| Path | Consults policies? | Outcome for `owner` |
+|---|---|---|
+| Ordinary query | yes | `tenant_isolation OR true` → **sees every row** |
+| `pg_dump` | **no** — it sets `row_security = off` | **errors out** |
+
+`pg_dump` does not evaluate `admin_bypass` at all; with `row_security = off` it
+refuses rather than silently under-dumping. That is precisely why unit 0.1 failed
+with *"query would be affected by row-level security policy for table
+Announcement"*. **Same mechanism, opposite outcomes for reads and dumps** — which
+is why "owner is BYPASSRLS" looked true from the application and false from the
+backup job, and why nobody reconciled the two for months.
+
+Corrected in this unit: `.github/workflows/db-backup.yml:12,115` and
+`docs/SYSTEM_DESIGN.md:206-207`, which both attributed the bypass to a role
+attribute rather than a policy.
+
+---|---|
 | `.github/workflows/db-backup.yml:12,115` | owner is **BYPASSRLS** |
 | `docs/SYSTEM_DESIGN.md:206` | `prismaAdmin` is a **BYPASSRLS role** |
 | `docs/RUNBOOK_CREDENTIAL_ROTATION.md:41` | owner has `FORCE ROW LEVEL SECURITY` and **no BYPASSRLS** |

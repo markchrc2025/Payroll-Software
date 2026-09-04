@@ -80,14 +80,16 @@ Notes:
   > does **not** keep tenant traffic on the app role — `src/lib/with-tenant.ts:18`
   > imports this same default client and relies on RLS.
   >
-  > **Whether tenant isolation actually holds at runtime is UNRESOLVED**, because the
-  > repository contradicts itself about the owner role's privileges:
-  > `.github/workflows/db-backup.yml:12` and `docs/SYSTEM_DESIGN.md:206` call it
-  > BYPASSRLS, while `docs/RUNBOOK_CREDENTIAL_ROTATION.md:41` says it has
-  > `FORCE ROW LEVEL SECURITY` and **no** BYPASSRLS. Unit 0.8 already flagged the
-  > role inventory as unverified and built `.github/workflows/db-role-inventory.yml`
-  > to settle it. **Run that inventory before trusting either reading.** Track C
-  > cannot fix this: the fix is in `src/lib/`, which Track C does not own.
+  > **RESOLVED 2026-09-01 (R118): tenant isolation is NOT enforced at the database
+  > layer.** The role inventory measured `owner` as `is_superuser = f`,
+  > `has_bypassrls = f` — but the bypass never came from the attribute. Every RLS
+  > table carries an `admin_bypass` POLICY (`TO owner USING (true)`, unit 0.13),
+  > permissive policies are OR'd, and the runtime client connects as `owner`. So
+  > every table evaluates `tenant_isolation OR true`.
+  >
+  > **Fix: unit 0.7 (Track B, in flight).** Track C does not own `src/lib/prisma*.ts`.
+  > Full analysis, including why `pg_dump` errors where ordinary queries succeed,
+  > is in `docs/DOC_TRUST.md` §3.2.
 
 ---
 
