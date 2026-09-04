@@ -9,7 +9,7 @@ name: DB Backup (off-platform, encrypted)
 # the pieces: GitHub runs it, Sliplane holds the live DB, Cloudflare R2 holds the
 # copy. See docs/BACKUPS.md.
 #
-# Safety: `pg_dump` only READS, via the owner (BYPASSRLS) role — no RLS policy or
+# Safety: `pg_dump` only READS, via the owner role — no RLS policy or
 # DB role is ever altered. The dump is gpg AES-256 encrypted before it leaves the
 # runner. The app never holds any backup credential.
 
@@ -112,7 +112,18 @@ jobs:
           DUMP_KEY="db/${TS}.dump.gpg"
           MANIFEST_KEY="db/${TS}.dump.manifest.json"
 
-          # 1) full, consistent custom-format dump. Owner/BYPASSRLS role => all rows.
+          # 1) full, consistent custom-format dump.
+          # CORRECTED 2026-09-01 (unit 0.11, R118): this said "Owner/BYPASSRLS role
+          # => all rows". The owner does NOT hold the BYPASSRLS attribute — the
+          # role inventory measured has_bypassrls = f. What the owner has is an
+          # `admin_bypass` POLICY on every RLS table (unit 0.13,
+          # `CREATE POLICY admin_bypass ON <t> TO owner USING (true)`), and
+          # permissive policies are OR'd, so ordinary queries see every row.
+          # pg_dump is NOT an ordinary query: it sets `row_security = off` and does
+          # not consult policies at all, so it ERRORS instead of dumping. That is
+          # the root cause of unit 0.1's failure ("query would be affected by
+          # row-level security policy for table Announcement"). Only a role with
+          # the real attribute (here: `postgres`) can dump.
           #    Absolute path so the runner's older default pg_dump can't shadow v18.
           "$PG_BIN/pg_dump" -Fc "$BACKUP_DATABASE_URL" > db.dump
           SIZE_PLAIN=$(stat -c%s db.dump)

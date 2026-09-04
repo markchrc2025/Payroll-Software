@@ -15,7 +15,8 @@ This is the "post-engine" regression net referenced in the build sequence — wr
 3. **Golden cases, not smoke tests.** Each test asserts an exact expected amount (in centavos), not merely "returns a number" or "does not throw."
 4. **Integer centavos everywhere.** All monetary assertions are in integer centavos. A test fails if any monetary value is a floating-point number at rest.
 5. **Determinism & effective-dating.** Re-running the same inputs yields byte-identical output. A computation for a past period uses that period's effective-dated tables regardless of the current system date.
-6. **Tests travel with the engine.** Each engine module ships with its tests in the same change. CI blocks merge on any failing or missing-coverage engine test.
+6. **Tests travel with the engine.** Each engine module ships with its tests in the same change.
+   > *Corrected 2026-09-01 (unit 0.11): this said "CI blocks merge on any failing or missing-coverage engine test." Neither half was true. No CI existed until unit 0.17. Today CI runs the full suite on every PR, but (a) **there is no coverage gate at all** — `coverage` appears nowhere in `.github/workflows/ci.yml` — and (b) **CI cannot block a merge**, because required status checks need GitHub Pro on a private repo (`docs/CI.md`). A red PR is still mergeable.*
 
 **Framework:** Vitest. **Assumed rounding policy:** round half up to the centavo (the policy set in the `src/lib/money/` module, Blueprint §4). If a different mode is chosen, the rounded expected values below shift accordingly; the unrounded arithmetic does not.
 

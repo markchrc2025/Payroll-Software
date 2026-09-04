@@ -127,6 +127,50 @@ whoever owns `prisma/`.
 
 ---
 
+## The lint baseline — `scripts/lint-baseline.sh`
+
+Three tracks were each retyping the same `sed | md5sum` pipeline by hand to
+report lint state. A baseline that depends on retyping a pipeline correctly is
+not a baseline, so the normalisation is now committed:
+
+```bash
+bash scripts/lint-baseline.sh                 # report this checkout
+bash scripts/lint-baseline.sh <base-commit>   # and diff against that commit
+```
+
+### What it reports, and why the hash alone is not enough
+
+| Field | Meaning |
+|---|---|
+| **COUNT** | problems / errors / warnings. The md5 is **not insertion-independent** — one finding appearing or disappearing anywhere shifts it without saying how much moved. The count is what makes a change legible. |
+| **RAW** | md5 of ESLint's output verbatim. A property of the **path and the commit together**: ESLint pads columns to the longest absolute path, so a different worktree gives a different raw hash for identical findings. |
+| **NORM** | md5 after stripping the worktree root and collapsing whitespace runs. **Worktree-independent — this is the durable value.** |
+
+It also prints the HEAD sha and refuses to present a dirty tree's numbers as a
+baseline.
+
+### The base-commit argument, and the trap it closes
+
+"Diff the lint against `main`" goes **vacuous the moment a unit merges**, because
+the branch *is* `main` and the diff is empty — the check stops working exactly
+when a unit closes and someone most wants the answer. So the comparison is
+pinned to an explicit commit, defaulting to the **merge-base** with `origin/main`
+rather than to `origin/main` itself. Passing a base that equals HEAD is refused
+outright rather than reported as "no change".
+
+Post-merge, pass the **pre-merge `main` sha**:
+
+```bash
+bash scripts/lint-baseline.sh 4dfd70221b8501dc09315df15a0e93ce8f8064f3
+```
+
+### Authoritative baselines
+
+Stated on merged `main` at the bottom of this document's history and in
+`docs/DECISIONS.md`. Report all three values, always — count included.
+
+---
+
 ## Why a green run with skipped tests is treated as a FAILURE
 
 This is the point of the unit, so it is worth stating plainly.

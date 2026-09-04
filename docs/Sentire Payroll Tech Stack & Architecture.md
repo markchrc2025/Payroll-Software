@@ -9,7 +9,7 @@
 
 | Layer | Technology | Hosting / Provider |
 |---|---|---|
-| Frontend Framework | Next.js 14+ (App Router) | Render |
+| Frontend Framework | Next.js 16.2.6 (App Router) | Sliplane |
 | Language | TypeScript | — |
 | UI Components | shadcn/ui + Tailwind CSS | — |
 | Database | PostgreSQL (via Supabase) | Supabase (Singapore) |
@@ -25,7 +25,7 @@
 | SMS Notifications | Semaphore PH | Semaphore |
 | PDF Generation | @react-pdf/renderer | Server-side |
 | Excel / CSV | SheetJS (xlsx) | Server-side |
-| ESS Mobile | Next.js PWA (next-pwa) | Render |
+| ESS Mobile | Next.js (App Router) | Sliplane |
 | Error Tracking | Sentry | Sentry Cloud |
 | CI/CD | GitHub Actions | GitHub |
 
@@ -73,7 +73,9 @@ Sentire Payroll is a **multi-tenant SaaS** built on a monolithic Next.js applica
 
 ## 2. Frontend Layer
 
-### Framework — Next.js 14+ (App Router)
+### Framework — Next.js 16.2.6 (App Router)
+
+> *Corrected 2026-09-01 (unit 0.11): this document said "Next.js 14+". `package.json:52` pins `"next": "16.2.6"`, and `AGENTS.md` warns that this major differs from training-data conventions.*
 
 The entire platform is built on **Next.js with the App Router**. This covers both the Admin Portal and the ESS PWA under a single codebase, separated by route groups:
 
@@ -494,8 +496,8 @@ npx inngest-cli@latest dev
 
 | Concern | Implementation |
 |---|---|
-| Multi-tenant data isolation | Supabase RLS — enforced at database level, not just application |
-| API authentication | Supabase JWT tokens validated on every API route |
+| Multi-tenant data isolation | Postgres RLS — enforced at database level, not just application. **Caveat:** the runtime client resolves `DIRECT_DATABASE_URL ?? DATABASE_URL` (`src/lib/prisma.ts:54`), so which role serves tenant traffic in production is unresolved — see `docs/MIGRATION_SLIPLANE.md` §env. |
+| API authentication | **NOT SUPABASE.** NextAuth v5 (`next-auth ^5.0.0-beta.31`, `package.json:53`); there is no `@supabase/*` dependency and no `@supabase` import anywhere in `src/`. *(Corrected 2026-09-01, unit 0.11.)* |
 | File access control | Signed URLs with 15-minute expiry — no public bucket access |
 | Bank account fraud prevention | Profile Update Request workflow — changes require HR Admin approval before commit |
 | Geofence tampering prevention | Haversine distance computed server-side — client only sends coordinates |
