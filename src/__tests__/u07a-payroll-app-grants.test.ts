@@ -1,5 +1,5 @@
 /**
- * Unit 0.7, stop-check A1 — payroll_app holds the grants the runtime needs.
+ * Unit 0.7, stop-check A1: payroll_app holds the grants the runtime needs.
  *
  * Migration 20261110000000_payroll_app_runtime_grants grants the whole public
  * schema once and sets DEFAULT PRIVILEGES. Before it, payroll_app had full
@@ -27,7 +27,7 @@ const describeDb = DB ? describe : describe.skip;
 
 const VERBS = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 
-describeDb("unit 0.7 A1 — payroll_app grants", () => {
+describeDb("unit 0.7 A1: payroll_app grants", () => {
   let c: pg.Client;
   const probeTable = `u07a_probe_${randomBytes(4).toString("hex")}`;
 
