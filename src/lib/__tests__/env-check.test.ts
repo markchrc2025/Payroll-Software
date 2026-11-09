@@ -13,7 +13,8 @@ beforeEach(() => {
   process.env.DATABASE_URL = "postgresql://u:p@h:6543/db";
   process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
   process.env.EMAIL_ASSET_BASE_URL = "https://cdn.example.com/email-assets";
-  delete process.env.DIRECT_DATABASE_URL;
+  // Unit 0.7: both URLs are required; neither stands in for the other.
+  process.env.DIRECT_DATABASE_URL = "postgresql://o:p@h:5432/db";
 });
 afterEach(() => {
   process.env = { ...SAVED };
@@ -43,10 +44,17 @@ describe("checkCriticalEnv", () => {
     expect(problems.some((p) => p.name === "DATABASE_URL")).toBe(true);
   });
 
-  it("accepts DIRECT_DATABASE_URL as the database url", () => {
+  // Unit 0.7 replaced "accepts DIRECT_DATABASE_URL as the database url": that
+  // fallback is the precedence bug that let the owner serve tenant traffic.
+  it("does NOT accept DIRECT_DATABASE_URL in place of DATABASE_URL (unit 0.7)", () => {
     delete process.env.DATABASE_URL;
     process.env.DIRECT_DATABASE_URL = "postgresql://u:p@h:5432/db";
-    expect(checkCriticalEnv().some((p) => p.name === "DATABASE_URL")).toBe(false);
+    expect(checkCriticalEnv().some((p) => p.name === "DATABASE_URL")).toBe(true);
+  });
+
+  it("flags a missing DIRECT_DATABASE_URL even when DATABASE_URL is set (unit 0.7)", () => {
+    delete process.env.DIRECT_DATABASE_URL;
+    expect(checkCriticalEnv().map((p) => p.name)).toEqual(["DIRECT_DATABASE_URL"]);
   });
 });
 

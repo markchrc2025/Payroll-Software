@@ -19,11 +19,21 @@ export interface EnvProblem {
 export function checkCriticalEnv(): EnvProblem[] {
   const problems: EnvProblem[] = [];
 
-  // DATABASE_URL — required for everything.
-  if (!process.env.DATABASE_URL && !process.env.DIRECT_DATABASE_URL) {
+  // Unit 0.7: two connection strings, two roles, no fallback between them.
+  if (!process.env.DATABASE_URL) {
     problems.push({
       name: "DATABASE_URL",
-      detail: "No database connection string is set.",
+      detail:
+        "Not set. The runtime client connects as the RLS-constrained app role " +
+        "(payroll_app) and no longer falls back to DIRECT_DATABASE_URL.",
+    });
+  }
+  if (!process.env.DIRECT_DATABASE_URL) {
+    problems.push({
+      name: "DIRECT_DATABASE_URL",
+      detail:
+        "Not set. prismaAdmin, the job queue and migrations connect as the owner " +
+        "role and no longer fall back to DATABASE_URL.",
     });
   }
 

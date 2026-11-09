@@ -67,6 +67,8 @@ describe("unit 0.6 — /api/health liveness (T3)", () => {
   it("T3e: a missing ALERT_EMAIL_TO is a WARNING, never a critical problem", async () => {
     delete process.env.ALERT_EMAIL_TO;
     process.env.DATABASE_URL = "postgresql://u:p@h:5432/db";
+    // Unit 0.7: both URLs are required now; neither falls back to the other.
+    process.env.DIRECT_DATABASE_URL = "postgresql://o:p@h:5432/db";
     process.env.ENCRYPTION_KEY = Buffer.alloc(32).toString("base64");
     const res = await GET();
     const body = await res.json();

@@ -22,6 +22,11 @@ if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "::error:: DATABASE_URL (payroll_app, the RLS-constrained runtime role) is not set. Unit 0.7: the runtime client no longer falls back to DIRECT_DATABASE_URL." >&2
+  exit 1
+fi
+
 # 0.21: the migration set GRANTs to roles it never creates. Create any that are
 # missing (NOLOGIN, no elevated attributes); a no-op where they already exist.
 # Fail-closed like migrate: if a role is missing and cannot be created, stop.
@@ -30,5 +35,14 @@ node scripts/db/ensure-roles.mjs
 
 echo "[start] Applying database migrations (prisma migrate deploy)…"
 "$BIN/prisma" migrate deploy
-echo "[start] Migrations up to date — starting Next.js"
+echo "[start] Migrations up to date"
+
+# Unit 0.7, fail-closed: the runtime client must connect as a role RLS
+# constrains (not superuser, not BYPASSRLS, not a table owner, no USING (true)
+# policy, full grants). Otherwise refuse to start: with Dokploy's health check
+# and rollback configured, the previous version keeps serving.
+echo "[start] Checking the runtime database role…"
+node scripts/db/assert-runtime-role.mjs
+
+echo "[start] Starting Next.js"
 exec "$BIN/next" start

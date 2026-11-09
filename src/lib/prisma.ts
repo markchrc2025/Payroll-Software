@@ -8,6 +8,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { encrypt, decrypt, ENCRYPTED_FIELDS, hmac, HMAC_COMPANIONS } from "./crypto";
+import { lazyClient, runtimeDatabaseUrl } from "./db-urls";
 
 function encryptArgs(model: string, data: unknown): unknown {
   const fields = ENCRYPTED_FIELDS[model];
@@ -51,7 +52,10 @@ function decryptResult(model: string, result: unknown): unknown {
 }
 
 function createPrismaClient() {
-  const connectionString = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!;
+  // Unit 0.7: DATABASE_URL ONLY (payroll_app, which RLS constrains). The old
+  // `DIRECT_DATABASE_URL ?? DATABASE_URL` let the owner win whenever both were
+  // set, so in production RLS isolated nothing (#214).
+  const connectionString = runtimeDatabaseUrl();
   const adapter = new PrismaPg({ connectionString });
   const base = new PrismaClient({
     adapter,
@@ -119,15 +123,21 @@ function createPrismaClient() {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var prismaGlobal: undefined | ReturnType<typeof createPrismaClient>;
 }
 
-const prisma: ReturnType<typeof createPrismaClient> =
-  globalThis.prismaGlobal ?? createPrismaClient();
+let instance: ReturnType<typeof createPrismaClient> | undefined;
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prismaGlobal = prisma;
+function getPrisma(): ReturnType<typeof createPrismaClient> {
+  instance ??= globalThis.prismaGlobal ?? createPrismaClient();
+  if (process.env.NODE_ENV !== "production") {
+    globalThis.prismaGlobal = instance;
+  }
+  return instance;
 }
+
+// Constructed on first use, so a missing DATABASE_URL throws at the first
+// query (and in scripts/db/assert-runtime-role.mjs at boot), not at import.
+const prisma: ReturnType<typeof createPrismaClient> = lazyClient(getPrisma);
 
 export default prisma;
