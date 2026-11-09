@@ -17,6 +17,7 @@
     "scan:secrets": "bash scripts/scan-secrets.sh",
     "db:migrate": "prisma migrate deploy",
     "start": "bash scripts/start.sh",
+    "test:integration": "tsx scripts/integration/harness.ts",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
