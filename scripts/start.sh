@@ -22,6 +22,12 @@ if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+# 0.21: the migration set GRANTs to roles it never creates. Create any that are
+# missing (NOLOGIN, no elevated attributes); a no-op where they already exist.
+# Fail-closed like migrate: if a role is missing and cannot be created, stop.
+echo "[start] Ensuring database roles the migrations depend on…"
+node scripts/db/ensure-roles.mjs
+
 echo "[start] Applying database migrations (prisma migrate deploy)…"
 "$BIN/prisma" migrate deploy
 echo "[start] Migrations up to date — starting Next.js"
