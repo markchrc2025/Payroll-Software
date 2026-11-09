@@ -1,5 +1,5 @@
 /**
- * Unit 0.21 — a fresh database cannot migrate: no migration creates `payroll_app`.
+ * Unit 0.21: a fresh database cannot migrate: no migration creates `payroll_app`.
  *
  * scripts/db/ensure-roles.mjs runs before `prisma migrate deploy` in
  * scripts/start.sh and in CI. The END-TO-END proof is CI itself: its container
@@ -35,7 +35,7 @@ const NEVER_CREATED = `u21_never_${suffix}`;
 
 const quiet = () => {};
 
-describe("unit 0.21 — role list (T1)", () => {
+describe("unit 0.21: role list (T1)", () => {
   it("always ensures payroll_app, and de-duplicates", () => {
     expect(rolesToEnsure([])).toEqual(["payroll_app"]);
     expect(rolesToEnsure(["owner", "payroll_app", "owner"])).toEqual(["payroll_app", "owner"]);
@@ -49,7 +49,7 @@ describe("unit 0.21 — role list (T1)", () => {
   );
 });
 
-describeDb("unit 0.21 — ensure-roles against a real Postgres (T2–T4)", () => {
+describeDb("unit 0.21: ensure-roles against a real Postgres (T2–T4)", () => {
   let admin: pg.Client;
 
   const attrs = async (name: string) =>
@@ -117,7 +117,7 @@ describeDb("unit 0.21 — ensure-roles against a real Postgres (T2–T4)", () =>
   });
 });
 
-describe("unit 0.21 — start.sh ordering (T5)", () => {
+describe("unit 0.21: start.sh ordering (T5)", () => {
   const sh = readFileSync("scripts/start.sh", "utf8")
     .split("\n")
     .filter((l) => !l.trimStart().startsWith("#"))
