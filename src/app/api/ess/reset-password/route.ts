@@ -49,22 +49,48 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await hashEssPassword(password);
-    await prismaAdmin.$transaction([
-      prismaAdmin.employee.update({
+
+    // Unit 0.15 review. One interactive transaction, in this order:
+    //   1. CONSUME the token atomically (usedAt still null), so two requests
+    //      racing with the same link cannot both set a password; the loser
+    //      gets the same "invalid or expired" answer and writes nothing.
+    //   2. Set the password. A reset on a not-yet-activated (INVITED) account
+    //      also activates it: the link went to the work email, which is the
+    //      same proof the activation link relies on.
+    //   3. Revoke every open ESS session. A reset is what someone does when
+    //      they think the account is compromised; sessions opened with the
+    //      old password must not outlive it.
+    //   4. Retire any other unused reset links for this employee.
+    const consumed = await prismaAdmin.$transaction(async (tx) => {
+      const now = new Date();
+      const claim = await tx.essPasswordReset.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: now },
+      });
+      if (claim.count !== 1) return false;
+
+      await tx.employee.update({
         where: { id: emp.id },
         data: {
           essPasswordHash: passwordHash,
-          // A reset on a not-yet-activated account also activates it.
           ...(emp.essAccessStatus === "INVITED"
-            ? { essAccessStatus: "ACTIVE", essActivatedAt: new Date() }
+            ? { essAccessStatus: "ACTIVE", essActivatedAt: now }
             : {}),
         },
-      }),
-      prismaAdmin.essPasswordReset.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+      await tx.essSession.updateMany({
+        where: { employeeId: emp.id, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.essPasswordReset.updateMany({
+        where: { employeeId: emp.id, usedAt: null },
+        data: { usedAt: now },
+      });
+      return true;
+    });
+    if (!consumed) {
+      return err("This reset link is invalid or has expired. Request a new one.", 400);
+    }
 
     // Security notice (best-effort).
     if (emp.workEmail) {
