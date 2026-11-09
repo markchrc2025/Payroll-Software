@@ -128,7 +128,8 @@ export async function POST(req: NextRequest) {
     });
 
     // Snapshot the DTR approval chain. If no approvers resolve, the submission
-    // is immediately final-approved (eligible for payroll).
+    // is final-approved (eligible for payroll) ONLY when a second party with
+    // TIMESHEETS:APPROVE submitted it; one's own stays SUBMITTED (unit 0.22).
     const snap = await snapshotApprovalChain(tx, {
       module: "DTR",
       entityId: submission.id,
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
       tenantId: auth.tenantId,
     });
 
-    if (snap.activeSteps === 0) {
+    if (snap.activeSteps === 0 && !isSelf && isApprover) {
       await tx.dTRSubmission.update({
         where: { id: submission.id },
         data: { status: "MANAGER_APPROVED" },

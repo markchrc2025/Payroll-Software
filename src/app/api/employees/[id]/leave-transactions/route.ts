@@ -19,6 +19,7 @@ import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
 import { splitLeaveUnits, resolveOrCreateBalance } from "@/lib/leave/filing";
 import { finalizeLeaveApproval } from "@/lib/leave/apply-to-dtr";
+import { isSecondPartyApprover } from "@/lib/approvals/second-party";
 
 export async function GET(
   req: NextRequest,
@@ -126,8 +127,13 @@ export async function POST(
       tenantId: auth.tenantId,
     });
 
-    // No resolvable approvers → auto-approve, debit paid units, write DTR.
-    if (snap.activeSteps === 0) {
+    // No resolvable approvers: approve now ONLY if the filer is a second party
+    // with LEAVES:APPROVE (unit 0.22). Otherwise it stays PENDING for HR; it
+    // used to auto-approve for ANY filer, the employee included.
+    if (
+      snap.activeSteps === 0 &&
+      (await isSecondPartyApprover(tx, auth, employeeId, "LEAVE"))
+    ) {
       const updated = await tx.leaveTransaction.update({
         where: { id: leaveTransaction.id },
         data: { approvalStatus: "APPROVED", approvedAt: new Date() },
