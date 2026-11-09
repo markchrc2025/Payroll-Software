@@ -1,5 +1,5 @@
 /**
- * Unit 0.7, T6 — every table carrying tenantId has the full RLS shape.
+ * Unit 0.7, T6: every table carrying tenantId has the full RLS shape.
  *
  * Catches a future migration that adds a tenant table without RLS. The rule is
  * hand-written here (REP-2), not read from any migration:
@@ -33,7 +33,7 @@ type Row = {
   bypass: boolean;
 };
 
-describeDb("unit 0.7 T6 — RLS shape on every tenant table", () => {
+describeDb("unit 0.7 T6: RLS shape on every tenant table", () => {
   let c: pg.Client;
   let rows: Row[];
 
