@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,8 +46,6 @@ type OTApplication = {
   employee: { id: string; employeeNumber: string; firstName: string; lastName: string };
 };
 
-type Employee = { id: string; employeeNumber: string; firstName: string; lastName: string };
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -72,7 +70,6 @@ function statusBadgeVariant(s: string): "default" | "secondary" | "outline" | "d
 
 export default function OTApplicationsPage() {
   const [applications, setApplications] = useState<OTApplication[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
@@ -82,28 +79,14 @@ export default function OTApplicationsPage() {
   const [filterDateTo, setFilterDateTo] = useState("");
 
   // Sheets
-  const [createOpen, setCreateOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<OTApplication | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  // Create form
-  const [form, setForm] = useState({
-    employeeId: "",
-    date: "",
-    hoursRequested: "",
-    justification: "",
-  });
   const [saving, setSaving] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Data loading
   // ---------------------------------------------------------------------------
-
-  const loadEmployees = useCallback(async () => {
-    const res = await fetch("/api/employees?limit=500&status=ACTIVE");
-    const json = await res.json();
-    setEmployees(json.data ?? []);
-  }, []);
 
   const loadApplications = useCallback(async () => {
     setLoading(true);
@@ -118,36 +101,11 @@ export default function OTApplicationsPage() {
     setLoading(false);
   }, [filterStatus, filterDateFrom, filterDateTo]);
 
-  useEffect(() => { loadEmployees(); }, [loadEmployees]);
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
-
-  async function handleCreate() {
-    if (!form.employeeId) { toast.error("Select an employee"); return; }
-    if (!form.date) { toast.error("Date is required"); return; }
-    if (!form.hoursRequested || Number(form.hoursRequested) <= 0) { toast.error("Hours requested must be > 0"); return; }
-    if (!form.justification.trim()) { toast.error("Justification is required"); return; }
-
-    setSaving(true);
-    const res = await fetch(`/api/employees/${form.employeeId}/ot-applications`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: form.date,
-        hours: parseFloat(form.hoursRequested),
-        justification: form.justification.trim(),
-      }),
-    });
-    const json = await res.json();
-    setSaving(false);
-    if (!res.ok) { toast.error(json.error ?? "Failed to create OT application"); return; }
-    toast.success("OT application created");
-    setCreateOpen(false);
-    loadApplications();
-  }
 
   async function handleApprove(app: OTApplication) {
     const res = await fetch(`/api/ot-applications/${app.id}/approve`, { method: "POST" });
@@ -223,9 +181,9 @@ export default function OTApplicationsPage() {
           <Button variant="outline" size="sm" onClick={loadApplications} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => { setForm({ employeeId: "", date: "", hoursRequested: "", justification: "" }); setCreateOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1.5" /> New Application
-          </Button>
+          {/* PAY-121 (ruling B6): no one files OT for another employee.
+              Employees file their own in ESS; HR approves here. */}
+          <span className="self-center text-xs text-muted-foreground">Employees file OT in ESS</span>
         </div>
       </div>
 
@@ -310,57 +268,6 @@ export default function OTApplicationsPage() {
         <p className="text-xs text-muted-foreground text-right">Showing 50 of {total} applications.</p>
       )}
 
-      {/* Create Sheet */}
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-sm">
-          <SheetHeader>
-            <SheetTitle>New OT Application</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 space-y-5">
-            <div className="space-y-1.5">
-              <Label>Employee <span className="text-destructive">*</span></Label>
-              <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v ?? "" })}>
-                <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.lastName}, {e.firstName} ({e.employeeNumber})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Date <span className="text-destructive">*</span></Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Hours Requested <span className="text-destructive">*</span></Label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24"
-                placeholder="2.0"
-                value={form.hoursRequested}
-                onChange={(e) => setForm({ ...form, hoursRequested: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Justification <span className="text-destructive">*</span></Label>
-              <Textarea rows={4} value={form.justification} onChange={(e) => setForm({ ...form, justification: e.target.value })} />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button className="flex-1" onClick={handleCreate} disabled={saving}>
-                {saving ? "Submitting…" : "Submit Application"}
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Reject Sheet */}
       <Sheet open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
         <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
