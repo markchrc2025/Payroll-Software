@@ -19,13 +19,28 @@
 # does NOT (PII, for one; unit 0.8's actual leak would have sailed through).
 set -uo pipefail
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 0
+
+# ── Unit 0.16: filename guard, before the secret scan ───────────────────────
+# Refuses newly ADDED files named like a pasted command (` -h `, `SELECT `,
+# `psql`, quotes) and new files at the repo root that are not allowlisted.
+# Unit 0.8's leak was exactly that, and its contents were PII, which no secret
+# scanner flags. Runs even with SKIP_SECRET_SCAN=1; its own bypass is
+# SKIP_FILENAME_GUARD=1 (or --no-verify). Skipped on a branch that predates it.
+if [ -f "$REPO_ROOT/scripts/check-filenames.mjs" ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    printf '\n\033[1;31m[filename-guard] BLOCKED: node is not on PATH, so added file names cannot be checked.\033[0m\n' >&2
+    printf '  Install Node, or commit deliberately with: git commit --no-verify\n\n' >&2
+    exit 1
+  fi
+  node "$REPO_ROOT/scripts/check-filenames.mjs" --staged >/dev/null || exit 1
+fi
+
 if [ "${SKIP_SECRET_SCAN:-}" = "1" ]; then
   printf '\033[33m[secret-scan] SKIPPED via SKIP_SECRET_SCAN=1.\033[0m\n' >&2
   exit 0
 fi
-
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT" || exit 0
 
 CONFIG="$REPO_ROOT/.gitleaks.toml"
 

@@ -365,6 +365,11 @@ jobs:
             --report-format template --report-template .githooks/gitleaks-report.tmpl \
             --report-path -
 
+      # Unit 0.16: the same filename guard the pre-commit hook runs, over the
+      # files this range ADDS, so a bypassed or missing hook is caught here.
+      - name: Filename guard over files the range adds
+        run: node scripts/check-filenames.mjs --range '${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}'
+
       - name: What to do if this job is red
         if: failure()
         run: |
