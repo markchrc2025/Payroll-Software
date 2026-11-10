@@ -28,14 +28,16 @@ import {
   type PhilHealthSchedulePayload,
   type SssSchedulePayload,
 } from "../src/lib/statutory/types";
+import { adminDatabaseUrl } from "../src/lib/db-urls";
 
 // ---------------------------------------------------------------------------
 // Connection (admin / BYPASSRLS — DIRECT_DATABASE_URL).
 // ---------------------------------------------------------------------------
-const url = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
-if (!url) {
-  throw new Error("DIRECT_DATABASE_URL or DATABASE_URL must be set");
-}
+// PAY-54 (unit 0.7 follow-up): operator scripts connect ONLY as the owner role via
+// DIRECT_DATABASE_URL. They used to fall back to DATABASE_URL, which after the
+// runtime switch is payroll_app under RLS: a script would then read nothing and
+// report an empty database instead of failing. adminDatabaseUrl() throws instead.
+const url = adminDatabaseUrl();
 const pool = new Pool({ connectionString: url });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
