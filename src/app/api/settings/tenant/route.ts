@@ -84,7 +84,12 @@ const patchSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
-  // @permission-exempt: the company's own name and branding, shown on every screen (unit 0.25)
+  // Unit 0.25, Mark's ruling of 10 Nov: locked. This returns the company's
+  // payroll rules (pay cycle, statutory cutoff, 13th month basis, maximum
+  // deduction %, night-differential window, employee ID numbering), not just
+  // branding. Only the Settings screens call it; the logo stays open.
+  const denied = await forbidUnless(auth, ["SETTINGS", "READ"]);
+  if (denied) return denied;
 
   const tenant = await withTenant(auth.tenantId, (tx) =>
     tx.tenant.findFirst({

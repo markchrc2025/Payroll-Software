@@ -21,6 +21,10 @@
  * B6  loans need PAYROLL:READ.
  * B7  an account with no role is refused; SUPER_ADMIN passes.
  * B8  submitting someone else's expense claim is refused (ruling B6).
+ * B9  the company payroll rules (settings/tenant) need SETTINGS:READ (Mark,
+ *     10 Nov: lock it).
+ * B10 the org chart is read-only for everyone (Mark, 10 Nov): any role can
+ *     read it; changing a reporting line needs EMPLOYEES:UPDATE.
  */
 import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -42,6 +46,9 @@ import { POST as approveMovement } from "@/app/api/movements/[id]/approve/route"
 import { GET as employmentTerms } from "@/app/api/employees/[id]/employment-terms/route";
 import { GET as listLoans } from "@/app/api/loans/route";
 import { POST as submitExpense } from "@/app/api/expense-claims/[id]/submit/route";
+import { GET as tenantSettings } from "@/app/api/settings/tenant/route";
+import { GET as orgChart } from "@/app/api/org-chart/route";
+import { PATCH as reassign } from "@/app/api/org-chart/reassign/route";
 
 // ── S1: the static gate ──────────────────────────────────────────────────────
 
@@ -92,6 +99,8 @@ const ROLE = {
   hrRead: `u25hrread${sfx}`,
   payrollRead: `u25payroll${sfx}`,
   approver: `u25approve${sfx}`,
+  settingsRead: `u25setread${sfx}`,
+  hrEdit: `u25hredit${sfx}`,
 } as const;
 const GRANTS: Record<keyof typeof ROLE, [string, string][]> = {
   narrow: [["TIMESHEETS", "READ"]],
@@ -101,6 +110,8 @@ const GRANTS: Record<keyof typeof ROLE, [string, string][]> = {
   hrRead: [["EMPLOYEES", "READ"]],
   payrollRead: [["PAYROLL", "READ"]],
   approver: [["EMPLOYEES", "APPROVE"]],
+  settingsRead: [["SETTINGS", "READ"]],
+  hrEdit: [["EMPLOYEES", "UPDATE"]],
 };
 const USER = `u25u${sfx}`;
 const EMP_ME = `u25me${sfx}`;
@@ -223,5 +234,29 @@ describeDb("unit 0.25: the role decides, on the real routes", () => {
     as(ROLE.payrollRead);
     expect((await submitExpense(post({}), params(claim))).status).toBe(403);
     expect((await admin.query(`SELECT status FROM "ExpenseClaim" WHERE id = $1`, [claim])).rows[0].status).toBe("DRAFT");
+  });
+
+  it("B9 the company payroll rules need SETTINGS:READ", async () => {
+    as(ROLE.narrow);
+    expect((await tenantSettings(get("http://test.local/api"))).status).toBe(403);
+    as(ROLE.settingsRead);
+    expect((await tenantSettings(get("http://test.local/api"))).status).toBe(200);
+  });
+
+  it("B10 the org chart is read-only for everyone; changing a reporting line needs EMPLOYEES:UPDATE", async () => {
+    as(ROLE.narrow);
+    expect((await orgChart(get("http://test.local/api"))).status).toBe(200);
+    const before = (await admin.query(`SELECT "immediateSupervisorId" FROM "Employee" WHERE id = $1`, [EMP_OTHER])).rows[0];
+    const move = () =>
+      reassign(
+        Object.assign(new Request("http://test.local/api", { method: "PATCH", body: JSON.stringify({ employeeId: EMP_OTHER, targetEmployeeId: EMP_ME }) }), {
+          nextUrl: new URL("http://test.local/api"),
+        }) as never,
+      );
+    expect((await move()).status).toBe(403);
+    expect((await admin.query(`SELECT "immediateSupervisorId" FROM "Employee" WHERE id = $1`, [EMP_OTHER])).rows[0]).toEqual(before);
+    as(ROLE.hrEdit);
+    expect((await move()).status).toBe(200);
+    expect((await admin.query(`SELECT "immediateSupervisorId" FROM "Employee" WHERE id = $1`, [EMP_OTHER])).rows[0].immediateSupervisorId).toBe(EMP_ME);
   });
 });

@@ -16,7 +16,7 @@ import { ok, unauthorized } from "@/lib/api-response";
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
-  // @permission-exempt: names and positions every dashboard user sees; no pay, IDs or personal details (unit 0.25)
+  // @permission-exempt: Mark's ruling of 10 Nov: the org chart is READ-ONLY for every employee. It shows names, positions, departments and reporting lines, no pay, IDs or personal details. It is built from each employee's level and reporting manager, and every way of changing those needs a permission only the owner and HR roles hold: org-chart/reassign and placements EMPLOYEES:UPDATE, employee edit EMPLOYEES:UPDATE, positions SETTINGS:UPDATE, movement approval EMPLOYEES:APPROVE (unit 0.25)
 
   const data = await withTenant(auth.tenantId, async (tx) => {
     const [employees, positions, departments, branches, tenant] = await Promise.all([
