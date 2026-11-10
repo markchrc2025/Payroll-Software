@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * ESS forgot password — employees enter their company code + employee ID to
- * request a reset link, which is emailed to the work email on file. The
+ * ESS Forgot PIN: employees enter their company code + employee ID to request
+ * a link to choose a new PIN, emailed to the address their record uses for ESS
+ * links (personal by default, work once HR switches it; unit 0.15 Am 3). The
  * response is always generic (no account enumeration).
  */
 
@@ -44,7 +45,7 @@ export default function EssForgotPasswordPage() {
           <div className="text-center">
             <p className="text-[15px] font-semibold text-gray-800">Check your email</p>
             <p className="mt-1 text-[13px] text-gray-500">
-              If that account exists and has an email on file, we&apos;ve sent a reset link. It expires in 1 hour.
+              If that account exists and has an email on file, we&apos;ve sent a link to choose a new PIN. It expires in 1 hour and also unlocks your account.
             </p>
             <Link href="/ess/login" className="mt-4 inline-block text-[13px] font-medium text-[#1E3A5F]">
               Back to sign in
@@ -53,9 +54,9 @@ export default function EssForgotPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <p className="text-[17px] font-semibold text-gray-800">Reset your password</p>
+              <p className="text-[17px] font-semibold text-gray-800">Forgot your PIN?</p>
               <p className="mt-1 text-[13px] text-gray-500">
-                Enter your company code and employee ID. We&apos;ll email a reset link to the address on file.
+                Enter your company code and employee ID. We&apos;ll email you a link to choose a new PIN.
               </p>
             </div>
             <div className="space-y-1.5">

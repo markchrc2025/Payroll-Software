@@ -21,7 +21,12 @@
  *       cannot reset.
  * Change password (B8):
  *   P1  ends every session of the employee, the requesting one included.
- *   P2  needs the current password when the account has one.
+ *   P2  needs the current credential (PIN or password).
+ *
+ * Amendment 3 (Mark's ruling of 10 Nov): both engines now set the employee's
+ * 6-digit PIN instead of a password, and links go to the record's chosen email
+ * (personal by default). A reset also removes the optional password. The
+ * properties above are unchanged; only the credential they set moved.
  */
 import { randomBytes } from "node:crypto";
 import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from "vitest";
@@ -73,7 +78,9 @@ async function setEmp(id: string, fields: Record<string, unknown>) {
   );
 }
 const emp = async (id: string) =>
-  (await admin.query(`SELECT "essAccessStatus", "essPasswordHash" FROM "Employee" WHERE id = $1`, [id])).rows[0];
+  (await admin.query(`SELECT "essAccessStatus", "essPasswordHash", "essPin" FROM "Employee" WHERE id = $1`, [id])).rows[0];
+const PIN_A = "480213";
+const PIN_B = "591746";
 const openSessions = async (id: string) =>
   Number((await admin.query(`SELECT count(*) FROM "EssSession" WHERE "employeeId" = $1 AND "revokedAt" IS NULL`, [id])).rows[0].count);
 async function openSession(id: string): Promise<string> {
@@ -102,8 +109,8 @@ describeDb("unit 0.15 Am 1: ESS invitation and reset are separate engines", () =
     ];
     for (const [id, ess, status, email] of rows) {
       await admin.query(
-        `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt", "essAccessStatus", "employmentStatus", "workEmail")
-         VALUES ($1, $2, $1, 'U15', $1, '2026-01-05', now(), $3, $4, $5)`,
+        `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt", "essAccessStatus", "employmentStatus", "workEmail", "personalEmail")
+         VALUES ($1, $2, $1, 'U15', $1, '2026-01-05', now(), $3, $4, $5, $5)`,
         [id, T, ess, status, email],
       );
     }
@@ -122,48 +129,54 @@ describeDb("unit 0.15 Am 1: ESS invitation and reset are separate engines", () =
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    await setEmp(E.invited, { essAccessStatus: "INVITED", essPasswordHash: null });
-    await setEmp(E.active, { essAccessStatus: "ACTIVE", essPasswordHash: await bcrypt.hash("Old-Password-1", 4) });
+    await setEmp(E.invited, { essAccessStatus: "INVITED", essPasswordHash: null, essPin: null });
+    await setEmp(E.active, {
+      essAccessStatus: "ACTIVE",
+      essPasswordHash: await bcrypt.hash("Old-Password-1", 4),
+      essPin: await bcrypt.hash(PIN_A, 4),
+      essFailedAttempts: 0,
+      essLockedUntil: null,
+    });
   });
 
   // ── invitation ──
   it("I1 a new invitation retires the previous one", async () => {
     const first = await invite(E.invited);
     const second = await invite(E.invited);
-    expect((await claimInvite(prismaAdmin, first.rawToken, "h1")).ok).toBe(false);
-    expect((await claimInvite(prismaAdmin, second.rawToken, "h2")).ok).toBe(true);
+    expect((await claimInvite(prismaAdmin, first.rawToken, PIN_A)).ok).toBe(false);
+    expect((await claimInvite(prismaAdmin, second.rawToken, PIN_B)).ok).toBe(true);
   });
 
-  it("I2 accepting activates INVITED, sets the password, and is single-use", async () => {
+  it("I2 accepting activates INVITED, sets the PIN, and is single-use", async () => {
     const { rawToken } = await invite(E.invited);
-    const res = await activatePost(json({ token: rawToken, password: "New-Password-1" }));
+    const res = await activatePost(json({ token: rawToken, pin: PIN_A }));
     expect(res.status).toBe(200);
     const after = await emp(E.invited);
     expect(after.essAccessStatus).toBe("ACTIVE");
-    expect(await bcrypt.compare("New-Password-1", after.essPasswordHash)).toBe(true);
-    expect((await activatePost(json({ token: rawToken, password: "Another-Pass-1" }))).status).toBe(400);
+    expect(await bcrypt.compare(PIN_A, after.essPin)).toBe(true);
+    expect((await activatePost(json({ token: rawToken, pin: PIN_B }))).status).toBe(400);
   });
 
   it("I3 a DISABLED employee cannot re-activate with an old invitation", async () => {
     await setEmp(E.disabled, { essAccessStatus: "INVITED" });
     const { rawToken } = await invite(E.disabled);
     await setEmp(E.disabled, { essAccessStatus: "DISABLED" }); // HR disables before it is used
-    const res = await activatePost(json({ token: rawToken, password: "Sneak-Back-In-1" }));
+    const res = await activatePost(json({ token: rawToken, pin: PIN_A }));
     expect(res.status).toBe(400);
     expect((await emp(E.disabled)).essAccessStatus).toBe("DISABLED");
-    expect(await claimInvite(prismaAdmin, rawToken, "h")).toEqual({ ok: false, reason: "invalid" });
+    expect(await claimInvite(prismaAdmin, rawToken, PIN_A)).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("I4 a separated employee is refused", async () => {
     await setEmp(E.separated, { essAccessStatus: "INVITED" });
     const { rawToken } = await invite(E.separated);
-    expect(await claimInvite(prismaAdmin, rawToken, "h")).toEqual({ ok: false, reason: "separated" });
+    expect(await claimInvite(prismaAdmin, rawToken, PIN_A)).toEqual({ ok: false, reason: "separated" });
     await setEmp(E.separated, { essAccessStatus: "ACTIVE" });
   });
 
   it("I5 two requests racing with one invitation: exactly one succeeds", async () => {
     const { rawToken } = await invite(E.invited);
-    const results = await Promise.all([claimInvite(prismaAdmin, rawToken, "a"), claimInvite(prismaAdmin, rawToken, "b")]);
+    const results = await Promise.all([claimInvite(prismaAdmin, rawToken, PIN_A), claimInvite(prismaAdmin, rawToken, PIN_B)]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
   });
 
@@ -177,42 +190,43 @@ describeDb("unit 0.15 Am 1: ESS invitation and reset are separate engines", () =
     expect(sentTo).toEqual(["act@u15.test"]);
   });
 
-  it("R2 a reset changes the password, ends every session, retires other links, keeps the status", async () => {
+  it("R2 a reset sets a new PIN, removes the password, ends every session, retires other links, keeps the status", async () => {
     await openSession(E.active);
     await openSession(E.active);
     const older = (await reset(E.active))!;
     const newest = (await reset(E.active))!;
     expect(older && newest).toBeTruthy();
-    const res = await resetPost(json({ token: newest.rawToken, password: "Reset-Password-1" }));
+    const res = await resetPost(json({ token: newest.rawToken, pin: PIN_B }));
     expect(res.status).toBe(200);
     const after = await emp(E.active);
     expect(after.essAccessStatus).toBe("ACTIVE");
-    expect(await bcrypt.compare("Reset-Password-1", after.essPasswordHash)).toBe(true);
+    expect(await bcrypt.compare(PIN_B, after.essPin)).toBe(true);
+    expect(after.essPasswordHash).toBeNull();
     expect(await openSessions(E.active)).toBe(0);
-    expect((await claimReset(prismaAdmin, older.rawToken, "h")).ok).toBe(false);
+    expect((await claimReset(prismaAdmin, older.rawToken, PIN_A)).ok).toBe(false);
   });
 
   it("R3 a reset link never activates an account", async () => {
     await setEmp(E.invited, { essAccessStatus: "ACTIVE" });
     const link = (await reset(E.invited))!;
     await setEmp(E.invited, { essAccessStatus: "INVITED" }); // e.g. HR re-invited
-    const res = await resetPost(json({ token: link.rawToken, password: "Reset-Password-1" }));
+    const res = await resetPost(json({ token: link.rawToken, pin: PIN_B }));
     expect(res.status).toBe(403);
     const after = await emp(E.invited);
-    expect(after).toEqual({ essAccessStatus: "INVITED", essPasswordHash: null });
+    expect(after).toEqual({ essAccessStatus: "INVITED", essPasswordHash: null, essPin: null });
   });
 
   it("R4 two requests racing with one reset link: exactly one succeeds", async () => {
     const link = (await reset(E.active))!;
-    const results = await Promise.all([claimReset(prismaAdmin, link.rawToken, "a"), claimReset(prismaAdmin, link.rawToken, "b")]);
+    const results = await Promise.all([claimReset(prismaAdmin, link.rawToken, PIN_A), claimReset(prismaAdmin, link.rawToken, PIN_B)]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
   });
 
   it("R5 the engines do not cross", async () => {
     const inv = await invite(E.invited);
     const rst = (await reset(E.active))!;
-    expect((await claimReset(prismaAdmin, inv.rawToken, "h")).ok).toBe(false);
-    expect((await claimInvite(prismaAdmin, rst.rawToken, "h")).ok).toBe(false);
+    expect((await claimReset(prismaAdmin, inv.rawToken, PIN_A)).ok).toBe(false);
+    expect((await claimInvite(prismaAdmin, rst.rawToken, PIN_A)).ok).toBe(false);
     expect((await emp(E.invited)).essAccessStatus).toBe("INVITED");
   });
 
@@ -220,17 +234,17 @@ describeDb("unit 0.15 Am 1: ESS invitation and reset are separate engines", () =
   it("P1 changing the password ends every session, the requesting one included", async () => {
     const mine = await openSession(E.active);
     await openSession(E.active);
-    const res = await passwordPost(json({ newPassword: "Changed-Pass-1", currentPassword: "Old-Password-1" }, mine));
+    const res = await passwordPost(json({ newPassword: "Changed-Pass-1", current: "Old-Password-1" }, mine));
     expect(res.status).toBe(200);
     expect(await openSessions(E.active)).toBe(0);
-    const again = await passwordPost(json({ newPassword: "Changed-Pass-2", currentPassword: "Changed-Pass-1" }, mine));
+    const again = await passwordPost(json({ newPassword: "Changed-Pass-2", current: "Changed-Pass-1" }, mine));
     expect(again.status).toBe(401);
   });
 
-  it("P2 the current password is required when the account has one", async () => {
+  it("P2 the current PIN or password is required", async () => {
     const mine = await openSession(E.active);
     expect((await passwordPost(json({ newPassword: "Changed-Pass-1" }, mine))).status).toBe(400);
-    expect((await passwordPost(json({ newPassword: "Changed-Pass-1", currentPassword: "wrong-one" }, mine))).status).toBe(400);
+    expect((await passwordPost(json({ newPassword: "Changed-Pass-1", current: "wrong-one" }, mine))).status).toBe(400);
     expect(await bcrypt.compare("Old-Password-1", (await emp(E.active)).essPasswordHash)).toBe(true);
     expect(await openSessions(E.active)).toBe(1);
   });

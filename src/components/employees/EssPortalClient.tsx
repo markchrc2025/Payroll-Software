@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Mail, Pencil, KeyRound } from "lucide-react";
+import { RefreshCw, Pencil, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,9 @@ type EssRow = {
   firstName: string;
   lastName: string;
   workEmail: string | null;
+  personalEmail: string | null;
+  /** Unit 0.15 Am 3: which email receives ESS invitation and reset links. */
+  essEmailChoice: "PERSONAL" | "WORK";
   employmentStatus: string;
   essAccessStatus: "NOT_INVITED" | "INVITED" | "ACTIVE" | "DISABLED";
   essInvitedAt: string | null;
@@ -55,6 +58,11 @@ function fmt(d: string | null): string {
 function fmtDate(d: string | null): string {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-PH", { dateStyle: "medium" });
+}
+
+/** The email ESS links go to for this row, or null when it is missing. */
+function linkEmail(r: EssRow): string | null {
+  return (r.essEmailChoice === "WORK" ? r.workEmail : r.personalEmail) || null;
 }
 
 function StatusBadge({ row }: { row: EssRow }) {
@@ -226,7 +234,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
     invited: rows.filter((r) => r.essAccessStatus === "INVITED").length,
     notInvited: rows.filter((r) => r.essAccessStatus === "NOT_INVITED").length,
     disabled: rows.filter((r) => r.essAccessStatus === "DISABLED").length,
-    noEmail: rows.filter((r) => !r.workEmail).length,
+    noEmail: rows.filter((r) => !linkEmail(r)).length,
   };
 
   return (
@@ -237,7 +245,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
         <StatCard label="Invited" value={stats.invited} tone="text-blue-600" />
         <StatCard label="Not invited" value={stats.notInvited} tone="text-foreground" />
         <StatCard label="Disabled" value={stats.disabled} tone="text-destructive" />
-        <StatCard label="No work email" value={stats.noEmail} tone="text-amber-600" />
+        <StatCard label="No ESS email" value={stats.noEmail} tone="text-amber-600" />
       </div>
 
       {/* Toolbar */}
@@ -267,7 +275,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
           <table className="w-full border-collapse text-[13.5px]">
             <thead>
               <tr>
-                {["Employee", "Work Email", "ESS Status", "Last Login", "Passkeys"].map((h) => (
+                {["Employee", "ESS Email", "ESS Status", "Last Login", "Passkeys"].map((h) => (
                   <th key={h} className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
                     {h}
                   </th>
@@ -303,22 +311,32 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        {r.workEmail ? (
-                          <button
-                            type="button"
-                            onClick={() => openEmailDialog(r)}
-                            title="Edit work email"
-                            className="group inline-flex items-center gap-1.5 text-left text-[13.5px] text-[#4A586B] hover:text-[#E8693A]"
-                          >
-                            <span>{r.workEmail}</span>
-                            <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
-                          </button>
-                        ) : (
-                          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
-                            onClick={() => openEmailDialog(r)}>
-                            <Mail className="h-3.5 w-3.5" /> Add work email
-                          </Button>
-                        )}
+                        {/* Unit 0.15 Am 3: ESS links go to the personal email at
+                            hiring, switchable to the work email later. */}
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[13.5px] text-[#4A586B]">
+                            {linkEmail(r) ?? <span className="text-amber-600">No {r.essEmailChoice === "WORK" ? "work" : "personal"} email</span>}
+                          </span>
+                          <span className="flex items-center gap-2 text-[11.5px] text-[#8E9AAC]">
+                            {r.essEmailChoice === "WORK" ? "Work email" : "Personal email"}
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="underline hover:text-[#E8693A]"
+                              onClick={() => act(r.id, { action: "set_link_email", choice: r.essEmailChoice === "WORK" ? "PERSONAL" : "WORK" })}
+                            >
+                              {r.essEmailChoice === "WORK" ? "Use personal" : "Use work"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEmailDialog(r)}
+                              title={r.workEmail ? "Edit work email" : "Add work email"}
+                              className="inline-flex items-center gap-1 hover:text-[#E8693A]"
+                            >
+                              <Pencil className="h-3 w-3" /> {r.workEmail ? "Edit work" : "Add work"}
+                            </button>
+                          </span>
+                        </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3"><StatusBadge row={r} /></td>
                       <td className="whitespace-nowrap px-4 py-3 text-[13.5px] text-[#4A586B]">{fmt(r.essLastLoginAt)}</td>
@@ -337,29 +355,22 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex flex-wrap justify-end gap-1.5">
                           {!granted ? (
-                            r.workEmail ? (
-                              <>
-                                <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                  onClick={() => act(r.id, { action: "activate" })}>
-                                  {r.essAccessStatus === "DISABLED" ? "Re-activate" : "Activate"}
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
-                                  onClick={() => invite(r.id)}>
-                                  Invite by email
-                                </Button>
-                              </>
-                            ) : (
-                              // Safeguard: ESS access requires a work email on file.
-                              // Offer to add it right here instead of a dead end.
-                              <Button size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy}
-                                onClick={() => openEmailDialog(r)}
-                                title="A work email is required before ESS access can be enabled.">
-                                <Mail className="h-3.5 w-3.5" /> Add work email
+                            linkEmail(r) ? (
+                              // Ruling B7 / Am 3: only the invitation gives access, and the
+                              // employee chooses their PIN from it, so there is no separate
+                              // "Activate" here.
+                              <Button size="sm" className="h-7 px-2 text-xs" disabled={busy}
+                                onClick={() => invite(r.id)}>
+                                {r.essAccessStatus === "DISABLED" ? "Re-invite by email" : "Invite by email"}
                               </Button>
+                            ) : (
+                              <span className="text-[11.5px] text-amber-600" title="Add the email ESS links go to, or switch to the other email.">
+                                Add an email to invite
+                              </span>
                             )
                           ) : (
                             <>
-                              {r.essAccessStatus === "INVITED" && r.workEmail && (
+                              {r.essAccessStatus === "INVITED" && linkEmail(r) && (
                                 <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy}
                                   onClick={() => invite(r.id)}>
                                   Resend invite
@@ -500,8 +511,8 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <DialogTitle>{emailTarget?.workEmail ? "Edit work email" : "Add work email"}</DialogTitle>
             <DialogDescription>
               {emailTarget ? `${emailTarget.firstName} ${emailTarget.lastName} (${emailTarget.employeeNumber}). ` : ""}
-              This is saved to the employee&apos;s record and is where ESS invites,
-              password resets and notifications are sent.
+              Saved to the employee&apos;s record. ESS invitations and Forgot PIN links go here
+              only when the employee&apos;s ESS email is set to Work.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

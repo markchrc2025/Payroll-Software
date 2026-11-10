@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
         firstName: true,
         lastName: true,
         workEmail: true,
+        personalEmail: true,
+        essEmailChoice: true,
         employmentStatus: true,
         essAccessStatus: true,
         essInvitedAt: true,
@@ -63,6 +65,9 @@ export async function GET(req: NextRequest) {
     firstName: r.firstName,
     lastName: r.lastName,
     workEmail: r.workEmail,
+    personalEmail: r.personalEmail,
+    // Unit 0.15 Am 3: where ESS invitation and reset links go.
+    essEmailChoice: r.essEmailChoice,
     employmentStatus: r.employmentStatus,
     essAccessStatus: r.essAccessStatus,
     essInvitedAt: r.essInvitedAt?.toISOString() ?? null,

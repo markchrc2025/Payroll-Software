@@ -1,44 +1,34 @@
 "use client";
 
 /**
- * ESS account activation — employees land here from the email invite link
- * (/ess/activate?token=...). They set a password; on success the account is
- * activated and they're sent to the ESS sign-in page.
+ * ESS account activation: employees land here from the email invitation
+ * (/ess/activate?token=...) and choose their own 6-digit PIN (unit 0.15
+ * Amendment 3). On success the account is activated and they go to sign-in.
  */
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { PinSetForm } from "@/components/ess/PinSetForm";
 
 function ActivateForm() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
-
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password.length < 8) { toast.error("Password must be at least 8 characters."); return; }
-    if (password !== confirm) { toast.error("Passwords do not match."); return; }
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/ess/activate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) { toast.error(json?.error ?? "Activation failed."); return; }
-      setDone(true);
-      toast.success("Account activated! You can now sign in.");
-      setTimeout(() => router.replace("/ess/login"), 1500);
-    } finally {
-      setSubmitting(false);
-    }
+  async function submit(pin: string): Promise<boolean> {
+    const res = await fetch("/api/ess/activate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, pin }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) { toast.error(json?.error ?? "Activation failed."); return false; }
+    setDone(true);
+    toast.success("Account activated. Sign in with your employee number and PIN.");
+    setTimeout(() => router.replace("/ess/login"), 1500);
+    return true;
   }
 
   if (!token) {
@@ -60,41 +50,13 @@ function ActivateForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <p className="text-[17px] font-semibold text-gray-800">Activate your account</p>
-        <p className="mt-1 text-[13px] text-gray-500">Set a password to finish enabling Employee Self-Service.</p>
-      </div>
-      <div className="space-y-1.5">
-        <label className="block text-[12.5px] font-medium text-gray-700">New password</label>
-        <input
-          type="password"
-          autoComplete="new-password"
-          placeholder="At least 8 characters"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] outline-none focus:border-[#1E3A5F]"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <label className="block text-[12.5px] font-medium text-gray-700">Confirm password</label>
-        <input
-          type="password"
-          autoComplete="new-password"
-          placeholder="Re-enter password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] outline-none focus:border-[#1E3A5F]"
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={submitting || !password || !confirm}
-        className="w-full rounded-lg bg-[#1E3A5F] py-2.5 text-[14px] font-semibold text-white disabled:opacity-50"
-      >
-        {submitting ? "Activating…" : "Activate account"}
-      </button>
-    </form>
+    <PinSetForm
+      title="Activate your account"
+      subtitle="Choose your own 6-digit PIN. You will use it with your employee number to sign in."
+      submitLabel="Activate account"
+      busyLabel="Activating…"
+      onSubmit={submit}
+    />
   );
 }
 

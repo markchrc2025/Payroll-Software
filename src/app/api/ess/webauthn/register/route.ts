@@ -8,13 +8,17 @@ import { generateRegistrationOptions } from "@simplewebauthn/server";
 import type { NextRequest } from "next/server";
 import { getEssContext } from "@/lib/ess-auth";
 import { issueChallenge } from "@/lib/webauthn-challenge";
-import { ok, unauthorized, serverError } from "@/lib/api-response";
+import { ok, err, unauthorized, serverError } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
+import { ESS_PASSKEYS_ENABLED, PASSKEYS_OFF_MESSAGE } from "@/lib/ess-passkeys";
 
 const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "Sentire Payroll ESS";
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 
 export async function POST(req: NextRequest) {
+  // Unit 0.15 Am 3: passkeys are off for now (Mark's ruling of 10 Nov).
+  if (!ESS_PASSKEYS_ENABLED) return err(PASSKEYS_OFF_MESSAGE, 404);
+
   const ctx = await getEssContext(req);
   if (!ctx) return unauthorized();
 

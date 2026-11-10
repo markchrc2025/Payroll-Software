@@ -1,9 +1,11 @@
 /**
- * POST /api/ess/forgot-password — request an ESS password-reset link.
+ * POST /api/ess/forgot-password: request an ESS reset link (Forgot PIN).
  *
  * Public. Body: { companyCode, employeeNumber }. If the employee exists, has an
- * ACTIVE ESS account and a work email on file, we email them a one-time reset
- * link (1 hour; earlier unused links are retired).
+ * ACTIVE ESS account and the email their record chooses for ESS links is on
+ * file (personal by default, work once HR switches it; unit 0.15 Am 3), we
+ * email them a one-time link to set a new PIN (1 hour; earlier unused links
+ * are retired). Using it also lifts a wrong-attempt lock.
  * Always responds 200 with a generic message — never reveals whether an
  * account exists.
  */
@@ -37,10 +39,10 @@ export async function POST(req: NextRequest) {
     if (tenant) {
       const emp = await prismaAdmin.employee.findFirst({
         where: { tenantId: tenant.id, employeeNumber, deletedAt: null },
-        select: { id: true, firstName: true, workEmail: true },
+        select: { id: true, firstName: true },
       });
       // Unit 0.15 Amendment 1, ruling B7: reset links go ONLY to ACTIVE,
-      // employed accounts with a work email (checked inside issueReset). An
+      // employed accounts with a link email on file (checked inside issueReset). An
       // account HR invited but the employee never activated gets nothing
       // here: its only way in is the invitation. Same generic answer either way.
       const issued = emp
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
         : null;
       if (emp && issued) {
         try {
-          await sendEmployeeResetPassword(emp.workEmail!, {
+          await sendEmployeeResetPassword(issued.email, {
             firstName: emp.firstName,
             resetUrl: `${APP_URL}/ess/reset-password?token=${issued.rawToken}`,
           });

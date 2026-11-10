@@ -13,11 +13,12 @@ type AuthenticatorDevice = VerifyAuthenticationResponseOpts["authenticator"];
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { verifyChallenge } from "@/lib/webauthn-challenge";
-import { activateInvitedEssAccount, evaluateEssAccess } from "@/lib/ess-access-gate";
+import { evaluateEssAccess } from "@/lib/ess-access-gate";
 import { createEssSession } from "@/lib/ess-auth";
 import { captureError } from "@/lib/observability";
 import { ok, err, serverError } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
+import { ESS_PASSKEYS_ENABLED, PASSKEYS_OFF_MESSAGE } from "@/lib/ess-passkeys";
 
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 function expectedOrigins(): string[] {
@@ -32,6 +33,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Unit 0.15 Am 3: passkeys are off for now (Mark's ruling of 10 Nov).
+  if (!ESS_PASSKEYS_ENABLED) return err(PASSKEYS_OFF_MESSAGE, 404);
+
   const body = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) return err("Invalid input", 422, parsed.error.flatten());
@@ -137,27 +141,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // A passkey sign-in is a successful first sign-in like any other, so it
-    // activates an INVITED employee exactly as the credential path does.
-    // Without this the two paths disagree about what a sign-in means: an
-    // employee whose only credential is a passkey would sign in indefinitely
-    // while HR's ESS portal showed them as "Invited" forever.
-    //
-    // Reachable despite registration requiring a session: HR disabling and
-    // later re-granting access sets INVITED again, and nothing deletes the
-    // passkey they registered while ACTIVE.
+    // Unit 0.15 Am 3 (ruling B7): no sign-in activates an account, a passkey
+    // included. The invitation is the only way from INVITED to ACTIVE. (This
+    // route used to activate here; with HR re-granting access setting INVITED
+    // again, a passkey registered earlier was a way back in around the
+    // invitation.)
     if (access.needsActivation) {
-      try {
-        await activateInvitedEssAccount(employeeId);
-      } catch (e) {
-        await captureError(e, {
-          scope: "ess/webauthn:activation",
-          critical: true,
-          tenantId,
-          employeeId,
-        });
-        return serverError(e);
-      }
+      return err("Your account isn't active yet. Open the invitation email from HR to set your PIN.", 403);
     }
 
     const rawToken = await createEssSession(tenantId, employeeId);

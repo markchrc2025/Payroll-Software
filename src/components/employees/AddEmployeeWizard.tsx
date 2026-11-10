@@ -6,7 +6,7 @@ import type { Control, FieldErrors, Path, UseFormSetValue } from "react-hook-for
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, User, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
+import { Check, User, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { uploadImage, ACCEPT_ATTR } from "@/lib/upload-image";
 import {
@@ -59,7 +59,10 @@ type Props = {
   employeeId?: string;
   /** Existing employee number (e.g. EMP-0001), shown read-only when editing. */
   employeeNumber?: string;
-  /** Whether the employee already has an ESS PIN (edit mode). */
+  /**
+   * Whether the employee already has an ESS PIN (edit mode). No longer used:
+   * HR does not set PINs (unit 0.15 Am 3); kept so callers need no change.
+   */
   hasEssPin?: boolean;
   /** Prefill values when editing (shaped like CreateEmployeeInput). */
   initialData?: Partial<CreateEmployeeInput>;
@@ -517,16 +520,14 @@ function BackgroundCreateNotice({ what }: { what: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees, mode = "create", employeeId, employeeNumber, hasEssPin = false, initialData, storageReady = false }: Props) {
+export function AddEmployeeWizard({ departments, branches, positions, shiftSchedules, jobTypes, jobStatuses, levels, workflows, employees, mode = "create", employeeId, employeeNumber, initialData, storageReady = false }: Props) {
   const isEdit = mode === "edit";
   const router = useRouter();
 
-  // ESS PIN (Section 9). Not part of the RHF form/schema — it's set via the
-  // dedicated /ess-pin endpoint after the employee is created/updated.
-  const [essPin, setEssPin] = useState("");
-  const [essPinConfirm, setEssPinConfirm] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [clearPin, setClearPin] = useState(false);
+  // ESS (Section 9). Unit 0.15 Amendment 3 (Mark's ruling of 10 Nov): HR never
+  // sets an employee's PIN. At hiring, the ESS invitation goes to the personal
+  // email, and the employee chooses their own PIN from it.
+  const [sendInvite, setSendInvite] = useState(true);
   const [step, setStep] = useState(0);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
   const [saved, setSaved] = useState(false);
@@ -550,6 +551,10 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Pre-existing: React Hook Form's watch() makes the React Compiler skip this
+  // component, as it always has. Silenced only so the changed-files lint gate
+  // passes when this file is touched (unit 0.15 Am 3 replaced the PIN section).
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedDeptId          = form.watch("departmentId");
   const watchedLevelId         = form.watch("levelId");
 
@@ -620,21 +625,6 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   }
 
   async function onSubmit(data: CreateEmployeeInput) {
-    // Validate the optional ESS PIN BEFORE creating/updating the employee, so we
-    // never persist the employee and then fail on the PIN.
-    if (!clearPin && essPin) {
-      if (!/^\d{4,8}$/.test(essPin)) {
-        setStep(8);
-        toast.error("ESS PIN must be 4–8 digits.");
-        return;
-      }
-      if (essPin !== essPinConfirm) {
-        setStep(8);
-        toast.error("ESS PINs do not match.");
-        return;
-      }
-    }
-
     const res = await fetch(
       isEdit ? `/api/employees/${employeeId}` : "/api/employees",
       {
@@ -654,21 +644,25 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
       return;
     }
 
-    // ESS PIN is set/cleared via the dedicated endpoint once we have an id.
-    const targetId = isEdit ? employeeId : (json?.data?.id as string | undefined);
-    if (targetId && (clearPin || essPin)) {
-      try {
-        const pinRes = await fetch(`/api/employees/${targetId}/ess-pin`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: clearPin ? null : essPin }),
-        });
-        if (!pinRes.ok) {
-          const pj = await pinRes.json().catch(() => null);
-          toast.error(`Employee saved, but the ESS PIN update failed: ${pj?.message ?? "please set it from the employee page."}`);
+    // Unit 0.15 Am 3: on hiring, send the ESS invitation to the personal email
+    // (the employee sets their own PIN from it). Best-effort: the employee is
+    // saved either way, and HR can send it later from the ESS portal.
+    const newId = isEdit ? undefined : (json?.data?.id as string | undefined);
+    if (newId && sendInvite) {
+      if (!data.personalEmail) {
+        toast.warning("Employee saved. No personal email, so no ESS invitation was sent. Add one, then invite from the ESS portal.");
+      } else {
+        try {
+          const inv = await fetch(`/api/employees/${newId}/ess-invite`, { method: "POST" });
+          if (!inv.ok) {
+            const ij = await inv.json().catch(() => null);
+            toast.error(`Employee saved, but the ESS invitation wasn't sent: ${ij?.error ?? "send it from the ESS portal."}`);
+          } else {
+            toast.success(`ESS invitation sent to ${data.personalEmail}`);
+          }
+        } catch {
+          toast.error("Employee saved, but the ESS invitation wasn't sent. Send it from the ESS portal.");
         }
-      } catch {
-        toast.error("Employee saved, but the ESS PIN update failed — please set it from the employee page.");
       }
     }
 
@@ -696,9 +690,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
     setDoneSteps(new Set());
     setSaved(false);
     setPhotoPreview(null);
-    setEssPin("");
-    setEssPinConfirm("");
-    setClearPin(false);
+    setSendInvite(true);
   }
 
   // ─── Step field rendering ────────────────────────────────────────────────
@@ -1097,53 +1089,21 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <FSec label="Remark" />
             <TAF control={c} name="remark" label="Remark" placeholder="Remark (2000 characters max)" rows={6} span2 />
 
-            <FSec label="Employee Self-Service (ESS) PIN" />
+            <FSec label="Employee Self-Service (ESS)" />
             <div className="col-span-2 space-y-3">
               <p className="text-[12px]" style={{ color: "#9b9085" }}>
-                {isEdit && hasEssPin
-                  ? "A PIN is already set. Enter a new PIN to replace it, or leave blank to keep the current one."
-                  : "Optional — lets the employee log in to Employee Self-Service with a PIN instead of their date of birth."}
+                Every employee signs in to ESS with their employee number and a 6-digit PIN they choose themselves.
+                HR never sets or sees it. The invitation goes to the personal email; you can switch ESS emails to the
+                work email later in the ESS portal.
               </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Lbl text={isEdit && hasEssPin ? "New PIN" : "Set PIN"} />
-                  <div className="relative">
-                    <Input
-                      type={showPin ? "text" : "password"}
-                      inputMode="numeric"
-                      maxLength={8}
-                      placeholder="4–8 digits"
-                      value={essPin}
-                      disabled={clearPin}
-                      onChange={(e) => setEssPin(e.target.value.replace(/\D/g, ""))}
-                      className="h-10 text-[13.5px] pr-9"
-                      style={{ borderColor: "#ECE6DD", background: "#fff" }}
-                    />
-                    <button type="button" tabIndex={-1} onClick={() => setShowPin((v) => !v)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: "#9b9085" }}>
-                      {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <Lbl text="Confirm PIN" />
-                  <Input
-                    type={showPin ? "text" : "password"}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="Re-enter PIN"
-                    value={essPinConfirm}
-                    disabled={clearPin}
-                    onChange={(e) => setEssPinConfirm(e.target.value.replace(/\D/g, ""))}
-                    className="h-10 text-[13.5px]"
-                    style={{ borderColor: "#ECE6DD", background: "#fff" }}
-                  />
-                </div>
-              </div>
-              {isEdit && hasEssPin && (
+              {isEdit ? (
+                <p className="text-[12.5px]" style={{ color: "#2A2420" }}>
+                  To invite or re-invite this employee, use the ESS portal.
+                </p>
+              ) : (
                 <label className="flex items-center gap-2 text-[12.5px]" style={{ color: "#2A2420" }}>
-                  <input type="checkbox" checked={clearPin} onChange={(ev) => setClearPin(ev.target.checked)} />
-                  Clear PIN (employee will log in with their date of birth)
+                  <input type="checkbox" checked={sendInvite} onChange={(ev) => setSendInvite(ev.target.checked)} />
+                  Send the ESS invitation to the personal email when I save
                 </label>
               )}
             </div>

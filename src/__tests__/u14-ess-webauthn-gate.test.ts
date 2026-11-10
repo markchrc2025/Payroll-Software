@@ -21,6 +21,14 @@
  * (`evaluateEssAccess`), which T6 pins.
  *
  * These tests drive the real exported route handlers, not copies.
+ *
+ * EDITED under unit 0.15 Amendment 3 (Mark's ruling of 10 Nov 2026), the
+ * only change to this guard: passkeys are OFF for now, so these tests switch
+ * them on (`@/lib/ess-passkeys` mocked) to keep guarding the gate for the day
+ * they return; B4 now pins that a passkey sign-in REFUSES an INVITED account
+ * instead of activating it (ruling B7: only the invitation activates), and
+ * B4b (activation failure) is retired with the activation it tested; T6 signs
+ * in with a PIN because birth-date sign-in is gone.
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
@@ -49,6 +57,10 @@ vi.mock("@simplewebauthn/server", () => ({
 }));
 
 vi.mock("@/lib/observability", () => ({ captureError: vi.fn(async () => {}) }));
+
+// Passkeys are off in the product (unit 0.15 Am 3); on here, so the gate the
+// passkey path will need again stays guarded.
+vi.mock("@/lib/ess-passkeys", () => ({ ESS_PASSKEYS_ENABLED: true, PASSKEYS_OFF_MESSAGE: "off" }));
 
 import { POST as webauthnFinish } from "@/app/api/ess/webauthn/authenticate/finish/route";
 import prismaAdmin from "@/lib/prisma-admin";
@@ -245,28 +257,16 @@ describe("unit 0.14 — the WebAuthn ESS sign-in enforces the access gates", () 
     expect(critical!.scope).toContain("webauthn");
   });
 
-  it("B4: an INVITED employee signing in by passkey is ACTIVATED", async () => {
+  it("B4 (Am 3): an INVITED employee signing in by passkey is REFUSED and NOT activated", async () => {
     arrive({ essAccessStatus: "INVITED" });
 
     const res = await webauthnFinish(request());
 
-    expect(res.status).toBe(200);
-    const activation = db.employee.update.mock.calls
-      .map((c) => c[0].data as Record<string, unknown>)
-      .find((d) => "essAccessStatus" in d);
-    expect(activation).toBeDefined();
-    expect(activation!.essAccessStatus).toBe("ACTIVE");
-    expect(activation!.essActivatedAt).toBeInstanceOf(Date);
-  });
-
-  it("B4b: an activation failure on the passkey path FAILS the login", async () => {
-    arrive({ essAccessStatus: "INVITED" });
-    db.employee.update.mockRejectedValue(new Error("db blip on activation"));
-
-    const res = await webauthnFinish(request());
-
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(403);
     expect(session).not.toHaveBeenCalled();
+    for (const c of db.employee.update.mock.calls) {
+      expect(c[0].data).not.toHaveProperty("essAccessStatus");
+    }
   });
 
   it("B4c: an already-ACTIVE employee is not re-activated by a passkey sign-in", async () => {
@@ -300,12 +300,9 @@ describe("unit 0.14 — T6: both sign-in paths call the one shared gate", () => 
       status: 403,
       message: "Access denied — inactive employee",
     }));
-    const activateInvitedEssAccount = vi.fn(async () => {});
-
     // One doubled module, consulted by both routes.
     vi.doMock("@/lib/ess-access-gate", () => ({
       evaluateEssAccess,
-      activateInvitedEssAccount,
       ENDED_EMPLOYMENT_STATUSES: ["RESIGNED", "TERMINATED", "RETIRED"],
     }));
 
@@ -355,7 +352,7 @@ describe("unit 0.14 — T6: both sign-in paths call the one shared gate", () => 
       json: async () => ({
         companyCode: "DEMOCORP",
         employeeNumber: "E001",
-        birthDate: "1990-04-01",
+        pin: "480213",
       }),
     } as unknown as Parameters<typeof credentialPath>[0]);
 

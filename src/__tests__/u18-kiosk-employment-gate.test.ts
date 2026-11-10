@@ -316,10 +316,11 @@ describe("unit 0.18 — T5: kiosk and ESS sign-in call the one shared gate", () 
 
     const kioskRes = await kioskPath(request());
     const essRes = await essPath({
+      // Unit 0.15 Am 3: birth-date sign-in is gone; the credential is a PIN.
       json: async () => ({
         companyCode: "DEMOCORP",
         employeeNumber: "E001",
-        birthDate: "1990-04-01",
+        pin: "480213",
       }),
     } as unknown as Parameters<typeof essPath>[0]);
 
