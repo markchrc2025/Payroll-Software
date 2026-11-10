@@ -15,6 +15,9 @@ import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { readUploadedFile } from "@/lib/server-upload";
 import { putObject, isR2Configured } from "@/lib/r2";
+import { withTenant } from "@/lib/with-tenant";
+import { callerEmployeeId } from "@/lib/approvals/second-party";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const MAX_RECEIPT_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_RECEIPT_TYPES = [
@@ -28,6 +31,13 @@ const ALLOWED_RECEIPT_TYPES = [
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: a receipt is uploaded by the employee filing their own claim, or
+  // by payroll staff. Anyone else signed in may not write files into storage.
+  const ownClaimant = await withTenant(auth.tenantId, (tx) => callerEmployeeId(tx, auth));
+  if (!ownClaimant) {
+    const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+    if (denied) return denied;
+  }
 
   if (!isR2Configured()) {
     return err(

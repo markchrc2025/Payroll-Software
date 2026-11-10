@@ -15,6 +15,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { finalizeDocumentSchema } from "@/lib/validations/document";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 // ---------------------------------------------------------------------------
 // GET — list documents for the employee
@@ -26,6 +27,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["DOCUMENTS", "READ"]);
+  if (denied) return denied;
 
   const { id } = await params;
 
@@ -72,6 +76,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["DOCUMENTS", "CREATE"]);
+  if (denied) return denied;
 
   const { id } = await params;
 

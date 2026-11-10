@@ -11,10 +11,12 @@ import {
   createShiftScheduleSchema,
   listShiftSchedulesSchema,
 } from "@/lib/validations/dtr";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company reference data for dropdowns and screens, no employee records; changes to it are permission-checked (unit 0.25)
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listShiftSchedulesSchema.safeParse(qp);
@@ -46,6 +48,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = createShiftScheduleSchema.safeParse(body);

@@ -22,6 +22,7 @@ const VALID_MODULES: ApprovalModule[] = ["LEAVE", "DTR", "EXPENSE", "DOCUMENT"];
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: the caller's own approvals inbox: only steps assigned to the caller (unit 0.25)
 
   const moduleParam = req.nextUrl.searchParams.get("module");
   const moduleFilter =

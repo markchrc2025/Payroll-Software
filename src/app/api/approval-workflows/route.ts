@@ -9,8 +9,9 @@
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized, serverError } from "@/lib/api-response";
+import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const VALID_NOTIFY = ["none", "final", "finalrej", "interim", "all"] as const;
 const VALID_ROLES  = ["supervisor", "line_manager", "dept_head", "hr_manager", "ceo"] as const;
@@ -35,6 +36,9 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "READ"], ["EMPLOYEES", "READ"]);
+  if (denied) return denied;
 
   const rows = await withTenant(auth.tenantId, (tx) =>
     tx.approvalWorkflow.findMany({
@@ -49,6 +53,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   if (!body) return err("Invalid JSON body");
@@ -56,7 +63,9 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err("Validation failed", 422, parsed.error.flatten());
 
-  let { code, description, isActive, approvers, notify, recipients } = parsed.data;
+  // `code` alone is reassigned (NEW-n auto numbering).
+  const { description, isActive, approvers, notify, recipients } = parsed.data;
+  let { code } = parsed.data;
 
   try {
     // Check active records for user-supplied codes (non-NEW).

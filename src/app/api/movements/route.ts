@@ -8,10 +8,14 @@ import { getAuthContext } from "@/lib/auth";
 import { paginated, unauthorized, err } from "@/lib/api-response";
 import { listMovementsSchema } from "@/lib/validations/movement";
 import { serializeMovement } from "@/lib/movements/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["MOVEMENTS", "READ"]);
+  if (denied) return denied;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listMovementsSchema.safeParse(qp);
