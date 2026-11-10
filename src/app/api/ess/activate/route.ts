@@ -1,15 +1,19 @@
 /**
- * POST /api/ess/activate — accept an ESS email invitation.
+ * POST /api/ess/activate: accept an ESS email invitation.
  *
- * Public (token-authenticated). Validates the one-time invite token, sets the
- * employee's ESS password, and activates their account.
+ * Public (token-authenticated). Body: { token, password }.
  *
- * Body: { token: string, password: string }
+ * Unit 0.15 Amendment 1, ruling B7: the invitation is the ONLY way an ESS
+ * account becomes ACTIVE. The link works only while the employee is INVITED
+ * (an employee HR has since disabled cannot re-activate themselves with an old
+ * link), is claimed atomically, and retires any other invitation. Logic in
+ * src/lib/ess-credential-links.ts.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { err, ok, serverError } from "@/lib/api-response";
-import { hashEssToken, hashEssPassword } from "@/lib/ess-auth";
+import { hashEssPassword } from "@/lib/ess-auth";
+import { claimInvite } from "@/lib/ess-credential-links";
 import prismaAdmin from "@/lib/prisma-admin";
 
 const schema = z.object({
@@ -24,45 +28,13 @@ export async function POST(req: NextRequest) {
   const { token, password } = parsed.data;
 
   try {
-    const tokenHash = hashEssToken(token);
-    const invite = await prismaAdmin.essInvite.findUnique({
-      where: { tokenHash },
-      select: { id: true, employeeId: true, usedAt: true, expiresAt: true },
-    });
-
-    if (!invite || invite.usedAt !== null || invite.expiresAt.getTime() <= Date.now()) {
-      return err("This activation link is invalid or has expired. Ask HR to resend your invite.", 400);
-    }
-
-    const emp = await prismaAdmin.employee.findFirst({
-      where: { id: invite.employeeId, deletedAt: null },
-      select: { id: true, employmentStatus: true, employeeNumber: true },
-    });
-    if (!emp) {
-      return err("This activation link is invalid or has expired. Ask HR to resend your invite.", 400);
-    }
-    if (["RESIGNED", "TERMINATED", "RETIRED"].includes(emp.employmentStatus)) {
-      return err("This account is no longer active. Please contact HR.", 403);
-    }
-
     const passwordHash = await hashEssPassword(password);
-
-    await prismaAdmin.$transaction([
-      prismaAdmin.employee.update({
-        where: { id: emp.id },
-        data: {
-          essPasswordHash: passwordHash,
-          essAccessStatus: "ACTIVE",
-          essActivatedAt: new Date(),
-        },
-      }),
-      prismaAdmin.essInvite.update({
-        where: { id: invite.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
-
-    return ok({ employeeNumber: emp.employeeNumber }, "Account activated — you can now sign in.");
+    const result = await claimInvite(prismaAdmin, token, passwordHash);
+    if (!result.ok) {
+      if (result.reason === "separated") return err("This account is no longer active. Please contact HR.", 403);
+      return err("This activation link is invalid or has expired. Ask HR to resend your invite.", 400);
+    }
+    return ok({ employeeNumber: result.employeeNumber }, "Account activated. You can now sign in.");
   } catch (e) {
     console.error("[ess/activate]", e);
     return serverError(e);
