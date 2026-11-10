@@ -37,7 +37,7 @@ describe("PAY-54: operator scripts use the owner URL only", () => {
 
   it("O2 each script refuses to run with only DATABASE_URL set", () => {
     for (const [script, args] of SCRIPTS) {
-      const env = { ...process.env, DATABASE_URL: "postgresql://payroll_app:x@127.0.0.1:1/none", DOTENV_CONFIG_PATH: "/nonexistent" };
+      const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: "postgresql://payroll_app:x@127.0.0.1:1/none", DOTENV_CONFIG_PATH: "/nonexistent" };
       delete env.DIRECT_DATABASE_URL;
       const run = spawnSync("npx", ["tsx", script, ...args], { env, encoding: "utf8", timeout: 60_000 });
       expect(run.status, `${script} must exit non-zero`).not.toBe(0);
