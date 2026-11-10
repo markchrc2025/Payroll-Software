@@ -239,6 +239,12 @@ jobs:
           printf '  %s\n' $CHANGED
           npx eslint --max-warnings 0 --no-error-on-unmatched-pattern $CHANGED
 
+      # Unit 0.23: every `path:NN` citation in docs/** (except the dated,
+      # append-only docs/DECISIONS.md) must still resolve to a tracked file and
+      # an existing line, and match any `(expects `token`)` written after it.
+      - name: Doc citations resolve (blocking)
+        run: node scripts/check-doc-refs.mjs --strict
+
       - name: Repo-wide lint total (informational, never blocks)
         if: always()
         run: |
@@ -359,6 +365,11 @@ jobs:
             --report-format template --report-template .githooks/gitleaks-report.tmpl \
             --report-path -
 
+      # Unit 0.16: the same filename guard the pre-commit hook runs, over the
+      # files this range ADDS, so a bypassed or missing hook is caught here.
+      - name: Filename guard over files the range adds
+        run: node scripts/check-filenames.mjs --range '${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}'
+
       - name: What to do if this job is red
         if: failure()
         run: |
@@ -376,3 +387,47 @@ jobs:
           the local hook missed merge commits entirely.
           EOF
           exit 1
+
+  # Unit 0.24: the WHOLE app against a real Postgres, in the production role
+  # shape (non-superuser owner migrates; the runtime connects as a login that
+  # inherits payroll_app only). See scripts/integration/README.md.
+  # ADVISORY (continue-on-error) per REP-4: on main before unit 0.7 lands,
+  # scenario S7 is a KNOWN RED (the runtime connects as the owner, #214). Make
+  # it blocking once 0.7 is merged and this job has been green on main.
+  integration:
+    name: integration (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      INTEGRATION_ADMIN_URL: postgresql://postgres:ci@localhost:5432/postgres
+      TZ: Asia/Manila
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies (npm ci)
+        run: npm ci
+      - name: Integration harness (exit 0 clean, 1 finding, 2 could not run)
+        run: npm run test:integration -- --fresh
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-report
+          path: integration-report.json
+          if-no-files-found: warn

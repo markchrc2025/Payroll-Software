@@ -207,6 +207,19 @@ its own unit — proposed here so it is not forgotten.
 Until then, the honest mitigation is behavioural: **do not `git add -A`.** Stage
 by path, or read `git status` before every commit.
 
+**Implemented in unit 0.16.** `scripts/check-filenames.mjs` runs first in
+`.githooks/pre-commit` (before gitleaks, and even with `SKIP_SECRET_SCAN=1`)
+over the files a commit ADDS, and again in CI's `secret scan` job over the
+files a pull request adds. It refuses names containing a command-line flag
+(` -h `), an upper-case SQL keyword as a word (`SELECT`, `LIMIT`), a database
+or network tool name (`psql`, `pg_dump`, `curl`), a quote or shell
+metacharacter, a control character or a `.`/`..` segment, and any new file at
+the repository root that is not on the allowlist in the script. Both of unit
+0.8's real filenames are refused by four rules each; every file tracked at
+the time passes. Bypass deliberately with `SKIP_FILENAME_GUARD=1` or
+`git commit --no-verify`. It checks names only: a sensibly named file full of
+personal data still passes, so "do not `git add -A`" still stands.
+
 ### 2. The LOCAL hook only sees the staged diff — CI is what covers the rest.
 A secret in the working tree but never staged is invisible to the hook, as is
 anything already in history, as are merge commits. The CI job closes the first
