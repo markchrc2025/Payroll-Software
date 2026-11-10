@@ -94,6 +94,7 @@ describeDb("unit 0.15 Am 4: dashboard sign-in lockout", () => {
 
   it("D2 once the lock passes, the right password works and the count clears", async () => {
     for (let i = 1; i <= 5; i++) await signIn("Wrong-Password-1").catch(() => null);
+    await expect(signIn(PW)).rejects.toMatchObject({ code: "locked" }); // vacuity guard: it IS locked
     await admin.query(`UPDATE "User" SET "lockedUntil" = now() AT TIME ZONE 'UTC' - interval '1 minute' WHERE id = $1`, [U.a]);
     expect(await signIn(PW)).toMatchObject({ id: U.a });
     expect((await user(U.a)).failedLoginCount).toBe(0);
@@ -101,6 +102,7 @@ describeDb("unit 0.15 Am 4: dashboard sign-in lockout", () => {
 
   it("D3 a reset link unlocks at once", async () => {
     for (let i = 1; i <= 5; i++) await signIn("Wrong-Password-1").catch(() => null);
+    expect((await user(U.a)).lockMs).not.toBeNull(); // vacuity guard: it IS locked
     const raw = await issueUserLink(prismaAdmin, { userId: U.a, purpose: "RESET" });
     const res = await claimUserLink(prismaAdmin, raw, await bcrypt.hash("Fresh-Password-1", 4), { scope: "any" });
     expect(res.ok).toBe(true);
