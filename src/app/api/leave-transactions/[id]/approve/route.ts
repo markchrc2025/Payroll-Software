@@ -123,7 +123,7 @@ export async function POST(
     // ----- Legacy / no-workflow mode -----
     // Unit 0.22: this branch had NO permission check, so any signed-in tenant
     // user could approve any leave filed where no chain is configured.
-    if (!(await holdsApprovePermission(auth, "LEAVE"))) return "forbidden" as const;
+    if (!(await holdsApprovePermission(tx, auth, "LEAVE"))) return "forbidden" as const;
     const updated = await tx.leaveTransaction.update({
       where: { id },
       data: {

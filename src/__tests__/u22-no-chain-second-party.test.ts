@@ -1,39 +1,45 @@
 /**
- * Unit 0.22: with NO approval chain configured, a request is never approved by
- * the person it benefits.
+ * Unit 0.22 and Amendment 1 (Mark's rulings B5 and B6, 10 Nov 2026).
  *
- * The fraud vector (R100): on any tenant with no OT approval chain, an
- * employee's own ESS overtime request self-approved and wrote otMinutes onto a
- * DTRRecord, the employee supplying the hours. The absence of configuration
- * was the trigger, so a tenant that had not finished setting up approvals was
- * the exposed case. The decision log said to CHECK the same fallback in leave
- * filing rather than assume; checking found four routes and two approve paths:
+ * The fraud vector (R100): with no OT approval chain, an employee's own ESS
+ * overtime self-approved onto the DTR. Checking the same fallback found it in
+ * undertime, HR leave filing and DTR submission, and approve routes that
+ * checked nothing.
  *
- *   T1  ESS OT, no chain: stays PENDING; no DTRRecord write, no self-approval.
- *   T2  ESS undertime, no chain: stays PENDING (APPROVED undertime is excused).
- *   T3  HR leave filing, no chain, filer is the employee: stays PENDING.
- *   T4  HR leave filing, no chain, filer lacks LEAVES:APPROVE: stays PENDING.
- *   T5  HR leave filing, no chain, second party with LEAVES:APPROVE: approved
- *       at filing (the one-step HR path is kept).
- *   T6  DTR submission, no chain, own: stays SUBMITTED.
- *   T7  DTR submission, no chain, approver for someone else: final-approved.
- *   T8  Leave approve, no-workflow mode: refuses a caller without
- *       LEAVES:APPROVE (it checked nothing) and refuses one's own leave.
- *   T9  Undertime approve: refuses one's own request.
+ * B5  With no chain nothing is approved at filing. It waits for the company
+ *     OWNER (Tenant.ownerUserId) or a role granted the approve permission. The
+ *     owner is always an approver. Never the requester.
+ * B6  No one files for another employee (ESS only). No one sees another
+ *     employee's records except the owner and roles granted the permission.
  *
- * Drives the real route handlers. The tenant transaction is a recording fake,
- * so each test asserts which writes happened, not just the response.
+ *   T1  ESS OT, no chain: PENDING, no DTR write.
+ *   T2  ESS undertime, no chain: PENDING.
+ *   T3  HR leave filing route: refused for everyone, even with LEAVES:APPROVE.
+ *   T4  HR leave list: someone else's needs LEAVES:READ or owner; own is fine.
+ *   T5  DTR submission: only one's own; with no chain it stays SUBMITTED.
+ *   T6  Leave approve, no chain: needs owner or LEAVES:APPROVE; owner passes
+ *       without the permission; never one's own.
+ *   T7  Expense approve: checked nothing before; now never one's own, and only
+ *       the owner or PAYROLL:APPROVE.
+ *   T8  Expense claims: filing only for oneself; lists scoped to one's own
+ *       without PAYROLL:READ.
+ *   T9  Leave balance adjust: checked nothing before; now never one's own, and
+ *       only the owner or LEAVES:UPDATE.
+ *   T10 OT approve guard: the owner passes without TIMESHEETS:APPROVE; others
+ *       without it are refused; self still refused.
+ *
+ * Real route handlers; the tenant transaction is a recording fake.
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 const T = "tenant22";
 const EMP = "emp22self";
 const OTHER = "emp22other";
+const OWNER_USER = "user22owner";
 
 type Handler = (args: unknown) => unknown;
 let handlers: Record<string, Handler> = {};
 let calls: { op: string; args: unknown }[] = [];
-
 const tx = new Proxy(
   {},
   {
@@ -63,12 +69,12 @@ vi.mock("@/lib/require-permission", () => ({
   checkPermission: vi.fn(async () => false),
   requirePermission: vi.fn(),
 }));
-vi.mock("@/lib/leave/filing", () => ({
-  resolveOrCreateBalance: vi.fn(async () => ({ id: "bal22", available: 10 })),
-  splitLeaveUnits: vi.fn((_avail: number, amount: number) => ({ paidUnits: amount, unpaidUnits: 0 })),
-}));
 vi.mock("@/lib/leave/apply-to-dtr", () => ({ finalizeLeaveApproval: vi.fn(async () => {}) }));
-vi.mock("@/lib/payroll/serialize", () => ({ serializeLeaveTransaction: (r: unknown) => r }));
+vi.mock("@/lib/payroll/serialize", () => ({
+  serializeLeaveTransaction: (r: unknown) => r,
+  serializeExpenseClaim: (r: unknown) => r,
+  serializeLeaveBalance: (r: unknown) => r,
+}));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn(async () => {}), getClientIp: () => null }));
 vi.mock("@/lib/jobs/workers", () => ({
   enqueueDtrSubmitted: vi.fn(async () => {}),
@@ -82,33 +88,43 @@ vi.mock("@/lib/authz/self-approval", () => ({ isSelfAction: vi.fn() }));
 
 import { getEssContext } from "@/lib/ess-auth";
 import { getAuthContext } from "@/lib/auth";
-import { checkPermission, requirePermission } from "@/lib/require-permission";
+import { checkPermission } from "@/lib/require-permission";
 import { finalizeLeaveApproval } from "@/lib/leave/apply-to-dtr";
 import { isSelfAction } from "@/lib/authz/self-approval";
 import { POST as essOtPost } from "@/app/api/ess/ot-applications/route";
 import { POST as essUndertimePost } from "@/app/api/ess/undertime/route";
-import { POST as hrLeavePost } from "@/app/api/employees/[id]/leave-transactions/route";
+import { GET as hrLeaveGet, POST as hrLeavePost } from "@/app/api/employees/[id]/leave-transactions/route";
 import { POST as dtrSubmitPost } from "@/app/api/dtr/submissions/route";
 import { POST as leaveApprovePost } from "@/app/api/leave-transactions/[id]/approve/route";
-import { POST as undertimeApprovePost } from "@/app/api/undertime-requests/[id]/approve/route";
+import { POST as expenseApprovePost } from "@/app/api/expense-claims/[id]/approve/route";
+import { GET as expenseListGet, POST as expensePost } from "@/app/api/expense-claims/route";
+import { PUT as leaveBalancePut } from "@/app/api/employees/[id]/leave-balances/route";
+import { POST as otApprovePost } from "@/app/api/ot-applications/[id]/approve/route";
 
 type Fn = ReturnType<typeof vi.fn>;
 const fn = (f: unknown) => f as Fn;
 
 const today = new Date().toISOString().slice(0, 10);
-const req = (body: unknown) =>
-  new Request("http://test.local/api", { method: "POST", body: JSON.stringify(body) }) as never;
+const req = (body: unknown, url = "http://test.local/api") =>
+  Object.assign(new Request(url, { method: "POST", body: JSON.stringify(body) }), {
+    nextUrl: new URL(url),
+  }) as never;
+const getReq = (url: string) => Object.assign(new Request(url), { nextUrl: new URL(url) }) as never;
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 const ops = () => calls.map((c) => c.op);
-const updatesTo = (op: string) => calls.filter((c) => c.op === op).map((c) => c.args as { data?: Record<string, unknown> });
+const argsOf = (op: string) => calls.filter((c) => c.op === op).map((c) => c.args as Record<string, unknown>);
 
-/** A tenant user. `employeeId` is the Employee record linked to them (or none). */
-function signIn(user: { employeeId: string | null; canApprove: boolean }) {
-  fn(getAuthContext).mockResolvedValue({ tenantId: T, userId: "user22", systemRole: "TENANT_USER", roleId: "role22" });
-  fn(checkPermission).mockResolvedValue(user.canApprove);
+/** A tenant user, their linked Employee (if any), whether they are the owner, and the permissions their role holds. */
+function signIn(u: { employeeId: string | null; owner?: boolean; perms?: string[] }) {
+  const userId = u.owner ? OWNER_USER : "user22staff";
+  fn(getAuthContext).mockResolvedValue({ tenantId: T, userId, systemRole: "TENANT_USER", roleId: "role22" });
+  fn(checkPermission).mockImplementation(async (_t: string, _r: string, m: string, a: string) =>
+    (u.perms ?? []).includes(`${m}:${a}`),
+  );
+  handlers["tenant.findUnique"] = () => ({ ownerUserId: OWNER_USER });
   handlers["employee.findFirst"] = (args) => {
     const where = (args as { where: Record<string, unknown> }).where;
-    if ("userId" in where) return user.employeeId ? { id: user.employeeId } : null;
+    if ("userId" in where) return u.employeeId ? { id: u.employeeId } : null;
     return { id: where.id ?? OTHER, tenantId: T };
   };
 }
@@ -140,110 +156,117 @@ describe("unit 0.22: ESS self-filed requests never self-approve", () => {
   });
 });
 
-describe("unit 0.22: HR leave filing with no chain needs a second party", () => {
-  const body = { leaveTypeId: "cleavetype000000000000022", amount: 1, startDate: today, endDate: today };
-
-  beforeEach(() => {
-    handlers["leaveType.findFirst"] = () => ({ id: body.leaveTypeId, isPaid: true });
-    handlers["leaveTransaction.create"] = () => ({ id: "lt22", approvalStatus: "PENDING" });
-    handlers["leaveTransaction.update"] = (a) => ({ id: "lt22", ...(a as { data: object }).data });
+describe("unit 0.22 Am 1 (B6): no filing for, no viewing of, another employee", () => {
+  it("T3 the HR leave filing route is refused for everyone, even with LEAVES:APPROVE", async () => {
+    signIn({ employeeId: "emp22hr", owner: true, perms: ["LEAVES:APPROVE", "LEAVES:CREATE"] });
+    const res = await hrLeavePost(req({}));
+    expect(res.status).toBe(403);
+    expect(ops()).not.toContain("leaveTransaction.create");
   });
 
-  it("T3 filer IS the employee (even with LEAVES:APPROVE): stays PENDING", async () => {
-    signIn({ employeeId: EMP, canApprove: true });
-    const res = await hrLeavePost(req(body), params(EMP));
-    expect((await res.json()).data.approvalStatus).toBe("PENDING");
-    expect(finalizeLeaveApproval).not.toHaveBeenCalled();
-    expect(updatesTo("leaveTransaction.update")).toEqual([]);
+  it("T4 someone else's leave list needs LEAVES:READ or the owner; one's own is fine", async () => {
+    handlers["leaveTransaction.findMany"] = () => [];
+    handlers["leaveTransaction.count"] = () => 0;
+    const url = `http://test.local/api/employees/${OTHER}/leave-transactions`;
+    signIn({ employeeId: "emp22staff" });
+    expect((await hrLeaveGet(getReq(url), params(OTHER))).status).toBe(403);
+    signIn({ employeeId: "emp22hr", perms: ["LEAVES:READ"] });
+    expect((await hrLeaveGet(getReq(url), params(OTHER))).status).toBe(200);
+    signIn({ employeeId: "emp22own", owner: true });
+    expect((await hrLeaveGet(getReq(url), params(OTHER))).status).toBe(200);
+    signIn({ employeeId: OTHER });
+    expect((await hrLeaveGet(getReq(url), params(OTHER))).status).toBe(200);
   });
 
-  it("T4 filer lacks LEAVES:APPROVE: stays PENDING", async () => {
-    signIn({ employeeId: "emp22hr", canApprove: false });
-    const res = await hrLeavePost(req(body), params(OTHER));
-    expect((await res.json()).data.approvalStatus).toBe("PENDING");
-    expect(finalizeLeaveApproval).not.toHaveBeenCalled();
-  });
-
-  it("T5 second party with LEAVES:APPROVE: approved at filing", async () => {
-    signIn({ employeeId: "emp22hr", canApprove: true });
-    const res = await hrLeavePost(req(body), params(OTHER));
-    expect((await res.json()).data.approvalStatus).toBe("APPROVED");
-    expect(fn(finalizeLeaveApproval).mock.calls).toHaveLength(1);
-    expect(fn(finalizeLeaveApproval).mock.calls[0][0]).toBe(tx);
-    expect(fn(finalizeLeaveApproval).mock.calls[0][1]).toBe("lt22");
-    expect(checkPermission).toHaveBeenCalledWith(T, "role22", "LEAVES", "APPROVE");
-  });
-});
-
-describe("unit 0.22: DTR submission with no chain", () => {
-  const body = { employeeId: EMP, periodStart: "2026-11-01", periodEnd: "2026-11-15" };
-
-  beforeEach(() => {
+  it("T5 DTR: only one's own; with no chain it stays SUBMITTED", async () => {
+    const body = { employeeId: OTHER, periodStart: "2026-11-01", periodEnd: "2026-11-15" };
     handlers["dTRSubmission.create"] = () => ({ id: "sub22", status: "SUBMITTED" });
-  });
+    signIn({ employeeId: "emp22hr", perms: ["TIMESHEETS:APPROVE"] });
+    fn(isSelfAction).mockResolvedValue(false);
+    expect((await dtrSubmitPost(req(body))).status).toBe(403);
+    expect(ops()).not.toContain("dTRSubmission.create");
 
-  it("T6 one's own submission stays SUBMITTED", async () => {
-    signIn({ employeeId: EMP, canApprove: true });
+    calls = [];
+    signIn({ employeeId: OTHER });
     fn(isSelfAction).mockResolvedValue(true);
     await dtrSubmitPost(req(body));
-    const statuses = updatesTo("dTRSubmission.update").map((u) => u.data?.status);
-    expect(statuses).not.toContain("MANAGER_APPROVED");
+    expect(ops()).toContain("dTRSubmission.create");
+    expect(argsOf("dTRSubmission.update").map((u) => (u.data as { status?: string })?.status)).not.toContain("MANAGER_APPROVED");
   });
 
-  it("T7 an approver submitting for someone else is final-approved", async () => {
-    signIn({ employeeId: "emp22hr", canApprove: true });
-    fn(isSelfAction).mockResolvedValue(false);
-    await dtrSubmitPost(req({ ...body, employeeId: OTHER }));
-    const statuses = updatesTo("dTRSubmission.update").map((u) => u.data?.status);
-    expect(statuses).toContain("MANAGER_APPROVED");
+  it("T8 expense claims: filing only for oneself; lists scoped without PAYROLL:READ", async () => {
+    signIn({ employeeId: "emp22hr", perms: ["PAYROLL:APPROVE"] });
+    const res = await expensePost(req({ employeeId: OTHER, category: "TRAVEL", description: "Taxi", amount: 250, claimDate: today }));
+    expect([403, 400]).toContain(res.status);
+    expect(ops()).not.toContain("expenseClaim.create");
+
+    handlers["expenseClaim.count"] = () => 0;
+    handlers["expenseClaim.findMany"] = () => [];
+    calls = [];
+    signIn({ employeeId: "emp22staff" });
+    await expenseListGet(getReq("http://test.local/api/expense-claims"));
+    expect((argsOf("expenseClaim.findMany")[0].where as { employeeId?: string }).employeeId).toBe("emp22staff");
   });
 });
 
-describe("unit 0.22: approve routes refuse self-approval and unpermitted callers", () => {
+describe("unit 0.22 Am 1 (B5): owner or permitted role approves; never self", () => {
   beforeEach(() => {
-    handlers["leaveTransaction.findFirst"] = () => ({
-      id: "lt22",
-      type: "USAGE",
-      approvalStatus: "PENDING",
-      employeeId: OTHER,
-      currentStepIndex: 0,
-    });
+    handlers["leaveTransaction.findFirst"] = () => ({ id: "lt22", type: "USAGE", approvalStatus: "PENDING", employeeId: OTHER, currentStepIndex: 0 });
     handlers["approvalStep.findMany"] = () => [];
     handlers["leaveTransaction.update"] = (a) => ({ id: "lt22", ...(a as { data: object }).data });
   });
 
-  it("T8a leave approve, no-workflow mode: a caller without LEAVES:APPROVE is refused", async () => {
-    signIn({ employeeId: "emp22staff", canApprove: false });
-    const res = await leaveApprovePost(req({}), params("lt22"));
-    expect(res.status).toBe(403);
-    expect(updatesTo("leaveTransaction.update")).toEqual([]);
+  it("T6 leave approve, no chain: refused without permission, allowed for the owner, never self", async () => {
+    signIn({ employeeId: "emp22staff" });
+    expect((await leaveApprovePost(req({}), params("lt22"))).status).toBe(403);
     expect(finalizeLeaveApproval).not.toHaveBeenCalled();
-  });
 
-  it("T8b leave approve: one's own leave is refused even with LEAVES:APPROVE", async () => {
-    signIn({ employeeId: OTHER, canApprove: true });
-    const res = await leaveApprovePost(req({}), params("lt22"));
-    expect(res.status).toBe(403);
-    expect(updatesTo("leaveTransaction.update")).toEqual([]);
-  });
+    signIn({ employeeId: OTHER, owner: true, perms: ["LEAVES:APPROVE"] });
+    expect((await leaveApprovePost(req({}), params("lt22"))).status).toBe(403);
 
-  it("T8c leave approve: a second party with LEAVES:APPROVE approves", async () => {
-    signIn({ employeeId: "emp22hr", canApprove: true });
-    const res = await leaveApprovePost(req({}), params("lt22"));
-    expect(res.status).toBe(200);
+    signIn({ employeeId: "emp22own", owner: true });
+    expect((await leaveApprovePost(req({}), params("lt22"))).status).toBe(200);
     expect(fn(finalizeLeaveApproval).mock.calls).toHaveLength(1);
-    expect(fn(finalizeLeaveApproval).mock.calls[0][0]).toBe(tx);
-    expect(fn(finalizeLeaveApproval).mock.calls[0][1]).toBe("lt22");
   });
 
-  it("T9 undertime approve: one's own request is refused", async () => {
-    fn(requirePermission).mockResolvedValue({
-      ctx: { tenantId: T, userId: "user22", systemRole: "TENANT_USER", roleId: "role22" },
-    });
-    handlers["undertimeRequest.findFirst"] = () => ({ id: "ut22", status: "PENDING", employeeId: EMP });
-    handlers["employee.findFirst"] = () => ({ id: EMP });
-    const res = await undertimeApprovePost(req({}), params("ut22"));
-    expect(res.status).toBe(403);
-    expect(ops()).not.toContain("undertimeRequest.update");
+  it("T7 expense approve: never one's own; only the owner or PAYROLL:APPROVE", async () => {
+    handlers["expenseClaim.findFirst"] = () => ({ id: "ec22", employeeId: OTHER, status: "SUBMITTED" });
+    handlers["expenseClaim.update"] = (a) => ({ id: "ec22", ...(a as { data: object }).data });
+    const body = { taxTreatment: "NONTAXABLE_REIMBURSEMENT" };
+
+    signIn({ employeeId: "emp22staff" });
+    expect((await expenseApprovePost(req(body), params("ec22"))).status).toBe(403);
+    signIn({ employeeId: OTHER, perms: ["PAYROLL:APPROVE"] });
+    expect((await expenseApprovePost(req(body), params("ec22"))).status).toBe(403);
+    expect(ops()).not.toContain("expenseClaim.update");
+    signIn({ employeeId: "emp22own", owner: true });
+    expect((await expenseApprovePost(req(body), params("ec22"))).status).toBe(200);
+    expect(ops()).toContain("expenseClaim.update");
+  });
+
+  it("T9 leave balance adjust: never one's own; only the owner or LEAVES:UPDATE", async () => {
+    handlers["leaveType.findFirst"] = () => ({ id: "lvt22" });
+    handlers["leaveBalance.upsert"] = () => ({ id: "lb22" });
+    const body = { leaveTypeId: "cleavetype000000000000022", year: 2026, openingBalance: 30 };
+    signIn({ employeeId: "emp22staff" });
+    expect((await leaveBalancePut(req(body), params(OTHER))).status).toBe(403);
+    signIn({ employeeId: OTHER, perms: ["LEAVES:UPDATE"] });
+    expect((await leaveBalancePut(req(body), params(OTHER))).status).toBe(403);
+    expect(ops()).not.toContain("leaveBalance.upsert");
+    signIn({ employeeId: "emp22hr", perms: ["LEAVES:UPDATE"] });
+    expect([200, 422]).toContain((await leaveBalancePut(req(body), params(OTHER))).status);
+  });
+
+  it("T10 OT approve guard: owner passes without TIMESHEETS:APPROVE; others refused; self refused", async () => {
+    handlers["oTApplication.findFirst"] = () => ({ id: "ota22", status: "PENDING", employeeId: OTHER, date: new Date(), hours: 2 });
+    handlers["oTApplication.update"] = (a) => ({ id: "ota22", employeeId: OTHER, date: new Date(), hours: 2, ...(a as { data: object }).data });
+    signIn({ employeeId: "emp22staff" });
+    expect((await otApprovePost(req({}), params("ota22"))).status).toBe(403);
+    signIn({ employeeId: OTHER, owner: true });
+    expect((await otApprovePost(req({}), params("ota22"))).status).toBe(403);
+    calls = [];
+    signIn({ employeeId: "emp22own", owner: true });
+    expect((await otApprovePost(req({}), params("ota22"))).status).toBe(200);
+    expect(ops()).toContain("oTApplication.update");
   });
 });

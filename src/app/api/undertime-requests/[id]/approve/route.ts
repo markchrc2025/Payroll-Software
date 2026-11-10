@@ -14,10 +14,11 @@
  * so an approved early-departure is not deducted from pay. Only unfiled /
  * unapproved undertime is deducted.
  */
+import { requireApprover } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission, checkPermission } from "@/lib/require-permission";
+import { checkPermission } from "@/lib/require-permission";
 import { ok, err, notFound, forbidden } from "@/lib/api-response";
 import { callerEmployeeId } from "@/lib/approvals/second-party";
 
@@ -27,7 +28,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission(req, "TIMESHEETS", "APPROVE");
+  // Unit 0.22 Am 1 (B5): the owner or a role granted TIMESHEETS:APPROVE.
+  const guard = await requireApprover(req, "UNDERTIME");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
   const { id } = await params;

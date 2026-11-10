@@ -3,10 +3,11 @@
  *   GET — list leave balances for an employee (optional ?year=YYYY filter)
  *   PUT — upsert opening balance for a (leaveTypeId, year) pair
  */
+import { callerEmployeeId, holdsPermission, maySeeEmployeeRecords } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
-import { err, notFound, ok, unauthorized } from "@/lib/api-response";
+import { err, notFound, ok, unauthorized, forbidden } from "@/lib/api-response";
 import { listLeaveBalancesSchema, upsertLeaveBalanceSchema } from "@/lib/validations/leave";
 import { serializeLeaveBalance } from "@/lib/payroll/serialize";
 
@@ -28,6 +29,8 @@ export async function GET(
       where: { id: employeeId, tenantId: auth.tenantId },
     });
     if (!employee) return null;
+    // Unit 0.22 Am 1 (B6): the employee, the owner, or a LEAVES:READ role.
+    if (!(await maySeeEmployeeRecords(tx, auth, employeeId, "LEAVE"))) return null;
 
     return tx.leaveBalance.findMany({
       where: {
@@ -63,6 +66,11 @@ export async function PUT(
       where: { id: employeeId, tenantId: auth.tenantId },
     });
     if (!employee) return "no_employee" as const;
+    // Unit 0.22 Am 1 (B6): this checked nothing, so any signed-in user could
+    // set anyone's opening balance, their own included. Now: never one's own;
+    // the owner or a role granted LEAVES:UPDATE.
+    if ((await callerEmployeeId(tx, auth)) === employeeId) return "forbidden" as const;
+    if (!(await holdsPermission(tx, auth, ["LEAVES", "UPDATE"]))) return "forbidden" as const;
 
     // Validate leave type belongs to tenant
     const leaveType = await tx.leaveType.findFirst({
@@ -84,6 +92,7 @@ export async function PUT(
   });
 
   if (result === "no_employee") return notFound("Employee");
+  if (result === "forbidden") return forbidden("You cannot change this employee's leave balance");
   if (result === "no_leave_type") return notFound("LeaveType");
   return ok(serializeLeaveBalance(result), "LeaveBalance upserted");
 }

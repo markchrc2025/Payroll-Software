@@ -1,30 +1,47 @@
 /**
- * Unit 0.22: who may approve a request when NO approval chain resolves.
+ * Who may file, see and approve another employee's requests.
  *
- * Before 0.22, "no chain configured" meant "approve immediately": an
- * employee's own ESS overtime request wrote otMinutes onto a DTRRecord, own
- * undertime was excused, and leave or DTR filed by a tenant user was final
- * with nobody else involved. The absence of configuration was the trigger, so
- * a tenant that had not finished setting up approvals was the exposed case.
+ * Unit 0.22 found that "no approval chain configured" meant "approve
+ * immediately": an employee's own ESS overtime wrote otMinutes onto a DTR, own
+ * undertime was excused, and leave or DTR filed by any signed-in tenant user
+ * was final with nobody else involved.
  *
- * Rule now: with no chain, a request is approved at filing ONLY when the
- * person filing it is a second party, meaning not the employee the request is
- * about, who holds the module's approve permission. Otherwise it stays pending
- * and HR approves it through the existing no-workflow approve routes.
+ * Amendment 1, Mark's rulings of 10 Nov 2026:
+ *   B5  With no chain, nothing is approved at filing. The request waits for the
+ *       company OWNER (Tenant.ownerUserId, the first user granted the owner
+ *       role, transferable) or a role granted the module's approve permission.
+ *       The owner is always an approver. Never the requester.
+ *   B6  No one files for another employee: filing happens in ESS, by the
+ *       employee, and every employee must have ESS. No one sees another
+ *       employee's records except the owner and roles granted the permission
+ *       (role customization). Data privacy.
  */
-import type { ApprovalModule, PermissionAction, PermissionModule } from "@prisma/client";
-import type { AuthContext } from "@/lib/auth";
-import type { TenantTx } from "@/lib/with-tenant";
+import type { NextRequest } from "next/server";
+import type { PermissionAction, PermissionModule } from "@prisma/client";
+import { getAuthContext, type AuthContext } from "@/lib/auth";
+import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { checkPermission } from "@/lib/require-permission";
+import { forbidden, unauthorized } from "@/lib/api-response";
 
-export const NO_CHAIN_APPROVE_PERMISSION: Record<
-  "OT" | "UNDERTIME" | "DTR" | "LEAVE",
-  readonly [PermissionModule, PermissionAction]
-> = {
+export type RequestModule = "OT" | "UNDERTIME" | "DTR" | "LEAVE" | "EXPENSE";
+
+/** The permission that approves each module's requests when no chain resolves. */
+export const APPROVE_PERMISSION: Record<RequestModule, readonly [PermissionModule, PermissionAction]> = {
   OT: ["TIMESHEETS", "APPROVE"],
   UNDERTIME: ["TIMESHEETS", "APPROVE"],
   DTR: ["TIMESHEETS", "APPROVE"],
   LEAVE: ["LEAVES", "APPROVE"],
+  // There is no EXPENSES permission module; reimbursements are paid through payroll.
+  EXPENSE: ["PAYROLL", "APPROVE"],
+};
+
+/** The permission that lets someone see another employee's records of a module. */
+export const READ_PERMISSION: Record<RequestModule, readonly [PermissionModule, PermissionAction]> = {
+  OT: ["TIMESHEETS", "READ"],
+  UNDERTIME: ["TIMESHEETS", "READ"],
+  DTR: ["TIMESHEETS", "READ"],
+  LEAVE: ["LEAVES", "READ"],
+  EXPENSE: ["PAYROLL", "READ"],
 };
 
 /** The caller's own Employee id in this tenant, if they have one. */
@@ -36,24 +53,84 @@ export async function callerEmployeeId(tx: TenantTx, auth: AuthContext): Promise
   return me?.id ?? null;
 }
 
-export async function holdsApprovePermission(
-  auth: AuthContext,
-  module: keyof typeof NO_CHAIN_APPROVE_PERMISSION,
-): Promise<boolean> {
-  if (auth.systemRole === "SUPER_ADMIN") return true;
-  if (!auth.roleId) return false;
-  const [m, a] = NO_CHAIN_APPROVE_PERMISSION[module];
-  return checkPermission(auth.tenantId, auth.roleId, m, a);
+/** B5: the company owner is always an approver and always sees records. */
+export async function isTenantOwner(tx: TenantTx, auth: AuthContext): Promise<boolean> {
+  const t = await tx.tenant.findUnique({ where: { id: auth.tenantId }, select: { ownerUserId: true } });
+  return !!t?.ownerUserId && t.ownerUserId === auth.userId;
 }
 
-/** True only for a caller who is NOT the subject employee and holds the approve permission. */
-export async function isSecondPartyApprover(
+async function holds(
+  tx: TenantTx,
+  auth: AuthContext,
+  perm: readonly [PermissionModule, PermissionAction],
+): Promise<boolean> {
+  if (auth.systemRole === "SUPER_ADMIN") return true;
+  if (await isTenantOwner(tx, auth)) return true;
+  if (!auth.roleId) return false;
+  return checkPermission(auth.tenantId, auth.roleId, perm[0], perm[1]);
+}
+
+/** Owner, or a role granted this permission (role customization). Does NOT check self. */
+export function holdsPermission(
+  tx: TenantTx,
+  auth: AuthContext,
+  perm: readonly [PermissionModule, PermissionAction],
+) {
+  return holds(tx, auth, perm);
+}
+
+/** B5: owner, or a role granted the module's approve permission. Does NOT check self. */
+export function holdsApprovePermission(tx: TenantTx, auth: AuthContext, module: RequestModule) {
+  return holds(tx, auth, APPROVE_PERMISSION[module]);
+}
+
+/** B6: may this caller see THIS employee's records of a module? Self, owner, or the read permission. */
+export async function maySeeEmployeeRecords(
+  tx: TenantTx,
+  auth: AuthContext,
+  employeeId: string,
+  module: RequestModule,
+): Promise<boolean> {
+  if ((await callerEmployeeId(tx, auth)) === employeeId) return true;
+  return holds(tx, auth, READ_PERMISSION[module]);
+}
+
+/** B6: may this caller see EVERYONE's records of a module (lists)? Owner or the read permission. */
+export function maySeeAllRecords(tx: TenantTx, auth: AuthContext, module: RequestModule) {
+  return holds(tx, auth, READ_PERMISSION[module]);
+}
+
+/**
+ * B5 + self rule, for an approve route: the caller must not be the employee the
+ * request is about, and must be the owner or hold the approve permission.
+ */
+export async function mayApproveFor(
   tx: TenantTx,
   auth: AuthContext,
   subjectEmployeeId: string,
-  module: keyof typeof NO_CHAIN_APPROVE_PERMISSION & ApprovalModule,
-): Promise<boolean> {
-  const me = await callerEmployeeId(tx, auth);
-  if (me !== null && me === subjectEmployeeId) return false;
-  return holdsApprovePermission(auth, module);
+  module: RequestModule,
+): Promise<"ok" | "self" | "forbidden"> {
+  if ((await callerEmployeeId(tx, auth)) === subjectEmployeeId) return "self";
+  return (await holdsApprovePermission(tx, auth, module)) ? "ok" : "forbidden";
+}
+
+export const FILE_IN_ESS =
+  "Requests are filed by the employee in ESS. No one can file on another employee's behalf.";
+
+/**
+ * B5 route guard for approve and reject routes: signed in, and the owner or a
+ * role granted the module's approve permission. Replaces a plain
+ * requirePermission(...APPROVE) so the owner is always an approver even if
+ * their role is later customised. Self-approval is still refused inside each
+ * route, against the specific request.
+ */
+export async function requireApprover(
+  req: NextRequest,
+  module: RequestModule,
+): Promise<{ ctx: AuthContext } | Response> {
+  const auth = await getAuthContext(req);
+  if (!auth) return unauthorized();
+  const allowed = await withTenant(auth.tenantId, (tx) => holdsApprovePermission(tx, auth, module));
+  if (!allowed) return forbidden("You do not have permission to approve these requests");
+  return { ctx: auth };
 }
