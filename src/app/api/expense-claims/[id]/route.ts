@@ -1,3 +1,4 @@
+import { callerEmployeeId, maySeeEmployeeRecords } from "@/lib/approvals/second-party";
 import { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
@@ -21,6 +22,7 @@ export async function GET(
         include: { employee: { select: { id: true, firstName: true, lastName: true } } },
       });
       if (!claim) return notFound();
+      if (!(await maySeeEmployeeRecords(tx, auth, claim.employeeId, "EXPENSE"))) return notFound();
       return ok(serializeExpenseClaim(claim));
     });
   } catch (e) {
@@ -55,6 +57,8 @@ export async function PATCH(
         where: { id, tenantId: auth.tenantId },
       });
       if (!claim) return notFound();
+      // Unit 0.22 Am 1 (B6): a claim is edited only by the employee it belongs to.
+      if ((await callerEmployeeId(tx, auth)) !== claim.employeeId) return notFound();
       if (claim.status !== "DRAFT")
         return err("Only DRAFT claims can be edited", 409);
 

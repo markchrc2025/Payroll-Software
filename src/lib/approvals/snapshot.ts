@@ -6,7 +6,10 @@
  * resolvable step (null/self-approval slots are omitted). Returns the number of
  * active steps and the index of the first active step.
  *
- * If there are no active steps the entity should be treated as auto-approved.
+ * If there are no active steps (no workflow, or every slot unresolved or the
+ * requester), nothing is approved here: the request stays pending for the
+ * default single approver, the company owner or a role holding the module's
+ * approve permission, never the requester (unit 0.22 Am 1, ruling B5).
  */
 import type { ApprovalModule } from "@prisma/client";
 import type { TenantTx } from "@/lib/with-tenant";

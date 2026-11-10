@@ -14,11 +14,13 @@
  * so an approved early-departure is not deducted from pay. Only unfiled /
  * unapproved undertime is deducted.
  */
+import { requireApprover } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission, checkPermission } from "@/lib/require-permission";
-import { ok, err, notFound } from "@/lib/api-response";
+import { checkPermission } from "@/lib/require-permission";
+import { ok, err, notFound, forbidden } from "@/lib/api-response";
+import { callerEmployeeId } from "@/lib/approvals/second-party";
 
 const bodySchema = z.object({ note: z.string().optional() }).optional();
 
@@ -26,7 +28,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission(req, "TIMESHEETS", "APPROVE");
+  // Unit 0.22 Am 1 (B5): the owner or a role granted TIMESHEETS:APPROVE.
+  const guard = await requireApprover(req, "UNDERTIME");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
   const { id } = await params;
@@ -42,6 +45,9 @@ export async function POST(
     if (utr.status === "APPROVED") return { row: utr };
     if (utr.status === "REJECTED" || utr.status === "CANCELLED")
       return { terminal: true as const, status: utr.status };
+
+    // Unit 0.22: never one's own undertime (OT and DTR already refuse it).
+    if ((await callerEmployeeId(tx, auth)) === utr.employeeId) return { self: true as const };
 
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "UNDERTIME", entityId: id },
@@ -111,6 +117,8 @@ export async function POST(
   if ("notFound" in result && result.notFound) return notFound("Undertime request not found");
   if ("terminal" in result && result.terminal)
     return err(`Cannot approve a ${result.status} request`, 409);
+  if ("self" in result && result.self)
+    return forbidden("You cannot approve your own undertime request");
   if ("forbidden" in result && result.forbidden)
     return err("You are not the assigned approver for this step", 403);
 

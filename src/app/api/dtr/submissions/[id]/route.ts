@@ -1,7 +1,9 @@
 /**
  * /api/dtr/submissions/[id]
- *   GET — return submission with daily DTR breakdown + audit log
+ *   GET: return submission with daily DTR breakdown and audit log, to the
+ *   employee, the owner, a TIMESHEETS:READ role, or an assigned approver.
  */
+import { callerEmployeeId, maySeeEmployeeRecords } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
@@ -41,6 +43,20 @@ export async function GET(
       },
     });
     if (!submission) return null;
+
+    // Unit 0.22 Am 1 (B6): the employee, the owner, a TIMESHEETS:READ role,
+    // or an approver assigned to this submission (who must see what they
+    // approve). Anyone else gets 404, as if it did not exist.
+    if (!(await maySeeEmployeeRecords(tx, auth, submission.employeeId, "DTR"))) {
+      const me = await callerEmployeeId(tx, auth);
+      const assigned = me
+        ? await tx.approvalStep.findFirst({
+            where: { tenantId: auth.tenantId, module: "DTR", entityId: id, approverEmployeeId: me },
+            select: { id: true },
+          })
+        : null;
+      if (!assigned) return null;
+    }
 
     // Fetch DTR records for this employee for the cutoff period
     const dtrRecords = await tx.dTRRecord.findMany({
