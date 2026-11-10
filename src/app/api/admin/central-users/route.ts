@@ -1,8 +1,8 @@
+import { issueUserLink } from "@/lib/user-credential-links";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendAdminOnboarding } from "@/lib/emails";
-import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 
 export async function GET() {
@@ -64,15 +64,8 @@ export async function POST(req: Request) {
     select: { id: true, email: true, firstName: true },
   });
 
-  const raw = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(raw).digest("hex");
-  await prismaAdmin.passwordResetToken.create({
-    data: {
-      userId: user.id,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    },
-  });
+  // Unit 0.15 Am 2 (B7): an INVITE, the only link that can activate an account.
+  const raw = await issueUserLink(prismaAdmin, { userId: user.id, purpose: "INVITE" });
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sentire-payroll.onrender.com";
   const link = `${base}/centralportal/accept-invite?token=${raw}`;

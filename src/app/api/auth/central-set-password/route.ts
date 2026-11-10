@@ -3,7 +3,7 @@ import prismaAdmin from "@/lib/prisma-admin";
 import { sendAdminResetPasswordNotice } from "@/lib/emails";
 import { securityContext } from "@/lib/security-context";
 import bcrypt from "bcryptjs";
-import { createHash } from "crypto";
+import { claimUserLink } from "@/lib/user-credential-links";
 import { z } from "zod";
 
 const schema = z.object({
@@ -19,34 +19,18 @@ export async function POST(req: Request) {
   }
   const { token, password } = parsed.data;
 
-  const tokenHash = createHash("sha256").update(token).digest("hex");
-  const record = await prismaAdmin.passwordResetToken.findFirst({
-    where: { tokenHash },
-    select: { id: true, userId: true, expiresAt: true, usedAt: true },
-  });
-
-  if (!record || record.usedAt || record.expiresAt < new Date()) {
-    return err("This link is invalid or has expired", 400);
-  }
-
+  // Unit 0.15 Am 2 (rulings B7, B8). Before: ANY token set `isActive: true`,
+  // so a reset link sent to a deactivated Central admin switched them back on.
+  // Now only an INVITE activates, and only a never-activated account; a RESET
+  // needs an account that is already active. Sessions end either way.
+  const passwordHash = await bcrypt.hash(password, 10);
+  const result = await claimUserLink(prismaAdmin, token, passwordHash, { scope: "central" });
+  if (!result.ok) return err("This link is invalid or has expired", 400);
   const user = await prismaAdmin.user.findFirst({
-    where: { id: record.userId, tenantId: null, deletedAt: null },
-    select: { id: true, email: true, firstName: true, systemRole: true, centralRole: { select: { name: true } } },
+    where: { id: result.userId },
+    select: { email: true, systemRole: true, centralRole: { select: { name: true } } },
   });
   if (!user) return err("This link is invalid or has expired", 400);
-
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  await prismaAdmin.$transaction([
-    prismaAdmin.user.update({
-      where: { id: user.id },
-      data: { passwordHash, isActive: true },
-    }),
-    prismaAdmin.passwordResetToken.update({
-      where: { id: record.id },
-      data: { usedAt: new Date() },
-    }),
-  ]);
 
   // Security notice. The password IS changed at this point, so a delivery
   // failure must not fail the request (the user would retry with a now-used

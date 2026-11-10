@@ -6,7 +6,7 @@
  */
 
 import { type NextRequest } from "next/server";
-import { createHash } from "crypto";
+import { claimUserLink } from "@/lib/user-credential-links";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
@@ -35,37 +35,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { token, password } = parsed.data;
-  const tokenHash = createHash("sha256").update(token).digest("hex");
-
-  const record = await prismaAdmin.passwordResetToken.findUnique({
-    where: { tokenHash },
-  });
-
-  if (!record || record.usedAt !== null || record.expiresAt < new Date()) {
-    return err("This reset link is invalid or has expired.", 400);
-  }
-
-  const user = await prismaAdmin.user.findUnique({
-    where: { id: record.userId },
-    select: { id: true, isActive: true, deletedAt: true, email: true, firstName: true },
-  });
-
-  if (!user || !user.isActive || user.deletedAt !== null) {
-    return err("This reset link is invalid or has expired.", 400);
-  }
-
+  // Unit 0.15 Am 2 (rulings B7, B8): the link is claimed atomically, a RESET
+  // never activates an account, and every running session of the user ends.
   const passwordHash = await bcrypt.hash(password, 12);
-
-  await prismaAdmin.$transaction([
-    prismaAdmin.user.update({
-      where: { id: record.userId },
-      data: { passwordHash },
-    }),
-    prismaAdmin.passwordResetToken.update({
-      where: { id: record.id },
-      data: { usedAt: new Date() },
-    }),
-  ]);
+  const result = await claimUserLink(prismaAdmin, token, passwordHash, { scope: "any" });
+  if (!result.ok) return err("This reset link is invalid or has expired.", 400);
+  const user = { email: result.email, firstName: result.firstName };
 
   // Security notice. The password IS changed at this point, so a delivery
   // failure must not fail the request (the user would retry with a now-used
@@ -76,5 +51,5 @@ export async function POST(req: NextRequest) {
     console.error("[reset-password] password-changed email failed:", e);
   }
 
-  return ok(null, "Password updated successfully.");
+  return ok(null, "Password updated. You have been signed out everywhere; sign in with your new password.");
 }

@@ -15,9 +15,11 @@
  */
 
 import NextAuth, { type DefaultSession } from "next-auth";
+import type { JWT } from "@auth/core/jwt";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { sessionStillValid } from "@/lib/session-cutoff";
 import prismaAdmin from "@/lib/prisma-admin";
 import type { SystemRole } from "@prisma/client";
 
@@ -61,6 +63,8 @@ declare module "@auth/core/jwt" {
     tenantId: string | null;
     systemRole: SystemRole;
     roleId: string | null;
+    /** Unit 0.15 Am 2: epoch ms of sign-in; never refreshed. */
+    signedInAt?: number;
   }
 }
 
@@ -180,6 +184,28 @@ export const AUTH_PAGES = {
   error: "/login",
 } as const;
 
+/**
+ * Auth.js jwt callback, exported so tests can drive it directly.
+ * On sign-in it copies the user onto the token and stamps `signedInAt`.
+ * Unit 0.15 Am 2 (ruling B8): on every later request it re-checks the user; a
+ * password change or reset (User.sessionsValidAfter), a deactivation or a
+ * deletion ends the session now instead of at the 8-hour expiry.
+ */
+export async function jwtCallback({ token, user }: { token: JWT; user?: unknown }): Promise<JWT | null> {
+  if (user) {
+    // user is the object returned from authorize(), only on initial sign-in
+    const u = user as { id: string; tenantId: string | null; systemRole: SystemRole; roleId: string | null };
+    token.userId = u.id;
+    token.tenantId = u.tenantId;
+    token.systemRole = u.systemRole;
+    token.roleId = u.roleId;
+    token.signedInAt = Date.now();
+    return token;
+  }
+  if (!(await sessionStillValid(token))) return null;
+  return token;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 /* 8h */ },
   pages: AUTH_PAGES,
@@ -195,16 +221,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        // user is the object returned from authorize() — only on initial sign-in
-        token.userId = user.id as string;
-        token.tenantId = (user as { tenantId: string | null }).tenantId;
-        token.systemRole = (user as { systemRole: SystemRole }).systemRole;
-        token.roleId = (user as { roleId: string | null }).roleId;
-      }
-      return token;
-    },
+    jwt: jwtCallback,
     async session({ session, token }) {
       session.user.id = token.userId;
       session.user.tenantId = token.tenantId;
