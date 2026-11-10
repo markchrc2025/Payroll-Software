@@ -121,7 +121,7 @@ into a broken running app — the worst case is that the *new* deploy never star
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' https://payroll.sentire.solutions/api/health   # 200
 ```
-Then log in as a tenant admin in a browser. `auth.ts:35` uses `prismaAdmin`, so a
+Then log in as a tenant admin in a browser. `src/auth.ts:100` (expects `prismaAdmin`) uses `prismaAdmin`, so a
 successful login is what actually proves the rotated credential reached the admin
 client — the health endpoint alone does not.
 
@@ -155,7 +155,7 @@ confirming it connects.
 | Consumer | Effect between step 2 and step 3 |
 |---|---|
 | Runtime requests (`prisma`) | Existing pooled connections keep working; **new** connections fail. Errors appear gradually, not instantly — do not read early success as "no impact". |
-| Login (`prismaAdmin`, `auth.ts:35`) | Fails once it needs a new connection. |
+| Login (`prismaAdmin`, `src/auth.ts:100` (expects `prismaAdmin`)) | Fails once it needs a new connection. |
 | pg-boss (`jobs/client.ts:20`) | Uses LISTEN/NOTIFY on a long-lived connection. On its next reconnect it fails and job workers stop. Recovers on redeploy. |
 | Migrate-at-boot (`scripts/start.sh`) | If the container restarts mid-window it fails closed and the deploy is blocked — protective, not a fault. |
 | `db-migrate.yml` | Manual dispatch only. No impact unless dispatched. |
