@@ -123,6 +123,13 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
         companyCode: mode === "tenant" ? companyCode.trim().toUpperCase() : undefined,
         destination: redirectTo,
       });
+      if (!outcome.ok && outcome.code === "locked") {
+        // Unit 0.15 Am 4: five wrong passwords in a row lock sign-in.
+        setStatus("error");
+        setFormErr("Too many wrong attempts. Try again in 15 minutes, or reset your password to unlock now.");
+        shake();
+        return;
+      }
       if (!outcome.ok) {
         setStatus("error");
         setFormErr(

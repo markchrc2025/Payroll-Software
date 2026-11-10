@@ -102,6 +102,9 @@ export async function claimUserLink(
       data: {
         passwordHash,
         sessionsValidAfter: now,
+        // Unit 0.15 Am 4: using a link also lifts a wrong-password lock.
+        failedLoginCount: 0,
+        lockedUntil: null,
         ...(centralFirstActivation ? { isActive: true } : {}),
       },
     });

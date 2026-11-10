@@ -76,7 +76,7 @@ export function postLoginDestination(
 // Credentials sign-in
 
 export type SignInResult =
-  | { error?: string; ok?: boolean; status?: number; url?: string | null }
+  | { error?: string; code?: string; ok?: boolean; status?: number; url?: string | null }
   | undefined;
 
 export type SignInFn = (
@@ -136,6 +136,8 @@ export async function submitCredentials(
     redirectTo: args.destination,
   });
 
-  if (!res || res.error) return { ok: false, code: res?.error };
+  // `code` carries a CredentialsSignin subclass's code, e.g. "locked" (unit
+  // 0.15 Am 4); otherwise fall back to the error type as before.
+  if (!res || res.error) return { ok: false, code: res?.code && res.code !== "credentials" ? res.code : res?.error };
   return { ok: true, destination: args.destination };
 }
