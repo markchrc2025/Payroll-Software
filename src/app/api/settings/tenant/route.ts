@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { err, ok, unauthorized } from "@/lib/api-response";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const INDUSTRY_LIST = [
   "Agriculture",
@@ -83,6 +84,7 @@ const patchSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: the company's own name and branding, shown on every screen (unit 0.25)
 
   const tenant = await withTenant(auth.tenantId, (tx) =>
     tx.tenant.findFirst({
@@ -129,6 +131,9 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);

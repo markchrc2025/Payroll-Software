@@ -1,7 +1,14 @@
+/**
+ * POST /api/expense-claims/[id]/submit: submit a DRAFT expense claim.
+ *
+ * Unit 0.25 (ruling B6): only the employee the claim belongs to can submit it.
+ * No one files for another employee.
+ */
 import { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
-import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { ok, err, unauthorized, notFound, forbidden, serverError } from "@/lib/api-response";
+import { callerEmployeeId } from "@/lib/approvals/second-party";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function POST(
@@ -18,6 +25,9 @@ export async function POST(
         where: { id, tenantId: auth.tenantId },
       });
       if (!claim) return notFound();
+      if (claim.employeeId !== (await callerEmployeeId(tx, auth))) {
+        return forbidden("You can only submit your own expense claims. Employees submit theirs in ESS.");
+      }
       if (claim.status !== "DRAFT")
         return err("Only DRAFT claims can be submitted", 409);
 

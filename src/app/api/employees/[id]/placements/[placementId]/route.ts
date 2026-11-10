@@ -7,6 +7,7 @@ import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const patchSchema = z.object({
   effectiveDate: z.string().optional(),
@@ -25,6 +26,9 @@ type RouteParams = { params: Promise<{ id: string; placementId: string }> };
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["EMPLOYEES", "UPDATE"]);
+  if (denied) return denied;
   const { id, placementId } = await params;
 
   const body = await req.json().catch(() => null);
@@ -116,6 +120,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["EMPLOYEES", "UPDATE"]);
+  if (denied) return denied;
   const { id, placementId } = await params;
 
   const result = await withTenant(auth.tenantId, async (tx) => {

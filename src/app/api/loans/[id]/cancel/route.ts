@@ -8,6 +8,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { serializeLoan } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function POST(
   req: NextRequest,
@@ -15,6 +16,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const result = await withTenant(auth.tenantId, async (tx) => {

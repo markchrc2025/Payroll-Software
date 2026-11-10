@@ -69,5 +69,6 @@ export async function GET(
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: always refused: no one files leave for another employee (ruling B6, unit 0.22 Am 1) (unit 0.25)
   return forbidden(FILE_IN_ESS);
 }

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const createSchema = z.object({
   effectiveDate:    z.string().min(1, "Effective date is required"),
@@ -24,6 +25,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const result = await withTenant(auth.tenantId, async (tx) => {
@@ -55,6 +59,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);

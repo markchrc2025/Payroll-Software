@@ -15,6 +15,7 @@ import {
   listAssignmentsSchema,
 } from "@/lib/validations/pay-component";
 import { serializeEmployeePayComponent } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(
   req: NextRequest,
@@ -22,6 +23,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"]);
+  if (denied) return denied;
   const { id: employeeId } = await params;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
@@ -60,6 +64,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id: employeeId } = await params;
 
   const body = await req.json().catch(() => null);

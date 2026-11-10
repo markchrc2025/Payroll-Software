@@ -11,6 +11,7 @@ import { withTenant } from "@/lib/with-tenant";
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: answers only whether the caller may initiate; reads no records (unit 0.25)
   if (auth.systemRole === "SUPER_ADMIN") return ok({ canInitiate: true, isHR: false });
 
   const result = await withTenant(auth.tenantId, async (tx) => {

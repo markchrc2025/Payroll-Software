@@ -18,6 +18,7 @@ import {
   type AlphalistEmployeeInput,
   type AlphalistSheetInput,
 } from "@/lib/payroll/reports/bir-alphalist";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const querySchema = z.object({
   year: z.coerce
@@ -31,6 +32,9 @@ const querySchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["REPORTS", "READ"]);
+  if (denied) return denied;
 
   const { searchParams } = new URL(req.url);
   const parsed = querySchema.safeParse({

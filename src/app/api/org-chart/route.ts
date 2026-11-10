@@ -16,6 +16,7 @@ import { ok, unauthorized } from "@/lib/api-response";
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: names and positions every dashboard user sees; no pay, IDs or personal details (unit 0.25)
 
   const data = await withTenant(auth.tenantId, async (tx) => {
     const [employees, positions, departments, branches, tenant] = await Promise.all([

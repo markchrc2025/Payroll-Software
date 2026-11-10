@@ -83,6 +83,7 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company reference data for dropdowns and screens, no employee records; changes to it are permission-checked (unit 0.25)
   const { roleKey } = await params;
 
   if (!(SINGLETON_ROLES as readonly string[]).includes(roleKey))

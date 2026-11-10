@@ -12,6 +12,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { r2, R2_BUCKET, isR2Configured } from "@/lib/r2";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 // ---------------------------------------------------------------------------
 // GET — issue a presigned download URL
@@ -23,6 +24,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["DOCUMENTS", "READ"]);
+  if (denied) return denied;
 
   if (!isR2Configured()) {
     return err("File storage is not configured on the server.", 503);
@@ -68,6 +72,9 @@ export async function DELETE(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["DOCUMENTS", "DELETE"]);
+  if (denied) return denied;
 
   const { id, docId } = await params;
 
