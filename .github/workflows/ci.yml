@@ -133,34 +133,15 @@ jobs:
           '
 
       # The migration set is NOT self-contained: 35 statements across
-      # prisma/migrations GRANT to `payroll_app`, and the admin_bypass policies
-      # reference `owner`. Neither role exists in a fresh container, so
-      # `migrate deploy` dies on migration 4 of 87 with
-      # `ERROR: role "payroll_app" does not exist` (found by this pipeline's
-      # very first run). Same idempotent pre-creation the restore drill uses —
-      # scripts/restore-from-backup.md:48-50 — so CI and the drill agree.
-      # No password: these are NOLOGIN grant targets inside a throwaway
-      # container, never authenticated against.
-      - name: Pre-create the roles the migrations GRANT to
-        run: |
-          node -e '
-            const { Client } = require("pg");
-            const roles = ["owner", "payroll_app", "sentire_books_app"];
-            const c = new Client({ connectionString: process.env.TEST_DATABASE_URL });
-            (async () => {
-              await c.connect();
-              for (const r of roles) {
-                await c.query(
-                  `DO $$ BEGIN CREATE ROLE "${r}"; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`
-                );
-                console.log("role ready:", r);
-              }
-              await c.end();
-            })().catch((e) => {
-              console.error("::error::Could not pre-create migration roles: " + e.message);
-              process.exit(1);
-            });
-          '
+      # prisma/migrations GRANT to `payroll_app`, and no migration creates it,
+      # so on a fresh cluster `migrate deploy` dies on migration 4 of 87 with
+      # `ERROR: role "payroll_app" does not exist`. Unit 0.21: CI now runs the
+      # SAME script scripts/start.sh runs in production, with NO extra role
+      # names, so a green run proves a fresh database migrates through the
+      # production path. (The restore drill passes extra names for the roles a
+      # pg_dump references; migrations need only payroll_app.)
+      - name: Ensure the roles the migrations GRANT to (same as start.sh)
+        run: node scripts/db/ensure-roles.mjs
 
       - name: Apply migrations to the CI database
         run: npx prisma migrate deploy

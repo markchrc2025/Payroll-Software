@@ -44,10 +44,9 @@ aws s3 cp "s3://$BACKUP_S3_BUCKET/${KEY%.gpg}.manifest.json" manifest.json --end
 gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_GPG_PASSPHRASE" -o db.dump -d db.dump.gpg
 
 # 3) roles the dump references (owner = admin_bypass policy; payroll_app /
-#    sentire_books_app = GRANTs), then restore
-for r in owner payroll_app sentire_books_app; do
-  psql "$SCRATCH_DATABASE_URL" -c "DO \$\$ BEGIN CREATE ROLE \"$r\"; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
-done
+#    sentire_books_app = GRANTs), then restore. Same script start.sh runs
+#    (unit 0.21); payroll_app is always included, the others are passed.
+DIRECT_DATABASE_URL="$SCRATCH_DATABASE_URL" node scripts/db/ensure-roles.mjs owner sentire_books_app
 pg_restore --no-owner -d "$SCRATCH_DATABASE_URL" db.dump || echo "warnings are non-fatal"
 
 # 4) verify
