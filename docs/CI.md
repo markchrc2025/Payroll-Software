@@ -274,7 +274,7 @@ those routes.
 every `path:NN`, `path:A-B` and `path:A,B` citation in `docs/**/*.md` and fails
 when the path does not resolve to exactly one tracked file (a bare file name
 must be unique), or the cited line is past the end of the file. Writing
-`` `src/auth.ts:100` (expects `prismaAdmin`) `` also requires that token on the
+`` `src/auth.ts:104` (expects `prismaAdmin`) `` also requires that token on the
 cited line, which is what catches a citation that still resolves but now points
 at the wrong code. `docs/DECISIONS.md` is excluded: it is append-only and its
 citations are true as of their date. `--all` includes it, for information
