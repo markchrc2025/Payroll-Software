@@ -8,6 +8,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, paginated, err, unauthorized, serverError } from "@/lib/api-response";
 import { randomBytes } from "crypto";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const listSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -27,6 +28,7 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company notices every dashboard user reads (unit 0.25)
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listSchema.safeParse(qp);
@@ -81,6 +83,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/require-permission";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { updateDtrRecordSchema } from "@/lib/validations/dtr";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(
   req: NextRequest,
@@ -17,6 +18,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["TIMESHEETS", "READ"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const record = await withTenant(auth.tenantId, (tx) =>

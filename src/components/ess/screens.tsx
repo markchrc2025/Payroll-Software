@@ -1008,6 +1008,7 @@ function BiometricSection() {
 function ChangePassword() {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
+  const [current, setCurrent] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -1020,11 +1021,18 @@ function ChangePassword() {
     try {
       await essFetch("/api/ess/password", {
         method: "POST",
-        body: JSON.stringify({ newPassword: pw }),
+        body: JSON.stringify({ newPassword: pw, currentPassword: current || undefined }),
       });
-      toast.success("Password updated. Use it next time you sign in.");
+      // Unit 0.15 Am 1 (B8): the server has ended every session, this one
+      // included. Sign out here too and go to the sign-in screen.
+      toast.success("Password updated. Please sign in again with your new password.");
       setPw("");
+      setCurrent("");
       setOpen(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("ess_token");
+        window.location.replace("/ess/login");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't update your password.");
     } finally {
@@ -1048,6 +1056,17 @@ function ChangePassword() {
       </div>
       {open && (
         <div style={{ padding: "0 0 12px" }}>
+          <div className="e-finput">
+            <EIcon name="lock" size={17} />
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Current password (leave blank if you only use a PIN)"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+          <div style={{ height: 8 }} />
           <div className="e-finput">
             <EIcon name="lock" size={17} />
             <input

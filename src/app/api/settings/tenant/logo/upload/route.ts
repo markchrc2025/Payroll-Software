@@ -14,6 +14,7 @@ import type { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { putObject, buildTenantLogoKey, isR2Configured } from "@/lib/r2";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -21,6 +22,9 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
 
   if (!isR2Configured()) {
     return err(

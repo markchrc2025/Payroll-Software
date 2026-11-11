@@ -14,10 +14,14 @@ import { fromCentavos } from "@/lib/money";
 import { unauthorized } from "@/lib/api-response";
 import { toCsvString, csvDownloadResponse } from "@/lib/utils/csv";
 import { listEmployeesSchema } from "@/lib/validations/employee";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["EMPLOYEES", "EXPORT"]);
+  if (denied) return denied;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const { departmentId, branchId, status, employmentType } =

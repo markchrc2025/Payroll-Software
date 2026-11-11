@@ -5,6 +5,7 @@
  * Requires rejectionReason in body. No balance mutation.
  * The assigned approver for the current step OR an HR admin can reject.
  */
+import { callerEmployeeId, holdsApprovePermission } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
@@ -32,6 +33,10 @@ export async function POST(
     });
     if (!txn) return "not_found" as const;
     if (txn.approvalStatus !== "PENDING") return "not_pending" as const;
+
+    // Unit 0.22 Am 1 (B5): never one's own; with no chain, only the owner or a
+    // role granted LEAVES:APPROVE decides (this branch checked nothing).
+    if ((await callerEmployeeId(tx, auth)) === txn.employeeId) return "forbidden" as const;
 
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "LEAVE", entityId: id },
@@ -71,6 +76,8 @@ export async function POST(
           note: rejectionReason,
         },
       });
+    } else if (!(await holdsApprovePermission(tx, auth, "LEAVE"))) {
+      return "forbidden" as const;
     }
 
     return tx.leaveTransaction.update({

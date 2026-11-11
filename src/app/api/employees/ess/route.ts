@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
         essDeactivateAt: true,
         essDeactivateReason: true,
         essPin: true,
+        // Unit 0.20: HR could not see passkeys at all.
+        _count: { select: { essWebAuthnCredentials: true } },
       },
     }),
   );
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
     essDeactivateAt: r.essDeactivateAt?.toISOString() ?? null,
     essDeactivateReason: r.essDeactivateReason,
     hasEssPin: r.essPin !== null,
+    passkeyCount: r._count.essWebAuthnCredentials,
   }));
 
   return ok(data);

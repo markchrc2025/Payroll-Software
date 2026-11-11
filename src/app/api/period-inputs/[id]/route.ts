@@ -10,6 +10,7 @@ import { getAuthContext } from "@/lib/auth";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { updatePeriodInputSchema } from "@/lib/validations/period-input";
 import { serializePeriodInput } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(
   req: NextRequest,
@@ -17,6 +18,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const row = await withTenant(auth.tenantId, (tx) =>
@@ -32,6 +36,9 @@ export async function PATCH(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);
@@ -56,6 +63,9 @@ export async function DELETE(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "DELETE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const deleted = await withTenant(auth.tenantId, async (tx) => {

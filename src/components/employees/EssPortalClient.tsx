@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Mail, Pencil } from "lucide-react";
+import { RefreshCw, Mail, Pencil, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,16 @@ type EssRow = {
   essDeactivateAt: string | null;
   essDeactivateReason: string | null;
   hasEssPin: boolean;
+  /** Unit 0.20: registered ESS passkeys (WebAuthn). */
+  passkeyCount?: number;
+};
+
+type Passkey = {
+  id: string;
+  label: string | null;
+  aaguid: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
 };
 
 const STATUS_OPTIONS = [
@@ -96,6 +106,9 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
   const [emailTarget, setEmailTarget] = useState<EssRow | null>(null);
   const [emailValue, setEmailValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [passkeyTarget, setPasskeyTarget] = useState<EssRow | null>(null);
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -139,6 +152,34 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
       await reload();
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function openPasskeys(r: EssRow) {
+    setPasskeyTarget(r);
+    setPasskeys(null);
+    const res = await fetch(`/api/employees/${r.id}/passkeys`);
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      toast.error(json?.error ?? "Could not load passkeys");
+      setPasskeyTarget(null);
+      return;
+    }
+    setPasskeys(json?.data ?? []);
+  }
+
+  async function removePasskey(credId: string) {
+    if (!passkeyTarget) return;
+    setRemovingId(credId);
+    try {
+      const res = await fetch(`/api/employees/${passkeyTarget.id}/passkeys/${credId}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { toast.error(json?.error ?? "Could not remove passkey"); return; }
+      toast.success(json?.message ?? "Passkey removed");
+      setPasskeys((list) => (list ?? []).filter((p) => p.id !== credId));
+      await reload();
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -226,7 +267,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
           <table className="w-full border-collapse text-[13.5px]">
             <thead>
               <tr>
-                {["Employee", "Work Email", "ESS Status", "Last Login"].map((h) => (
+                {["Employee", "Work Email", "ESS Status", "Last Login", "Passkeys"].map((h) => (
                   <th key={h} className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
                     {h}
                   </th>
@@ -239,7 +280,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-16 text-center text-[13.5px] text-[#8E9AAC]">No employees found.</td>
+                  <td colSpan={6} className="px-4 py-16 text-center text-[13.5px] text-[#8E9AAC]">No employees found.</td>
                 </tr>
               ) : (
                 rows.map((r) => {
@@ -281,6 +322,18 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3"><StatusBadge row={r} /></td>
                       <td className="whitespace-nowrap px-4 py-3 text-[13.5px] text-[#4A586B]">{fmt(r.essLastLoginAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {(r.passkeyCount ?? 0) > 0 ? (
+                          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => openPasskeys(r)}
+                            title="Passkeys this employee registered for ESS sign-in">
+                            <KeyRound className="h-3.5 w-3.5" />
+                            {r.passkeyCount} {r.passkeyCount === 1 ? "passkey" : "passkeys"}
+                          </Button>
+                        ) : (
+                          <span className="text-[13.5px] text-[#8E9AAC]">None</span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex flex-wrap justify-end gap-1.5">
                           {!granted ? (
@@ -397,6 +450,45 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <Button onClick={confirmSchedule} disabled={submitting || !scheduleAt || !scheduleReason.trim()}>
               {submitting ? "Scheduling…" : "Schedule"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Passkeys dialog (unit 0.20) */}
+      <Dialog open={!!passkeyTarget} onOpenChange={(o) => { if (!o) { setPasskeyTarget(null); setPasskeys(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ESS passkeys</DialogTitle>
+            <DialogDescription>
+              {passkeyTarget ? `${passkeyTarget.firstName} ${passkeyTarget.lastName} (${passkeyTarget.employeeNumber}) ` : ""}
+              registered these for signing in to ESS. Disabling ESS access does not remove them;
+              remove any you do not recognise, or when offboarding.
+            </DialogDescription>
+          </DialogHeader>
+          {passkeys === null ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : passkeys.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No passkeys registered.</p>
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {passkeys.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{p.label || "Unnamed device"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Added {fmtDate(p.createdAt)} · Last used {p.lastUsedAt ? fmt(p.lastUsedAt) : "never"}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                    disabled={removingId !== null} onClick={() => removePasskey(p.id)}>
+                    {removingId === p.id ? "Removing…" : "Remove"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPasskeyTarget(null); setPasskeys(null); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

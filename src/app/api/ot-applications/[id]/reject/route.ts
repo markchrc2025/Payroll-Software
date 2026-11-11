@@ -5,9 +5,10 @@
  * Works in both workflow-step mode and legacy/no-workflow mode.
  * Reverses DTRRecord.otMinutes to 0 if the application was previously APPROVED.
  */
+import { requireApprover } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
-import { requirePermission, checkPermission } from "@/lib/require-permission";
+import { checkPermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { z } from "zod";
 
@@ -19,7 +20,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission(req, "TIMESHEETS", "APPROVE");
+  // Unit 0.22 Am 1 (B5): the owner or a role granted TIMESHEETS:APPROVE.
+  const guard = await requireApprover(req, "OT");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
   const { id } = await params;

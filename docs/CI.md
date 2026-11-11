@@ -268,6 +268,19 @@ those routes.
 
 ---
 
+## Doc citations (unit 0.23)
+
+`node scripts/check-doc-refs.mjs --strict` runs in `gates` and blocks. It parses
+every `path:NN`, `path:A-B` and `path:A,B` citation in `docs/**/*.md` and fails
+when the path does not resolve to exactly one tracked file (a bare file name
+must be unique), or the cited line is past the end of the file. Writing
+`` `src/auth.ts:100` (expects `prismaAdmin`) `` also requires that token on the
+cited line, which is what catches a citation that still resolves but now points
+at the wrong code. `docs/DECISIONS.md` is excluded: it is append-only and its
+citations are true as of their date. `--all` includes it, for information
+(10 Nov 2026: 52 ledger citations, 17 no longer resolve). To relax the gate, drop
+`--strict` from the step; the report still prints.
+
 ## Making this enforceable (not done in 0.17)
 
 In rough order of cost:

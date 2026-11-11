@@ -14,6 +14,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { err, ok, unauthorized } from "@/lib/api-response";
 import { checkDeductionCap } from "@/lib/payroll/deduction-cap";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const querySchema = z.object({
   employeeId: z.string().min(1),
@@ -25,6 +26,9 @@ const querySchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"]);
+  if (denied) return denied;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = querySchema.safeParse(qp);

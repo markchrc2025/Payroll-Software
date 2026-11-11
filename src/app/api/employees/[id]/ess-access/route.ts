@@ -13,6 +13,7 @@
  *
  * Requires EMPLOYEES:UPDATE.
  */
+import { retireInvites, retireResets } from "@/lib/ess-credential-links";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
@@ -103,6 +104,10 @@ export async function POST(
         where: { employeeId: id, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      // Unit 0.15 Am 1 (B7): a disabled account keeps no usable link. An old
+      // invitation could otherwise re-activate it without HR.
+      await retireInvites(tx, id);
+      await retireResets(tx, id);
       return { kind: "ok" as const, message: "ESS access disabled" };
     }
 
@@ -122,6 +127,8 @@ export async function POST(
           where: { employeeId: id, revokedAt: null },
           data: { revokedAt: new Date() },
         });
+        await retireInvites(tx, id);
+        await retireResets(tx, id);
         return { kind: "ok" as const, message: "ESS access disabled" };
       }
       await tx.employee.update({

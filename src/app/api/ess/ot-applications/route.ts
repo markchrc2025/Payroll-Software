@@ -22,14 +22,6 @@ import { getEssContext } from "@/lib/ess-auth";
 import { err, ok, paginated, serverError, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
-import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
-
-const OT_POLICY_SELECT = {
-  otBreakMode:         true,
-  otBreakTriggerHours: true,
-  otBreakBlockHours:   true,
-  otBreakMinutes:      true,
-} as const;
 
 const createSchema = z.object({
   date: z.string().date("Must be a valid date (YYYY-MM-DD)"),
@@ -143,63 +135,17 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Snapshot the approval chain. If no steps are configured for this
-      // employee, auto-approve immediately (same behaviour as Leave filing).
-      const snap = await snapshotApprovalChain(tx, {
+      // Snapshot the approval chain. Unit 0.22: when no steps resolve, the
+      // request STAYS PENDING. It used to self-approve here and write otMinutes
+      // onto a DTRRecord with no second party, the employee supplying the hours.
+      // HR approves it through /api/ot-applications/[id]/approve (no-workflow
+      // mode, TIMESHEETS:APPROVE, never one's own).
+      await snapshotApprovalChain(tx, {
         module: "OT",
         entityId: row.id,
         requesterId: ctx.employeeId,
         tenantId: ctx.tenantId,
       });
-
-      if (snap.activeSteps === 0) {
-        // Resolve the employee's effective shift to apply the OT break rule.
-        const otAssignment = await tx.employeeShiftAssignment.findFirst({
-          where: {
-            tenantId:      ctx.tenantId,
-            employeeId:    ctx.employeeId,
-            effectiveFrom: { lte: requestedDate },
-            OR: [{ effectiveTo: null }, { effectiveTo: { gte: requestedDate } }],
-          },
-          orderBy: { effectiveFrom: "desc" },
-          select: { shiftSchedule: { select: OT_POLICY_SELECT } },
-        });
-        let otShift = otAssignment?.shiftSchedule ?? null;
-        if (!otShift) {
-          const emp = await tx.employee.findFirst({
-            where: { id: ctx.employeeId, tenantId: ctx.tenantId },
-            select: { shiftSchedule: { select: OT_POLICY_SELECT } },
-          });
-          otShift = emp?.shiftSchedule ?? null;
-        }
-
-        const rawOtMinutes = Math.round(Number(hours) * 60);
-        const otMinutes = otShift ? applyOtBreakRule(rawOtMinutes, otShift) : rawOtMinutes;
-
-        await tx.dTRRecord.upsert({
-          where: {
-            tenantId_employeeId_date: {
-              tenantId:   ctx.tenantId,
-              employeeId: ctx.employeeId,
-              date:       requestedDate,
-            },
-          },
-          update: { otMinutes },
-          create: {
-            tenantId:   ctx.tenantId,
-            employeeId: ctx.employeeId,
-            date:       requestedDate,
-            dayStatus:  "REST_DAY",
-            otMinutes,
-          },
-        });
-
-        const approved = await tx.oTApplication.update({
-          where: { id: row.id },
-          data: { status: "APPROVED", approvedAt: new Date() },
-        });
-        return approved;
-      }
 
       return row;
     });

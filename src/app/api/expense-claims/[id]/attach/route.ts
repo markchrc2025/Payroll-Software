@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { attachExpenseClaimSchema } from "@/lib/validations/expense-claim";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function POST(
   req: NextRequest,
@@ -11,6 +12,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   let body: unknown;
