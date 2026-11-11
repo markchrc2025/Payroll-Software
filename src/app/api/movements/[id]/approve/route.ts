@@ -12,6 +12,7 @@ import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
 import { applyMovementEffects } from "@/lib/movements/apply";
 import { serializeMovement } from "@/lib/movements/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function POST(
   req: NextRequest,
@@ -19,6 +20,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["EMPLOYEES", "APPROVE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const result = await withTenant(auth.tenantId, async (tx) => {

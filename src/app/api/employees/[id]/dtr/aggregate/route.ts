@@ -19,6 +19,7 @@ import { expandHolidays } from "@/lib/holidays/recurrence";
 import { holidayAppliesToBranch } from "@/lib/holidays/scope";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,6 +117,9 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["TIMESHEETS", "UPDATE"]);
+  if (denied) return denied;
   const { id: employeeId } = await params;
 
   const body = await req.json().catch(() => null);

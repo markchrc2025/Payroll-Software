@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -92,14 +91,6 @@ const EXPENSE_STATUSES = [
   { value: "PAID", label: "Paid" },
 ];
 
-const EMPTY_FORM = {
-  employeeId: "",
-  category: "OTHER",
-  description: "",
-  amount: "",
-  claimDate: new Date().toISOString().split("T")[0],
-};
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -131,12 +122,10 @@ export default function ExpenseClaimsPage() {
   const [filterStatus, setFilterStatus] = useState("");
 
   // Sheets
-  const [createOpen, setCreateOpen] = useState(false);
   const [approveTarget, setApproveTarget] = useState<ExpenseClaim | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ExpenseClaim | null>(null);
   const [attachTarget, setAttachTarget] = useState<ExpenseClaim | null>(null);
 
-  const [form, setForm] = useState(EMPTY_FORM);
   const [approveTax, setApproveTax] = useState("NONTAXABLE_REIMBURSEMENT");
   const [rejectReason, setRejectReason] = useState("");
   const [attachPayrollId, setAttachPayrollId] = useState("");
@@ -175,40 +164,6 @@ export default function ExpenseClaimsPage() {
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
-
-  async function handleCreate() {
-    if (!form.employeeId) { toast.error("Select an employee"); return; }
-    if (!form.description.trim()) { toast.error("Description is required"); return; }
-    if (!form.amount || isNaN(parseFloat(form.amount))) { toast.error("Enter a valid amount"); return; }
-    if (!form.claimDate) { toast.error("Claim date is required"); return; }
-
-    setSaving(true);
-    const res = await fetch("/api/expense-claims", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employeeId: form.employeeId,
-        category: form.category,
-        description: form.description,
-        amount: parseFloat(form.amount).toFixed(2),
-        claimDate: form.claimDate,
-      }),
-    });
-    const json = await res.json();
-    setSaving(false);
-    if (!res.ok) { toast.error(json.error ?? "Failed to create claim"); return; }
-    toast.success("Expense claim created");
-    setCreateOpen(false);
-    loadClaims();
-  }
-
-  async function handleSubmit(claim: ExpenseClaim) {
-    const res = await fetch(`/api/expense-claims/${claim.id}/submit`, { method: "POST" });
-    const json = await res.json();
-    if (!res.ok) { toast.error(json.error ?? "Failed to submit"); return; }
-    toast.success("Claim submitted");
-    loadClaims();
-  }
 
   async function handleApprove() {
     if (!approveTarget) return;
@@ -307,9 +262,9 @@ export default function ExpenseClaimsPage() {
           <Button variant="outline" size="sm" onClick={loadClaims} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => { setForm({ ...EMPTY_FORM }); setCreateOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1.5" /> Add Claim
-          </Button>
+          {/* PAY-121 (ruling B6): no one files or submits an expense claim for
+              another employee. Employees do it in ESS; HR approves here. */}
+          <span className="self-center text-xs text-muted-foreground">Employees file claims in ESS</span>
         </div>
       </div>
 
@@ -375,9 +330,7 @@ export default function ExpenseClaimsPage() {
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
                       {claim.status === "DRAFT" && (
-                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => handleSubmit(claim)}>
-                          Submit
-                        </Button>
+                        <span className="text-xs text-muted-foreground">Draft, not yet submitted by the employee</span>
                       )}
                       {claim.status === "SUBMITTED" && (
                         <>
@@ -405,61 +358,6 @@ export default function ExpenseClaimsPage() {
       {total > 50 && (
         <p className="text-xs text-muted-foreground text-right">Showing 50 of {total} claims.</p>
       )}
-
-      {/* Create Sheet */}
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Add Expense Claim</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 space-y-5">
-            <div className="space-y-1.5">
-              <Label>Employee <span className="text-destructive">*</span></Label>
-              <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v ?? "" })}>
-                <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.lastName}, {e.firstName} ({e.employeeNumber})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Claim Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={form.claimDate} onChange={(e) => setForm({ ...form, claimDate: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount (₱) <span className="text-destructive">*</span></Label>
-                <Input type="number" min="0" step="0.01" placeholder="1500.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v ?? form.category })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description <span className="text-destructive">*</span></Label>
-              <Textarea rows={3} placeholder="Describe the expense…" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button className="flex-1" onClick={handleCreate} disabled={saving}>
-                {saving ? "Creating…" : "Create Claim"}
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Approve Sheet */}
       <Sheet open={!!approveTarget} onOpenChange={(o) => !o && setApproveTarget(null)}>

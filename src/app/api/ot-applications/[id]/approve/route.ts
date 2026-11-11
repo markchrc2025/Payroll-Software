@@ -9,10 +9,11 @@
  *
  * Idempotent: re-approving an already-APPROVED application returns 200.
  */
+import { requireApprover } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
-import { requirePermission, checkPermission } from "@/lib/require-permission";
+import { checkPermission } from "@/lib/require-permission";
 import { ok, err, notFound, forbidden } from "@/lib/api-response";
 import { enqueueOtApproved } from "@/lib/jobs/workers";
 import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
@@ -30,7 +31,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission(req, "TIMESHEETS", "APPROVE");
+  // Unit 0.22 Am 1 (B5): the owner or a role granted TIMESHEETS:APPROVE.
+  const guard = await requireApprover(req, "OT");
   if (guard instanceof Response) return guard;
   const { ctx: auth } = guard;
   const { id } = await params;

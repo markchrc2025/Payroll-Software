@@ -13,10 +13,9 @@ import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
-import { generateEssToken, hashEssToken } from "@/lib/ess-auth";
+import { issueInvite } from "@/lib/ess-credential-links";
 import { sendEmployeeOnboarding } from "@/lib/emails";
 
-const EXPIRES_DAYS = 7;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 export async function POST(
@@ -52,19 +51,11 @@ export async function POST(
     return err("Your company code isn't set — configure it in Settings before sending ESS invites.", 422);
   }
 
-  const rawToken = generateEssToken();
-  const tokenHash = hashEssToken(rawToken);
-  const expiresAt = new Date(Date.now() + EXPIRES_DAYS * 24 * 60 * 60 * 1000);
-
-  await withTenant(ctx.tenantId, async (tx) => {
-    // Invalidate any prior unused invites for this employee.
-    await tx.essInvite.updateMany({
-      where: { employeeId: id, usedAt: null },
-      data: { usedAt: new Date() },
-    });
-    await tx.essInvite.create({
-      data: { tenantId: ctx.tenantId, employeeId: id, tokenHash, expiresAt },
-    });
+  // Unit 0.15 Amendment 1, ruling B7: the invitation engine issues the
+  // employee's ONE live invitation and retires every earlier unused one, so
+  // only the newest email works.
+  const rawToken = await withTenant(ctx.tenantId, async (tx) => {
+    const { rawToken } = await issueInvite(tx, { tenantId: ctx.tenantId, employeeId: id });
     await tx.employee.update({
       where: { id },
       data: {
@@ -78,6 +69,7 @@ export async function POST(
         essDeactivateScheduledByUserId: null,
       },
     });
+    return rawToken;
   });
 
   // Send the email last — if it fails, surface it (the invite row still exists

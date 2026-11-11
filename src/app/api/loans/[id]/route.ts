@@ -11,6 +11,7 @@ import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { toCentavos } from "@/lib/money";
 import { updateLoanSchema } from "@/lib/validations/pay-component";
 import { serializeLoan } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(
   req: NextRequest,
@@ -18,6 +19,9 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const row = await withTenant(auth.tenantId, (tx) =>
@@ -33,6 +37,9 @@ export async function PATCH(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);

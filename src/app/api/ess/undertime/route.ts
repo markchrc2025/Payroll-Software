@@ -133,22 +133,16 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Snapshot the approval chain. If no steps are configured for this
-      // employee, auto-approve immediately (aggregator excuses APPROVED rows).
-      const snap = await snapshotApprovalChain(tx, {
+      // Snapshot the approval chain. Unit 0.22: when no steps resolve, the
+      // request STAYS PENDING. It used to self-approve, and the DTR aggregator
+      // excuses APPROVED undertime, so an employee could excuse their own.
+      // HR approves it through /api/undertime-requests/[id]/approve.
+      await snapshotApprovalChain(tx, {
         module: "UNDERTIME",
         entityId: row.id,
         requesterId: ctx.employeeId,
         tenantId: ctx.tenantId,
       });
-
-      if (snap.activeSteps === 0) {
-        const approved = await tx.undertimeRequest.update({
-          where: { id: row.id },
-          data: { status: "APPROVED", approvedAt: new Date() },
-        });
-        return approved;
-      }
 
       return row;
     });

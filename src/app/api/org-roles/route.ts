@@ -18,6 +18,7 @@ export type SingletonRoleKey = (typeof SINGLETON_ROLES)[number];
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company reference data for dropdowns and screens, no employee records; changes to it are permission-checked (unit 0.25)
 
   const rows = await withTenant(auth.tenantId, (tx) =>
     tx.orgRole.findMany({

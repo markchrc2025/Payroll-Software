@@ -1,11 +1,16 @@
 /**
  * GET  /api/employees/[id]/ot-applications — List OT applications for employee
  * POST /api/employees/[id]/ot-applications — File a new OT application
+ *
+ * PAY-121 (ruling B6): no one files OT for another employee. POST works only
+ * for the caller's own employee record; employees file theirs in ESS, and HR
+ * approves. Unit 0.22 Am 1 closed the same door on leave, DTR and expense.
  */
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
-import { ok, err, notFound } from "@/lib/api-response";
+import { ok, err, notFound, forbidden } from "@/lib/api-response";
+import { isSelfAction } from "@/lib/authz/self-approval";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -68,6 +73,7 @@ export async function POST(
       where: { id: employeeId, tenantId: auth.tenantId, deletedAt: null },
     });
     if (!employee) return { notFound: true as const };
+    if (!(await isSelfAction(tx, auth.tenantId, auth.userId, employeeId))) return { forbidden: true as const };
 
     const row = await tx.oTApplication.create({
       data: {
@@ -82,6 +88,7 @@ export async function POST(
     return { notFound: false as const, row };
   });
 
+  if ("forbidden" in result) return forbidden("You can only file your own OT. Employees file theirs in ESS.");
   if (result.notFound) return notFound("Employee not found");
   return ok(result.row, "OT application filed", 201);
 }

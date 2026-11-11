@@ -1,3 +1,4 @@
+import { callerEmployeeId, FILE_IN_ESS, maySeeAllRecords } from "@/lib/approvals/second-party";
 import { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
@@ -7,6 +8,7 @@ import {
   unauthorized,
   paginated,
   serverError,
+  forbidden,
 } from "@/lib/api-response";
 import {
   createExpenseClaimSchema,
@@ -31,9 +33,12 @@ export async function GET(req: NextRequest) {
 
   try {
     return await withTenant(auth.tenantId, async (tx) => {
+      // Unit 0.22 Am 1 (B6): everyone's claims only for the owner or a
+      // PAYROLL:READ role; anyone else sees only their own.
+      const own = (await maySeeAllRecords(tx, auth, "EXPENSE")) ? null : ((await callerEmployeeId(tx, auth)) ?? "__none__");
       const where = {
         tenantId: auth.tenantId,
-        ...(employeeId ? { employeeId } : {}),
+        ...(own ? { employeeId: own } : employeeId ? { employeeId } : {}),
         ...(status ? { status } : {}),
         ...(dateFrom || dateTo
           ? {
@@ -87,6 +92,8 @@ export async function POST(req: NextRequest) {
 
   try {
     return await withTenant(auth.tenantId, async (tx) => {
+      // Unit 0.22 Am 1 (B6): only for oneself; employees file in ESS.
+      if ((await callerEmployeeId(tx, auth)) !== d.employeeId) return forbidden(FILE_IN_ESS);
       // Ensure employee belongs to tenant
       const employee = await tx.employee.findFirst({
         where: { id: d.employeeId, tenantId: auth.tenantId },

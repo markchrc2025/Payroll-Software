@@ -13,10 +13,14 @@ import {
   listPayComponentsSchema,
 } from "@/lib/validations/pay-component";
 import { serializePayComponent } from "@/lib/payroll/serialize";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["PAYROLL", "READ"], ["SETTINGS", "READ"]);
+  if (denied) return denied;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listPayComponentsSchema.safeParse(qp);
@@ -48,6 +52,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = createPayComponentSchema.safeParse(body);

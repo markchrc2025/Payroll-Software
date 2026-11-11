@@ -9,6 +9,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const VALID_NOTIFY = ["none", "final", "finalrej", "interim", "all"] as const;
 const VALID_ROLES  = ["supervisor", "line_manager", "dept_head", "hr_manager", "ceo"] as const;
@@ -41,6 +42,9 @@ async function resolve(id: string, tenantId: string) {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "READ"], ["EMPLOYEES", "READ"]);
+  if (denied) return denied;
 
   const { id } = await params;
   const row = await resolve(id, auth.tenantId);
@@ -51,6 +55,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
 
   const { id } = await params;
   const row = await resolve(id, auth.tenantId);
@@ -94,6 +101,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "DELETE"]);
+  if (denied) return denied;
 
   const { id } = await params;
   const row = await resolve(id, auth.tenantId);

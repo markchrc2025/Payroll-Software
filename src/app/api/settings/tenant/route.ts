@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { err, ok, unauthorized } from "@/lib/api-response";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const INDUSTRY_LIST = [
   "Agriculture",
@@ -83,6 +84,12 @@ const patchSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25, Mark's ruling of 10 Nov: locked. This returns the company's
+  // payroll rules (pay cycle, statutory cutoff, 13th month basis, maximum
+  // deduction %, night-differential window, employee ID numbering), not just
+  // branding. Only the Settings screens call it; the logo stays open.
+  const denied = await forbidUnless(auth, ["SETTINGS", "READ"]);
+  if (denied) return denied;
 
   const tenant = await withTenant(auth.tenantId, (tx) =>
     tx.tenant.findFirst({
@@ -129,6 +136,9 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);

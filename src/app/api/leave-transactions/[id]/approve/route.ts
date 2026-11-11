@@ -14,11 +14,12 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
-import { err, notFound, ok, unauthorized } from "@/lib/api-response";
+import { err, forbidden, notFound, ok, unauthorized } from "@/lib/api-response";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { checkPermission } from "@/lib/require-permission";
 import { finalizeLeaveApproval } from "@/lib/leave/apply-to-dtr";
+import { callerEmployeeId, holdsApprovePermission } from "@/lib/approvals/second-party";
 
 const bodySchema = z.object({ note: z.string().optional() }).optional();
 
@@ -41,6 +42,10 @@ export async function POST(
     if (txn.type !== "USAGE") return "wrong_type" as const;
     if (txn.approvalStatus === "APPROVED") return txn;
     if (txn.approvalStatus !== "PENDING") return "not_pending" as const;
+
+    // Unit 0.22: never one's own leave, in either mode (OT and DTR already
+    // refuse self-approval; this route did not).
+    if ((await callerEmployeeId(tx, auth)) === txn.employeeId) return "self" as const;
 
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "LEAVE", entityId: id },
@@ -116,6 +121,9 @@ export async function POST(
     }
 
     // ----- Legacy / no-workflow mode -----
+    // Unit 0.22: this branch had NO permission check, so any signed-in tenant
+    // user could approve any leave filed where no chain is configured.
+    if (!(await holdsApprovePermission(tx, auth, "LEAVE"))) return "forbidden" as const;
     const updated = await tx.leaveTransaction.update({
       where: { id },
       data: {
@@ -131,6 +139,7 @@ export async function POST(
   if (result === "not_found") return notFound("LeaveTransaction");
   if (result === "wrong_type") return err("Only USAGE transactions can be approved", 422);
   if (result === "not_pending") return err("Transaction is not in PENDING status", 409);
+  if (result === "self") return forbidden("You cannot approve your own leave");
   if (result === "forbidden")
     return err("You are not the assigned approver for this step", 403);
 
