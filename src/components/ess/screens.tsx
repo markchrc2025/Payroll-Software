@@ -22,6 +22,8 @@ import {
   fmtTime,
 } from "./primitives";
 import { useEssData } from "./use-ess-data";
+import { ESS_PASSKEYS_ENABLED } from "@/lib/ess-passkeys";
+import { ESS_PIN_LENGTH, pinProblem } from "@/lib/ess-pin-policy";
 import {
   essFetch,
   peso,
@@ -1005,6 +1007,93 @@ function BiometricSection() {
   );
 }
 
+/**
+ * Unit 0.15 Amendment 3: the PIN is the default ESS sign-in; a password is an
+ * optional second way in. Both changes need the current PIN (or password),
+ * end every session (ruling B8), and sign this device out.
+ */
+function signOutEverywhere(message: string) {
+  toast.success(message);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("ess_token");
+    window.location.replace("/ess/login");
+  }
+}
+
+function ChangePin() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (busy) return;
+    const problem = pinProblem(pin);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    setBusy(true);
+    try {
+      await essFetch("/api/ess/pin", { method: "POST", body: JSON.stringify({ current, newPin: pin }) });
+      setOpen(false);
+      signOutEverywhere("PIN changed. Please sign in again with your new PIN.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't change your PIN.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="e-srow">
+        <span className="e-prow-ic">
+          <EIcon name="lock" size={17} />
+        </span>
+        <div className="e-srow-t">
+          <b>Change PIN</b>
+          <i>Your 6-digit PIN is how you sign in</i>
+        </div>
+        <button className="e-seclink" onClick={() => setOpen((v) => !v)}>
+          {open ? "Cancel" : "Change"}
+        </button>
+      </div>
+      {open && (
+        <div style={{ padding: "0 0 12px" }}>
+          <div className="e-finput">
+            <EIcon name="lock" size={17} />
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Current PIN or password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+          <div style={{ height: 8 }} />
+          <div className="e-finput">
+            <EIcon name="lock" size={17} />
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              placeholder="New 6-digit PIN"
+              maxLength={ESS_PIN_LENGTH}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, ESS_PIN_LENGTH))}
+            />
+          </div>
+          <div style={{ height: 8 }} />
+          <EBtn kind="primary" full onClick={save} disabled={busy || !current || pin.length !== ESS_PIN_LENGTH}>
+            {busy ? "Saving…" : "Save PIN"}
+          </EBtn>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ChangePassword() {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
@@ -1021,20 +1110,14 @@ function ChangePassword() {
     try {
       await essFetch("/api/ess/password", {
         method: "POST",
-        body: JSON.stringify({ newPassword: pw, currentPassword: current || undefined }),
+        body: JSON.stringify({ newPassword: pw, current }),
       });
-      // Unit 0.15 Am 1 (B8): the server has ended every session, this one
-      // included. Sign out here too and go to the sign-in screen.
-      toast.success("Password updated. Please sign in again with your new password.");
       setPw("");
       setCurrent("");
       setOpen(false);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("ess_token");
-        window.location.replace("/ess/login");
-      }
+      signOutEverywhere("Password saved. Please sign in again.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't update your password.");
+      toast.error(e instanceof Error ? e.message : "Couldn't save your password.");
     } finally {
       setBusy(false);
     }
@@ -1047,8 +1130,8 @@ function ChangePassword() {
           <EIcon name="shield" size={17} />
         </span>
         <div className="e-srow-t">
-          <b>Change password</b>
-          <i>Set a password to sign in without your PIN</i>
+          <b>Password (optional)</b>
+          <i>Another way to sign in besides your PIN</i>
         </div>
         <button className="e-seclink" onClick={() => setOpen((v) => !v)}>
           {open ? "Cancel" : "Set"}
@@ -1061,7 +1144,7 @@ function ChangePassword() {
             <input
               type="password"
               autoComplete="current-password"
-              placeholder="Current password (leave blank if you only use a PIN)"
+              placeholder="Current PIN or password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
             />
@@ -1078,7 +1161,7 @@ function ChangePassword() {
             />
           </div>
           <div style={{ height: 8 }} />
-          <EBtn kind="primary" full onClick={save} disabled={busy}>
+          <EBtn kind="primary" full onClick={save} disabled={busy || !current}>
             {busy ? "Saving…" : "Save password"}
           </EBtn>
         </div>
@@ -1123,7 +1206,8 @@ export function SettingsScreen() {
       </ECard>
       <ESection>Security</ESection>
       <ECard className="e-pcard">
-        <BiometricSection />
+        {ESS_PASSKEYS_ENABLED && <BiometricSection />}
+        <ChangePin />
         <ChangePassword />
       </ECard>
       <ESection>Appearance</ESection>

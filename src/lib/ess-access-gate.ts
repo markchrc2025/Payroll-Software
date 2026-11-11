@@ -17,12 +17,13 @@
  *   implementation here; every sign-in path calls it.
  *
  * ADDING A NEW ESS SIGN-IN PATH
- *   Call `evaluateEssAccess` before minting anything, and honour
- *   `needsActivation`. Do not re-implement any of this inline.
+ *   Call `evaluateEssAccess` before minting anything, and REFUSE when
+ *   `needsActivation` is true: only the invitation activates (unit 0.15 Am 3).
+ *   Do not re-implement any of this inline.
  *
  * NOT AN AUTHENTICATION CHECK. This answers "may this employee hold a
  * session?", never "is this really them?". Callers prove identity themselves —
- * password/PIN/birth date on the credential path, a WebAuthn assertion on the
+ * PIN or password on the credential path, a WebAuthn assertion on the
  * passkey path, a kiosk PIN at a kiosk — and the two questions must stay
  * separate.
  *
@@ -44,8 +45,6 @@
  * `ess-access-gate` by unit 0.14's tests, which are a regression guard and must
  * not be edited. It hosts both layers.
  */
-
-import prismaAdmin from "@/lib/prisma-admin";
 
 /** Employment states that end ESS access outright. */
 export const ENDED_EMPLOYMENT_STATUSES = ["RESIGNED", "TERMINATED", "RETIRED"] as const;
@@ -205,20 +204,7 @@ export function evaluateEssAccess(
   return { allowed: true, needsActivation: subject.essAccessStatus === "INVITED" };
 }
 
-/**
- * Flip an INVITED employee to ACTIVE. Shared for the same reason the gate is:
- * the credential path activated on first sign-in and the passkey path did not,
- * so an employee could sign in by passkey forever and stay INVITED in HR's
- * portal.
- *
- * Deliberately NOT wrapped. Per unit 0.10 this is account state, not
- * bookkeeping: it must fail the login rather than leave someone holding a
- * session for an account that never activated — a state that is permanent,
- * because every later sign-in re-attempts the same failing write.
- */
-export async function activateInvitedEssAccount(employeeId: string): Promise<void> {
-  await prismaAdmin.employee.update({
-    where: { id: employeeId },
-    data: { essAccessStatus: "ACTIVE", essActivatedAt: new Date() },
-  });
-}
+// Unit 0.15 Amendment 3 (ruling B7): `activateInvitedEssAccount` is gone. No
+// sign-in path activates an account any more; accepting the invitation
+// (claimInvite in src/lib/ess-credential-links.ts) is the only way from
+// INVITED to ACTIVE. Sign-in paths REFUSE an account with `needsActivation`.

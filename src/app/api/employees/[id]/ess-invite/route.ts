@@ -2,9 +2,13 @@
  * POST /api/employees/[id]/ess-invite — email an ESS activation link.
  *
  * Grants ESS access (status → INVITED) and emails the employee a one-time link
- * to set their password and activate. Requires a work email on file and a
- * configured email provider (RESEND_API_KEY). Resending invalidates any prior
- * unused invite.
+ * where they choose their own 6-digit PIN and activate. Resending invalidates
+ * any prior unused invite.
+ *
+ * Unit 0.15 Amendment 3 (Mark's ruling of 10 Nov): the link goes to the email
+ * the record chooses for ESS links, the personal email at hiring, switchable
+ * to the work email later (ess-access action set_link_email). Requires that
+ * email on file and a configured email provider (RESEND_API_KEY).
  *
  * Requires EMPLOYEES:UPDATE.
  */
@@ -13,7 +17,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
-import { issueInvite } from "@/lib/ess-credential-links";
+import { essLinkEmail, issueInvite } from "@/lib/ess-credential-links";
 import { sendEmployeeOnboarding } from "@/lib/emails";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -31,7 +35,15 @@ export async function POST(
   const data = await withTenant(ctx.tenantId, async (tx) => {
     const emp = await tx.employee.findFirst({
       where: { id, tenantId: ctx.tenantId, deletedAt: null },
-      select: { id: true, firstName: true, lastName: true, workEmail: true, employeeNumber: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        employeeNumber: true,
+        essEmailChoice: true,
+        personalEmail: true,
+        workEmail: true,
+      },
     });
     if (!emp) return null;
     const tenant = await tx.tenant.findUnique({
@@ -44,8 +56,14 @@ export async function POST(
   if (!data) return notFound("Employee");
   const { emp, tenant } = data;
 
-  if (!emp.workEmail) {
-    return err("This employee has no work email on file — add one before inviting, or activate manually.", 422);
+  const to = essLinkEmail(emp);
+  if (!to) {
+    return err(
+      emp.essEmailChoice === "WORK"
+        ? "ESS links for this employee go to their work email, and none is on file. Add one, or switch ESS links back to the personal email."
+        : "This employee has no personal email on file. Add one before inviting, or switch ESS links to the work email.",
+      422,
+    );
   }
   if (!tenant?.companyCode) {
     return err("Your company code isn't set — configure it in Settings before sending ESS invites.", 422);
@@ -59,7 +77,7 @@ export async function POST(
     await tx.employee.update({
       where: { id },
       data: {
-        // Grant access; first login (or activation) flips to ACTIVE.
+        // Grant access; only accepting this invitation flips it to ACTIVE.
         essAccessStatus: "INVITED",
         essInvitedAt: new Date(),
         essInvitedByUserId: ctx.userId,
@@ -75,7 +93,7 @@ export async function POST(
   // Send the email last — if it fails, surface it (the invite row still exists
   // so a resend works, and access is already granted).
   try {
-    await sendEmployeeOnboarding(emp.workEmail, {
+    await sendEmployeeOnboarding(to, {
       firstName: emp.firstName,
       companyName: tenant.name,
       activationUrl: `${APP_URL}/ess/activate?token=${rawToken}`,
@@ -97,9 +115,9 @@ export async function POST(
     action: "UPDATE",
     entity: "Employee",
     entityId: id,
-    changes: { field: "essAccess", essAction: "invite", to: emp.workEmail },
+    changes: { field: "essAccess", essAction: "invite", to, linkEmail: emp.essEmailChoice },
     ipAddress: getClientIp(req),
   });
 
-  return ok({ id, invitedEmail: emp.workEmail }, "Invitation sent");
+  return ok({ id, invitedEmail: to, linkEmail: emp.essEmailChoice }, "Invitation sent");
 }

@@ -3,9 +3,13 @@
 /**
  * ESS sign-in — restyled to the desktop design handoff (DLogin): a centered
  * single-column card on the warm background with the Sentire "Nexus" lockup and
- * a footer. Company code + employee number → 6-box PIN (with password / date of
- * birth / biometric fallbacks). All auth is real (POST /api/ess/auth and the
- * WebAuthn endpoints); the device remembers the employee so we can greet by name.
+ * a footer. Company code + employee number → 6-box PIN, the default, with the
+ * employee's optional password as the other way in. All auth is real
+ * (POST /api/ess/auth); the device remembers the employee so we can greet by
+ * name.
+ *
+ * Unit 0.15 Amendment 3 (Mark's ruling of 10 Nov 2026): date-of-birth sign-in
+ * is removed, and Face ID / passkey sign-in is off for now (ESS_PASSKEYS_ENABLED).
  */
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -14,6 +18,7 @@ import { toast } from "sonner";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { NexusMark } from "@/components/sentire-login/glyphs";
 import { EIcon } from "@/components/ess/icons";
+import { ESS_PASSKEYS_ENABLED } from "@/lib/ess-passkeys";
 import "@/components/ess/ess.css";
 
 const IDENTITY_KEY = "ess_identity";
@@ -27,7 +32,7 @@ interface Identity {
   initials?: string;
 }
 
-type Method = "pin" | "password" | "dob";
+type Method = "pin" | "password";
 type Status = "idle" | "error" | "success";
 
 // 6-box PIN entry backed by a hidden numeric input (handoff DPinBoxes).
@@ -89,7 +94,6 @@ function EssLoginContent() {
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [birthDate, setBirthDate] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errMsg, setErrMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -120,7 +124,7 @@ function EssLoginContent() {
   }, [sp]);
 
   const authenticate = useCallback(
-    async (cred: { pin?: string; password?: string; birthDate?: string }) => {
+    async (cred: { pin?: string; password?: string }) => {
       if (busy) return;
       setBusy(true);
       setErrMsg("");
@@ -241,7 +245,6 @@ function EssLoginContent() {
     setEmployeeNumber("");
     setPin("");
     setPassword("");
-    setBirthDate("");
     setMethod("pin");
     setStatus("idle");
     setErrMsg("");
@@ -336,7 +339,7 @@ function EssLoginContent() {
         {errMsg && <p className="d-login-err">{errMsg}</p>}
         <div className="d-login-new">
           <span>New employee?</span>
-          <button type="button" onClick={() => toast.info("Ask your HR admin to send your activation link.")}>
+          <button type="button" onClick={() => toast.info("Open the invitation email from HR to set your PIN. Ask HR to resend it if you can't find it.")}>
             Activate your account
           </button>
         </div>
@@ -354,14 +357,16 @@ function EssLoginContent() {
           {status === "error" ? errMsg || "Incorrect PIN — try again." : "Type your 6-digit PIN"}
         </p>
         <div className="d-login-links">
-          <button type="button" onClick={faceId} disabled={busy}>
-            Use Face ID
+          {ESS_PASSKEYS_ENABLED && (
+            <button type="button" onClick={faceId} disabled={busy}>
+              Use Face ID
+            </button>
+          )}
+          <button type="button" onClick={() => router.push("/ess/forgot-password")}>
+            Forgot PIN?
           </button>
           <button type="button" onClick={() => { setMethod("password"); setStatus("idle"); }}>
             Use password
-          </button>
-          <button type="button" onClick={() => { setMethod("dob"); setStatus("idle"); }}>
-            Date of birth
           </button>
           <button type="button" onClick={switchAccount}>
             Use a different account
@@ -403,44 +408,6 @@ function EssLoginContent() {
         </button>
         {errMsg && <p className="d-login-err">{errMsg}</p>}
         <div className="d-login-links">
-          <button type="button" onClick={() => router.push("/ess/forgot-password")}>
-            Forgot password?
-          </button>
-          <button type="button" onClick={() => { setMethod("pin"); setStatus("idle"); }}>
-            Use PIN
-          </button>
-          <button type="button" onClick={() => { setMethod("dob"); setStatus("idle"); }}>
-            Date of birth
-          </button>
-          <button type="button" onClick={switchAccount}>
-            Different account
-          </button>
-        </div>
-      </div>
-    );
-  } else {
-    card = (
-      <div className="d-login-card">
-        <h2>Confirm your date of birth</h2>
-        <p className="d-login-sub">
-          Signing in as <b>{employeeNumber}</b> · {identity?.company ?? companyCode}
-        </p>
-        <div className="d-lfield">
-          <label className="e-flabel">Date of birth</label>
-          <div className="e-finput">
-            <EIcon name="cal" size={17} />
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoFocus />
-          </div>
-        </div>
-        <button
-          className="e-btn e-btn-primary e-btn-full"
-          onClick={() => authenticate({ birthDate })}
-          disabled={busy || !birthDate}
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        {errMsg && <p className="d-login-err">{errMsg}</p>}
-        <div className="d-login-links">
           <button type="button" onClick={() => { setMethod("pin"); setStatus("idle"); }}>
             Use PIN
           </button>
@@ -448,6 +415,7 @@ function EssLoginContent() {
             Different account
           </button>
         </div>
+        <p className="d-login-sub">Forgot your password? Sign in with your PIN, then set a new one in Settings.</p>
       </div>
     );
   }

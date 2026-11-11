@@ -8,12 +8,18 @@
  *   { action: "cancel_schedule" }                   — cancel a pending schedule
  *   { action: "set_work_email", workEmail }         — set/update the employee's
  *                                                     work email (wired to the
- *                                                     employee record; required
- *                                                     before ESS can be enabled)
+ *                                                     employee record)
+ *   { action: "set_link_email", choice }            — where ESS invitation and
+ *                                                     reset links go: PERSONAL
+ *                                                     (default at hiring) or WORK
+ *
+ * Unit 0.15 Amendment 3 (Mark's ruling of 10 Nov): ESS links go to the
+ * personal email at hiring, switchable to the work email later. Granting
+ * access needs the CHOSEN email on file, whichever it is.
  *
  * Requires EMPLOYEES:UPDATE.
  */
-import { retireInvites, retireResets } from "@/lib/ess-credential-links";
+import { essLinkEmail, retireInvites, retireResets } from "@/lib/ess-credential-links";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
@@ -34,6 +40,7 @@ const bodySchema = z.discriminatedUnion("action", [
     action: z.literal("set_work_email"),
     workEmail: z.string().trim().email("Enter a valid email address").max(255),
   }),
+  z.object({ action: z.literal("set_link_email"), choice: z.enum(["PERSONAL", "WORK"]) }),
 ]);
 
 export async function POST(
@@ -53,14 +60,20 @@ export async function POST(
   const result = await withTenant(ctx.tenantId, async (tx) => {
     const emp = await tx.employee.findFirst({
       where: { id, tenantId: ctx.tenantId, deletedAt: null },
-      select: { id: true, essAccessStatus: true, essActivatedAt: true, workEmail: true },
+      select: {
+        id: true,
+        essAccessStatus: true,
+        essActivatedAt: true,
+        essEmailChoice: true,
+        personalEmail: true,
+        workEmail: true,
+      },
     });
     if (!emp) return { kind: "not_found" as const };
 
     if (input.action === "set_work_email") {
-      // The work email lives on the employee record — this is the single place
-      // it can be set/edited from the ESS portal, and it's what invites,
-      // password resets and notifications are sent to. Stored lowercased.
+      // The work email lives on the employee record. ESS links go to it only
+      // once the record is switched to WORK (set_link_email). Stored lowercased.
       await tx.employee.update({
         where: { id },
         data: { workEmail: input.workEmail.toLowerCase() },
@@ -68,11 +81,20 @@ export async function POST(
       return { kind: "ok" as const, message: "Work email saved" };
     }
 
+    if (input.action === "set_link_email") {
+      const next = { ...emp, essEmailChoice: input.choice };
+      if (!essLinkEmail(next)) return { kind: "needs_email" as const, choice: input.choice };
+      await tx.employee.update({ where: { id }, data: { essEmailChoice: input.choice } });
+      return {
+        kind: "ok" as const,
+        message: input.choice === "WORK" ? "ESS links now go to the work email" : "ESS links now go to the personal email",
+      };
+    }
+
     if (input.action === "activate") {
-      // Safeguard: an ESS account must be tied to a work email (used for
-      // invites, password reset, and notifications). No email → no activation.
-      if (!emp.workEmail) {
-        return { kind: "needs_email" as const };
+      // Safeguard: the invitation and reset links need the chosen email on file.
+      if (!essLinkEmail(emp)) {
+        return { kind: "needs_email" as const, choice: emp.essEmailChoice };
       }
       await tx.employee.update({
         where: { id },
@@ -156,7 +178,12 @@ export async function POST(
 
   if (result.kind === "not_found") return notFound("Employee");
   if (result.kind === "needs_email") {
-    return err("Add a work email to this employee before enabling ESS access.", 422);
+    return err(
+      result.choice === "WORK"
+        ? "Add a work email to this employee first: ESS links would go there."
+        : "Add a personal email to this employee first: ESS links go there.",
+      422,
+    );
   }
 
   void writeAuditLog({
@@ -171,6 +198,7 @@ export async function POST(
       ...("reason" in input ? { reason: input.reason } : {}),
       ...("deactivateAt" in input ? { deactivateAt: input.deactivateAt.toISOString() } : {}),
       ...("workEmail" in input ? { workEmail: input.workEmail.toLowerCase() } : {}),
+      ...("choice" in input ? { linkEmail: input.choice } : {}),
     },
     ipAddress: getClientIp(req),
   });

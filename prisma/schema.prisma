@@ -1161,8 +1161,18 @@ model Employee {
   nontaxableBasicAmountCents BigInt            @default(0)
 
   // ESS
+  /// The employee's 6-digit ESS PIN (bcrypt), the default sign-in. Set ONLY by
+  /// the employee, through their invitation or a reset link; HR never sets or
+  /// sees it (unit 0.15 Am 3, Mark's ruling of 10 Nov).
   essPin                         String? // hashed at app layer
   essPasswordHash                String? // optional ESS password (bcrypt), set by the employee
+  /// Where ESS invitation and reset links go: the personal email at hiring,
+  /// switchable to the work email later (unit 0.15 Am 3).
+  essEmailChoice                 EssEmailChoice  @default(PERSONAL)
+  /// Wrong PIN or password attempts since the last success or lock. Five in a
+  /// row lock ESS sign-in for 15 minutes; a reset link unlocks at once.
+  essFailedAttempts              Int             @default(0)
+  essLockedUntil                 DateTime?
   kioskPinHash                   String?
   /// ESS portal access. Employees do NOT get access on creation — HR must
   /// grant (activate) it. Login is blocked unless INVITED or ACTIVE.
@@ -3305,6 +3315,12 @@ enum EssAccessStatus {
   INVITED
   ACTIVE
   DISABLED
+}
+
+/// Which of the employee's emails receives ESS invitation and reset links.
+enum EssEmailChoice {
+  PERSONAL
+  WORK
 }
 
 /// One-time email invitation to activate ESS access (set a password). The raw
