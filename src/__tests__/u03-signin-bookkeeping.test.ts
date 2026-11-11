@@ -123,6 +123,10 @@ describe("unit 0.3 — authorizeCredentials bookkeeping is fail-soft", () => {
   it("returns null (does not throw) when no candidate password verifies", async () => {
     crypt.compare.mockResolvedValue(false);
     await expect(authorizeCredentials(CREDS)).resolves.toBeNull();
-    expect(db.user.update).not.toHaveBeenCalled();
+    // Unit 0.15 Am 4: a wrong password now counts toward the 5-attempt lock,
+    // so one write happens; bookkeeping (lastLoginAt) still never does.
+    for (const c of db.user.update.mock.calls) {
+      expect(c[0].data).not.toHaveProperty("lastLoginAt");
+    }
   });
 });

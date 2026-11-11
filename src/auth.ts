@@ -18,6 +18,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import type { JWT } from "@auth/core/jwt";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { AccountLockedSignin, isLocked, recordUserLoginFailure } from "@/lib/user-lockout";
 import { z } from "zod";
 import { sessionStillValid } from "@/lib/session-cutoff";
 import prismaAdmin from "@/lib/prisma-admin";
@@ -44,6 +45,7 @@ const USER_SELECT = {
   tenantId: true,
   systemRole: true,
   roleId: true,
+  lockedUntil: true,
 } as const;
 
 declare module "next-auth" {
@@ -97,6 +99,7 @@ export const authorizeCredentials = async (raw: unknown) => {
     tenantId: string | null;
     systemRole: SystemRole;
     roleId: string | null;
+    lockedUntil: Date | null;
   }> = [];
 
   if (scope === "admin") {
@@ -133,14 +136,42 @@ export const authorizeCredentials = async (raw: unknown) => {
     });
   }
 
+  // Unit 0.15 Amendment 4: five wrong passwords in a row lock an account for
+  // 15 minutes; a reset link unlocks it at once (src/lib/user-lockout.ts). A
+  // locked account is refused even with the right password, and the screen is
+  // told why (AccountLockedSignin is client-safe, unlike other throws here).
+  // When an email matches several accounts, a wrong password counts against
+  // each unlocked one, because each was a target of the guess.
   let user: (typeof candidates)[number] | null = null;
+  let lockedMatch = false;
   for (const c of candidates) {
     if (await bcrypt.compare(password, c.passwordHash)) {
+      if (isLocked(c)) {
+        lockedMatch = true;
+        continue;
+      }
       user = c;
       break;
     }
   }
-  if (!user) return null;
+  if (!user) {
+    if (lockedMatch) throw new AccountLockedSignin();
+    let lockedNow = false;
+    for (const c of candidates) {
+      if (isLocked(c)) {
+        lockedNow = true;
+        continue;
+      }
+      try {
+        if (await recordUserLoginFailure(c.id)) lockedNow = true;
+      } catch (e) {
+        // Fail soft: a counting blip must not turn into ?error=Configuration.
+        console.error("[auth] failed to record a wrong password for user", c.id, e);
+      }
+    }
+    if (lockedNow) throw new AccountLockedSignin();
+    return null;
+  }
 
   // lastLoginAt is BOOKKEEPING, not authorization: it records when someone last
   // signed in and says nothing about whether they may. A failure here must never
@@ -152,7 +183,7 @@ export const authorizeCredentials = async (raw: unknown) => {
   try {
     await prismaAdmin.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
     });
   } catch (e) {
     console.error("[auth] failed to record lastLoginAt for user", user.id, e);

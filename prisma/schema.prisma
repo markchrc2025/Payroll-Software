@@ -742,6 +742,10 @@ model User {
   /// Unit 0.15 Am 2 (ruling B8): sessions signed in before this instant are
   /// rejected. Set when the password changes or is reset.
   sessionsValidAfter DateTime?
+  /// Unit 0.15 Am 4: wrong passwords in a row since the last success or lock.
+  /// Five lock dashboard sign-in for 15 minutes; a reset link unlocks at once.
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
   firstName          String
   lastName           String
   jobTitle           String? // Central Portal administrator title / position (optional)
