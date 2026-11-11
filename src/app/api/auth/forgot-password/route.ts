@@ -6,7 +6,7 @@
  */
 
 import { type NextRequest } from "next/server";
-import { randomBytes, createHash } from "crypto";
+import { issueUserLink } from "@/lib/user-credential-links";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendTenantAdminResetPassword } from "@/lib/emails";
@@ -41,24 +41,8 @@ export async function POST(req: NextRequest) {
     });
 
     if (user) {
-      // Invalidate any existing unused tokens
-      await prismaAdmin.passwordResetToken.updateMany({
-        where: { userId: user.id, usedAt: null },
-        data: { usedAt: new Date() },
-      });
-
-      // Generate a new token
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-
-      await prismaAdmin.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash,
-          expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-        },
-      });
-
+      // Unit 0.15 Am 2 (B7): one live RESET link per user; never activates.
+      const rawToken = await issueUserLink(prismaAdmin, { userId: user.id, purpose: "RESET", ttlMs: TOKEN_TTL_MS });
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
 

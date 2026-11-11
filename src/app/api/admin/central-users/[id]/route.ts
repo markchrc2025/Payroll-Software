@@ -1,8 +1,8 @@
+import { issueUserLink } from "@/lib/user-credential-links";
 import { requireCentralPermission } from "@/lib/central-permission";
 import { ok, err } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendAdminResetPassword } from "@/lib/emails";
-import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -113,18 +113,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const target = await prismaAdmin.user.findFirst({
     where: { id, tenantId: null, deletedAt: null },
-    select: { id: true, email: true, firstName: true },
+    select: { id: true, email: true, firstName: true, isActive: true, passwordHash: true },
   });
   if (!target) return err("Central admin not found", 404);
 
-  const raw = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(raw).digest("hex");
-  await prismaAdmin.passwordResetToken.create({
-    data: { userId: target.id, tokenHash, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
-  });
+  // Unit 0.15 Am 2 (B7): an admin who never set a password gets their
+  // invitation again; anyone else gets a RESET, which only works while the
+  // account is active and never re-activates it.
+  const purpose = !target.isActive && target.passwordHash === "" ? "INVITE" : "RESET";
+  const raw = await issueUserLink(prismaAdmin, { userId: target.id, purpose });
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sentire-payroll.onrender.com";
-  const link = `${base}/centralportal/reset-password?token=${raw}`;
+  const link =
+    purpose === "INVITE"
+      ? `${base}/centralportal/accept-invite?token=${raw}`
+      : `${base}/centralportal/reset-password?token=${raw}`;
 
   try {
     await sendAdminResetPassword(target.email, { firstName: target.firstName, resetUrl: link });

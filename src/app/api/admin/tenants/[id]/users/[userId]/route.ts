@@ -10,8 +10,8 @@
  * Every action is written to the platform audit feed (SECURITY).
  * Requires TENANTS:MANAGE. Uses prismaAdmin (BYPASSRLS).
  */
+import { issueUserLink } from "@/lib/user-credential-links";
 import type { NextRequest } from "next/server";
-import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 import prismaAdmin from "@/lib/prisma-admin";
 import { requireCentralPermission } from "@/lib/central-permission";
@@ -26,17 +26,13 @@ const schema = z.object({
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-/** Issue a fresh single-use reset token, invalidating older unused ones. */
-async function issueResetToken(userId: string, ttlMs: number): Promise<string> {
-  await prismaAdmin.passwordResetToken.updateMany({
-    where: { userId, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-  const raw = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(raw).digest("hex");
-  await prismaAdmin.passwordResetToken.create({
-    data: { userId, tokenHash, expiresAt: new Date(Date.now() + ttlMs) },
-  });
+/**
+ * Issue the user's one live link of a purpose (unit 0.15 Am 2, ruling B7):
+ * "reset_link" is a RESET, "invite" is an INVITE. Neither activates a tenant
+ * user; that is the "activate" action.
+ */
+async function issueLink(userId: string, purpose: "INVITE" | "RESET"): Promise<string> {
+  const raw = await issueUserLink(prismaAdmin, { userId, purpose });
   return `${APP_URL}/reset-password?token=${raw}`;
 }
 
@@ -77,13 +73,13 @@ export async function POST(
   try {
     switch (action) {
       case "reset_link": {
-        const resetUrl = await issueResetToken(user.id, 60 * 60 * 1000); // 1h
+        const resetUrl = await issueLink(user.id, "RESET"); // 1h
         await sendTenantAdminResetPassword(user.email, { firstName: user.firstName, resetUrl });
         await audit("sent a password-reset link");
         return ok(null, `Reset link sent to ${user.email}`);
       }
       case "invite": {
-        const resetUrl = await issueResetToken(user.id, 7 * 24 * 60 * 60 * 1000); // 7d
+        const resetUrl = await issueLink(user.id, "INVITE"); // 7d
         await sendTenantOnboarding(user.email, { firstName: user.firstName, companyName: tenant.name, activationUrl: resetUrl });
         await audit("re-sent the account invite");
         return ok(null, `Invite re-sent to ${user.email}`);

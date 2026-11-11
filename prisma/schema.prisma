@@ -735,13 +735,16 @@ model Announcement {
 // =============================================================================
 
 model User {
-  id           String  @id @default(cuid())
-  tenantId     String? // NULL for SUPER_ADMIN users
-  email        String
-  passwordHash String
-  firstName    String
-  lastName     String
-  jobTitle     String? // Central Portal administrator title / position (optional)
+  id                 String    @id @default(cuid())
+  tenantId           String? // NULL for SUPER_ADMIN users
+  email              String
+  passwordHash       String
+  /// Unit 0.15 Am 2 (ruling B8): sessions signed in before this instant are
+  /// rejected. Set when the password changes or is reset.
+  sessionsValidAfter DateTime?
+  firstName          String
+  lastName           String
+  jobTitle           String? // Central Portal administrator title / position (optional)
 
   systemRole SystemRole @default(TENANT_USER)
   roleId     String?
@@ -788,13 +791,22 @@ model User {
   @@index([deletedAt])
 }
 
+/// Unit 0.15 Am 2 (ruling B7): what a PasswordResetToken row is for. An
+/// INVITE sets a new account's first password (and, for Central admins,
+/// activates it); a RESET only changes the password of an ACTIVE account.
+enum UserLinkPurpose {
+  INVITE
+  RESET
+}
+
 model PasswordResetToken {
-  id        String    @id @default(cuid())
+  id        String          @id @default(cuid())
   userId    String
-  tokenHash String    @unique // SHA-256 hex of the raw token
+  purpose   UserLinkPurpose @default(RESET)
+  tokenHash String          @unique // SHA-256 hex of the raw token
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime        @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1974,7 +1986,7 @@ model LeaveTransaction {
   /// NULL on every non-accrual row, which is what keeps the unique constraint
   /// below from ever applying to USAGE/ADJUSTMENT/etc: in Postgres NULLs are
   /// distinct, so those rows can never collide with each other.
-  periodKey String?
+  periodKey     String?
 
   tenant      Tenant            @relation(fields: [tenantId], references: [id])
   employee    Employee          @relation(fields: [employeeId], references: [id])
