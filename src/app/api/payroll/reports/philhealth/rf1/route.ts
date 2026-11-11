@@ -17,6 +17,7 @@ import {
   type PhilhealthRf1EmployeeInput,
   type PhilhealthRf1SheetInput,
 } from "@/lib/payroll/reports/philhealth-rf1";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const querySchema = z.object({
   year: z.coerce
@@ -40,6 +41,9 @@ function parsePhilhealthMsc(breakdown: unknown): bigint {
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["REPORTS", "READ"]);
+  if (denied) return denied;
 
   const { searchParams } = new URL(req.url);
   const parsed = querySchema.safeParse({

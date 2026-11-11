@@ -13,6 +13,7 @@ export async function POST(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: creator only: the check below refuses anyone who did not create the request (unit 0.25)
   const { id } = await params;
 
   const result = await withTenant(auth.tenantId, async (tx) => {

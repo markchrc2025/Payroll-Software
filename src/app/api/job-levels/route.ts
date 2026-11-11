@@ -8,6 +8,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { z } from "zod";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -19,6 +20,7 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company reference data for dropdowns and screens, no employee records; changes to it are permission-checked (unit 0.25)
 
   const levels = await withTenant(auth.tenantId, (tx) => tx.jobLevel.findMany({
     where: { tenantId: auth.tenantId, deletedAt: null },
@@ -40,6 +42,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   if (!body) return err("Invalid JSON body");

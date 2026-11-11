@@ -31,6 +31,7 @@ const chatSchema = z.object({
 export async function POST(req: NextRequest) {
   const ctx = await getAuthContext(req);
   if (!ctx) return unauthorized();
+  // @permission-exempt: HR assistant chat; reads no employee records; gated by the AI feature flag and daily cap (unit 0.25)
 
   // Check AI gating (feature flag + daily cap)
   const gating = await checkAiGating(ctx.tenantId);

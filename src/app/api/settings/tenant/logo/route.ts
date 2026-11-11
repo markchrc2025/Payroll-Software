@@ -16,6 +16,7 @@ import { resolveObjectUrl, isR2Configured } from "@/lib/r2";
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: the company logo, shown on every screen (unit 0.25)
 
   const tenant = await withTenant(auth.tenantId, (tx) =>
     tx.tenant.findFirst({

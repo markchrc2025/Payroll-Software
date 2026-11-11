@@ -9,6 +9,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { updateShiftScheduleSchema } from "@/lib/validations/dtr";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(
   req: NextRequest,
@@ -16,6 +17,7 @@ export async function GET(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: company reference data for dropdowns and screens, no employee records; changes to it are permission-checked (unit 0.25)
   const { id } = await params;
 
   const shift = await withTenant(auth.tenantId, (tx) =>
@@ -33,6 +35,9 @@ export async function PATCH(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const body = await req.json().catch(() => null);
@@ -100,6 +105,9 @@ export async function DELETE(
 ) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "DELETE"]);
+  if (denied) return denied;
   const { id } = await params;
 
   const deleted = await withTenant(auth.tenantId, async (tx) => {

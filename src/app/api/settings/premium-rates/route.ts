@@ -10,6 +10,7 @@ import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { err, ok, unauthorized } from "@/lib/api-response";
 import type { PremiumMultiplierKey } from "@prisma/client";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 // ---------------------------------------------------------------------------
 // DOLE statutory minimum floors (Art. 87–94, Labor Code, as amended)
@@ -50,6 +51,9 @@ const putSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "READ"], ["PAYROLL", "READ"]);
+  if (denied) return denied;
 
   const rows = await withTenant(auth.tenantId, (tx) =>
     tx.premiumRateConfig.findMany({
@@ -73,6 +77,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["SETTINGS", "UPDATE"]);
+  if (denied) return denied;
 
   let body: unknown;
   try {

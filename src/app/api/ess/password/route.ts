@@ -4,17 +4,27 @@
  * Lets a signed-in employee set or change their ESS password. Requires a valid
  * ESS session; the password is bcrypt-hashed into Employee.essPasswordHash.
  *
- * Body: { newPassword: string (min 8) }
+ * Body: { newPassword: string (min 8), currentPassword?: string }
+ *
+ * Unit 0.15 Amendment 1, ruling B8: changing the password ENDS EVERY ESS
+ * SESSION of the employee, including the one making the request; the client
+ * signs out and the employee signs in again with the new password. If the
+ * account already has a password, the current one is required, so a stolen
+ * session alone cannot lock the owner out.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { err, ok, serverError, unauthorized } from "@/lib/api-response";
-import { getEssContext, hashEssPassword } from "@/lib/ess-auth";
+import { getEssContext, hashEssPassword, verifyEssPassword } from "@/lib/ess-auth";
+import { endAllEssSessions } from "@/lib/ess-credential-links";
 import { withTenant } from "@/lib/with-tenant";
 import { sendEmployeeResetPasswordNotice } from "@/lib/emails";
 import { securityContext } from "@/lib/security-context";
 
-const Schema = z.object({ newPassword: z.string().min(8).max(72) });
+const Schema = z.object({
+  newPassword: z.string().min(8).max(72),
+  currentPassword: z.string().max(200).optional(),
+});
 
 export async function POST(req: NextRequest) {
   const ctx = await getEssContext(req);
@@ -33,13 +43,24 @@ export async function POST(req: NextRequest) {
 
   try {
     const hash = await hashEssPassword(parsed.data.newPassword);
-    const emp = await withTenant(ctx.tenantId, (tx) =>
-      tx.employee.update({
+    const emp = await withTenant(ctx.tenantId, async (tx) => {
+      const current = await tx.employee.findFirst({
+        where: { id: ctx.employeeId, tenantId: ctx.tenantId },
+        select: { essPasswordHash: true },
+      });
+      if (current?.essPasswordHash) {
+        const given = parsed.data.currentPassword ?? "";
+        if (!given || !(await verifyEssPassword(given, current.essPasswordHash))) return "wrong_current" as const;
+      }
+      const updated = await tx.employee.update({
         where: { id: ctx.employeeId },
         data: { essPasswordHash: hash },
         select: { workEmail: true },
-      }),
-    );
+      });
+      await endAllEssSessions(tx, ctx.employeeId);
+      return updated;
+    });
+    if (emp === "wrong_current") return err("Your current password is incorrect.", 400);
 
     // Security notice (best-effort — never fail the change on a delivery error).
     if (emp.workEmail) {
@@ -57,7 +78,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return ok({ updated: true }, "Password updated");
+    return ok({ updated: true, signedOut: true }, "Password updated. You have been signed out everywhere; sign in with your new password.");
   } catch (e) {
     console.error("[ess/password]", e);
     return serverError(e);

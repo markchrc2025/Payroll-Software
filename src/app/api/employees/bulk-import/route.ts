@@ -22,10 +22,14 @@ import { ok, err, unauthorized } from "@/lib/api-response";
 import { csvEmployeeRowSchema } from "@/lib/validations/employee";
 import { parseCsvString } from "@/lib/utils/csv";
 import { claimEmployeeIdBulk, formatEmployeeId } from "@/lib/claim-employee-id";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["EMPLOYEES", "CREATE"]);
+  if (denied) return denied;
 
   // --- Parse multipart form ---
   const formData = await req.formData().catch(() => null);

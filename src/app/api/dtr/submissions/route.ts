@@ -3,11 +3,11 @@
  *   GET  — list DTR period-submissions (paginated, filterable)
  *   POST — create a new DTR submission (HR on behalf of employee, or ESS)
  */
+import { callerEmployeeId, maySeeAllRecords } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
-import { checkPermission } from "@/lib/require-permission";
 import { isSelfAction } from "@/lib/authz/self-approval";
 import { err, forbidden, ok, paginated, unauthorized } from "@/lib/api-response";
 import {
@@ -36,6 +36,13 @@ export async function GET(req: NextRequest) {
       periodEnd: periodEnd ? { lte: new Date(periodEnd + "T23:59:59.999Z") } : undefined,
     }),
   };
+
+  // Unit 0.22 Am 1 (B6): everyone's submissions only for the owner or a
+  // TIMESHEETS:READ role; anyone else sees only their own.
+  const scoped = await withTenant(auth.tenantId, async (tx) =>
+    (await maySeeAllRecords(tx, auth, "DTR")) ? null : ((await callerEmployeeId(tx, auth)) ?? "__none__"),
+  );
+  if (scoped) where.employeeId = scoped;
 
   const [rows, total] = await withTenant(auth.tenantId, (tx) =>
     Promise.all([
@@ -73,14 +80,10 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
 
   const result = await withTenant(auth.tenantId, async (tx) => {
-    // Authz: caller must be the employee themselves (ESS) or hold TIMESHEETS:APPROVE.
+    // Unit 0.22 Am 1 (B6): only the employee submits their own DTR. HR used
+    // to be able to submit anyone's, and with no chain that was final.
     const isSelf = await isSelfAction(tx, auth.tenantId, auth.userId, d.employeeId);
-    const isApprover =
-      auth.systemRole === "SUPER_ADMIN" ||
-      (auth.roleId
-        ? await checkPermission(auth.tenantId, auth.roleId, "TIMESHEETS", "APPROVE")
-        : false);
-    if (!isSelf && !isApprover) return "FORBIDDEN";
+    if (!isSelf) return "FORBIDDEN";
 
     // Validate employee belongs to tenant
     const employee = await tx.employee.findFirst({
@@ -127,8 +130,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Snapshot the DTR approval chain. If no approvers resolve, the submission
-    // is immediately final-approved (eligible for payroll).
+    // Snapshot the DTR approval chain. Unit 0.22 Am 1 (B5): with no chain the
+    // submission stays SUBMITTED until the owner or a TIMESHEETS:APPROVE role
+    // approves it; nothing is approved at submission.
     const snap = await snapshotApprovalChain(tx, {
       module: "DTR",
       entityId: submission.id,
@@ -136,12 +140,7 @@ export async function POST(req: NextRequest) {
       tenantId: auth.tenantId,
     });
 
-    if (snap.activeSteps === 0) {
-      await tx.dTRSubmission.update({
-        where: { id: submission.id },
-        data: { status: "MANAGER_APPROVED" },
-      });
-    } else if (snap.firstStepIndex !== 0) {
+    if (snap.activeSteps > 0 && snap.firstStepIndex !== 0) {
       await tx.dTRSubmission.update({
         where: { id: submission.id },
         data: { currentStepIndex: snap.firstStepIndex },
@@ -152,7 +151,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (result === "FORBIDDEN")
-    return forbidden("You can only submit your own DTR unless you have approval rights");
+    return forbidden("You can only submit your own DTR. Employees submit theirs in ESS.");
   if (result === "NOT_FOUND_EMP") return err("Employee not found", 404);
   if (result === "DUPLICATE")
     return err("A submission already exists for this employee and period", 409);

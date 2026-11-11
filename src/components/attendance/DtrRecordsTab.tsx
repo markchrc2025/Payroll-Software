@@ -10,7 +10,6 @@ import {
   ChevronRight,
   ShieldCheck,
   RotateCcw,
-  Plus,
   Clock,
   Pencil,
 } from "lucide-react";
@@ -475,112 +474,6 @@ function ReturnDialog({
           </Button>
           <Button variant="destructive" onClick={handleReturn} disabled={saving}>
             {saving ? "Returning…" : "Return"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// =============================================================================
-// CreateSubmissionDialog
-// =============================================================================
-
-function CreateSubmissionDialog({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [employeeId, setEmployeeId] = useState("");
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setEmployeeId("");
-      setPeriodStart("");
-      setPeriodEnd("");
-    }
-  }, [open]);
-
-  async function handleCreate() {
-    if (!employeeId.trim() || !periodStart || !periodEnd) {
-      toast.error("All fields are required.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/dtr/submissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: employeeId.trim(),
-          periodStart,
-          periodEnd,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.message ?? "Failed to create submission");
-        return;
-      }
-      toast.success("DTR submission created");
-      onCreated();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Create DTR Submission</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Employee ID</Label>
-            <Input
-              placeholder="cm…"
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Period Start</Label>
-              <Input
-                type="date"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Period End</Label>
-              <Input
-                type="date"
-                value={periodEnd}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={saving}
-            className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
-          >
-            {saving ? "Creating…" : "Create Submission"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1062,7 +955,6 @@ export function DtrRecordsTab() {
   const [periodEnd, setPeriodEnd] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const debouncedSearch = useDebounce(employeeSearch, 400);
 
@@ -1159,14 +1051,9 @@ export function DtrRecordsTab() {
           <RefreshCw className="h-4 w-4" />
         </Button>
 
-        <Button
-          size="sm"
-          className="ml-auto bg-[#E8693A] hover:bg-[#C2552F] text-white"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          New Submission
-        </Button>
+        {/* PAY-121 (ruling B6): no one submits a DTR for another employee.
+            Employees submit their own in ESS; HR approves or returns here. */}
+        <span className="ml-auto self-center text-xs text-muted-foreground">Employees submit DTRs in ESS</span>
       </div>
 
       {data && (
@@ -1306,11 +1193,6 @@ export function DtrRecordsTab() {
       />
 
       {/* Create Dialog */}
-      <CreateSubmissionDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={fetchData}
-      />
     </div>
   );
 }

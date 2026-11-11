@@ -12,10 +12,14 @@ import {
   createDtrRecordSchema,
   listDtrRecordsSchema,
 } from "@/lib/validations/dtr";
+import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["TIMESHEETS", "READ"]);
+  if (denied) return denied;
 
   const qp = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = listDtrRecordsSchema.safeParse(qp);
@@ -105,6 +109,9 @@ async function attachGeofenceWarnings<T extends DtrRow>(
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // Unit 0.25: the caller's role must allow this, not just a sign-in.
+  const denied = await forbidUnless(auth, ["TIMESHEETS", "CREATE"]);
+  if (denied) return denied;
 
   const body = await req.json().catch(() => null);
   const parsed = createDtrRecordSchema.safeParse(body);
