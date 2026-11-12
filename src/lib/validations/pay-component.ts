@@ -3,6 +3,8 @@
  * assignments (Phase D2).
  */
 import { z } from "zod";
+
+// Query-string flags use z.stringbool(): z.coerce.boolean() reads the text "false" as true.
 import {
   LoanStatus,
   LoanType,
@@ -57,10 +59,10 @@ export type UpdatePayComponentInput = z.infer<typeof updatePayComponentSchema>;
 
 export const listPayComponentsSchema = z.object({
   kind: z.nativeEnum(PayComponentKind).optional(),
-  isActive: z.coerce.boolean().optional(),
-  includeDeleted: z.coerce.boolean().default(false),
+  isActive: z.stringbool().optional(),
+  includeDeleted: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 // -----------------------------------------------------------------------------
@@ -127,5 +129,5 @@ export const listLoansSchema = z.object({
   status: z.nativeEnum(LoanStatus).optional(),
   loanType: z.nativeEnum(LoanType).optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 });

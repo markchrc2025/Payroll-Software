@@ -13,7 +13,7 @@ import { getAuthContext } from "@/lib/auth";
 import { fromCentavos } from "@/lib/money";
 import { unauthorized } from "@/lib/api-response";
 import { toCsvString, csvDownloadResponse } from "@/lib/utils/csv";
-import { listEmployeesSchema } from "@/lib/validations/employee";
+import { listEmployeesSchema, CURRENTLY_EMPLOYED_STATUSES } from "@/lib/validations/employee";
 import { forbidUnless } from "@/lib/authz/route-permission";
 
 export async function GET(req: NextRequest) {
@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
     deletedAt: null,
     ...(departmentId && { departmentId }),
     ...(branchId && { branchId }),
-    ...(status && { employmentStatus: status }),
+    ...(status === "ACTIVE"
+      ? { employmentStatus: { in: [...CURRENTLY_EMPLOYED_STATUSES] } }
+      : status && { employmentStatus: status }),
     ...(employmentType && { employmentType }),
   };
 
