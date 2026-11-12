@@ -183,10 +183,10 @@ export default function CompanyBrandingPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Company &amp; Branding
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Your company&apos;s legal identity and contact details. Appears on payslips and reports.
           </p>
         </div>
@@ -199,7 +199,7 @@ export default function CompanyBrandingPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Save Changes"}
@@ -211,7 +211,7 @@ export default function CompanyBrandingPage() {
       {loading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-4">
+            <div key={i} className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-4">
               <Skeleton className="h-4 w-40" />
               <div className="grid grid-cols-2 gap-4">
                 <Skeleton className="h-9 w-full" />
@@ -226,13 +226,13 @@ export default function CompanyBrandingPage() {
           <Section title="Logo" icon={<Building2 className="h-4 w-4 text-[#E8693A]" />}>
             <div className="flex items-start gap-5">
               <div
-                className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-[#E8EBF1] bg-[#F5F6FA] overflow-hidden"
+                className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-[#E8E8E8] bg-[#F7F7F7] overflow-hidden"
               >
                 {logoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoSrc} alt="Logo" className="h-full w-full object-contain" />
                 ) : (
-                  <Building2 className="h-8 w-8 text-[#C5CDD7]" />
+                  <Building2 className="h-8 w-8 text-[#D4D4D4]" />
                 )}
               </div>
               <div className="flex-1 space-y-1.5">
@@ -265,7 +265,7 @@ export default function CompanyBrandingPage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-9 text-[13px] text-[#9AA5B4]"
+                      className="h-9 text-[13px] text-[#A3A3A3]"
                       onClick={() => {
                         setLogoPreview(null);
                         setForm((f) => ({ ...f, logoKey: "", logoUrl: "" }));
@@ -276,7 +276,7 @@ export default function CompanyBrandingPage() {
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-[#9AA5B4]">
+                <p className="text-xs text-[#A3A3A3]">
                   Upload a JPG, PNG, or WebP image (max 5 MB). Recommended: 400×400 px. Stored securely in your company&apos;s file storage.
                 </p>
               </div>
@@ -293,7 +293,7 @@ export default function CompanyBrandingPage() {
                   value={form.name}
                   onChange={(e) => set("name", e.target.value)}
                 />
-                <p className="text-xs text-[#9AA5B4]">Registered name with SEC / DTI</p>
+                <p className="text-xs text-[#A3A3A3]">Registered name with SEC / DTI</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Display / Trade Name</Label>
@@ -302,7 +302,7 @@ export default function CompanyBrandingPage() {
                   value={form.tradeName}
                   onChange={(e) => set("tradeName", e.target.value)}
                 />
-                <p className="text-xs text-[#9AA5B4]">Shown on payslips if different from legal name</p>
+                <p className="text-xs text-[#A3A3A3]">Shown on payslips if different from legal name</p>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -391,7 +391,7 @@ export default function CompanyBrandingPage() {
 
       {/* ── Save bar ── */}
       {dirty && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+        <div className="sticky bottom-0 flex items-center justify-between rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] px-5 py-3">
           <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
@@ -406,7 +406,7 @@ export default function CompanyBrandingPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               {saving ? "Saving…" : "Save"}
             </Button>
@@ -427,10 +427,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-4">
       <div className="flex items-center gap-2">
         {icon}
-        <h2 className="text-[14px] font-semibold text-[#111827]">{title}</h2>
+        <h2 className="text-[14px] font-semibold text-[#171717]">{title}</h2>
       </div>
       {children}
     </div>

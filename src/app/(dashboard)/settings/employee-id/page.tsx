@@ -102,10 +102,10 @@ export default function EmployeeIdPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Employee ID
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             The Employee ID auto-assigned to each new record. It&apos;s the identifier used
             across payroll, payslips, ESS, and every transaction — and in employee page URLs.
           </p>
@@ -119,7 +119,7 @@ export default function EmployeeIdPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving || !!nextSeqError}
-              className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Save Changes"}
@@ -131,7 +131,7 @@ export default function EmployeeIdPage() {
       {loading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-3">
+            <div key={i} className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-3">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-10 w-full" />
             </div>
@@ -140,9 +140,9 @@ export default function EmployeeIdPage() {
       ) : (
         <div className="space-y-5">
           {/* Live Preview */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5">
-            <Label className="text-[14px] font-semibold text-[#111827]">Preview</Label>
-            <p className="text-[12.5px] text-[#6B7A8D] mt-0.5 mb-3">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5">
+            <Label className="text-[14px] font-semibold text-[#171717]">Preview</Label>
+            <p className="text-[12.5px] text-[#6B6B6B] mt-0.5 mb-3">
               What the next employee&apos;s ID will look like with the current settings.
             </p>
             <div
@@ -154,10 +154,10 @@ export default function EmployeeIdPage() {
           </div>
 
           {/* Format */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-5">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-5">
             <div>
-              <Label className="text-[14px] font-semibold text-[#111827]">Format</Label>
-              <p className="text-[12.5px] text-[#6B7A8D] mt-0.5">
+              <Label className="text-[14px] font-semibold text-[#171717]">Format</Label>
+              <p className="text-[12.5px] text-[#6B6B6B] mt-0.5">
                 ID = <span className="font-mono">Prefix</span>
                 {form.empIdIncludeYear && <> + <span className="font-mono">Year</span></>}
                 {" + "}<span className="font-mono">Sequence</span>
@@ -167,40 +167,38 @@ export default function EmployeeIdPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                  Prefix <span className="text-[11px] text-[#9CA3AF] font-normal">(letters, numbers, . _ -)</span>
+                <Label className="text-[13px] font-medium text-[#404040] mb-1.5 block">
+                  Prefix <span className="text-[11px] text-[#A3A3A3] font-normal">(letters, numbers, . _ -)</span>
                 </Label>
                 <Input
                   value={form.empIdPrefix}
                   onChange={(e) => update("empIdPrefix", e.target.value.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 20))}
                   placeholder="EMP-"
                   className="h-10 text-[13.5px] font-mono"
-                  style={{ borderColor: "#ECE6DD" }}
                 />
               </div>
 
               <div>
-                <Label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                  Suffix <span className="text-[11px] text-[#9CA3AF] font-normal">(optional; letters, numbers, . _ -)</span>
+                <Label className="text-[13px] font-medium text-[#404040] mb-1.5 block">
+                  Suffix <span className="text-[11px] text-[#A3A3A3] font-normal">(optional; letters, numbers, . _ -)</span>
                 </Label>
                 <Input
                   value={form.empIdSuffix}
                   onChange={(e) => update("empIdSuffix", e.target.value.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 20))}
                   placeholder=""
                   className="h-10 text-[13.5px] font-mono"
-                  style={{ borderColor: "#ECE6DD" }}
                 />
               </div>
 
               <div>
-                <Label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                  Sequence Digits <span className="text-[11px] text-[#9CA3AF] font-normal">(zero-padding width)</span>
+                <Label className="text-[13px] font-medium text-[#404040] mb-1.5 block">
+                  Sequence Digits <span className="text-[11px] text-[#A3A3A3] font-normal">(zero-padding width)</span>
                 </Label>
                 <select
                   value={form.empIdPadding}
                   onChange={(e) => update("empIdPadding", Number(e.target.value))}
-                  className="h-10 w-full rounded-md border px-3 text-[13.5px] bg-white outline-none"
-                  style={{ borderColor: "#ECE6DD", color: "#111827" }}
+                  className="h-7 w-full rounded-[8px] border px-3 text-[13.5px] bg-[var(--fill)] outline-none"
+                  style={{ borderColor: "#E8E8E8", color: "#171717" }}
                 >
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
@@ -212,13 +210,13 @@ export default function EmployeeIdPage() {
 
               <div
                 className="flex items-center justify-between rounded-[9px] px-4 py-3"
-                style={{ background: "#F6F2EC", border: "1px solid #ECE6DD" }}
+                style={{ background: "#F7F7F7", border: "1px solid #E8E8E8" }}
               >
                 <div>
-                  <p className="text-[13.5px] font-medium" style={{ color: "#2A2420" }}>
+                  <p className="text-[13.5px] font-medium" style={{ color: "#171717" }}>
                     Include Year
                   </p>
-                  <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                  <p className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                     Adds {currentYear} before the sequence; resets to 1 each year
                   </p>
                 </div>
@@ -231,10 +229,10 @@ export default function EmployeeIdPage() {
           </div>
 
           {/* Sequence */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-3">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-3">
             <div>
-              <Label className="text-[14px] font-semibold text-[#111827]">Next Sequence Number</Label>
-              <p className="text-[12.5px] text-[#6B7A8D] mt-0.5">
+              <Label className="text-[14px] font-semibold text-[#171717]">Next Sequence Number</Label>
+              <p className="text-[12.5px] text-[#6B6B6B] mt-0.5">
                 The sequence number that will be assigned to the next new employee.
                 You can advance this (e.g., if migrating from another system), but it cannot be decreased.
               </p>
@@ -255,7 +253,7 @@ export default function EmployeeIdPage() {
                   }
                 }}
                 className="h-10 text-[13.5px]"
-                style={{ borderColor: nextSeqError ? "#E0463B" : "#ECE6DD" }}
+                style={{ borderColor: nextSeqError ? "#E0463B" : "#E8E8E8" }}
               />
               {nextSeqError && (
                 <p className="mt-1 text-[11.5px]" style={{ color: "#E0463B" }}>{nextSeqError}</p>
@@ -267,7 +265,7 @@ export default function EmployeeIdPage() {
 
       {/* Sticky save bar */}
       {dirty && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+        <div className="sticky bottom-0 flex items-center justify-between rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] px-5 py-3">
           <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
@@ -282,7 +280,7 @@ export default function EmployeeIdPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving || !!nextSeqError}
-              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               {saving ? "Saving…" : "Save"}
             </Button>

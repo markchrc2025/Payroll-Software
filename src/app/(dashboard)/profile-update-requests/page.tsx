@@ -175,7 +175,7 @@ export default function ProfileUpdateRequestsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Profile Update Requests</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Profile Update Requests</h1>
         <p className="text-sm text-muted-foreground">Employee-submitted field changes pending HR approval</p>
       </div>
 

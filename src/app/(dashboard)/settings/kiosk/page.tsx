@@ -246,7 +246,7 @@ export default function KiosksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Kiosks</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Kiosks</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${kiosks.length} kiosk${kiosks.length !== 1 ? "s" : ""}`}
           </p>
@@ -497,7 +497,7 @@ export default function KiosksPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-lg bg-muted p-4">
-              <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">Device Token</p>
+              <p className="text-[12.5px] text-muted-foreground mb-2 font-medium">Device Token</p>
               <code className="block text-sm font-mono break-all leading-relaxed">{newToken}</code>
             </div>
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">

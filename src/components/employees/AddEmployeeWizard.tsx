@@ -231,7 +231,7 @@ function getErr(errors: FieldErrors<CreateEmployeeInput>, name: string): string 
 
 function Lbl({ text, req }: { text: string; req?: boolean }) {
   return (
-    <label className="mb-1.5 block text-[12.5px] font-semibold" style={{ color: "#2A2420" }}>
+    <label className="mb-1.5 block text-[12.5px] font-semibold" style={{ color: "#171717" }}>
       {text}{req && <span style={{ color: "#E8693A" }} className="ml-0.5">*</span>}
     </label>
   );
@@ -248,8 +248,8 @@ function FGrid({ children }: { children: React.ReactNode }) {
 
 function FSec({ label }: { label: string }) {
   return (
-    <div className="col-span-2 mt-2 border-t pt-4 text-[10.5px] font-bold uppercase tracking-[0.1em]"
-      style={{ borderColor: "#ECE6DD", color: "#9b9085" }}>
+    <div className="col-span-2 mt-2 border-t pt-4 text-[12.5px] font-medium"
+      style={{ borderColor: "#E8E8E8", color: "#6B6B6B" }}>
       {label}
     </div>
   );
@@ -262,7 +262,7 @@ function FNote({ lines }: { lines: string[] }) {
       <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white"
         style={{ background: "#E8693A" }}>?</span>
       <div className="space-y-0.5">
-        {lines.map((l, i) => <p key={i} style={{ color: "#6B6259" }}>{l}</p>)}
+        {lines.map((l, i) => <p key={i} style={{ color: "#525252" }}>{l}</p>)}
       </div>
     </div>
   );
@@ -288,8 +288,7 @@ function TF({
       <Controller control={control} name={name} render={({ field }) => (
         <Input type={type} placeholder={placeholder}
           {...field} value={(field.value as string) ?? ""}
-          className="h-10 text-[13.5px]"
-          style={{ borderColor: "#ECE6DD", background: "#fff" }} />
+          className="h-10 text-[13.5px]" />
       )} />
       <FErr msg={msg} />
     </div>
@@ -318,7 +317,7 @@ function SF({
       <Lbl text={label} req={req} />
       <Controller control={control} name={name} render={({ field }) => (
         <Select value={(field.value as string) ?? ""} onValueChange={field.onChange}>
-          <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+          <SelectTrigger className="h-10 text-[13.5px]">
             <SelectValue placeholder={placeholder ?? `Select ${label}`} />
           </SelectTrigger>
           <SelectContent>
@@ -350,12 +349,10 @@ function MF({
     <div className={span2 ? "col-span-2" : ""}>
       <Lbl text={label} req={req} />
       <Controller control={control} name={name} render={({ field }) => (
-        <div className="flex h-10 items-center overflow-hidden rounded-md border text-[13.5px]"
-          style={{ borderColor: "#ECE6DD" }}>
-          <span className="flex h-full items-center border-r px-3 text-[13px] font-medium"
-            style={{ background: "#F6F2EC", color: "#6B6259", borderColor: "#ECE6DD" }}>₱</span>
+        <div className="flex h-7 items-center overflow-hidden rounded-[8px] bg-[var(--fill)] text-[13.5px]">
+          <span className="flex h-full items-center pl-2 pr-1 text-[13.5px] text-[var(--muted-2)]">₱</span>
           <input type="text" inputMode="numeric" placeholder={placeholder ?? "0.00"}
-            className="flex-1 border-none bg-white px-3 text-[13.5px] outline-none"
+            className="flex-1 border-none bg-transparent px-1 text-[13.5px] outline-none"
             {...field}
             value={(field.value as string | number) ?? ""}
             onChange={(e) => field.onChange(e.target.value)} />
@@ -382,8 +379,8 @@ function ToggleF({
 }) {
   return (
     <div className={`flex items-center justify-between rounded-[9px] px-4 py-3 ${span2 ? "col-span-2" : ""}`}
-      style={{ background: "#F6F2EC", border: "1px solid #ECE6DD" }}>
-      <span className="text-[13.5px]" style={{ color: "#2A2420" }}>{label}</span>
+      style={{ background: "#F7F7F7", border: "1px solid #E8E8E8" }}>
+      <span className="text-[13.5px]" style={{ color: "#171717" }}>{label}</span>
       <Controller control={control} name={name} render={({ field }) => (
         <Switch
           checked={!!field.value}
@@ -416,8 +413,7 @@ function TAF({
       <Controller control={control} name={name} render={({ field }) => (
         <Textarea rows={rows} placeholder={placeholder}
           {...field} value={(field.value as string) ?? ""}
-          className="text-[13.5px] resize-none"
-          style={{ borderColor: "#ECE6DD" }} />
+          className="text-[13.5px] resize-none" />
       )} />
     </div>
   );
@@ -443,22 +439,24 @@ function VerticalStepper({
           <button key={i} type="button"
             onClick={() => onGoTo(i)}
             className={[
-              "flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-[#faf6f0]",
+              "flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left transition-colors cursor-pointer hover:bg-[#F3F3F3]",
             ].join(" ")}
-            style={isCur ? { background: "#fdeee6" } : undefined}
+            style={isCur ? { background: "#F3F3F3" } : undefined}
           >
-            <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[12px] font-bold"
-              style={isDone || isCur
-                ? { background: "#E8693A", color: "#fff" }
-                : { background: "#ECE6DD", color: "#9b9085" }}>
+            <div className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[12px] font-medium"
+              style={isDone
+                ? { background: "#171717", color: "#fff" }
+                : isCur
+                  ? { background: "#fff", color: "#171717", boxShadow: "inset 0 0 0 1.5px #171717" }
+                  : { background: "#fff", color: "#6B6B6B", boxShadow: "inset 0 0 0 1px #D4D4D4" }}>
               {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
             </div>
             <div className="hidden xl:block leading-none min-w-0">
               <div className="text-[13px] font-semibold truncate"
-                style={{ color: isCur ? "#E8693A" : isDone ? "#2A2420" : "#9b9085" }}>
+                style={{ color: isCur || isDone ? "#171717" : "#6B6B6B" }}>
                 {s.id}
               </div>
-              <div className="mt-0.5 text-[11px] truncate" style={{ color: "#9b9085" }}>{s.sub}</div>
+              <div className="mt-0.5 text-[11px] truncate" style={{ color: "#6B6B6B" }}>{s.sub}</div>
             </div>
           </button>
         );
@@ -482,17 +480,17 @@ function SuccessState({
         <Check className="h-8 w-8" style={{ color: "#0FA36B" }} />
       </div>
       <div>
-        <h2 className="text-2xl font-bold" style={{ color: "#2A2420" }}>
+        <h2 className="text-2xl font-bold" style={{ color: "#171717" }}>
           {firstName} {lastName} created!
         </h2>
-        <p className="mt-1 text-[14px]" style={{ color: "#6B6259" }}>
+        <p className="mt-1 text-[14px]" style={{ color: "#525252" }}>
           {position || "Employee"} · {department || "—"} · joined {hireDate || "—"}
         </p>
       </div>
       <div className="flex gap-3">
         <Button variant="outline" onClick={onAddAnother}>Add another</Button>
         <Link href="/employees">
-          <Button style={{ background: "#E8693A", color: "#fff" }}>
+          <Button>
             Back to Employees <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
@@ -506,11 +504,11 @@ function SuccessState({
 // employee exists (save first, then edit to add history + certificates).
 function BackgroundCreateNotice({ what }: { what: string }) {
   return (
-    <div className="rounded-[12px] border border-dashed px-5 py-8 text-center" style={{ borderColor: "#ECE6DD" }}>
-      <p className="text-[13.5px] font-medium" style={{ color: "#2A2420" }}>
+    <div className="rounded-[12px] border border-dashed px-5 py-8 text-center">
+      <p className="text-[13.5px] font-medium" style={{ color: "#171717" }}>
         Save the employee first to add {what}
       </p>
-      <p className="mx-auto mt-1 max-w-sm text-[12.5px]" style={{ color: "#9b9085" }}>
+      <p className="mx-auto mt-1 max-w-sm text-[12.5px]" style={{ color: "#6B6B6B" }}>
         Click <strong>Save employee</strong> below, then reopen them in Edit — this
         section becomes editable once the record exists.
       </p>
@@ -706,16 +704,16 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
           <FGrid>
             <div className="col-span-2 flex items-center gap-4 py-1">
               <div
-                className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full"
-                style={{ background: "#fdeee6", border: "2px dashed #E8693A" }}
+                className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[12px]"
+                style={{ background: "#F3F3F3" }}
               >
                 {photoPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element -- local blob preview
                   <img src={photoPreview} alt="Profile photo" className="h-full w-full object-cover" />
                 ) : uploadingPhoto ? (
-                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8693A" }} />
+                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#525252" }} />
                 ) : (
-                  <User className="h-7 w-7" style={{ color: "#E8693A" }} />
+                  <User className="h-7 w-7" style={{ color: "#525252" }} />
                 )}
               </div>
               <input
@@ -737,17 +735,17 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             </div>
             {/* Employee ID — read-only preview; actual value assigned atomically on save */}
             <div className="col-span-2">
-              <label className="mb-1.5 block text-[12.5px] font-semibold" style={{ color: "#2A2420" }}>
+              <label className="mb-1.5 block text-[12.5px] font-semibold" style={{ color: "#171717" }}>
                 Employee ID
               </label>
               <div className="flex items-center gap-2.5">
                 <div
-                  className="flex h-10 items-center rounded-md border px-3 font-mono text-[13.5px] font-semibold min-w-[140px]"
-                  style={{ borderColor: "#ECE6DD", background: "#F6F2EC", color: "#E8693A" }}
+                  className="flex h-7 items-center rounded-[8px] bg-[var(--fill)] px-2 font-mono text-[13.5px] font-medium min-w-[140px]"
+                  style={{ borderColor: "#E8E8E8", background: "#F7F7F7", color: "#E8693A" }}
                 >
                   {isEdit ? (employeeNumber ?? "—") : "—"}
                 </div>
-                <span className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                <span className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                   {isEdit ? "Assigned — cannot be changed" : "Auto-assigned on save"}
                 </span>
               </div>
@@ -790,7 +788,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Level" />
               <Controller control={c} name="levelId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Select level…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -804,7 +802,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Department" />
               <Controller control={c} name="departmentId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Select department…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -826,7 +824,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 });
                 return (
                   <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                    <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                    <SelectTrigger className="h-10 text-[13.5px]">
                       <SelectValue placeholder="Select position…" />
                     </SelectTrigger>
                     <SelectContent>
@@ -853,7 +851,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                     className="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white"
                     style={{ background: "#E8693A" }}
                   >!</span>
-                  <div className="space-y-1" style={{ color: "#6B6259" }}>
+                  <div className="space-y-1" style={{ color: "#525252" }}>
                     <p>No branches exist yet. A branch is required — it determines which holidays apply to this employee at payroll-run time.</p>
                     <Link
                       href="/branches"
@@ -884,7 +882,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Approval Workflow" />
               <Controller control={c} name="workflowId" render={({ field }) => (
                 <Select value={field.value ? field.value : "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Use level / tenant default…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -900,7 +898,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                   </SelectContent>
                 </Select>
               )} />
-              <p className="mt-1 text-[11.5px]" style={{ color: "#9b9085" }}>
+              <p className="mt-1 text-[11.5px]" style={{ color: "#6B6B6B" }}>
                 Routes this employee&apos;s leave, DTR, and expense approvals. Leave blank to inherit from their level or the tenant default.
               </p>
             </div>
@@ -914,7 +912,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Reports To (Immediate Supervisor)" />
               <Controller control={c} name="immediateSupervisorId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Select supervisor…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -932,7 +930,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Line Manager" />
               <Controller control={c} name="managerId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Select manager…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -954,7 +952,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
               <Lbl text="Shift Schedule" />
               <Controller control={c} name="shiftScheduleId" render={({ field }) => (
                 <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                  <SelectTrigger className="h-10 text-[13.5px]" style={{ borderColor: "#ECE6DD" }}>
+                  <SelectTrigger className="h-10 text-[13.5px]">
                     <SelectValue placeholder="Select shift schedule…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1091,17 +1089,17 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
 
             <FSec label="Employee Self-Service (ESS)" />
             <div className="col-span-2 space-y-3">
-              <p className="text-[12px]" style={{ color: "#9b9085" }}>
+              <p className="text-[12px]" style={{ color: "#6B6B6B" }}>
                 Every employee signs in to ESS with their employee number and a 6-digit PIN they choose themselves.
                 HR never sets or sees it. The invitation goes to the personal email; you can switch ESS emails to the
                 work email later in the ESS portal.
               </p>
               {isEdit ? (
-                <p className="text-[12.5px]" style={{ color: "#2A2420" }}>
+                <p className="text-[12.5px]" style={{ color: "#171717" }}>
                   To invite or re-invite this employee, use the ESS portal.
                 </p>
               ) : (
-                <label className="flex items-center gap-2 text-[12.5px]" style={{ color: "#2A2420" }}>
+                <label className="flex items-center gap-2 text-[12.5px]" style={{ color: "#171717" }}>
                   <input type="checkbox" checked={sendInvite} onChange={(ev) => setSendInvite(ev.target.checked)} />
                   Send the ESS invitation to the personal email when I save
                 </label>
@@ -1160,12 +1158,12 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
         <div className="flex flex-col gap-3">
 
           {/* Step content card */}
-          <div className="rounded-[14px] p-6" style={{ background: "#fff", border: "1px solid #ECE6DD" }}>
+          <div className="rounded-[14px] p-6" style={{ background: "#fff", border: "1px solid #E8E8E8" }}>
             <div className="mb-5">
-              <h2 className="text-[19px] font-semibold" style={{ color: "#2A2420" }}>
+              <h2 className="text-[19px] font-semibold" style={{ color: "#171717" }}>
                 {STEPS[step].id}
               </h2>
-              <p className="text-[13px]" style={{ color: "#9b9085" }}>
+              <p className="text-[13px]" style={{ color: "#6B6B6B" }}>
                 {STEPS[step].sub}
               </p>
             </div>
@@ -1174,8 +1172,8 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
 
           {/* Footer bar */}
           <div className="flex items-center justify-between rounded-[10px] px-4 py-3"
-            style={{ background: "#fff", border: "1px solid #ECE6DD" }}>
-            <span className="text-[13px]" style={{ color: "#9b9085" }}>
+            style={{ background: "#fff", border: "1px solid #E8E8E8" }}>
+            <span className="text-[13px]" style={{ color: "#6B6B6B" }}>
               Step {step + 1} of {STEPS.length}
             </span>
             <div className="flex items-center gap-2">
@@ -1196,7 +1194,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
                 </Button>
               )}
               <Button type="submit" size="sm" disabled={isSubmitting}
-                style={{ background: "#E8693A", color: "#fff" }}>
+                style={{ background: "#E8693A", color: "#2A2420" }}>
                 {isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Save employee"}
               </Button>
             </div>

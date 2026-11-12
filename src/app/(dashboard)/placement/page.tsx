@@ -230,7 +230,7 @@ export default function PlacementPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Placement</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Placement</h1>
         <p className="text-sm text-muted-foreground">
           Job position, reporting chain, department, branch, and level history per employee
         </p>

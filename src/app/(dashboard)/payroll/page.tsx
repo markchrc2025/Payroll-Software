@@ -139,17 +139,17 @@ export default function PayrollPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Payroll
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             {runs ? `${runs.total} run${runs.total !== 1 ? "s" : ""}` : "Loading…"}
           </p>
         </div>
         <Button
           size="sm"
           onClick={() => setDialogOpen(true)}
-          className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+          className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
         >
           <Plus className="mr-2 h-3.5 w-3.5" />
           New Payroll Run
@@ -157,9 +157,9 @@ export default function PayrollPage() {
       </div>
 
       {/* ── Filters toolbar ── */}
-      <div className="flex gap-2 p-3 bg-white rounded-xl border border-[#E8EBF1] shadow-sm">
+      <div className="flex gap-2 p-3 bg-white rounded-xl border border-[#E8E8E8]">
         <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v ?? filterStatus)}>
-          <SelectTrigger className="w-44 h-9 text-[13px] border-[#E8EBF1]">
+          <SelectTrigger className="w-44 h-9 text-[13px] border-[#E8E8E8]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -172,15 +172,15 @@ export default function PayrollPage() {
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Pay Period</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Cycle</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Type</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Status</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Created</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Pay Period</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Cycle</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Type</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Status</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Created</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -195,7 +195,7 @@ export default function PayrollPage() {
               ))
             ) : !runs?.data?.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-[#6B7A8D]">
+                <TableCell colSpan={6} className="py-12 text-center text-[#6B6B6B]">
                   <Wallet className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No payroll runs yet. Create one to get started.
                 </TableCell>
@@ -207,16 +207,16 @@ export default function PayrollPage() {
                   FINALIZED: { bg: "#E5F6EE", color: "#0FA36B" },
                   CANCELLED: { bg: "#FCE9E7", color: "#E0463B" },
                 };
-                const s = statusStyle[run.status] ?? { bg: "#F5F6FA", color: "#4A586B" };
+                const s = statusStyle[run.status] ?? { bg: "#F7F7F7", color: "#525252" };
                 return (
-                  <TableRow key={run.id} className="hover:bg-[#FAFBFF]">
-                    <TableCell className="font-medium tabular-nums text-[13.5px] text-[#111827]">
+                  <TableRow key={run.id} className="hover:bg-[#FAFAFA]">
+                    <TableCell className="font-medium tabular-nums text-[13.5px] text-[#171717]">
                       {formatPeriod(run.periodStart, run.periodEnd)}
                     </TableCell>
-                    <TableCell className="text-[13px] text-[#6B7A8D]">
+                    <TableCell className="text-[13px] text-[#6B6B6B]">
                       {CYCLE_LABELS[run.cycle] ?? run.cycle}
                     </TableCell>
-                    <TableCell className="text-[13px] text-[#6B7A8D]">
+                    <TableCell className="text-[13px] text-[#6B6B6B]">
                       {TYPE_LABELS[run.runType] ?? run.runType}
                     </TableCell>
                     <TableCell>
@@ -227,11 +227,11 @@ export default function PayrollPage() {
                         {run.status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-[13px] text-[#6B7A8D] tabular-nums">
+                    <TableCell className="text-[13px] text-[#6B6B6B] tabular-nums">
                       {new Date(run.createdAt).toLocaleDateString("en-PH")}
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" nativeButton={false} className="h-7 w-7 text-[#6B7A8D]" render={<Link href={`/payroll/${run.id}`} />}>
+                      <Button size="icon" variant="ghost" nativeButton={false} className="h-7 w-7 text-[#6B6B6B]" render={<Link href={`/payroll/${run.id}`} />}>
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>

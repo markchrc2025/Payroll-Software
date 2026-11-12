@@ -295,7 +295,7 @@ export default function MovementsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Employee Movements</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Employee Movements</h1>
         <p className="text-sm text-muted-foreground">Transfers, promotions, salary adjustments, and status changes</p>
       </div>
 

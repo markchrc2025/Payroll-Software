@@ -123,12 +123,12 @@ function irow(label: string, value: React.ReactNode) {
   return (
     <div
       key={label}
-      className="flex flex-col gap-0.5 py-[10px] border-b border-[#E8EBF1] last:border-0"
+      className="flex flex-col gap-0.5 py-[10px] border-b border-[#E8E8E8] last:border-0"
     >
-      <span className="text-[10.5px] uppercase tracking-[0.7px] font-bold text-[#8E9AAC]">
+      <span className="text-[12.5px] font-medium text-[#8F8F8F]">
         {label}
       </span>
-      <span className="text-[13.5px] font-semibold text-[#0E1B2E]">{value || "—"}</span>
+      <span className="text-[13.5px] font-semibold text-[#171717]">{value || "—"}</span>
     </div>
   );
 }
@@ -147,7 +147,7 @@ function PersonalTab({ emp }: { emp: Employee }) {
     <div className="p-5 space-y-7">
       {/* Personal details */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.8px] font-bold text-[#8E9AAC] mb-3">
+        <h3 className="text-[12.5px] font-medium text-[#8F8F8F] mb-3">
           Personal Details
         </h3>
         <div className="grid grid-cols-2 gap-x-5">
@@ -174,7 +174,7 @@ function PersonalTab({ emp }: { emp: Employee }) {
 
       {/* Government IDs */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.8px] font-bold text-[#8E9AAC] mb-3">
+        <h3 className="text-[12.5px] font-medium text-[#8F8F8F] mb-3">
           Government IDs
         </h3>
         <div className="grid grid-cols-2 gap-x-5">
@@ -187,7 +187,7 @@ function PersonalTab({ emp }: { emp: Employee }) {
 
       {/* Banking */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.8px] font-bold text-[#8E9AAC] mb-3">
+        <h3 className="text-[12.5px] font-medium text-[#8F8F8F] mb-3">
           Banking
         </h3>
         <div className="grid grid-cols-2 gap-x-5">
@@ -238,7 +238,7 @@ function CompensationTab({ emp }: { emp: Employee }) {
 
 function PlaceholderTab({ label }: { label: string }) {
   return (
-    <div className="p-10 flex flex-col items-center justify-center text-[#8E9AAC]">
+    <div className="p-10 flex flex-col items-center justify-center text-[#8F8F8F]">
       <span className="text-[40px] mb-3">📂</span>
       <p className="text-[14px] font-semibold">{label}</p>
       <p className="text-[13px] mt-1">No data yet</p>
@@ -377,7 +377,7 @@ function EditableAvatar({ employeeId, photoKey, bg, color, initials }: {
       {/* Encircling progress ring while uploading; turns green when done. */}
       {(uploading || justDone) && (
         <svg viewBox="0 0 80 80" className="pointer-events-none absolute -inset-1 h-[80px] w-[80px] -rotate-90">
-          <circle cx="40" cy="40" r={R} fill="none" stroke="#E8EBF1" strokeWidth="4" />
+          <circle cx="40" cy="40" r={R} fill="none" stroke="#E8E8E8" strokeWidth="4" />
           <circle
             cx="40" cy="40" r={R} fill="none"
             stroke={justDone ? "#0FA36B" : "#E8693A"}
@@ -431,15 +431,15 @@ function LeftPanel({
     .join(" · ");
 
   return (
-    <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] p-5 flex flex-col gap-0">
+    <div className="bg-white rounded-[14px] border border-[#E8E8E8] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] p-5 flex flex-col gap-0">
       {/* Avatar */}
-      <div className="flex flex-col items-center text-center py-5 border-b border-[#E8EBF1]">
+      <div className="flex flex-col items-center text-center py-5 border-b border-[#E8E8E8]">
         <EditableAvatar employeeId={emp.id} photoKey={emp.photoKey} bg={bg} color={color} initials={initials} />
-        <p className="text-[16px] font-bold text-[#0E1B2E]">
+        <p className="text-[16px] font-bold text-[#171717]">
           {emp.firstName} {emp.lastName}
         </p>
         {posLine && (
-          <p className="text-[12.5px] text-[#4A586B] mt-1">{posLine}</p>
+          <p className="text-[12.5px] text-[#525252] mt-1">{posLine}</p>
         )}
         {emp.employmentStatus && (
           <div className="mt-2">
@@ -460,8 +460,8 @@ function LeftPanel({
 
       {/* Leave balances */}
       {leaveBalances.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-[#E8EBF1]">
-          <p className="text-[10.5px] uppercase tracking-[0.7px] font-bold text-[#8E9AAC] mb-2">
+        <div className="mt-3 pt-3 border-t border-[#E8E8E8]">
+          <p className="text-[12.5px] font-medium text-[#8F8F8F] mb-2">
             Leave Balance
           </p>
           <div className="flex flex-wrap gap-2">
@@ -471,7 +471,7 @@ function LeftPanel({
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#fdeee6] text-[#E8693A] text-[12px] font-semibold"
               >
                 {lb.leaveTypeName}
-                <span className="bg-[#E8693A] text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                <span className="bg-[#E8693A] text-[var(--on-acc)] rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
                   {lb.balance}
                 </span>
               </span>
@@ -594,9 +594,9 @@ export function EmployeeProfileClient({
       <LeftPanel emp={employee} leaveBalances={leaveBalances} />
 
       {/* Right */}
-      <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-[14px] border border-[#E8E8E8] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] flex flex-col overflow-hidden">
         {/* Tab bar */}
-        <div className="flex items-center border-b border-[#E8EBF1] px-5 overflow-x-auto gap-2">
+        <div className="flex items-center border-b border-[#E8E8E8] px-5 overflow-x-auto gap-2">
           <div className="flex flex-1 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -606,8 +606,8 @@ export function EmployeeProfileClient({
                 flex-shrink-0 px-[15px] py-[14px] text-[13px] font-semibold border-b-2 transition-colors
                 ${
                   activeTab === tab
-                    ? "text-[#E8693A] border-[#E8693A]"
-                    : "text-[#8E9AAC] border-transparent hover:text-[#4A586B]"
+                    ? "text-[var(--ink)] border-[var(--ink)]"
+                    : "text-[#8F8F8F] border-transparent hover:text-[#525252]"
                 }
               `}
             >
@@ -617,7 +617,7 @@ export function EmployeeProfileClient({
           </div>
           <button
             onClick={() => setKioskPinOpen(true)}
-            className="flex-shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 h-7 px-2.5 rounded-[8px] bg-[var(--fill)] text-[13.5px] font-medium text-[var(--ink)] hover:bg-[var(--fill-2)] transition-colors"
           >
             <Fingerprint className="h-3.5 w-3.5" />
             Set Kiosk PIN
@@ -644,11 +644,11 @@ export function EmployeeProfileClient({
 
         {/* Linked User Account card — Employment tab only */}
         {activeTab === "Employment" && (
-          <div className="mx-5 mb-5 rounded-[12px] border border-[#E8EBF1] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#F8F9FC] border-b border-[#E8EBF1]">
+          <div className="mx-5 mb-5 rounded-[12px] border border-[#E8E8E8] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#F7F7F7] border-b border-[#E8E8E8]">
               <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-[#4A586B]" />
-                <span className="text-[11px] uppercase tracking-[0.7px] font-bold text-[#8E9AAC]">
+                <UserCheck className="h-4 w-4 text-[#525252]" />
+                <span className="text-[12.5px] font-medium text-[#8F8F8F]">
                   Linked User Account
                 </span>
               </div>
@@ -676,16 +676,16 @@ export function EmployeeProfileClient({
                     {getInitials(linkedUser.firstName, linkedUser.lastName)}
                   </div>
                   <div>
-                    <p className="text-[13.5px] font-semibold text-[#0E1B2E]">
+                    <p className="text-[13.5px] font-semibold text-[#171717]">
                       {linkedUser.firstName} {linkedUser.lastName}
                     </p>
-                    <p className="text-[12px] text-[#8E9AAC]">{linkedUser.email}</p>
+                    <p className="text-[12px] text-[#8F8F8F]">{linkedUser.email}</p>
                   </div>
                 </div>
                 {!isSelf && (
                   <button
                     onClick={() => setLinkDialogOpen(true)}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8E8E8] text-[12px] font-semibold text-[#525252] hover:bg-[#F7F7F7] transition-colors"
                   >
                     <Link2 className="h-3.5 w-3.5" />
                     Change
@@ -694,11 +694,11 @@ export function EmployeeProfileClient({
               </div>
             ) : (
               <div className="px-4 py-4 flex items-center justify-between">
-                <p className="text-[13px] text-[#8E9AAC]">No user account linked yet.</p>
+                <p className="text-[13px] text-[#8F8F8F]">No user account linked yet.</p>
                 {!isSelf && (
                   <button
                     onClick={() => setLinkDialogOpen(true)}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8EBF1] text-[12px] font-semibold text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E8E8E8] text-[12px] font-semibold text-[#525252] hover:bg-[#F7F7F7] transition-colors"
                   >
                     <Link2 className="h-3.5 w-3.5" />
                     Link User Account
@@ -743,7 +743,7 @@ export function EmployeeProfileClient({
               <Button
                 onClick={handleLink}
                 disabled={!selectedUserId || linking}
-                className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
+                className="bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
               >
                 {linking ? "Linking…" : "Link Account"}
               </Button>
@@ -792,7 +792,7 @@ export function EmployeeProfileClient({
               <Button type="button" variant="outline" onClick={() => setKioskPinOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={savingKioskPin} className="bg-[#E8693A] hover:bg-[#C2552F] text-white">
+              <Button type="submit" disabled={savingKioskPin} className="bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]">
                 {savingKioskPin ? "Saving…" : "Save PIN"}
               </Button>
             </div>

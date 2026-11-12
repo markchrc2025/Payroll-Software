@@ -73,7 +73,7 @@ async function api(method: string, url: string, body?: unknown) {
 function Toolbar({ count, onAdd }: { count: number; onAdd: () => void }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <span className="text-[12.5px] text-[#8E9AAC]">{count} {count === 1 ? "entry" : "entries"}</span>
+      <span className="text-[12.5px] text-[#8F8F8F]">{count} {count === 1 ? "entry" : "entries"}</span>
       <Button size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add</Button>
     </div>
   );
@@ -81,8 +81,8 @@ function Toolbar({ count, onAdd }: { count: number; onAdd: () => void }) {
 
 function ListBox({ empty, children }: { empty: string; children: React.ReactNode[] }) {
   return (
-    <div className="overflow-hidden rounded-[12px] border border-[#ECE6DD]">
-      {children.length === 0 ? <div className="px-4 py-10 text-center text-[13px] text-[#9b9085]">{empty}</div> : children}
+    <div className="overflow-hidden rounded-[12px] border border-[#E8E8E8]">
+      {children.length === 0 ? <div className="px-4 py-10 text-center text-[13px] text-[#6B6B6B]">{empty}</div> : children}
     </div>
   );
 }
@@ -91,11 +91,11 @@ function RowItem({ title, subtitle, meta, extra, onEdit, onDelete }: {
   title: string; subtitle?: string; meta?: string; extra?: React.ReactNode; onEdit: () => void; onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4 border-b border-[#ECE6DD] px-4 py-3.5 last:border-b-0">
+    <div className="flex items-start gap-4 border-b border-[#E8E8E8] px-4 py-3.5 last:border-b-0">
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-[#2A2420]">{title}</div>
-        {subtitle && <div className="text-[12.5px] text-[#4A586B]">{subtitle}</div>}
-        {meta && <div className="mt-0.5 text-[11.5px] text-[#9b9085]">{meta}</div>}
+        <div className="text-[13.5px] font-semibold text-[#171717]">{title}</div>
+        {subtitle && <div className="text-[12.5px] text-[#525252]">{subtitle}</div>}
+        {meta && <div className="mt-0.5 text-[11.5px] text-[#6B6B6B]">{meta}</div>}
         {extra}
       </div>
       <div className="flex shrink-0 gap-1">
@@ -257,7 +257,7 @@ export function WorkExperienceSection({ employeeId }: { employeeId: string }) {
             title={r.position}
             subtitle={r.companyName + (r.location ? ` · ${r.location}` : "")}
             meta={[(r.startDate || r.endDate) ? `${fmtDate(r.startDate) || "—"} – ${r.endDate ? fmtDate(r.endDate) : "Present"}` : null, r.reasonForLeaving ? `Left: ${r.reasonForLeaving}` : null].filter(Boolean).join("  ·  ") || undefined}
-            extra={r.description ? <p className="mt-1 text-[12.5px] text-[#4A586B]">{r.description}</p> : undefined}
+            extra={r.description ? <p className="mt-1 text-[12.5px] text-[#525252]">{r.description}</p> : undefined}
             onEdit={() => openEdit(r)} onDelete={() => remove(r)} />
         ))}
       </ListBox>
@@ -271,7 +271,7 @@ export function WorkExperienceSection({ employeeId }: { employeeId: string }) {
             </FieldRow>
             <FieldRow>
               <div className="space-y-1.5"><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>End date <span className="text-[#9b9085]">(blank = present)</span></Label><Input type="date" value={f.endDate} onChange={(e) => setF({ ...f, endDate: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>End date <span className="text-[#6B6B6B]">(blank = present)</span></Label><Input type="date" value={f.endDate} onChange={(e) => setF({ ...f, endDate: e.target.value })} /></div>
             </FieldRow>
             <div className="space-y-1.5"><Label>Location</Label><Input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Makati City" /></div>
             <div className="space-y-1.5"><Label>Description</Label><Textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Key responsibilities…" /></div>
@@ -384,9 +384,9 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
             <div className="space-y-1.5"><Label>Notes</Label><Textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
             {storageReady && (
               <div className="space-y-1.5">
-                <Label>Certificate {editing?.certificateFileName ? <span className="text-[#9b9085]">(current: {editing.certificateFileName})</span> : null}</Label>
+                <Label>Certificate {editing?.certificateFileName ? <span className="text-[#6B6B6B]">(current: {editing.certificateFileName})</span> : null}</Label>
                 <Input type="file" accept={ALLOWED_MIME_TYPES.join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-                <p className="text-[11px] text-[#9b9085]">PDF or image, max {MAX_FILE_SIZE / 1024 / 1024} MB. {editing ? "Choosing a new file replaces the current one." : ""}</p>
+                <p className="text-[11px] text-[#6B6B6B]">PDF or image, max {MAX_FILE_SIZE / 1024 / 1024} MB. {editing ? "Choosing a new file replaces the current one." : ""}</p>
               </div>
             )}
           </div>

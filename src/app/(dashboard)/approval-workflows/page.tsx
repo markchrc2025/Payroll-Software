@@ -196,12 +196,12 @@ function SequenceBuilder({
       <div className="flex items-center gap-3.5">
         <span
           className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full border-[1.5px] border-dashed ml-[5px]"
-          style={{ borderColor: "#cfc4b5", background: "var(--bg, #F6F2EC)", color: "var(--muted-clr, #6B6259)" }}
+          style={{ borderColor: "#C9C9C9", background: "var(--bg, #F7F7F7)", color: "var(--muted-clr, #525252)" }}
         >
           <Users className="h-4 w-4" />
         </span>
         <div>
-          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Employee files a request</p>
+          <p className="font-sans text-[13.5px] font-semibold text-[#171717]">Employee files a request</p>
           <p className="text-[12px] text-muted-foreground">Request enters the approval flow</p>
         </div>
       </div>
@@ -220,7 +220,7 @@ function SequenceBuilder({
               className="absolute left-[21px] top-[-10px] z-0 w-0.5"
               style={{
                 height: "calc(100% + 20px)",
-                background: "var(--line, #ECE6DD)",
+                background: "var(--line, #E8E8E8)",
               }}
             />
             {/* Stage card */}
@@ -230,7 +230,7 @@ function SequenceBuilder({
               onDrop={(e) => e.preventDefault()}
               className="relative z-10 my-2.5 rounded-[12px] border bg-white px-3 py-[11px] transition-all"
               style={{
-                borderColor: isOver ? "var(--acc, #E8693A)" : dragging ? "#d6ccc4" : "var(--line, #ECE6DD)",
+                borderColor: isOver ? "var(--acc, #E8693A)" : dragging ? "#D4D4D4" : "var(--line, #E8E8E8)",
                 boxShadow: isOver ? "0 0 0 3px var(--acc-soft, #fdeee6)" : "none",
                 opacity: dragging ? 0.4 : 1,
               }}
@@ -247,7 +247,7 @@ function SequenceBuilder({
                   className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full font-sans text-[12.5px] font-bold text-white"
                   style={{
                     background: "var(--acc, #E8693A)",
-                    boxShadow: "0 0 0 4px #fff, 0 4px 10px -5px rgba(232,105,58,.9)",
+                    boxShadow: "0 0 0 4px #fff",
                   }}
                 >
                   {i + 1}
@@ -259,7 +259,7 @@ function SequenceBuilder({
                 </div>
                 <div className="flex flex-none items-center gap-1">
                   <button
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#F7F7F7] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
                     disabled={i === 0}
                     onClick={() => move(i, -1)}
                     aria-label="Move up"
@@ -267,7 +267,7 @@ function SequenceBuilder({
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#f6f1ea] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white text-muted-foreground transition-colors hover:bg-[#F7F7F7] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
                     disabled={i === approvers.length - 1}
                     onClick={() => move(i, 1)}
                     aria-label="Move down"
@@ -284,8 +284,8 @@ function SequenceBuilder({
                 </div>
               </div>
               {/* Module toggles — which approval types this step applies to */}
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t pt-2.5 pl-7" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
-                <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Applies to</span>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t pt-2.5 pl-7" style={{ borderColor: "var(--line-2, #EFEFEF)" }}>
+                <span className="mr-1 text-[12.5px] font-medium text-muted-foreground">Applies to</span>
                 {MODULE_TOGGLES.map(({ k: flag, label }) => {
                   const on = step[flag];
                   return (
@@ -295,9 +295,9 @@ function SequenceBuilder({
                       onClick={() => onToggle(i, flag, !on)}
                       className="inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[12px] font-medium transition-all"
                       style={{
-                        borderColor: on ? "var(--acc, #E8693A)" : "var(--line, #ECE6DD)",
+                        borderColor: on ? "var(--acc, #E8693A)" : "var(--line, #E8E8E8)",
                         background: on ? "var(--acc-soft, #fdeee6)" : "#fff",
-                        color: on ? "#C2552F" : "var(--muted-clr, #6B6259)",
+                        color: on ? "#C2552F" : "var(--muted-clr, #525252)",
                       }}
                     >
                       {on ? <Check className="h-3 w-3" /> : <span className="h-3 w-3" />}
@@ -316,17 +316,17 @@ function SequenceBuilder({
         <div className="relative pl-0">
           <span
             className="absolute left-[21px] top-[-10px] z-0 h-[32px] w-0.5"
-            style={{ background: "var(--line, #ECE6DD)" }}
+            style={{ background: "var(--line, #E8E8E8)" }}
           />
           <button
             onClick={onAdd}
             className="relative z-10 my-2.5 flex w-full items-center gap-3 rounded-[12px] border-[1.5px] border-dashed px-3 py-[11px] font-sans text-[13.5px] font-semibold text-muted-foreground transition-all hover:border-[var(--acc)] hover:bg-[var(--acc-soft)] hover:text-[#C2552F]"
-            style={{ borderColor: "var(--line, #ECE6DD)" }}
+            style={{ borderColor: "var(--line, #E8E8E8)" }}
           >
             <span
               className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full border-[1.5px] border-dashed"
               style={{
-                borderColor: "#cdc2b3",
+                borderColor: "#C9C9C9",
                 background: "#fff",
                 color: "var(--acc, #E8693A)",
                 boxShadow: "0 0 0 4px #fff",
@@ -342,7 +342,7 @@ function SequenceBuilder({
       {/* Connector before finish node */}
       <span
         className="absolute left-[21px] z-0 h-[22px] w-0.5"
-        style={{ bottom: 34, background: "var(--line, #ECE6DD)" }}
+        style={{ bottom: 34, background: "var(--line, #E8E8E8)" }}
       />
 
       {/* Approved finish node */}
@@ -354,7 +354,7 @@ function SequenceBuilder({
           <Check className="h-4 w-4" />
         </span>
         <div>
-          <p className="font-sans text-[13.5px] font-semibold text-[#2A2420]">Request approved</p>
+          <p className="font-sans text-[13.5px] font-semibold text-[#171717]">Request approved</p>
           <p className="text-[12px] text-muted-foreground">Employee &amp; recipients notified</p>
         </div>
       </div>
@@ -405,7 +405,7 @@ function RolePicker({
                   </div>
                   <span
                     className="flex h-7 w-7 flex-none items-center justify-center rounded-lg"
-                    style={{ background: "var(--bg, #F6F2EC)", color: "var(--acc, #E8693A)" }}
+                    style={{ background: "var(--bg, #F7F7F7)", color: "var(--acc, #E8693A)" }}
                   >
                     <Plus className="h-4 w-4" />
                   </span>
@@ -435,7 +435,7 @@ function WorkflowList({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Approval Workflows</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Approval Workflows</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Reusable templates that define how employee requests — leave, DTR, expenses and more — are routed and approved across the org chart.
           </p>
@@ -457,7 +457,7 @@ function WorkflowList({
             <button
               key={t.id}
               onClick={() => onOpen(t.id)}
-              className="group flex flex-col rounded-[14px] border bg-white p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-[#ddd3c6] hover:shadow-[0_12px_28px_-20px_rgba(42,36,32,0.45)]"
+              className="group flex flex-col rounded-[14px] border bg-white p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-[#D4D4D4] hover:shadow-[0_12px_28px_-20px_rgba(42,36,32,0.45)]"
             >
               <div className="mb-3.5 flex items-center justify-between">
                 <span
@@ -474,7 +474,7 @@ function WorkflowList({
               <p className="min-h-[38px] text-[13px] leading-[1.45] text-muted-foreground">
                 {t.description ?? ""}
               </p>
-              <div className="mt-4 flex items-center justify-between border-t pt-3.5" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
+              <div className="mt-4 flex items-center justify-between border-t pt-3.5" style={{ borderColor: "var(--line-2, #EFEFEF)" }}>
                 <div className="flex items-center gap-2.5">
                   <RoleStack roles={t.approvers.map((s) => s.roleKey)} />
                   <span className="font-sans text-[12.5px] font-semibold text-muted-foreground">
@@ -483,7 +483,7 @@ function WorkflowList({
                 </div>
                 <ChevronRight
                   className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-[var(--acc)]"
-                  style={{ color: "var(--muted-2, #9b9085)" }}
+                  style={{ color: "var(--muted-2, #6B6B6B)" }}
                 />
               </div>
             </button>
@@ -496,7 +496,7 @@ function WorkflowList({
           >
             <span
               className="mb-2.5 flex h-12 w-12 items-center justify-center rounded-[13px] transition-all"
-              style={{ background: "var(--bg, #F6F2EC)", color: "var(--acc, #E8693A)" }}
+              style={{ background: "var(--bg, #F7F7F7)", color: "var(--acc, #E8693A)" }}
             >
               <Plus className="h-5 w-5" />
             </span>
@@ -586,7 +586,7 @@ function WorkflowDetail({
             <CalendarCheck2 className="h-6 w-6" />
           </span>
           <div>
-            <h1 className="font-sans text-[26px] font-semibold tracking-[-0.025em] leading-tight">
+            <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
               {draft.code || "New workflow"}
             </h1>
             <p className="mt-0.5 text-[13.5px] text-muted-foreground">
@@ -598,7 +598,7 @@ function WorkflowDetail({
           {/* Active toggle pill */}
           <div
             className="flex items-center gap-2.5 rounded-[10px] border bg-white px-3.5 py-[7px]"
-            style={{ borderColor: "var(--line, #ECE6DD)" }}
+            style={{ borderColor: "var(--line, #E8E8E8)" }}
           >
             <span className="font-sans text-[13px] font-semibold">
               {draft.isActive ? "Active" : "Inactive"}
@@ -653,7 +653,7 @@ function WorkflowDetail({
             {/* Card header */}
             <div
               className="flex items-center justify-between gap-3.5 border-b px-[18px] py-[15px]"
-              style={{ borderColor: "var(--line-2, #f1ece4)" }}
+              style={{ borderColor: "var(--line-2, #EFEFEF)" }}
             >
               <div>
                 <h3 className="font-sans text-[15.5px] font-semibold tracking-[-0.01em]">Approval sequence</h3>
@@ -674,7 +674,7 @@ function WorkflowDetail({
                 <div className="flex flex-col items-center py-7 text-center">
                   <span
                     className="mb-3 flex h-[54px] w-[54px] items-center justify-center rounded-[14px]"
-                    style={{ background: "var(--bg, #F6F2EC)", color: "var(--muted-clr, #6B6259)" }}
+                    style={{ background: "var(--bg, #F7F7F7)", color: "var(--muted-clr, #525252)" }}
                   >
                     <Users className="h-6 w-6" />
                   </span>
@@ -702,7 +702,7 @@ function WorkflowDetail({
           </div>
 
           {/* Info note */}
-          <div className="flex items-start gap-3 rounded-[10px] border bg-white px-4 py-3.5" style={{ borderColor: "var(--line, #ECE6DD)" }}>
+          <div className="flex items-start gap-3 rounded-[10px] border bg-white px-4 py-3.5" style={{ borderColor: "var(--line, #E8E8E8)" }}>
             <Info className="mt-0.5 h-4 w-4 flex-none text-muted-foreground" />
             <div className="text-[12.5px] text-muted-foreground leading-relaxed space-y-1">
               <p>Each level is resolved from the employee&apos;s position in the <b className="font-semibold text-foreground">organization chart</b> at the time of filing — no need to name specific people.</p>
@@ -716,7 +716,7 @@ function WorkflowDetail({
         <div className="space-y-4">
           {/* Details card */}
           <div className="rounded-[14px] border bg-white overflow-hidden">
-            <div className="border-b px-4 py-3" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
+            <div className="border-b px-4 py-3" style={{ borderColor: "var(--line-2, #EFEFEF)" }}>
               <h3 className="font-sans text-[14px] font-semibold">Details</h3>
             </div>
             <div className="space-y-3.5 p-4">
@@ -742,7 +742,7 @@ function WorkflowDetail({
 
           {/* Notify card */}
           <div className="rounded-[14px] border bg-white overflow-hidden">
-            <div className="border-b px-4 py-3" style={{ borderColor: "var(--line-2, #f1ece4)" }}>
+            <div className="border-b px-4 py-3" style={{ borderColor: "var(--line-2, #EFEFEF)" }}>
               <h3 className="font-sans text-[14px] font-semibold">Notify additional recipients</h3>
             </div>
             <div className="p-4">
@@ -755,14 +755,14 @@ function WorkflowDetail({
                       onClick={() => set("notify", o.k)}
                       className="flex items-start gap-2.5 rounded-[11px] border p-3 text-left transition-all"
                       style={{
-                        borderColor: on ? "var(--acc, #E8693A)" : "var(--line, #ECE6DD)",
+                        borderColor: on ? "var(--acc, #E8693A)" : "var(--line, #E8E8E8)",
                         background: on ? "var(--acc-soft, #fdeee6)" : "#fff",
                       }}
                     >
                       {/* Radio dot */}
                       <span
                         className="mt-[2px] flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-2 transition-all"
-                        style={{ borderColor: on ? "var(--acc, #E8693A)" : "#cfc4b5" }}
+                        style={{ borderColor: on ? "var(--acc, #E8693A)" : "#C9C9C9" }}
                       >
                         <span
                           className="h-[9px] w-[9px] rounded-full transition-transform"
@@ -785,7 +785,7 @@ function WorkflowDetail({
               {notifyOn && (
                 <div
                   className="mt-4 border-t pt-4"
-                  style={{ borderColor: "var(--line-2, #f1ece4)" }}
+                  style={{ borderColor: "var(--line-2, #EFEFEF)" }}
                 >
                   <div className="mb-2.5 flex items-center justify-between">
                     <span className="font-sans text-[12.5px] font-semibold">Recipient roles</span>
@@ -801,7 +801,7 @@ function WorkflowDetail({
                   {draft.recipients.length === 0 ? (
                     <p
                       className="rounded-[9px] border border-dashed p-3 text-[12.5px] text-muted-foreground"
-                      style={{ borderColor: "var(--line, #ECE6DD)", background: "var(--bg, #F6F2EC)" }}
+                      style={{ borderColor: "var(--line, #E8E8E8)", background: "var(--bg, #F7F7F7)" }}
                     >
                       No additional recipient roles selected.
                     </p>
@@ -813,8 +813,8 @@ function WorkflowDetail({
                         return (
                           <span
                             key={k + i}
-                            className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--bg,#F6F2EC)] py-1 pl-1 pr-2 font-sans text-[12.5px] font-medium"
-                            style={{ borderColor: "var(--line, #ECE6DD)" }}
+                            className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--bg,#F7F7F7)] py-1 pl-1 pr-2 font-sans text-[12.5px] font-medium"
+                            style={{ borderColor: "var(--line, #E8E8E8)" }}
                           >
                             <span
                               className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px]"

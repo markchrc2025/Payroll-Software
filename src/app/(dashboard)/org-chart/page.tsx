@@ -39,9 +39,9 @@ const DEPT_PIN: Record<string, string> = {
   "Finance & Accounting": "#4F9373",
   "Sales & Marketing": "#A0627D",
   "People & Culture": "#5E7FB1",
-  "Warehouse": "#8A6253",
+  "Warehouse": "#525252",
 };
-const DEPT_FALLBACK = ["#E8693A", "#3E63A0", "#4F9373", "#A0627D", "#5E7FB1", "#8A6253", "#C7913D", "#B5683E"];
+const DEPT_FALLBACK = ["#E8693A", "#3E63A0", "#4F9373", "#A0627D", "#5E7FB1", "#525252", "#C7913D", "#B5683E"];
 
 const Z_MIN = 0.4, Z_MAX = 1.6;
 const SYNTH_ID = "__root__";
@@ -137,7 +137,7 @@ export default function OrgChartPage() {
     (data?.departments ?? []).forEach((d, i) => {
       map[d.name] = DEPT_PIN[d.name] || DEPT_FALLBACK[i % DEPT_FALLBACK.length];
     });
-    return (name: string) => map[name] || DEPT_PIN[name] || "#6B6259";
+    return (name: string) => map[name] || DEPT_PIN[name] || "#525252";
   }, [data?.departments]);
 
   // ── build the graph (nodes, parent map, children map, root, stats) ──
@@ -549,7 +549,7 @@ export default function OrgChartPage() {
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Organization Chart</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Organization Chart</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Define the company&apos;s reporting structure — drag any person onto a new manager to re-assign them.
           </p>

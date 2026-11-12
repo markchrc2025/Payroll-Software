@@ -61,10 +61,10 @@ export default function ShiftSchedulesPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Shift Schedules
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Named shift templates that define work hours, break rules, and DTR enforcement.
           </p>
         </div>
@@ -81,7 +81,7 @@ export default function ShiftSchedulesPage() {
           <Button
             size="sm"
             onClick={openCreate}
-            className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+            className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Shift
           </Button>
@@ -89,16 +89,16 @@ export default function ShiftSchedulesPage() {
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Type</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Hours</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Work Days</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Break</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">OT</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Name</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Type</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Hours</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Work Days</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Break</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">OT</TableHead>
               <TableHead className="w-[60px]" />
             </TableRow>
           </TableHeader>
@@ -113,7 +113,7 @@ export default function ShiftSchedulesPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={7} className="text-center text-[#6B6B6B] py-10">
                   No shift schedules yet.
                 </TableCell>
               </TableRow>
@@ -121,14 +121,14 @@ export default function ShiftSchedulesPage() {
               rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="hover:bg-[#FAFBFF] cursor-pointer"
+                  className="hover:bg-[#FAFAFA] cursor-pointer"
                   onClick={() => openEdit(row)}
                 >
-                  <TableCell className="font-medium text-[13.5px] text-[#111827]">
+                  <TableCell className="font-medium text-[13.5px] text-[#171717]">
                     <div className="flex flex-col gap-0.5">
                       <span>{row.name}</span>
                       {row.code && (
-                        <span className="text-[11px] text-[#6B7A8D] font-mono">{row.code}</span>
+                        <span className="text-[11px] text-[#6B6B6B] font-mono">{row.code}</span>
                       )}
                     </div>
                     {row.crossesMidnight && (
@@ -140,7 +140,7 @@ export default function ShiftSchedulesPage() {
                     <Badge variant="outline">{typeLabel(row.type)}</Badge>
                   </TableCell>
 
-                  <TableCell className="font-mono text-[13px] text-[#4A586B]">
+                  <TableCell className="font-mono text-[13px] text-[#525252]">
                     {row.type === "FIXED" ? (
                       <>
                         {row.timeIn} – {row.timeOut}
@@ -171,7 +171,7 @@ export default function ShiftSchedulesPage() {
                           style={
                             (Array.isArray(row.workDays) ? row.workDays : []).includes(d)
                               ? { background: "#fdeee6", color: "#E8693A", fontWeight: 600 }
-                              : { color: "#C5CDD7" }
+                              : { color: "#D4D4D4" }
                           }
                         >
                           {DAY_LABELS[d]}
@@ -180,7 +180,7 @@ export default function ShiftSchedulesPage() {
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-[13px] text-[#6B7A8D]">
+                  <TableCell className="text-[13px] text-[#6B6B6B]">
                     {row.breakMinutes}m
                     {(row.breakPolicy === "TRACK_ACTUAL" || row.breakPolicy === "PUNCH_IN_OUT") && (
                       <span className="ml-1.5 text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1 py-0.5 font-medium">
@@ -194,13 +194,13 @@ export default function ShiftSchedulesPage() {
                     )}
                   </TableCell>
 
-                  <TableCell className="text-[13px] text-[#6B7A8D]">
+                  <TableCell className="text-[13px] text-[#6B6B6B]">
                     {row.otThresholdMinutes !== null ? (
                       <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 font-medium">
                         Auto &gt;{Math.round(row.otThresholdMinutes / 60)}h
                       </span>
                     ) : (
-                      <span className="text-[#C5CDD7]">Manual</span>
+                      <span className="text-[#D4D4D4]">Manual</span>
                     )}
                   </TableCell>
 
@@ -209,7 +209,7 @@ export default function ShiftSchedulesPage() {
                       variant="ghost"
                       size="sm"
                       onClick={(e) => { e.stopPropagation(); openEdit(row); }}
-                      className="text-[12px] text-[#6B7A8D] hover:text-[#2A2420]"
+                      className="text-[12px] text-[#6B6B6B] hover:text-[#171717]"
                     >
                       Edit
                     </Button>

@@ -240,7 +240,7 @@ export default function ExpenseClaimsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Expense Claims</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Expense Claims</h1>
         <p className="text-sm text-muted-foreground">Track and approve employee expense reimbursements</p>
       </div>
 

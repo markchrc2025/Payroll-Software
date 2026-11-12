@@ -225,12 +225,12 @@ function SectionDivider({ icon, label }: { icon: ReactNode; label: ReactNode }) 
     <div className="flex items-center gap-[11px] my-[22px] first:mt-[2px]">
       <span
         style={{ fontFamily: "Instrument Sans, sans-serif" }}
-        className="flex items-center gap-[7px] text-[11px] font-bold uppercase tracking-[.07em] text-[#C2552F] whitespace-nowrap"
+        className="flex items-center gap-[7px] text-[12.5px] font-medium text-[#C2552F] whitespace-nowrap"
       >
         <span className="text-[#E8693A] flex items-center">{icon}</span>
         {label}
       </span>
-      <div className="flex-1 h-px bg-[#ECE6DD]" />
+      <div className="flex-1 h-px bg-[#E8E8E8]" />
     </div>
   );
 }
@@ -379,24 +379,24 @@ export function HolidayFormModal({
           [data-holiday-modal] {
             scrollbar-gutter: stable;
             scrollbar-width: thin;
-            scrollbar-color: #d9cfc2 transparent;
+            scrollbar-color: #D4D4D4 transparent;
           }
           [data-holiday-modal]::-webkit-scrollbar { width: 12px; }
           [data-holiday-modal]::-webkit-scrollbar-track { background: transparent; }
           [data-holiday-modal]::-webkit-scrollbar-thumb {
-            background: #d9cfc2;
+            background: #D4D4D4;
             border-radius: 99px;
             border: 4px solid transparent;
             background-clip: padding-box;
           }
-          [data-holiday-modal]::-webkit-scrollbar-thumb:hover { background: #c3b29c; }
+          [data-holiday-modal]::-webkit-scrollbar-thumb:hover { background: #C9C9C9; }
         `}</style>
 
         {/* ── HEADER ── */}
         <div
           className={cn(
             "flex-none flex items-start justify-between px-6 py-5 border-b border-transparent transition-colors duration-150",
-            !atTop && "border-b-[#ECE6DD] shadow-[0_6px_14px_-12px_rgba(33,26,21,0.4)]"
+            !atTop && "border-b-[#E8E8E8] shadow-[0_6px_14px_-12px_rgba(33,26,21,0.4)]"
           )}
         >
           <div className="flex items-center gap-3.5">
@@ -410,12 +410,12 @@ export function HolidayFormModal({
             </div>
             <div>
               <DialogTitle
-                className="text-[17px] font-semibold leading-tight text-[#2A2420]"
+                className="text-[17px] font-semibold leading-tight text-[#171717]"
                 style={{ fontFamily: "Instrument Sans, sans-serif" }}
               >
                 {mode === "edit" ? "Edit Holiday" : "Add Holiday"}
               </DialogTitle>
-              <DialogDescription className="mt-0.5 text-[12px] text-[#6B6259]">
+              <DialogDescription className="mt-0.5 text-[12px] text-[#525252]">
                 {mode === "edit"
                   ? "Update this holiday's details below."
                   : "Holidays drive payroll multipliers automatically."}
@@ -427,7 +427,7 @@ export function HolidayFormModal({
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="flex-none size-[34px] rounded-[9px] border-[#ECE6DD]"
+                className="flex-none size-[34px] rounded-[9px] border-[#E8E8E8]"
               />
             }
             aria-label="Close"
@@ -448,16 +448,16 @@ export function HolidayFormModal({
           {mode === "edit" && (
             <div
               className="flex items-center gap-3 rounded-[11px] border px-4 py-3 mb-2"
-              style={{ background: "#F6F2EC", borderColor: "#ECE6DD" }}
+              style={{ background: "#F7F7F7", borderColor: "#E8E8E8" }}
             >
               <div
                 className="flex items-center justify-center rounded-[8px] size-8"
-                style={{ background: "#e9eff7" }}
+                style={{ background: "#EFEFEF" }}
               >
                 <CalendarDays className="size-4" style={{ color: "#3e63a0" }} />
               </div>
-              <span className="text-[12.5px] text-[#6B6259]">
-                Changes apply to all <b className="text-[#2A2420]">future payroll runs</b>.
+              <span className="text-[12.5px] text-[#525252]">
+                Changes apply to all <b className="text-[#171717]">future payroll runs</b>.
               </span>
             </div>
           )}
@@ -466,7 +466,7 @@ export function HolidayFormModal({
           <SectionDivider icon={<CalendarDays className="size-3.5" />} label="Details" />
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[12.5px] font-medium text-[#2A2420]">
+            <Label className="text-[12.5px] font-medium text-[#171717]">
               Holiday name <span style={{ color: "#E8693A" }}>*</span>
             </Label>
             <Input
@@ -479,13 +479,13 @@ export function HolidayFormModal({
           </div>
 
           <div className="flex flex-col gap-1.5 mt-3">
-            <Label className="text-[12.5px] font-medium text-[#2A2420]">
+            <Label className="text-[12.5px] font-medium text-[#171717]">
               Date <span style={{ color: "#E8693A" }}>*</span>
             </Label>
             <div className="relative">
               <CalendarDays
                 className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ width: 15, height: 15, color: "#9b9085" }}
+                style={{ width: 15, height: 15, color: "#6B6B6B" }}
               />
               <Input
                 type="date"
@@ -502,10 +502,10 @@ export function HolidayFormModal({
               type="checkbox"
               checked={form.recurringAnnually}
               onChange={(e) => set("recurringAnnually", e.target.checked)}
-              className="rounded border-[#ECE6DD] accent-[#E8693A]"
+              className="rounded border-[#E8E8E8] accent-[#E8693A]"
             />
-            <Repeat className="size-3.5" style={{ color: "#6B6259" }} />
-            <span className="text-[12.5px]" style={{ color: "#2A2420" }}>
+            <Repeat className="size-3.5" style={{ color: "#525252" }} />
+            <span className="text-[12.5px]" style={{ color: "#171717" }}>
               Recurring annually (same date each year)
             </span>
           </label>
@@ -515,10 +515,10 @@ export function HolidayFormModal({
               type="checkbox"
               checked={form.isTentative}
               onChange={(e) => set("isTentative", e.target.checked)}
-              className="rounded border-[#ECE6DD] accent-[#E8693A]"
+              className="rounded border-[#E8E8E8] accent-[#E8693A]"
             />
-            <Info className="size-3.5" style={{ color: "#6B6259" }} />
-            <span className="text-[12.5px]" style={{ color: "#2A2420" }}>
+            <Info className="size-3.5" style={{ color: "#525252" }} />
+            <span className="text-[12.5px]" style={{ color: "#171717" }}>
               Tentative date (subject to proclamation)
             </span>
           </label>
@@ -538,18 +538,18 @@ export function HolidayFormModal({
                   className={cn(
                     "flex items-start justify-between gap-2 rounded-[12px] p-3 text-left border-[1.5px] transition-all",
                     selected
-                      ? "border-[#E8693A] bg-[#fdeee6] shadow-[0_0_0_3px_rgba(232,105,58,.1)]"
-                      : "border-[#ECE6DD] bg-white hover:border-[#d0c9c0]"
+                      ? "border-[var(--ink)] bg-[var(--hover)]"
+                      : "border-[#E8E8E8] bg-white hover:border-[#D4D4D4]"
                   )}
                 >
                   <div className="min-w-0">
                     <div
                       className="text-[13px] font-semibold leading-tight"
-                      style={{ color: selected ? "#C2552F" : "#2A2420" }}
+                      style={{ color: selected ? "#C2552F" : "#171717" }}
                     >
                       {meta.label}
                     </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: "#9b9085" }}>
+                    <div className="text-[11px] mt-0.5" style={{ color: "#6B6B6B" }}>
                       {meta.blurb}
                     </div>
                   </div>
@@ -572,13 +572,13 @@ export function HolidayFormModal({
           {isArea && (
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">
+                <Label className="text-[12.5px] font-medium text-[#171717]">
                   Region <span style={{ color: "#E8693A" }}>*</span>
                 </Label>
                 <div className="relative">
                   <MapPin
                     className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10"
-                    style={{ width: 15, height: 15, color: "#9b9085" }}
+                    style={{ width: 15, height: 15, color: "#6B6B6B" }}
                   />
                   <select
                     value={form.region}
@@ -599,8 +599,8 @@ export function HolidayFormModal({
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">
-                  Province / City <span style={{ color: "#9b9085" }} className="font-normal">(optional)</span>
+                <Label className="text-[12.5px] font-medium text-[#171717]">
+                  Province / City <span style={{ color: "#6B6B6B" }} className="font-normal">(optional)</span>
                 </Label>
                 <Input
                   placeholder="e.g. Makati City"
@@ -625,15 +625,15 @@ export function HolidayFormModal({
                   className={cn(
                     "flex flex-col gap-2 rounded-[12px] p-3 text-left border-[1.5px] transition-all",
                     selected
-                      ? "border-[#E8693A] bg-[#fdeee6] shadow-[0_0_0_3px_rgba(232,105,58,.1)]"
-                      : "border-[#ECE6DD] bg-white hover:border-[#d0c9c0]"
+                      ? "border-[var(--ink)] bg-[var(--hover)]"
+                      : "border-[#E8E8E8] bg-white hover:border-[#D4D4D4]"
                   )}
                 >
                   <div
                     className="flex items-center justify-center rounded-[8px] size-8"
                     style={{
-                      background: selected ? "#E8693A" : "#F6F2EC",
-                      color: selected ? "#fff" : "#6B6259",
+                      background: selected ? "#E8693A" : "#F7F7F7",
+                      color: selected ? "#fff" : "#525252",
                     }}
                   >
                     {opt.icon}
@@ -641,11 +641,11 @@ export function HolidayFormModal({
                   <div>
                     <div
                       className="text-[13px] font-semibold leading-tight"
-                      style={{ color: selected ? "#C2552F" : "#2A2420" }}
+                      style={{ color: selected ? "#C2552F" : "#171717" }}
                     >
                       {opt.label}
                     </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: "#9b9085" }}>
+                    <div className="text-[11px] mt-0.5" style={{ color: "#6B6B6B" }}>
                       {opt.desc}
                     </div>
                   </div>
@@ -656,35 +656,34 @@ export function HolidayFormModal({
 
           {form.scope === "BRANCH_SPECIFIC" && (
             <div className="flex flex-col gap-1.5 mt-3">
-              <Label className="text-[12.5px] font-medium text-[#2A2420]">
+              <Label className="text-[12.5px] font-medium text-[#171717]">
                 Select branches <span style={{ color: "#E8693A" }}>*</span>
               </Label>
               {branches.length === 0 ? (
-                <p className="text-[12px]" style={{ color: "#9b9085" }}>No branches found.</p>
+                <p className="text-[12px]" style={{ color: "#6B6B6B" }}>No branches found.</p>
               ) : (
                 <div
                   className="rounded-[10px] border divide-y max-h-40 overflow-y-auto"
-                  style={{ borderColor: "#ECE6DD" }}
                 >
                   {branches.map((b) => (
                     <label
                       key={b.id}
                       className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-[#fdeee6]/40"
-                      style={{ borderColor: "#F0EBE3" }}
+                      style={{ borderColor: "#F3F3F3" }}
                     >
                       <input
                         type="checkbox"
                         checked={form.branchIds.includes(b.id)}
                         onChange={() => toggleBranch(b.id)}
-                        className="rounded border-[#ECE6DD] accent-[#E8693A]"
+                        className="rounded border-[#E8E8E8] accent-[#E8693A]"
                       />
-                      <span className="text-[12.5px]" style={{ color: "#2A2420" }}>
+                      <span className="text-[12.5px]" style={{ color: "#171717" }}>
                         {b.name}
                         {b.isHeadOffice && (
-                          <span className="ml-1.5 text-[10px]" style={{ color: "#9b9085" }}>(Head Office)</span>
+                          <span className="ml-1.5 text-[10px]" style={{ color: "#6B6B6B" }}>(Head Office)</span>
                         )}
                         {b.city && (
-                          <span className="ml-1 text-[11px]" style={{ color: "#9b9085" }}>· {b.city}</span>
+                          <span className="ml-1 text-[11px]" style={{ color: "#6B6B6B" }}>· {b.city}</span>
                         )}
                       </span>
                     </label>
@@ -701,8 +700,8 @@ export function HolidayFormModal({
           <SectionDivider icon={<FileText className="size-3.5" />} label="Reference" />
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[12.5px] font-medium text-[#2A2420]">
-              Proclamation reference <span style={{ color: "#9b9085" }} className="font-normal">(optional)</span>
+            <Label className="text-[12.5px] font-medium text-[#171717]">
+              Proclamation reference <span style={{ color: "#6B6B6B" }} className="font-normal">(optional)</span>
             </Label>
             <Input
               placeholder="e.g. Proclamation No. 368, s. 2023"
@@ -712,8 +711,8 @@ export function HolidayFormModal({
           </div>
 
           <div className="flex flex-col gap-1.5 mt-3">
-            <Label className="text-[12.5px] font-medium text-[#2A2420]">
-              Notes <span style={{ color: "#9b9085" }} className="font-normal">(optional)</span>
+            <Label className="text-[12.5px] font-medium text-[#171717]">
+              Notes <span style={{ color: "#6B6B6B" }} className="font-normal">(optional)</span>
             </Label>
             <Textarea
               rows={2}
@@ -733,28 +732,28 @@ export function HolidayFormModal({
         <div
           className={cn(
             "flex-none flex items-center justify-between px-6 py-4 border-t border-transparent transition-colors duration-150",
-            !atBottom && "border-t-[#ECE6DD] shadow-[0_-6px_14px_-12px_rgba(33,26,21,0.4)]"
+            !atBottom && "border-t-[#E8E8E8] shadow-[0_-6px_14px_-12px_rgba(33,26,21,0.4)]"
           )}
-          style={{ background: "#fcfaf7" }}
+          style={{ background: "#FAFAFA" }}
         >
           {/* Left: live summary */}
           <div
             className="flex items-center gap-[10px]"
             style={{ fontFamily: "Instrument Sans, sans-serif" }}
           >
-            <span className="text-[16px] font-bold" style={{ color: "#2A2420" }}>
+            <span className="text-[16px] font-bold" style={{ color: "#171717" }}>
               {summary.multiplier}
             </span>
-            <span className="text-[11px] font-semibold" style={{ color: "#9b9085" }}>pay</span>
-            <div className="w-px h-[22px]" style={{ background: "#ECE6DD" }} />
+            <span className="text-[11px] font-semibold" style={{ color: "#6B6B6B" }}>pay</span>
+            <div className="w-px h-[22px]" style={{ background: "#E8E8E8" }} />
             <div className="flex flex-col">
               <span className="flex items-center gap-1.5">
                 <span className={cn("h-2 w-2 rounded-full", summary.chip)} />
-                <b className="text-[12px] font-semibold" style={{ color: "#2A2420" }}>
+                <b className="text-[12px] font-semibold" style={{ color: "#171717" }}>
                   {summary.categoryLabel}
                 </b>
               </span>
-              <span className="text-[11px]" style={{ color: "#9b9085" }}>
+              <span className="text-[11px]" style={{ color: "#6B6B6B" }}>
                 {summary.dateText} · {summary.scopeText}
               </span>
             </div>
@@ -766,7 +765,7 @@ export function HolidayFormModal({
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="border-[#ECE6DD]"
+              className="border-[#E8E8E8]"
             >
               Cancel
             </Button>
@@ -774,7 +773,7 @@ export function HolidayFormModal({
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="gap-1.5 bg-[#E8693A] hover:bg-[#C2552F] text-white border-transparent"
+              className="gap-1.5 bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)] border-transparent"
             >
               {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Save Holiday"}
             </Button>

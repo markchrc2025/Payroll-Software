@@ -4,13 +4,10 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   MapPin,
-  Clock,
   Smartphone,
   Monitor,
-  Globe,
   AlertTriangle,
   CheckCircle2,
-  User,
   Building2,
   Camera,
   ExternalLink,
@@ -191,7 +188,7 @@ function PunchRow({ punch }: { punch: DayPunch }) {
       >
         {/* Big time */}
         <div className="w-20 shrink-0">
-          <p className={`text-lg font-bold ${punch.punchType === "IN" ? "text-emerald-600" : "text-slate-500"}`}>
+          <p className={`text-lg font-bold ${punch.punchType === "IN" ? "text-emerald-600" : "text-neutral-500"}`}>
             {fmtTime(punch.punchedAt)}
           </p>
         </div>
@@ -201,7 +198,7 @@ function PunchRow({ punch }: { punch: DayPunch }) {
           {punch.punchType === "IN" ? (
             <LogIn className="h-4 w-4 text-emerald-500" />
           ) : (
-            <LogOut className="h-4 w-4 text-slate-400" />
+            <LogOut className="h-4 w-4 text-neutral-400" />
           )}
           {punch.hasSelfie && <Camera className="h-3.5 w-3.5 text-[#E8693A]" />}
           {punch.latitude != null && <MapPin className="h-3.5 w-3.5 text-amber-500" />}
@@ -397,7 +394,7 @@ export function AttendanceLogDetailSheet({
                 {log.punchType === "IN" ? (
                   <LogIn className="h-4 w-4 text-emerald-600 shrink-0" />
                 ) : (
-                  <LogOut className="h-4 w-4 text-slate-500 shrink-0" />
+                  <LogOut className="h-4 w-4 text-neutral-500 shrink-0" />
                 )}
                 Attendance Transaction
               </>
@@ -442,13 +439,13 @@ export function AttendanceLogDetailSheet({
             <TabsList className="grid grid-cols-2 h-10 rounded-none bg-muted/50 border-b shrink-0 p-0">
               <TabsTrigger
                 value="attendance"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full text-xs font-semibold uppercase tracking-wide"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full text-[12.5px] font-medium"
               >
                 Attendance
               </TabsTrigger>
               <TabsTrigger
                 value="timeclock"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full text-xs font-semibold uppercase tracking-wide"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full text-[12.5px] font-medium"
               >
                 Time Clock
               </TabsTrigger>
@@ -516,12 +513,12 @@ export function AttendanceLogDetailSheet({
 
                 <InfoRow label="Last Clock-Out">
                   {dtr?.effectiveTimeOut ? (
-                    <span className="font-semibold text-slate-600 flex items-center gap-1.5">
+                    <span className="font-semibold text-neutral-600 flex items-center gap-1.5">
                       <LogOut className="h-3.5 w-3.5" />
                       {fmtTime(dtr.effectiveTimeOut)}
                     </span>
                   ) : lastOut ? (
-                    <span className="font-semibold text-slate-600 flex items-center gap-1.5">
+                    <span className="font-semibold text-neutral-600 flex items-center gap-1.5">
                       <LogOut className="h-3.5 w-3.5" />
                       {fmtTime(lastOut.punchedAt)}
                     </span>
@@ -593,7 +590,7 @@ export function AttendanceLogDetailSheet({
 
                 {/* Selected punch detail */}
                 <Separator className="my-2" />
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                <p className="text-[12.5px] font-medium text-muted-foreground mb-1">
                   Selected Punch
                 </p>
                 <InfoRow label="Punch Type">
@@ -648,7 +645,7 @@ export function AttendanceLogDetailSheet({
                     </span>
                   )}
                   {outsLogs.length > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                    <span className="flex items-center gap-1 text-xs text-neutral-500 font-medium">
                       <LogOut className="h-3.5 w-3.5" />
                       {outsLogs.length} Out
                     </span>

@@ -219,7 +219,7 @@ export default function BranchesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Branches</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Branches</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${branches.length} branch${branches.length !== 1 ? "es" : ""}`}
           </p>

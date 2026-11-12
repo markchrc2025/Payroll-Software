@@ -270,17 +270,17 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
       </div>
 
       {/* Table card — mirrors the Employees table chrome */}
-      <div className="overflow-hidden rounded-[14px] border border-[#E8EBF1] bg-white shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
+      <div className="overflow-hidden rounded-[14px] border border-[#E8E8E8] bg-white shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13.5px]">
             <thead>
               <tr>
                 {["Employee", "ESS Email", "ESS Status", "Last Login", "Passkeys"].map((h) => (
-                  <th key={h} className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
+                  <th key={h} className="whitespace-nowrap border-b border-[#E8E8E8] bg-[#FAFAFA] px-4 py-3 text-left text-[12.5px] font-medium text-[#8F8F8F]">
                     {h}
                   </th>
                 ))}
-                <th className="whitespace-nowrap border-b border-[#E8EBF1] bg-[#FBFCFE] px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.7px] text-[#8E9AAC]">
+                <th className="whitespace-nowrap border-b border-[#E8E8E8] bg-[#FAFAFA] px-4 py-3 text-right text-[12.5px] font-medium text-[#8F8F8F]">
                   Actions
                 </th>
               </tr>
@@ -288,7 +288,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center text-[13.5px] text-[#8E9AAC]">No employees found.</td>
+                  <td colSpan={6} className="px-4 py-16 text-center text-[13.5px] text-[#8F8F8F]">No employees found.</td>
                 </tr>
               ) : (
                 rows.map((r) => {
@@ -297,7 +297,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                   const busy = busyId === r.id;
                   const avatar = getAvatarColor(`${r.firstName}${r.lastName}`);
                   return (
-                    <tr key={r.id} className="border-b border-[#E8EBF1] transition-colors last:border-b-0 hover:bg-[#F8F9FC]">
+                    <tr key={r.id} className="border-b border-[#E8E8E8] transition-colors last:border-b-0 hover:bg-[#F7F7F7]">
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold"
@@ -305,8 +305,8 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                             {getInitials(r.firstName, r.lastName)}
                           </div>
                           <div>
-                            <div className="text-[13.5px] font-semibold leading-tight text-[#0E1B2E]">{r.firstName} {r.lastName}</div>
-                            <div className="text-[11.5px] text-[#8E9AAC]">{r.employeeNumber}</div>
+                            <div className="text-[13.5px] font-semibold leading-tight text-[#171717]">{r.firstName} {r.lastName}</div>
+                            <div className="text-[11.5px] text-[#8F8F8F]">{r.employeeNumber}</div>
                           </div>
                         </div>
                       </td>
@@ -314,10 +314,10 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                         {/* Unit 0.15 Am 3: ESS links go to the personal email at
                             hiring, switchable to the work email later. */}
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[13.5px] text-[#4A586B]">
+                          <span className="text-[13.5px] text-[#525252]">
                             {linkEmail(r) ?? <span className="text-amber-600">No {r.essEmailChoice === "WORK" ? "work" : "personal"} email</span>}
                           </span>
-                          <span className="flex items-center gap-2 text-[11.5px] text-[#8E9AAC]">
+                          <span className="flex items-center gap-2 text-[11.5px] text-[#8F8F8F]">
                             {r.essEmailChoice === "WORK" ? "Work email" : "Personal email"}
                             <button
                               type="button"
@@ -339,7 +339,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3"><StatusBadge row={r} /></td>
-                      <td className="whitespace-nowrap px-4 py-3 text-[13.5px] text-[#4A586B]">{fmt(r.essLastLoginAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[13.5px] text-[#525252]">{fmt(r.essLastLoginAt)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         {(r.passkeyCount ?? 0) > 0 ? (
                           <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs"
@@ -349,7 +349,7 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
                             {r.passkeyCount} {r.passkeyCount === 1 ? "passkey" : "passkeys"}
                           </Button>
                         ) : (
-                          <span className="text-[13.5px] text-[#8E9AAC]">None</span>
+                          <span className="text-[13.5px] text-[#8F8F8F]">None</span>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -404,11 +404,11 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-[#E8EBF1] px-4 py-3.5">
-          <span className="text-[12.5px] text-[#8E9AAC]">
+        <div className="flex items-center justify-between border-t border-[#E8E8E8] px-4 py-3.5">
+          <span className="text-[12.5px] text-[#8F8F8F]">
             Showing {rows.length === 0 ? 0 : 1}–{rows.length} of {rows.length}
           </span>
-          <span className="text-[12.5px] text-[#8E9AAC]">
+          <span className="text-[12.5px] text-[#8F8F8F]">
             {activeCount} of {rows.length} have ESS access
           </span>
         </div>
@@ -540,9 +540,9 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-[14px] border border-[#E8EBF1] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
+    <div className="rounded-[14px] border border-[#E8E8E8] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)]">
       <div className={`text-2xl font-bold ${tone}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-[#8E9AAC]">{label}</div>
+      <div className="mt-0.5 text-xs text-[#8F8F8F]">{label}</div>
     </div>
   );
 }

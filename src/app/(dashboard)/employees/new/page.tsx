@@ -57,7 +57,7 @@ export default async function NewEmployeePage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Add Employee</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Add Employee</h1>
           <p className="text-sm text-muted-foreground">
             Complete the steps below to create a new employee record.
           </p>

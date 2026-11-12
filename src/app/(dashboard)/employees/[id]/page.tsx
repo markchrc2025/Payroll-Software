@@ -90,8 +90,8 @@ export default async function EmployeeProfilePage({
   return (
     <div className="space-y-5">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#8E9AAC]">
-        <Link href="/employees" className="text-[#E8693A] font-semibold hover:underline">
+      <nav className="flex items-center gap-1.5 text-[13px] text-[#8F8F8F]">
+        <Link href="/employees" className="text-[var(--muted-2)] hover:text-[var(--ink)]">
           Employees
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -101,18 +101,18 @@ export default async function EmployeeProfilePage({
       {/* Page head */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-[32px] font-semibold tracking-[-0.6px] text-[#0E1B2E] leading-none">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-none">
             {fullName}
           </h1>
           {subtitle && (
-            <p className="text-[14px] text-[#4A586B] mt-2">{subtitle}</p>
+            <p className="text-[14px] text-[#525252] mt-2">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
           {isSelf ? (
             <span
               title="You cannot edit your own employee record. Ask another administrator to make changes."
-              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-[#F8F9FC] text-[#C5CDD7] text-[13px] font-semibold flex items-center gap-2 cursor-not-allowed select-none"
+              className="h-7 px-2.5 rounded-[8px] bg-[var(--fill)] text-[#A3A3A3] text-[13.5px] font-medium flex items-center gap-1.5 cursor-not-allowed select-none"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -123,7 +123,7 @@ export default async function EmployeeProfilePage({
           ) : (
             <Link
               href={`/employees/${empRef}/edit`}
-              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
+              className="h-7 px-2.5 rounded-[8px] border border-transparent bg-[var(--fill)] text-[#525252] text-[13.5px] font-medium flex items-center gap-2 hover:bg-[var(--fill-2)] transition-colors"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -132,7 +132,7 @@ export default async function EmployeeProfilePage({
               Edit Profile
             </Link>
           )}
-          <button className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors">
+          <button className="h-7 px-2.5 rounded-[8px] border border-transparent bg-[var(--fill)] text-[#525252] text-[13.5px] font-medium flex items-center gap-2 hover:bg-[var(--fill-2)] transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="5" y="4" width="14" height="17" rx="2"/>
               <path d="M9 4a1 1 0 011-1h4a1 1 0 011 1v1H9V4z" strokeLinejoin="round"/>
@@ -141,7 +141,7 @@ export default async function EmployeeProfilePage({
           </button>
           <Link
             href={`/employees/${empRef}/offboard`}
-            className="h-10 px-4 rounded-[9px] border border-[#FACECA] bg-[#FEF3F2] text-[#E0463B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#FCE9E7] transition-colors"
+            className="h-7 px-2.5 rounded-[8px] bg-[#FEF3F2] text-[#C93A30] text-[13.5px] font-medium flex items-center gap-1.5 hover:bg-[#FCE9E7] transition-colors"
           >
             Initiate Offboarding
           </Link>

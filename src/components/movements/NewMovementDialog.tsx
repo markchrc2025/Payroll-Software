@@ -88,7 +88,7 @@ const EMPTY_FORM = {
 function SectionDivider({ label }: { label: string }) {
   return (
     <div className="col-span-full flex items-center gap-3 pt-1">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{label}</span>
+      <span className="text-[12.5px] font-medium text-primary">{label}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );

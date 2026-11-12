@@ -113,10 +113,10 @@ export default function PayRulesPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Pay Rules
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Payroll engine defaults — these affect all employees unless overridden per-employee.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function PayRulesPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Save Changes"}
@@ -141,7 +141,7 @@ export default function PayRulesPage() {
       {loading ? (
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-3">
+            <div key={i} className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-3">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-20 w-full" />
             </div>
@@ -204,7 +204,7 @@ export default function PayRulesPage() {
           >
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#111827]">
+                <Label className="text-[12.5px] font-medium text-[#171717]">
                   Cap (% of monthly gross)
                 </Label>
                 <div className="flex items-center gap-2">
@@ -221,9 +221,9 @@ export default function PayRulesPage() {
                       }
                     }}
                   />
-                  <span className="text-[13px] text-[#6B7A8D]">%</span>
+                  <span className="text-[13px] text-[#6B6B6B]">%</span>
                 </div>
-                <p className="text-[12px] text-[#6B7A8D]">
+                <p className="text-[12px] text-[#6B6B6B]">
                   Common practice caps total deductions at 50% of gross. Final-pay
                   settlements on separation are exempt from this limit.
                 </p>
@@ -236,12 +236,12 @@ export default function PayRulesPage() {
             title="Allow Negative Final Pay"
             description="Regular and 13th-month runs are always floored at zero — loan installments are automatically deferred (and carried forward) so net pay can never go negative. Final-pay settlements on separation are the exception: charges against an employee's last pay (e.g. unreturned assets, outstanding loan balances) may legitimately make it negative."
           >
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-[#E8EBF1] bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-[#E8E8E8] bg-white px-4 py-3">
               <div>
-                <p className="text-[13.5px] font-medium text-[#111827]">
+                <p className="text-[13.5px] font-medium text-[#171717]">
                   Permit negative net on final pay
                 </p>
-                <p className="text-[12px] text-[#6B7A8D] mt-0.5">
+                <p className="text-[12px] text-[#6B6B6B] mt-0.5">
                   Turn off to also floor final-pay runs at zero (deferring any
                   loan balance instead of collecting it from the last pay).
                 </p>
@@ -260,7 +260,7 @@ export default function PayRulesPage() {
           >
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#111827]">Window start</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Window start</Label>
                 <Input
                   type="time"
                   className="w-36"
@@ -268,9 +268,9 @@ export default function PayRulesPage() {
                   onChange={(e) => update("nsdWindowStart", e.target.value)}
                 />
               </div>
-              <span className="pb-2 text-[#6B7A8D]">→</span>
+              <span className="pb-2 text-[#6B6B6B]">→</span>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#111827]">Window end</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Window end</Label>
                 <Input
                   type="time"
                   className="w-36"
@@ -285,8 +285,8 @@ export default function PayRulesPage() {
 
       {/* Save bar */}
       {dirty && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
-          <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
+        <div className="sticky bottom-0 flex items-center justify-between rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] px-5 py-3">
+          <p className="text-[13px] text-[var(--ink)] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -300,7 +300,7 @@ export default function PayRulesPage() {
               size="sm"
               onClick={handleSave}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               {saving ? "Saving…" : "Save"}
             </Button>
@@ -319,10 +319,10 @@ function RuleSection({ title, description, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-3">
+    <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-3">
       <div>
-        <Label className="text-[14px] font-semibold text-[#111827]">{title}</Label>
-        <p className="text-[12.5px] text-[#6B7A8D] mt-0.5">{description}</p>
+        <Label className="text-[14px] font-semibold text-[#171717]">{title}</Label>
+        <p className="text-[12.5px] text-[#6B6B6B] mt-0.5">{description}</p>
       </div>
       {children}
     </div>
@@ -347,20 +347,20 @@ function OptionGroup({
           onClick={() => onChange(opt.value)}
           className="flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
           style={value === opt.value
-            ? { background: "#fdeee6", borderColor: "#E8693A" }
-            : { background: "#fff", borderColor: "#E8EBF1" }}
+            ? { background: "#F7F7F7", borderColor: "#171717" }
+            : { background: "#fff", borderColor: "#E8E8E8" }}
         >
           <span
             className="mt-0.5 flex h-4 w-4 flex-shrink-0 rounded-full border-2 items-center justify-center"
             style={value === opt.value
-              ? { borderColor: "#E8693A", background: "#E8693A" }
-              : { borderColor: "#C5CDD7", background: "#fff" }}
+              ? { borderColor: "#171717", background: "#171717" }
+              : { borderColor: "#D4D4D4", background: "#fff" }}
           >
             {value === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
           </span>
           <div>
-            <p className="text-[13.5px] font-medium text-[#111827]">{opt.label}</p>
-            <p className="text-[12px] text-[#6B7A8D] mt-0.5">{opt.sublabel}</p>
+            <p className="text-[13.5px] font-medium text-[#171717]">{opt.label}</p>
+            <p className="text-[12px] text-[#6B6B6B] mt-0.5">{opt.sublabel}</p>
           </div>
         </button>
       ))}

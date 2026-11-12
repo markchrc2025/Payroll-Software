@@ -108,16 +108,6 @@ function postingStatusBadge(status: JobPosting["status"]) {
   return <Badge variant={(map[status] ?? "secondary") as never}>{status}</Badge>;
 }
 
-function Stars({ rating }: { rating: number | null }) {
-  return (
-    <span className="text-yellow-400">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n}>{n <= (rating ?? 0) ? "★" : "☆"}</span>
-      ))}
-    </span>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RecruitmentPage() {
@@ -375,7 +365,7 @@ export default function RecruitmentPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Recruitment</h1>
+      <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Recruitment</h1>
 
       <Tabs defaultValue="postings">
         <TabsList>
@@ -543,7 +533,7 @@ export default function RecruitmentPage() {
                         {[1, 2, 3, 4, 5].map((n) => (
                           <button
                             key={n}
-                            className={`text-lg ${n <= (a.rating ?? 0) ? "text-yellow-400" : "text-gray-300"} hover:text-yellow-400 transition-colors`}
+                            className={`text-lg ${n <= (a.rating ?? 0) ? "text-yellow-400" : "text-neutral-300"} hover:text-yellow-400 transition-colors`}
                             onClick={() => setRating(a, n)}
                           >
                             ★

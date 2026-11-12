@@ -22,22 +22,22 @@ export default function AttendancePage() {
     <div className="space-y-5">
       {/* ── Page header ── */}
       <div>
-        <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
           Time &amp; Attendance
         </h1>
-        <p className="text-[13px] text-[#6B7A8D] mt-0.5">Daily Time Record management</p>
+        <p className="text-[13px] text-[#6B6B6B] mt-0.5">Daily Time Record management</p>
       </div>
 
       {/* ── Tab Nav ── */}
-      <div className="flex gap-1 p-1 bg-white rounded-xl border border-[#E8EBF1] shadow-sm w-fit">
+      <div className="flex gap-0.5 p-0.5 bg-[var(--fill)] rounded-[8px] w-fit">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
+            className={`h-[26px] px-3 text-[13.5px] font-medium rounded-[6px] transition-all ${
               activeTab === tab.key
-                ? "bg-[#E8693A] text-white shadow-sm"
-                : "text-[#6B7A8D] hover:text-[#111827] hover:bg-[#F5F6FA]"
+                ? "bg-white text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,.1)]"
+                : "text-[var(--muted-2)] hover:text-[var(--ink)]"
             }`}
           >
             {tab.label}

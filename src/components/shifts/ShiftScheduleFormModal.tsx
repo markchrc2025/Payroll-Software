@@ -268,12 +268,12 @@ function SectionDivider({ icon, label }: { icon: ReactNode; label: ReactNode }) 
     <div className="flex items-center gap-[11px] my-[22px] first:mt-[2px]">
       <span
         style={{ fontFamily: "Instrument Sans, sans-serif" }}
-        className="flex items-center gap-[7px] text-[11px] font-bold uppercase tracking-[.07em] text-[#C2552F] whitespace-nowrap"
+        className="flex items-center gap-[7px] text-[12.5px] font-medium text-[#C2552F] whitespace-nowrap"
       >
         <span className="text-[#E8693A] flex items-center">{icon}</span>
         {label}
       </span>
-      <div className="flex-1 h-px bg-[#ECE6DD]" />
+      <div className="flex-1 h-px bg-[#E8E8E8]" />
     </div>
   );
 }
@@ -447,24 +447,24 @@ export function ShiftScheduleFormModal({
             [data-shift-modal] {
               scrollbar-gutter: stable;
               scrollbar-width: thin;
-              scrollbar-color: #d9cfc2 transparent;
+              scrollbar-color: #D4D4D4 transparent;
             }
             [data-shift-modal]::-webkit-scrollbar { width: 12px; }
             [data-shift-modal]::-webkit-scrollbar-track { background: transparent; }
             [data-shift-modal]::-webkit-scrollbar-thumb {
-              background: #d9cfc2;
+              background: #D4D4D4;
               border-radius: 99px;
               border: 4px solid transparent;
               background-clip: padding-box;
             }
-            [data-shift-modal]::-webkit-scrollbar-thumb:hover { background: #c3b29c; }
+            [data-shift-modal]::-webkit-scrollbar-thumb:hover { background: #C9C9C9; }
           `}</style>
 
           {/* ── HEADER ── */}
           <div
             className={cn(
               "flex-none flex items-start justify-between px-6 py-5 border-b border-transparent transition-colors duration-150",
-              !atTop && "border-b-[#ECE6DD] shadow-[0_6px_14px_-12px_rgba(33,26,21,0.4)]"
+              !atTop && "border-b-[#E8E8E8] shadow-[0_6px_14px_-12px_rgba(33,26,21,0.4)]"
             )}
           >
             <div className="flex items-center gap-3.5">
@@ -479,12 +479,12 @@ export function ShiftScheduleFormModal({
               </div>
               <div>
                 <DialogTitle
-                  className="text-[17px] font-semibold leading-tight text-[#2A2420]"
+                  className="text-[17px] font-semibold leading-tight text-[#171717]"
                   style={{ fontFamily: "Instrument Sans, sans-serif" }}
                 >
                   {mode === "edit" ? "Edit Shift Schedule" : "Add Shift Schedule"}
                 </DialogTitle>
-                <DialogDescription className="mt-0.5 text-[12px] text-[#6B6259]">
+                <DialogDescription className="mt-0.5 text-[12px] text-[#525252]">
                   {mode === "edit"
                     ? "Update the schedule settings below."
                     : "Configure a named shift template for DTR enforcement."}
@@ -496,7 +496,7 @@ export function ShiftScheduleFormModal({
                 <Button
                   variant="outline"
                   size="icon-sm"
-                  className="flex-none size-[34px] rounded-[9px] border-[#ECE6DD]"
+                  className="flex-none size-[34px] rounded-[9px] border-[#E8E8E8]"
                 />
               }
               aria-label="Close"
@@ -518,16 +518,16 @@ export function ShiftScheduleFormModal({
             {mode === "edit" && (
               <div
                 className="flex items-center gap-3 rounded-[11px] border px-4 py-3 mb-2"
-                style={{ background: "#F6F2EC", borderColor: "#ECE6DD" }}
+                style={{ background: "#F7F7F7", borderColor: "#E8E8E8" }}
               >
                 <div
                   className="flex items-center justify-center rounded-[8px] size-8"
-                  style={{ background: "#e9eff7" }}
+                  style={{ background: "#EFEFEF" }}
                 >
                   <Users className="size-4" style={{ color: "#3e63a0" }} />
                 </div>
-                <span className="text-[12.5px] text-[#6B6259]">
-                  <b className="text-[#2A2420]">{assignedCount}</b>{" "}
+                <span className="text-[12.5px] text-[#525252]">
+                  <b className="text-[#171717]">{assignedCount}</b>{" "}
                   {assignedCount === 1 ? "employee" : "employees"} assigned to this shift
                 </span>
               </div>
@@ -538,7 +538,7 @@ export function ShiftScheduleFormModal({
 
             <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 150px" }}>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">
+                <Label className="text-[12.5px] font-medium text-[#171717]">
                   Name <span style={{ color: "#E8693A" }}>*</span>
                 </Label>
                 <Input
@@ -552,7 +552,7 @@ export function ShiftScheduleFormModal({
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">Code</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Code</Label>
                 <Input
                   placeholder="DAY-8"
                   maxLength={20}
@@ -584,15 +584,15 @@ export function ShiftScheduleFormModal({
                     className={cn(
                       "flex flex-col gap-2 rounded-[12px] p-3 text-left border-[1.5px] transition-all",
                       selected
-                        ? "border-[#E8693A] bg-[#fdeee6] shadow-[0_0_0_3px_rgba(232,105,58,.1)]"
-                        : "border-[#ECE6DD] bg-white hover:border-[#d0c9c0]"
+                        ? "border-[var(--ink)] bg-[var(--hover)]"
+                        : "border-[#E8E8E8] bg-white hover:border-[#D4D4D4]"
                     )}
                   >
                     <div
                       className="flex items-center justify-center rounded-[8px] size-8"
                       style={{
-                        background: selected ? "#E8693A" : "#F6F2EC",
-                        color:      selected ? "#fff"    : "#6B6259",
+                        background: selected ? "#E8693A" : "#F7F7F7",
+                        color:      selected ? "#fff"    : "#525252",
                       }}
                     >
                       {icon}
@@ -600,11 +600,11 @@ export function ShiftScheduleFormModal({
                     <div>
                       <div
                         className="text-[13px] font-semibold leading-tight"
-                        style={{ color: selected ? "#C2552F" : "#2A2420" }}
+                        style={{ color: selected ? "#C2552F" : "#171717" }}
                       >
                         {t}
                       </div>
-                      <div className="text-[11px] mt-0.5" style={{ color: "#9b9085" }}>
+                      <div className="text-[11px] mt-0.5" style={{ color: "#6B6B6B" }}>
                         {desc}
                       </div>
                     </div>
@@ -620,13 +620,13 @@ export function ShiftScheduleFormModal({
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-[12.5px] font-medium text-[#2A2420]">
+                    <Label className="text-[12.5px] font-medium text-[#171717]">
                       Time in <span style={{ color: "#E8693A" }}>*</span>
                     </Label>
                     <div className="relative">
                       <Clock
                         className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 15, height: 15, color: "#9b9085" }}
+                        style={{ width: 15, height: 15, color: "#6B6B6B" }}
                       />
                       <Input
                         type="time"
@@ -640,13 +640,13 @@ export function ShiftScheduleFormModal({
                     )}
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-[12.5px] font-medium text-[#2A2420]">
+                    <Label className="text-[12.5px] font-medium text-[#171717]">
                       Time out <span style={{ color: "#E8693A" }}>*</span>
                     </Label>
                     <div className="relative">
                       <Clock
                         className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 15, height: 15, color: "#9b9085" }}
+                        style={{ width: 15, height: 15, color: "#6B6B6B" }}
                       />
                       <Input
                         type="time"
@@ -662,7 +662,7 @@ export function ShiftScheduleFormModal({
                 </div>
 
                 <div className="flex flex-col gap-1.5 mt-3">
-                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Grace period</Label>
+                  <Label className="text-[12.5px] font-medium text-[#171717]">Grace period</Label>
                   <div className="relative">
                     <Input
                       type="number"
@@ -674,12 +674,12 @@ export function ShiftScheduleFormModal({
                     />
                     <span
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
-                      style={{ color: "#9b9085" }}
+                      style={{ color: "#6B6B6B" }}
                     >
                       minutes
                     </span>
                   </div>
-                  <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                  <p className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                     Minutes after expected time-in before tardiness is recorded. 0 = strict.
                   </p>
                 </div>
@@ -689,10 +689,10 @@ export function ShiftScheduleFormModal({
                     type="checkbox"
                     checked={form.cross}
                     onChange={(e) => set("cross", e.target.checked)}
-                    className="rounded border-[#ECE6DD] accent-[#E8693A]"
+                    className="rounded border-[#E8E8E8] accent-[#E8693A]"
                   />
-                  <Moon className="size-3.5" style={{ color: "#6B6259" }} />
-                  <span className="text-[12.5px]" style={{ color: "#2A2420" }}>
+                  <Moon className="size-3.5" style={{ color: "#525252" }} />
+                  <span className="text-[12.5px]" style={{ color: "#171717" }}>
                     Crosses midnight (e.g. 22:00–06:00 night shift)
                   </span>
                 </label>
@@ -703,11 +703,11 @@ export function ShiftScheduleFormModal({
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-[12.5px] font-medium text-[#2A2420]">Core time in</Label>
+                    <Label className="text-[12.5px] font-medium text-[#171717]">Core time in</Label>
                     <div className="relative">
                       <Clock
                         className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 15, height: 15, color: "#9b9085" }}
+                        style={{ width: 15, height: 15, color: "#6B6B6B" }}
                       />
                       <Input
                         type="time"
@@ -718,11 +718,11 @@ export function ShiftScheduleFormModal({
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-[12.5px] font-medium text-[#2A2420]">Core time out</Label>
+                    <Label className="text-[12.5px] font-medium text-[#171717]">Core time out</Label>
                     <div className="relative">
                       <Clock
                         className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 15, height: 15, color: "#9b9085" }}
+                        style={{ width: 15, height: 15, color: "#6B6B6B" }}
                       />
                       <Input
                         type="time"
@@ -734,7 +734,7 @@ export function ShiftScheduleFormModal({
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5 mt-3">
-                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Required hours</Label>
+                  <Label className="text-[12.5px] font-medium text-[#171717]">Required hours</Label>
                   <div className="relative">
                     <Input
                       type="number"
@@ -747,12 +747,12 @@ export function ShiftScheduleFormModal({
                     />
                     <span
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
-                      style={{ color: "#9b9085" }}
+                      style={{ color: "#6B6B6B" }}
                     >
                       hours
                     </span>
                   </div>
-                  <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                  <p className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                     Employee can clock in any time but must be present during the core window and complete the required hours.
                   </p>
                 </div>
@@ -761,7 +761,7 @@ export function ShiftScheduleFormModal({
 
             {form.type === "Open" && (
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">Required hours</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Required hours</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -774,12 +774,12 @@ export function ShiftScheduleFormModal({
                   />
                   <span
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
-                    style={{ color: "#9b9085" }}
+                    style={{ color: "#6B6B6B" }}
                   >
                     hours
                   </span>
                 </div>
-                <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                <p className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                   No fixed schedule — employee works any hours. Undertime computed against this target.
                 </p>
               </div>
@@ -790,7 +790,7 @@ export function ShiftScheduleFormModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">Break duration</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Break duration</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -802,14 +802,14 @@ export function ShiftScheduleFormModal({
                   />
                   <span
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
-                    style={{ color: "#9b9085" }}
+                    style={{ color: "#6B6B6B" }}
                   >
                     minutes
                   </span>
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">Break policy</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Break policy</Label>
                 <select
                   value={form.breakPolicy}
                   onChange={(e) => set("breakPolicy", e.target.value as UiPolicy)}
@@ -846,7 +846,7 @@ export function ShiftScheduleFormModal({
             />
 
             <div className="flex items-center justify-between mb-2.5">
-              <p className="text-[12px]" style={{ color: "#9b9085" }}>
+              <p className="text-[12px]" style={{ color: "#6B6B6B" }}>
                 {Object.values(form.days).filter(Boolean).length} day
                 {Object.values(form.days).filter(Boolean).length !== 1 ? "s" : ""} selected
               </p>
@@ -857,7 +857,7 @@ export function ShiftScheduleFormModal({
                     type="button"
                     onClick={() => setPreset(p)}
                     className="text-[11.5px] font-medium px-2.5 py-1 rounded-[7px] border transition-colors hover:border-[#E8693A] hover:text-[#E8693A]"
-                    style={{ borderColor: "#ECE6DD", color: "#6B6259" }}
+                    style={{ borderColor: "#E8E8E8", color: "#525252" }}
                   >
                     {p === "weekdays" ? "Weekdays" : p === "all" ? "All" : "Clear"}
                   </button>
@@ -879,9 +879,9 @@ export function ShiftScheduleFormModal({
                       height: 42,
                       background: active
                         ? "#E8693A"
-                        : isWeekend ? "#F6F2EC" : "#fff",
-                      color:      active ? "#fff" : isWeekend ? "#9b9085" : "#2A2420",
-                      borderColor: active ? "#E8693A" : "#ECE6DD",
+                        : isWeekend ? "#F7F7F7" : "#fff",
+                      color:      active ? "#fff" : isWeekend ? "#6B6B6B" : "#171717",
+                      borderColor: active ? "#E8693A" : "#E8E8E8",
                     }}
                   >
                     {d}
@@ -915,7 +915,7 @@ export function ShiftScheduleFormModal({
 
             {/* Threshold (hours worked before OT is suggested / auto-approved) */}
             <div className="flex flex-col gap-1.5">
-              <Label className="text-[12.5px] font-medium text-[#2A2420]">
+              <Label className="text-[12.5px] font-medium text-[#171717]">
                 Suggest overtime beyond
               </Label>
               <div className="relative">
@@ -930,7 +930,7 @@ export function ShiftScheduleFormModal({
                 />
                 <span
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
-                  style={{ color: "#9b9085" }}
+                  style={{ color: "#6B6B6B" }}
                 >
                   hours
                 </span>
@@ -945,14 +945,14 @@ export function ShiftScheduleFormModal({
                 "w-full flex items-center gap-3 rounded-[12px] border-[1.5px] px-4 py-3 text-left transition-all mt-3",
                 form.otAutoApprove
                   ? "border-[#E8693A] bg-[#fdeee6]"
-                  : "border-[#ECE6DD] bg-white hover:border-[#d0c9c0]"
+                  : "border-[#E8E8E8] bg-white hover:border-[#D4D4D4]"
               )}
             >
               <div
                 className="flex-none flex items-center justify-center rounded-[8px] size-9"
                 style={{
-                  background: form.otAutoApprove ? "#E8693A" : "#F6F2EC",
-                  color:      form.otAutoApprove ? "#fff"    : "#6B6259",
+                  background: form.otAutoApprove ? "#E8693A" : "#F7F7F7",
+                  color:      form.otAutoApprove ? "#fff"    : "#525252",
                 }}
               >
                 <Zap className="size-4" />
@@ -960,11 +960,11 @@ export function ShiftScheduleFormModal({
               <div className="flex-1 min-w-0">
                 <div
                   className="text-[13px] font-semibold"
-                  style={{ color: form.otAutoApprove ? "#C2552F" : "#2A2420" }}
+                  style={{ color: form.otAutoApprove ? "#C2552F" : "#171717" }}
                 >
                   Auto-approve overtime beyond schedule
                 </div>
-                <div className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                <div className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                   {form.otAutoApprove
                     ? "Worked time past the threshold is auto-approved (break rule still applies)."
                     : "Employees must file an OT application for approval."}
@@ -974,7 +974,7 @@ export function ShiftScheduleFormModal({
                 className="flex-none relative transition-colors rounded-full"
                 style={{
                   width: 44, height: 25,
-                  background: form.otAutoApprove ? "#E8693A" : "#d0c9c0",
+                  background: form.otAutoApprove ? "#E8693A" : "#D4D4D4",
                 }}
               >
                 <div
@@ -990,7 +990,7 @@ export function ShiftScheduleFormModal({
             {/* OT break-deduction rule */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">OT break rule</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">OT break rule</Label>
                 <select
                   value={form.otBreakMode}
                   onChange={(e) => set("otBreakMode", e.target.value as FormState["otBreakMode"])}
@@ -1004,7 +1004,7 @@ export function ShiftScheduleFormModal({
 
               {form.otBreakMode === "SINGLE" && (
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Deduct once OT ≥</Label>
+                  <Label className="text-[12.5px] font-medium text-[#171717]">Deduct once OT ≥</Label>
                   <div className="relative">
                     <Input
                       type="number" min={0} max={24} step={0.5}
@@ -1012,14 +1012,14 @@ export function ShiftScheduleFormModal({
                       onChange={(e) => set("otBreakTrigger", e.target.value)}
                       className="pr-[56px]"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>hours</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#6B6B6B" }}>hours</span>
                   </div>
                 </div>
               )}
 
               {form.otBreakMode === "TIERED" && (
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-[12.5px] font-medium text-[#2A2420]">Per block of</Label>
+                  <Label className="text-[12.5px] font-medium text-[#171717]">Per block of</Label>
                   <div className="relative">
                     <Input
                       type="number" min={0} max={24} step={0.5}
@@ -1027,7 +1027,7 @@ export function ShiftScheduleFormModal({
                       onChange={(e) => set("otBreakBlock", e.target.value)}
                       className="pr-[56px]"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>hours</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#6B6B6B" }}>hours</span>
                   </div>
                 </div>
               )}
@@ -1035,7 +1035,7 @@ export function ShiftScheduleFormModal({
 
             {form.otBreakMode !== "NONE" && (
               <div className="flex flex-col gap-1.5 mt-3">
-                <Label className="text-[12.5px] font-medium text-[#2A2420]">Break deducted</Label>
+                <Label className="text-[12.5px] font-medium text-[#171717]">Break deducted</Label>
                 <div className="relative">
                   <Input
                     type="number" min={0} max={480}
@@ -1043,9 +1043,9 @@ export function ShiftScheduleFormModal({
                     onChange={(e) => set("otBreakMin", e.target.value)}
                     className="pr-[72px]"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#9b9085" }}>minutes</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none" style={{ color: "#6B6B6B" }}>minutes</span>
                 </div>
-                <p className="text-[11.5px]" style={{ color: "#9b9085" }}>
+                <p className="text-[11.5px]" style={{ color: "#6B6B6B" }}>
                   {form.otBreakMode === "SINGLE"
                     ? `e.g. ${form.otBreakTrigger || "6"}h+ of OT → deduct ${form.otBreakMin || "60"} min once.`
                     : `e.g. deduct ${form.otBreakMin || "60"} min for every ${form.otBreakBlock || "4"}h of OT.`}
@@ -1064,25 +1064,25 @@ export function ShiftScheduleFormModal({
           <div
             className={cn(
               "flex-none flex items-center justify-between px-6 py-4 border-t border-transparent transition-colors duration-150",
-              !atBottom && "border-t-[#ECE6DD] shadow-[0_-6px_14px_-12px_rgba(33,26,21,0.4)]"
+              !atBottom && "border-t-[#E8E8E8] shadow-[0_-6px_14px_-12px_rgba(33,26,21,0.4)]"
             )}
-            style={{ background: "#fcfaf7" }}
+            style={{ background: "#FAFAFA" }}
           >
             {/* Left: live summary */}
             <div
               className="flex items-center gap-[10px]"
               style={{ fontFamily: "Instrument Sans, sans-serif" }}
             >
-              <span className="text-[16px] font-bold" style={{ color: "#2A2420" }}>
+              <span className="text-[16px] font-bold" style={{ color: "#171717" }}>
                 {summary.paidHours}
               </span>
-              <span className="text-[11px] font-semibold" style={{ color: "#9b9085" }}>h paid</span>
-              <div className="w-px h-[22px]" style={{ background: "#ECE6DD" }} />
+              <span className="text-[11px] font-semibold" style={{ color: "#6B6B6B" }}>h paid</span>
+              <div className="w-px h-[22px]" style={{ background: "#E8E8E8" }} />
               <div className="flex flex-col">
-                <b className="text-[12px] font-semibold" style={{ color: "#2A2420" }}>
+                <b className="text-[12px] font-semibold" style={{ color: "#171717" }}>
                   {summary.rangeText}
                 </b>
-                <span className="text-[11px]" style={{ color: "#9b9085" }}>
+                <span className="text-[11px]" style={{ color: "#6B6B6B" }}>
                   {summary.dayText}
                 </span>
               </div>
@@ -1105,7 +1105,7 @@ export function ShiftScheduleFormModal({
                 variant="outline"
                 size="sm"
                 onClick={() => onOpenChange(false)}
-                className="border-[#ECE6DD]"
+                className="border-[#E8E8E8]"
               >
                 Cancel
               </Button>
@@ -1113,7 +1113,7 @@ export function ShiftScheduleFormModal({
                 size="sm"
                 onClick={handleSave}
                 disabled={saving}
-                className="gap-1.5 bg-[#E8693A] hover:bg-[#C2552F] text-white border-transparent"
+                className="gap-1.5 bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)] border-transparent"
               >
                 {saving
                   ? "Saving…"

@@ -291,7 +291,7 @@ export default function AssetsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Assets</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Assets</h1>
         <p className="text-sm text-muted-foreground">Company asset inventory and employee assignments</p>
       </div>
 

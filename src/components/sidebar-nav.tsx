@@ -7,7 +7,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-r
 
 // ---- SentireMark: 4-node constellation with accent center dot ----
 function SentireMark({ size = 30 }: { size?: number }) {
-  const ink = "#F7F3EF";
+  const ink = "#F7F7F7";
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" style={{ flex: "none", display: "block" }}>
       <g stroke={ink} strokeWidth="3.4" strokeLinecap="round" opacity="0.5">
@@ -254,8 +254,11 @@ function CompanyAvatar({
   const showLogo = logoUrl && !failed;
   return (
     <div
-      className="flex flex-none items-center justify-center overflow-hidden rounded-[8px] text-[12px] font-bold text-[#e9e2d8]"
-      style={{ height: size, width: size, background: showLogo ? "#fff" : "#E8693A" }}
+      className={[
+        "flex flex-none items-center justify-center overflow-hidden rounded-[6px] text-[10.5px] font-bold",
+        showLogo ? "bg-white" : "bg-[var(--acc)] text-[var(--on-acc)]",
+      ].join(" ")}
+      style={{ height: size, width: size }}
     >
       {showLogo ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -272,6 +275,8 @@ function CompanyAvatar({
   );
 }
 
+// Frappe UI style (Option B): light neutral sidebar, sentence-case group
+// labels, 28px items, the active item a white card with the icon in orange.
 export function SidebarNav({
   tenantName,
   tenantInitials,
@@ -330,57 +335,38 @@ export function SidebarNav({
 
   return (
     <aside
-      className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-visible transition-[width] duration-200 ease-in-out relative z-30"
-      style={{
-        width: isCollapsed ? "76px" : "266px",
-        background: "linear-gradient(168deg, #2E241C, #1f1813)",
-        borderRight: "1px solid rgba(255,255,255,0.05)",
-      }}
+      className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-visible transition-[width] duration-200 ease-in-out relative z-30 border-r border-[var(--line)] bg-[#F8F8F8] px-2 py-2.5 text-[var(--ink)]"
+      style={{ width: isCollapsed ? "56px" : "240px" }}
     >
-      {/* Radial glow — top-left */}
-      <div
-        className="pointer-events-none absolute -left-10 -top-10 h-64 w-64"
-        style={{
-          background: "radial-gradient(circle, rgba(232,105,58,0.18) 0%, transparent 70%)",
-        }}
-      />
-
       {/* Collapse/expand toggle */}
       <button
         onClick={toggle}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3.5 top-7 z-50 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-[#ECE6DD] bg-white shadow-md transition-all hover:scale-[1.08]"
-        style={{ color: "#9b9085" }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#E8693A";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "#E8693A";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#9b9085";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "#ECE6DD";
-        }}
+        className="absolute -right-[11px] top-3.5 z-50 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--muted-2)] shadow-[0_1px_2px_rgba(0,0,0,.08)] transition-colors hover:border-[#CFCFCF] hover:text-[var(--ink)] hover:shadow-[0_1px_3px_rgba(0,0,0,.12)]"
       >
         {isCollapsed ? (
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3" />
         ) : (
-          <ChevronLeft className="h-3.5 w-3.5" />
+          <ChevronLeft className="h-3 w-3" />
         )}
       </button>
 
       {/* Brand block */}
-      <div className="flex items-center gap-[11px] px-[14px] py-[18px] overflow-hidden">
-        <div
-          className="flex h-10 w-10 flex-none items-center justify-center rounded-[11px]"
-          style={{ background: "rgba(232,105,58,0.18)", boxShadow: "0 0 0 1px rgba(232,105,58,0.3)" }}
-        >
-          <SentireMark size={28} />
+      <div
+        className={[
+          "flex items-center gap-2 overflow-hidden pb-2.5 pt-1",
+          isCollapsed ? "justify-center px-0" : "px-1.5",
+        ].join(" ")}
+      >
+        <div className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] bg-[#1F1F1F]">
+          <SentireMark size={18} />
         </div>
         {!isCollapsed && (
-          <div className="leading-none overflow-hidden">
-            <div className="text-[15.5px] font-bold tracking-[-0.2px] text-white whitespace-nowrap">
+          <div className="overflow-hidden leading-tight">
+            <div className="whitespace-nowrap text-[14px] font-semibold text-[var(--ink)]">
               Sentire Payroll
             </div>
-            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[2.2px] text-[#8a7e6f] whitespace-nowrap">
+            <div className="whitespace-nowrap text-[12px] text-[var(--muted-2)]">
               HRIS &amp; Payroll
             </div>
           </div>
@@ -389,67 +375,51 @@ export function SidebarNav({
 
       {/* Company switcher */}
       {!isCollapsed ? (
-        <div
-          className="mx-3.5 mb-1 flex cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 transition-colors overflow-hidden"
-          style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.04)" }}
-        >
-          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={34} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12.5px] font-semibold text-[#e9e2d8]">
+        <div className="mb-2 flex cursor-pointer items-center gap-2 overflow-hidden rounded-[8px] border border-[var(--line)] bg-white px-[7px] py-1.5 shadow-[0_1px_2px_rgba(0,0,0,.04)] transition-colors hover:border-[#D4D4D4]">
+          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={24} />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate text-[13.5px] font-medium text-[var(--ink)]">
               {tenantName}
             </div>
-            <div className="text-[9.5px] font-semibold uppercase tracking-[0.4px] text-[#8a7e6f]">
-              Growth plan
-            </div>
+            <div className="text-[12px] text-[var(--muted-2)]">Growth plan</div>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 flex-none text-[#8a7e6f]" />
+          <ChevronsUpDown className="h-3.5 w-3.5 flex-none text-[var(--muted-2)]" />
         </div>
       ) : (
-        <div className="mx-auto mb-1 cursor-pointer hover:brightness-110 transition-all" title={tenantName}>
-          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={32} />
+        <div className="mx-auto mb-2 cursor-pointer" title={tenantName}>
+          <CompanyAvatar logoUrl={tenantLogoUrl} initials={tenantInitials} size={24} />
         </div>
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden [scrollbar-color:#D4D4D4_transparent] [scrollbar-width:thin]">
         {NAV_SECTIONS.map((section) => {
           const isOpen = isCollapsed || !!openGroups[section.label];
           const hasActive = section.items.some((i) => isActive(i.href));
 
           return (
-            <div key={section.label}>
+            <div key={section.label} className={isOpen ? "mb-1" : undefined}>
               {!isCollapsed ? (
                 <button
                   type="button"
                   onClick={() => toggleGroup(section.label)}
-                  className="flex w-full items-center px-[14px] pb-1.5 pt-3.5 gap-1 group"
+                  className="group flex w-full items-center gap-1 px-2 pb-1 pt-2 text-left text-[12px] font-medium text-[var(--muted-2)] transition-colors hover:text-[var(--ink)]"
                 >
-                  <span
-                    className="flex-1 text-left text-[10px] font-bold uppercase tracking-[0.08em]"
-                    style={{ color: hasActive && !isOpen ? "#E8693A" : "#8a7e6f" }}
-                  >
-                    {section.label}
-                  </span>
+                  <span className="flex-1">{toSentenceCase(section.label)}</span>
                   {hasActive && !isOpen && (
-                    <span
-                      className="mr-1 h-1.5 w-1.5 rounded-full"
-                      style={{ background: "#E8693A" }}
-                    />
+                    <span className="mr-1 h-1.5 w-1.5 rounded-full bg-[var(--acc)]" />
                   )}
                   <ChevronDown
                     className="h-3 w-3 transition-transform duration-[180ms]"
-                    style={{
-                      color: "#8a7e6f",
-                      transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
-                    }}
+                    style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
                   />
                 </button>
               ) : (
-                <div className="mx-3 mt-3.5 mb-1 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }} />
+                <div className="mx-1.5 my-2 border-t border-[var(--line)]" />
               )}
 
               {isOpen && (
-                <div className={["space-y-px", isCollapsed ? "px-2" : "px-[10px]"].join(" ")}>
+                <div className="space-y-px">
                   {section.items.map((item) => {
                     const active = isActive(item.href);
                     if (item.comingSoon) {
@@ -459,19 +429,15 @@ export function SidebarNav({
                           title={isCollapsed ? `${item.label} — coming soon` : undefined}
                           aria-disabled="true"
                           className={[
-                            "flex items-center rounded-[9px] px-[10px] py-[9px] text-[13.5px] font-medium cursor-default select-none",
-                            isCollapsed ? "justify-center" : "gap-[10px]",
+                            "flex h-7 cursor-default select-none items-center rounded-[8px] px-2 text-[13.5px] text-[var(--muted-2)] opacity-70",
+                            isCollapsed ? "justify-center px-0" : "gap-2",
                           ].join(" ")}
-                          style={{ color: "#8a7e6f", opacity: 0.7 }}
                         >
-                          <NavIcon name={item.icon} size={17} />
+                          <NavIcon name={item.icon} size={16} />
                           {!isCollapsed && (
                             <>
                               <span className="flex-1 truncate">{item.label}</span>
-                              <span
-                                className="ml-auto rounded-full px-[7px] py-px text-[9.5px] font-bold"
-                                style={{ background: "rgba(255,255,255,0.06)", color: "#9a8f80" }}
-                              >
+                              <span className="ml-auto rounded-full bg-[var(--fill)] px-1.5 text-[10px] font-medium text-[var(--muted-2)]">
                                 Soon
                               </span>
                             </>
@@ -484,42 +450,23 @@ export function SidebarNav({
                         key={item.href}
                         href={item.href}
                         title={isCollapsed ? item.label : undefined}
+                        aria-current={active ? "page" : undefined}
                         className={[
-                          "flex items-center rounded-[9px] px-[10px] py-[9px] text-[13.5px] font-medium transition-colors",
-                          isCollapsed ? "justify-center" : "gap-[10px]",
-                        ].join(" ")}
-                        style={
+                          "flex h-7 items-center rounded-[8px] px-2 text-[13.5px] transition-colors",
+                          isCollapsed ? "justify-center px-0" : "gap-2",
                           active
-                            ? {
-                                background: "#E8693A",
-                                color: "#ffffff",
-                                fontWeight: 600,
-                                boxShadow: "0 6px 16px -8px rgba(232,105,58,0.8)",
-                              }
-                            : { color: "#cfc6ba" }
-                        }
-                        onMouseEnter={(e) => {
-                          if (!active) {
-                            (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.07)";
-                            (e.currentTarget as HTMLAnchorElement).style.color = "#e9e2d8";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!active) {
-                            (e.currentTarget as HTMLAnchorElement).style.background = "";
-                            (e.currentTarget as HTMLAnchorElement).style.color = "#cfc6ba";
-                          }
-                        }}
+                            ? "bg-white font-medium text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,.08),0_0_0_1px_rgba(0,0,0,.04)]"
+                            : "text-[#383838] hover:bg-[#EFEFEF] hover:text-[var(--ink)]",
+                        ].join(" ")}
                       >
-                        <NavIcon name={item.icon} size={17} />
+                        <span className={active ? "flex text-[var(--acc-ink)]" : "flex text-[var(--muted-2)]"}>
+                          <NavIcon name={item.icon} size={16} />
+                        </span>
                         {!isCollapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
                             {item.isNew && (
-                              <span
-                                className="ml-auto rounded-full px-[7px] py-px text-[9.5px] font-bold"
-                                style={{ background: "rgba(232,105,58,0.18)", color: "#E8693A" }}
-                              >
+                              <span className="ml-auto rounded-full bg-[var(--acc-soft)] px-1.5 text-[10px] font-medium text-[var(--acc-ink)]">
                                 New
                               </span>
                             )}
@@ -536,4 +483,11 @@ export function SidebarNav({
       </nav>
     </aside>
   );
+}
+
+// Group labels are stored upper case ("INSIGHTS & TOOLS"); the Frappe style
+// shows them in sentence case ("Insights & tools").
+function toSentenceCase(label: string): string {
+  const lower = label.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
