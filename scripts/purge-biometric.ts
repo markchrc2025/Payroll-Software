@@ -16,10 +16,15 @@
 
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { adminDatabaseUrl } from "../src/lib/db-urls";
 
 const isDryRun = process.argv.includes("--dry-run");
 
-const connectionString = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!;
+// PAY-54 (unit 0.7 follow-up): operator scripts connect ONLY as the owner role via
+// DIRECT_DATABASE_URL. They used to fall back to DATABASE_URL, which after the
+// runtime switch is payroll_app under RLS: a script would then read nothing and
+// report an empty database instead of failing. adminDatabaseUrl() throws instead.
+const connectionString = adminDatabaseUrl();
 const prismaAdmin = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
