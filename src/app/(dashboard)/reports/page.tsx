@@ -132,10 +132,10 @@ function ReportCard({ report }: { report: ReportDef }) {
     downloadText(text, `${report.id}_${suffix}.${report.fileExt ?? "txt"}`);
   }
 
-  const agencyStyle = AGENCY_COLORS[report.agency] ?? { bg: "#F5F6FA", color: "#4A586B" };
+  const agencyStyle = AGENCY_COLORS[report.agency] ?? { bg: "#F7F7F7", color: "#525252" };
 
   return (
-    <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 flex flex-col gap-4">
+    <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 flex flex-col gap-4">
       {/* Card header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -147,10 +147,10 @@ function ReportCard({ report }: { report: ReportDef }) {
               {report.agency}
             </span>
           </div>
-          <div className="font-display text-[15px] font-semibold text-[#111827] leading-snug">
+          <div className="font-display text-[15px] font-semibold text-[#171717] leading-snug">
             {report.title}
           </div>
-          <div className="text-[12px] text-[#6B7A8D] mt-1 leading-relaxed">
+          <div className="text-[12px] text-[#6B6B6B] mt-1 leading-relaxed">
             {report.description}
           </div>
         </div>
@@ -159,9 +159,9 @@ function ReportCard({ report }: { report: ReportDef }) {
       {/* Year / month selectors */}
       <div className="flex gap-2 flex-wrap">
         <div className="space-y-1">
-          <Label className="text-[11px] font-semibold text-[#4A586B] uppercase tracking-wide">Year</Label>
+          <Label className="text-[12.5px] font-medium text-[#525252]">Year</Label>
           <Select value={year} onValueChange={(v) => setYear(v ?? year)}>
-            <SelectTrigger className="h-8 w-24 text-[13px] border-[#E8EBF1]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-24 text-[13px] border-[#E8E8E8]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {YEARS.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -171,9 +171,9 @@ function ReportCard({ report }: { report: ReportDef }) {
         </div>
         {report.monthly && (
           <div className="space-y-1">
-            <Label className="text-[11px] font-semibold text-[#4A586B] uppercase tracking-wide">Month</Label>
+            <Label className="text-[12.5px] font-medium text-[#525252]">Month</Label>
             <Select value={month} onValueChange={(v) => setMonth(v ?? month)}>
-              <SelectTrigger className="h-8 w-32 text-[13px] border-[#E8EBF1]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-32 text-[13px] border-[#E8E8E8]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {MONTHS.map((m) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -200,7 +200,7 @@ function ReportCard({ report }: { report: ReportDef }) {
           onClick={handleGenerate}
           disabled={loading}
           className="flex-1 h-9 flex items-center justify-center gap-1.5 text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-60"
-          style={{ background: "#E8693A", color: "#fff" }}
+          style={{ background: "#E8693A", color: "#2A2420" }}
         >
           {loading ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
@@ -213,7 +213,7 @@ function ReportCard({ report }: { report: ReportDef }) {
           <>
             <button
               onClick={handleDownloadJson}
-              className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#E8693A] hover:bg-[#fdeee6] transition-colors"
+              className="h-7 flex items-center gap-1.5 px-2.5 text-[13.5px] font-medium rounded-[8px] bg-[var(--fill)] text-[var(--ink)] hover:bg-[var(--fill-2)] transition-colors"
             >
               <Download className="h-3.5 w-3.5" /> JSON
             </button>
@@ -221,7 +221,7 @@ function ReportCard({ report }: { report: ReportDef }) {
               <button
                 onClick={handleDownloadFile}
                 title={`Download ${report.fileLabel ?? report.fileExt?.toUpperCase()}`}
-                className="h-9 flex items-center gap-1.5 px-3 text-[13px] font-semibold rounded-lg border border-[#E8EBF1] text-[#E8693A] hover:bg-[#fdeee6] transition-colors"
+                className="h-7 flex items-center gap-1.5 px-2.5 text-[13.5px] font-medium rounded-[8px] bg-[var(--fill)] text-[var(--ink)] hover:bg-[var(--fill-2)] transition-colors"
               >
                 <Download className="h-3.5 w-3.5" /> {report.fileLabel ?? report.fileExt?.toUpperCase()}
               </button>
@@ -328,23 +328,23 @@ export default function ReportsPage() {
     <div className="space-y-8">
       {/* ── Page header ── */}
       <div>
-        <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
           Gov&apos;t Reports
         </h1>
-        <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+        <p className="text-[13px] text-[#6B6B6B] mt-0.5">
           Generate and download statutory compliance reports. Only finalized payroll runs are included.
         </p>
       </div>
 
       {/* ── Info banner ── */}
-      <div className="flex items-start gap-3 rounded-xl border border-[#fdeee6] bg-[#fdeee6] p-4 text-[13px] text-[#E8693A]">
+      <div className="flex items-start gap-3 rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] p-4 text-[13px] text-[var(--ink)]">
         <span className="shrink-0 text-[16px]">ℹ</span>
         <span>Reports are computed from <strong>finalized</strong> payroll runs only. Draft or cancelled runs are excluded.</span>
       </div>
 
       {AGENCIES.map((agency) => {
         const agencyReports = REPORTS.filter((r) => r.agency === agency);
-        const agStyle = AGENCY_COLORS[agency] ?? { bg: "#F5F6FA", color: "#4A586B" };
+        const agStyle = AGENCY_COLORS[agency] ?? { bg: "#F7F7F7", color: "#525252" };
         return (
           <section key={agency} className="space-y-3">
             <div className="flex items-center gap-2">
@@ -354,7 +354,7 @@ export default function ReportsPage() {
               >
                 {agency}
               </span>
-              <span className="text-[12px] text-[#9AA5B4]">{agencyReports.length} report{agencyReports.length > 1 ? "s" : ""}</span>
+              <span className="text-[12px] text-[#A3A3A3]">{agencyReports.length} report{agencyReports.length > 1 ? "s" : ""}</span>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {agencyReports.map((report) => (

@@ -46,7 +46,7 @@ const AVATAR_COLORS = [
   { bg: "#F8F0DC", color: "#A87A1E" },
   { bg: "#E5F6EE", color: "#0FA36B" },
   { bg: "#FBF0DD", color: "#DB8A28" },
-  { bg: "#EEF1F6", color: "#4A586B" },
+  { bg: "#EFEFEF", color: "#525252" },
   { bg: "#F0EDFC", color: "#6D28D9" },
 ];
 
@@ -70,13 +70,13 @@ const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }>
   PROBATIONARY: { bg: "#FBF0DD", color: "#DB8A28", label: "Probationary" },
   CONTRACTUAL:  { bg: "#fdeee6", color: "#E8693A", label: "Contractual" },
   PROJECT_BASED:{ bg: "#F0EDFC", color: "#6D28D9", label: "Project-Based" },
-  RESIGNED:     { bg: "#EEF1F6", color: "#8E9AAC", label: "Resigned" },
+  RESIGNED:     { bg: "#EFEFEF", color: "#8F8F8F", label: "Resigned" },
   TERMINATED:   { bg: "#FCE9E7", color: "#E0463B", label: "Terminated" },
-  RETIRED:      { bg: "#EEF1F6", color: "#8E9AAC", label: "Retired" },
+  RETIRED:      { bg: "#EFEFEF", color: "#8F8F8F", label: "Retired" },
 };
 
 export function StatusPill({ status }: { status: string }) {
-  const s = STATUS_STYLE[status] ?? { bg: "#EEF1F6", color: "#8E9AAC", label: status.replace(/_/g, " ") };
+  const s = STATUS_STYLE[status] ?? { bg: "#EFEFEF", color: "#8F8F8F", label: status.replace(/_/g, " ") };
   return (
     <span
       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap"
@@ -123,10 +123,10 @@ export function buildColumns(
               {initials}
             </div>
             <div>
-              <div className="font-semibold text-[13.5px] leading-tight text-[#0E1B2E]">
+              <div className="font-semibold text-[13.5px] leading-tight text-[#171717]">
                 {firstName} {lastName}
               </div>
-              <div className="text-[11.5px] text-[#8E9AAC]">{employeeNumber}</div>
+              <div className="text-[11.5px] text-[#8F8F8F]">{employeeNumber}</div>
             </div>
           </div>
         );
@@ -136,8 +136,8 @@ export function buildColumns(
       id: "department",
       header: "Department",
       cell: ({ row }) => (
-        <span className="text-[13.5px] text-[#0E1B2E]">
-          {row.original.department?.name ?? <span className="text-[#8E9AAC]">—</span>}
+        <span className="text-[13.5px] text-[#171717]">
+          {row.original.department?.name ?? <span className="text-[#8F8F8F]">—</span>}
         </span>
       ),
     },
@@ -147,8 +147,8 @@ export function buildColumns(
       cell: ({ row }) => {
         const title = row.original.position?.title ?? row.original.jobTitle;
         return (
-          <span className="text-[13.5px] text-[#0E1B2E]">
-            {title ?? <span className="text-[#8E9AAC]">—</span>}
+          <span className="text-[13.5px] text-[#171717]">
+            {title ?? <span className="text-[#8F8F8F]">—</span>}
           </span>
         );
       },
@@ -157,8 +157,8 @@ export function buildColumns(
       id: "branch",
       header: "Branch",
       cell: ({ row }) => (
-        <span className="text-[13.5px] text-[#0E1B2E]">
-          {row.original.branch?.name ?? <span className="text-[#8E9AAC]">—</span>}
+        <span className="text-[13.5px] text-[#171717]">
+          {row.original.branch?.name ?? <span className="text-[#8F8F8F]">—</span>}
         </span>
       ),
     },
@@ -168,7 +168,7 @@ export function buildColumns(
       cell: ({ row }) => {
         const map: Record<string, string> = { MONTHLY: "Monthly", DAILY: "Daily", HOURLY: "Hourly" };
         return (
-          <span className="text-[13.5px] text-[#0E1B2E]">
+          <span className="text-[13.5px] text-[#171717]">
             {map[row.original.salaryType] ?? row.original.salaryType}
           </span>
         );
@@ -178,7 +178,7 @@ export function buildColumns(
       id: "monthlyRate",
       header: () => <span className="block text-right">Monthly rate</span>,
       cell: ({ row }) => (
-        <span className="text-[13.5px] text-[#0E1B2E] tabular-nums block text-right">
+        <span className="text-[13.5px] text-[#171717] tabular-nums block text-right">
           {formatRate(row.original.salaryHistory?.[0]?.basicSalaryCents, row.original.salaryType)}
         </span>
       ),
@@ -202,7 +202,7 @@ export function buildColumns(
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-[#8E9AAC] hover:text-[#0E1B2E] hover:bg-[#EEF1F6]"
+                  className="h-8 w-8 text-[#8F8F8F] hover:text-[#171717] hover:bg-[#EFEFEF]"
                   onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 />
               }

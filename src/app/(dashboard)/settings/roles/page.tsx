@@ -258,10 +258,10 @@ export default function RolesPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Custom Roles &amp; Module Access
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Create roles and choose exactly which modules each one can access. The built-in
             Administrator role has full access and is read-only.
           </p>
@@ -270,21 +270,21 @@ export default function RolesPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Role
           </Button>
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Description</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Permissions</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Type</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Name</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Description</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Permissions</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Type</TableHead>
               <TableHead className="w-[160px]" />
             </TableRow>
           </TableHeader>
@@ -299,7 +299,7 @@ export default function RolesPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={5} className="text-center text-[#6B6B6B] py-10">
                   No roles found.
                 </TableCell>
               </TableRow>
@@ -307,11 +307,11 @@ export default function RolesPage() {
               rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="hover:bg-[#FAFBFF] cursor-pointer"
+                  className="hover:bg-[#FAFAFA] cursor-pointer"
                   onClick={() => openEdit(row)}
                 >
-                  <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.name}</TableCell>
-                  <TableCell className="text-[13px] text-[#6B7A8D] max-w-[240px] truncate">
+                  <TableCell className="font-medium text-[13.5px] text-[#171717]">{row.name}</TableCell>
+                  <TableCell className="text-[13px] text-[#6B6B6B] max-w-[240px] truncate">
                     {row.description ?? "—"}
                   </TableCell>
                   <TableCell>
@@ -329,7 +329,7 @@ export default function RolesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 text-[12.5px] text-[#4A586B]"
+                        className="h-8 text-[12.5px] text-[#525252]"
                         onClick={() => openEdit(row)}
                         title={row.isSystem ? "View permissions (read-only)" : "Edit role & permissions"}
                       >
@@ -400,7 +400,7 @@ export default function RolesPage() {
                 <Label className="text-[13px]">Module Permissions</Label>
                 {!readOnly && (
                   <div className="flex items-center gap-3">
-                    <span className="text-[12px] text-[#8E9AAC]">{selected.size} selected</span>
+                    <span className="text-[12px] text-[#8F8F8F]">{selected.size} selected</span>
                     <button
                       type="button"
                       onClick={toggleAll}
@@ -417,10 +417,10 @@ export default function RolesPage() {
                   {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
-                <div className="rounded-xl border border-[#E8EBF1] overflow-x-auto">
+                <div className="rounded-xl border border-[#E8E8E8] overflow-x-auto">
                   <table className="w-full border-collapse min-w-[520px]">
                     <thead>
-                      <tr className="bg-[#F5F6FA] text-[11px] uppercase tracking-wide text-[#4A586B]">
+                      <tr className="bg-[#F7F7F7] text-[12.5px] text-[#525252]">
                         <th className="text-left font-semibold px-3 py-2.5">Module</th>
                         {ACTION_ORDER.map((a) => (
                           <th key={a} className="font-semibold px-2 py-2.5 text-center">{ACTION_LABEL[a]}</th>
@@ -432,13 +432,13 @@ export default function RolesPage() {
                         const ids = modulePermIds(mod);
                         const allOn = ids.length > 0 && ids.every((id) => selected.has(id));
                         return (
-                          <tr key={mod} className="border-t border-[#EEF1F6] text-[13px] text-[#0E1B2E]">
+                          <tr key={mod} className="border-t border-[#EFEFEF] text-[13px] text-[#171717]">
                             <td className="px-3 py-2.5">
                               <button
                                 type="button"
                                 onClick={() => toggleModule(mod)}
                                 disabled={readOnly}
-                                className="font-medium text-left hover:text-[#E8693A] disabled:hover:text-[#0E1B2E] disabled:cursor-default"
+                                className="font-medium text-left hover:text-[#E8693A] disabled:hover:text-[#171717] disabled:cursor-default"
                                 title={readOnly ? undefined : "Toggle all actions in this module"}
                               >
                                 {MODULE_LABEL[mod] ?? mod}
@@ -460,7 +460,7 @@ export default function RolesPage() {
                                       onChange={() => togglePerm(id)}
                                     />
                                   ) : (
-                                    <span className="text-[#D4DAE3]">—</span>
+                                    <span className="text-[#D4D4D4]">—</span>
                                   )}
                                 </td>
                               );
@@ -478,7 +478,7 @@ export default function RolesPage() {
             <div className="flex gap-3 pt-1">
               {!readOnly && (
                 <Button
-                  className="flex-1 bg-[#E8693A] hover:bg-[#C2552F] text-white"
+                  className="flex-1 bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
                   onClick={handleSave}
                   disabled={saving || permsLoading}
                 >

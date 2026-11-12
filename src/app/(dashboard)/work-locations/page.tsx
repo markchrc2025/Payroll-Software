@@ -156,10 +156,10 @@ export default function WorkLocationsPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Work Locations
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Map branches to DOLE regions for minimum-wage computation.
           </p>
         </div>
@@ -167,21 +167,21 @@ export default function WorkLocationsPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Location
           </Button>
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Region</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">City / Province</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Branches</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Name</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Region</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">City / Province</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Branches</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -196,18 +196,18 @@ export default function WorkLocationsPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={5} className="text-center text-[#6B6B6B] py-10">
                   No work locations yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
-                  <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.name}</TableCell>
+                <TableRow key={row.id} className="hover:bg-[#FAFAFA]">
+                  <TableCell className="font-medium text-[13.5px] text-[#171717]">{row.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="font-mono text-xs">{row.region}</Badge>
                   </TableCell>
-                  <TableCell className="text-[13px] text-[#6B7A8D]">
+                  <TableCell className="text-[13px] text-[#6B6B6B]">
                     {[row.city, row.province].filter(Boolean).join(", ") || "—"}
                   </TableCell>
                   <TableCell>

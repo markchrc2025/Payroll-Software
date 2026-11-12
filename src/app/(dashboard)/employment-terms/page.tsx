@@ -230,7 +230,7 @@ export default function EmploymentTermsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Employment Terms</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Employment Terms</h1>
         <p className="text-sm text-muted-foreground">
           Job type, status, leave workflow, workday, and holiday schedule history per employee
         </p>

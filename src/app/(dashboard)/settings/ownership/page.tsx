@@ -117,10 +117,10 @@ export default function OwnershipPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Ownership
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             The Super Admin is the designated primary administrator of this account.
           </p>
         </div>
@@ -137,10 +137,10 @@ export default function OwnershipPage() {
       ) : (
         <div className="space-y-5">
           {/* Current owner card */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5">
             <div className="flex items-center gap-2 mb-4">
               <Crown className="h-4 w-4 text-[#E8693A]" />
-              <h2 className="text-[14px] font-semibold text-[#111827]">Current Super Admin</h2>
+              <h2 className="text-[14px] font-semibold text-[#171717]">Current Super Admin</h2>
             </div>
             {data?.owner ? (
               <div className="flex items-center gap-4">
@@ -148,27 +148,27 @@ export default function OwnershipPage() {
                   {data.owner.firstName[0]}{data.owner.lastName[0]}
                 </div>
                 <div>
-                  <p className="text-[14px] font-medium text-[#111827]">{ownerName}</p>
-                  <p className="text-[13px] text-[#6B7A8D]">{data.owner.email}</p>
+                  <p className="text-[14px] font-medium text-[#171717]">{ownerName}</p>
+                  <p className="text-[13px] text-[#6B6B6B]">{data.owner.email}</p>
                 </div>
                 <span className="ml-auto text-[11px] font-medium bg-[#FDF0EA] text-[#E8693A] rounded-full px-2.5 py-1">
                   Super Admin
                 </span>
               </div>
             ) : (
-              <p className="text-[13px] text-[#9AA5B4]">No owner designated yet.</p>
+              <p className="text-[13px] text-[#A3A3A3]">No owner designated yet.</p>
             )}
           </div>
 
           {/* Transfer section */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#111827]">Transfer Ownership</h2>
-            <p className="text-[13px] text-[#6B7A8D]">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-4">
+            <h2 className="text-[14px] font-semibold text-[#171717]">Transfer Ownership</h2>
+            <p className="text-[13px] text-[#6B6B6B]">
               Transferring ownership designates another active user as the Super Admin of this account.
               You will retain your existing role and access after the transfer.
             </p>
             {eligibleUsers.length === 0 ? (
-              <p className="text-[13px] text-[#9AA5B4]">
+              <p className="text-[13px] text-[#A3A3A3]">
                 No other active users available to transfer to.
               </p>
             ) : (
@@ -184,23 +184,23 @@ export default function OwnershipPage() {
           </div>
 
           {/* Users list */}
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-3">
-            <h2 className="text-[14px] font-semibold text-[#111827]">All Active Users</h2>
-            <div className="divide-y divide-[#F3F4F6]">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-3">
+            <h2 className="text-[14px] font-semibold text-[#171717]">All Active Users</h2>
+            <div className="divide-y divide-[#F3F3F3]">
               {(data?.users ?? []).map((u) => {
                 const isOwner = u.id === data?.ownerUserId;
                 const name = `${u.firstName} ${u.lastName}`.trim() || u.email;
                 return (
                   <div key={u.id} className="flex items-center gap-3 py-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#6B7A8D] text-[12px] font-medium">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#F3F3F3] text-[#6B6B6B] text-[12px] font-medium">
                       {u.firstName[0]}{u.lastName[0]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-[#111827] truncate">{name}</p>
-                      <p className="text-[12px] text-[#9AA5B4] truncate">{u.email}</p>
+                      <p className="text-[13px] font-medium text-[#171717] truncate">{name}</p>
+                      <p className="text-[12px] text-[#A3A3A3] truncate">{u.email}</p>
                     </div>
                     {u.assignedRole && (
-                      <span className="text-[11px] text-[#6B7A8D] bg-[#F3F4F6] rounded-full px-2 py-0.5">
+                      <span className="text-[11px] text-[#6B6B6B] bg-[#F3F3F3] rounded-full px-2 py-0.5">
                         {u.assignedRole.name}
                       </span>
                     )}
@@ -273,7 +273,7 @@ export default function OwnershipPage() {
                 size="sm"
                 disabled={!canTransfer || transferring}
                 onClick={handleTransfer}
-                className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+                className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
               >
                 {transferring ? "Transferring…" : "Transfer Ownership"}
               </Button>

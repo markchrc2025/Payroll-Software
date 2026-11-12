@@ -169,10 +169,10 @@ export default function LeavePoliciesPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Leave Policies
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Leave type catalog — accrual rules, carry-over limits, and monetization settings.
           </p>
         </div>
@@ -180,22 +180,22 @@ export default function LeavePoliciesPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Leave Type
           </Button>
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Code</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Accrual</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Paid</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Status</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Code</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Name</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Accrual</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Paid</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Status</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -210,21 +210,21 @@ export default function LeavePoliciesPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={6} className="text-center text-[#6B6B6B] py-10">
                   No leave types yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
-                  <TableCell className="font-mono text-xs text-[#4A586B]">{row.code}</TableCell>
+                <TableRow key={row.id} className="hover:bg-[#FAFAFA]">
+                  <TableCell className="font-mono text-xs text-[#525252]">{row.code}</TableCell>
                   <TableCell>
-                    <p className="font-medium text-[13.5px] text-[#111827]">{row.name}</p>
+                    <p className="font-medium text-[13.5px] text-[#171717]">{row.name}</p>
                     {row.description && (
-                      <p className="text-[12px] text-[#9AA5B4] truncate max-w-[200px]">{row.description}</p>
+                      <p className="text-[12px] text-[#A3A3A3] truncate max-w-[200px]">{row.description}</p>
                     )}
                   </TableCell>
-                  <TableCell className="text-[13px] text-[#4A586B]">
+                  <TableCell className="text-[13px] text-[#525252]">
                     {Number(row.accrualAmount)} {row.unit.toLowerCase()}/{freqLabel(row.accrualFrequency).toLowerCase()}
                   </TableCell>
                   <TableCell>
@@ -237,7 +237,7 @@ export default function LeavePoliciesPage() {
                       className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full"
                       style={row.isActive
                         ? { background: "#E5F6EE", color: "#0FA36B" }
-                        : { background: "#F5F6FA", color: "#6B7A8D" }}
+                        : { background: "#F7F7F7", color: "#6B6B6B" }}
                     >
                       {row.isActive ? "Active" : "Inactive"}
                     </span>
@@ -363,7 +363,7 @@ export default function LeavePoliciesPage() {
             </div>
 
             <div className="space-y-3 rounded-md border p-4">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Options</p>
+              <p className="text-[12.5px] font-medium text-muted-foreground">Options</p>
               {(
                 [
                   { key: "isPaid" as const,                 label: "Paid leave" },

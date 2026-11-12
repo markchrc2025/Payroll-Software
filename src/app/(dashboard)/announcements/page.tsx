@@ -230,7 +230,7 @@ export default function AnnouncementsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Announcements</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Announcements</h1>
         <p className="text-sm text-muted-foreground">
           Publish company-wide messages that appear in the employee ESS app.
         </p>

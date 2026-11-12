@@ -106,16 +106,16 @@ export default function StorageBrowserPage() {
       {/* Page header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[32px] font-semibold tracking-[-0.6px] text-[#0E1B2E] leading-none">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-none">
             File Storage
           </h1>
-          <p className="text-[14px] text-[#4A586B] mt-2">
+          <p className="text-[14px] text-[#525252] mt-2">
             Browse the files this workspace has uploaded — photos, logos, documents, and payslips.
           </p>
         </div>
         <button
           onClick={() => load(prefix)}
-          className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
+          className="h-7 px-2.5 rounded-[8px] border border-transparent bg-[var(--fill)] text-[#525252] text-[13.5px] font-medium flex items-center gap-2 hover:bg-[var(--fill-2)] transition-colors"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
@@ -123,7 +123,7 @@ export default function StorageBrowserPage() {
       </div>
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#8E9AAC] flex-wrap">
+      <nav className="flex items-center gap-1.5 text-[13px] text-[#8F8F8F] flex-wrap">
         <button
           onClick={() => setPrefix(null)}
           className="flex items-center gap-1.5 text-[#E8693A] font-semibold hover:underline"
@@ -138,11 +138,11 @@ export default function StorageBrowserPage() {
             <span key={target} className="flex items-center gap-1.5">
               <ChevronRight className="h-3.5 w-3.5" />
               {isLast ? (
-                <span className="text-[#4A586B] font-medium">{seg}</span>
+                <span className="text-[#525252] font-medium">{seg}</span>
               ) : (
                 <button
                   onClick={() => setPrefix(target)}
-                  className="text-[#E8693A] font-semibold hover:underline"
+                  className="text-[var(--muted-2)] hover:text-[var(--ink)]"
                 >
                   {seg}
                 </button>
@@ -153,10 +153,10 @@ export default function StorageBrowserPage() {
       </nav>
 
       {/* Listing */}
-      <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] overflow-hidden">
+      <div className="bg-white rounded-[14px] border border-[#E8E8E8] shadow-[0_1px_3px_rgba(14,27,46,0.06),0_4px_12px_rgba(14,27,46,0.04)] overflow-hidden">
         <table className="w-full text-[13px]">
           <thead>
-            <tr className="border-b border-[#E8EBF1] text-left text-[12px] uppercase tracking-[0.4px] text-[#8E9AAC]">
+            <tr className="border-b border-[#E8E8E8] text-left text-[12.5px] text-[#8F8F8F]">
               <th className="px-5 py-3 font-semibold">Name</th>
               <th className="px-5 py-3 font-semibold w-[110px]">Size</th>
               <th className="px-5 py-3 font-semibold w-[190px]">Last Modified</th>
@@ -166,13 +166,13 @@ export default function StorageBrowserPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={4} className="px-5 py-10 text-center text-[#8E9AAC]">
+                <td colSpan={4} className="px-5 py-10 text-center text-[#8F8F8F]">
                   <Loader2 className="h-5 w-5 animate-spin inline-block" />
                 </td>
               </tr>
             ) : !data || (data.folders.length === 0 && data.files.length === 0) ? (
               <tr>
-                <td colSpan={4} className="px-5 py-10 text-center text-[#8E9AAC]">
+                <td colSpan={4} className="px-5 py-10 text-center text-[#8F8F8F]">
                   This folder is empty.
                 </td>
               </tr>
@@ -181,17 +181,17 @@ export default function StorageBrowserPage() {
                 {data.folders.map((f) => (
                   <tr
                     key={f}
-                    className="border-b border-[#F1F3F7] last:border-0 hover:bg-[#F8F9FC] cursor-pointer transition-colors"
+                    className="border-b border-[#F3F3F3] last:border-0 hover:bg-[#F7F7F7] cursor-pointer transition-colors"
                     onClick={() => setPrefix(f)}
                   >
                     <td className="px-5 py-3">
-                      <span className="flex items-center gap-2.5 font-medium text-[#0E1B2E]">
+                      <span className="flex items-center gap-2.5 font-medium text-[#171717]">
                         <Folder className="h-4 w-4 text-[#E8693A]" />
                         {segmentName(f)}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-[#8E9AAC]">—</td>
-                    <td className="px-5 py-3 text-[#8E9AAC]">—</td>
+                    <td className="px-5 py-3 text-[#8F8F8F]">—</td>
+                    <td className="px-5 py-3 text-[#8F8F8F]">—</td>
                     <td className="px-5 py-3" />
                   </tr>
                 ))}
@@ -201,22 +201,22 @@ export default function StorageBrowserPage() {
                   const isImage = IMAGE_EXTS.includes(ext);
                   const confirming = pendingDelete === file.key;
                   return (
-                    <tr key={file.key} className="border-b border-[#F1F3F7] last:border-0 hover:bg-[#F8F9FC] transition-colors">
+                    <tr key={file.key} className="border-b border-[#F3F3F3] last:border-0 hover:bg-[#F7F7F7] transition-colors">
                       <td className="px-5 py-3">
-                        <span className="flex items-center gap-2.5 text-[#0E1B2E]">
+                        <span className="flex items-center gap-2.5 text-[#171717]">
                           {isImage
-                            ? <ImageIcon className="h-4 w-4 text-[#8E9AAC]" />
-                            : <FileIcon className="h-4 w-4 text-[#8E9AAC]" />}
+                            ? <ImageIcon className="h-4 w-4 text-[#8F8F8F]" />
+                            : <FileIcon className="h-4 w-4 text-[#8F8F8F]" />}
                           <span className="break-all">{name}</span>
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-[#4A586B] whitespace-nowrap">{formatBytes(file.size)}</td>
-                      <td className="px-5 py-3 text-[#4A586B] whitespace-nowrap">{formatDate(file.lastModified)}</td>
+                      <td className="px-5 py-3 text-[#525252] whitespace-nowrap">{formatBytes(file.size)}</td>
+                      <td className="px-5 py-3 text-[#525252] whitespace-nowrap">{formatDate(file.lastModified)}</td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1.5">
                           <a
                             href={`/api/storage/object?key=${encodeURIComponent(file.key)}`}
-                            className="h-8 px-3 rounded-[8px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[12px] font-semibold flex items-center gap-1.5 hover:bg-[#F8F9FC] transition-colors"
+                            className="h-8 px-3 rounded-[8px] border border-[#E8E8E8] bg-white text-[#525252] text-[12px] font-semibold flex items-center gap-1.5 hover:bg-[#F7F7F7] transition-colors"
                           >
                             <Download className="h-3.5 w-3.5" />
                             Download
@@ -251,7 +251,7 @@ export default function StorageBrowserPage() {
           </tbody>
         </table>
         {data?.truncated && (
-          <div className="px-5 py-3 border-t border-[#E8EBF1] text-[12px] text-[#8E9AAC]">
+          <div className="px-5 py-3 border-t border-[#E8E8E8] text-[12px] text-[#8F8F8F]">
             Showing the first 500 items — this folder has more.
           </div>
         )}

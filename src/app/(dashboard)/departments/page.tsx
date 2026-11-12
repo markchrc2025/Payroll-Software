@@ -144,7 +144,7 @@ export default function DepartmentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Departments</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Departments</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${departments.length} department${departments.length !== 1 ? "s" : ""}`}
           </p>

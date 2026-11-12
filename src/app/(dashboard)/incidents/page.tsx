@@ -255,7 +255,7 @@ export default function IncidentsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Incidents</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Incidents</h1>
         <p className="text-sm text-muted-foreground">NTEs, incident reports, notices, and disciplinary records</p>
       </div>
 

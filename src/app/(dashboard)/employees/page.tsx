@@ -34,7 +34,6 @@ const EMPLOYMENT_STATUSES = [
   { value: "RETIRED", label: "Retired" },
 ];
 
-const LIMITS = [25, 50, 100];
 
 // ---------------------------------------------------------------------------
 // Page Component
@@ -48,7 +47,7 @@ export default function EmployeesPage() {
   const [branchId, setBranchId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [limit] = useState(25);
 
   // --- Data state ---
   const [listData, setListData] = useState<EmployeeListResponse | null>(null);
@@ -153,10 +152,10 @@ export default function EmployeesPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[32px] font-semibold tracking-[-0.6px] text-[#0E1B2E] leading-none">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-none">
             Employees
           </h1>
-          <p className="text-[14px] text-[#4A586B] mt-2">
+          <p className="text-[14px] text-[#525252] mt-2">
             {isLoading
               ? "Loading…"
               : `${listData?.total ?? 0} active employees across ${departments.length} departments and ${branches.length} branches.`}
@@ -167,17 +166,17 @@ export default function EmployeesPage() {
           <div className="relative" ref={ioMenuRef}>
             <button
               onClick={() => setIoMenuOpen((v) => !v)}
-              className="h-10 px-4 rounded-[10px] border border-[#E8EBF1] bg-white text-[#4A586B] text-[13px] font-semibold flex items-center gap-2 hover:bg-[#F8F9FC] transition-colors"
+              className="h-7 px-2.5 rounded-[8px] bg-[var(--fill)] text-[var(--ink)] text-[13.5px] font-medium flex items-center gap-1.5 hover:bg-[var(--fill-2)] transition-colors"
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
               Import / Export
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${ioMenuOpen ? "rotate-180" : ""}`} />
             </button>
             {ioMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-44 rounded-[10px] border border-[#E8EBF1] bg-white shadow-lg z-20 py-1 overflow-hidden">
+              <div className="absolute right-0 top-full mt-1.5 w-44 rounded-[10px] border border-[#E8E8E8] bg-white shadow-lg z-20 py-1 overflow-hidden">
                 <button
                   onClick={() => { setImportOpen(true); setIoMenuOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#4A586B] hover:bg-[#F8F9FC] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#525252] hover:bg-[#F7F7F7] transition-colors"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Import CSV
@@ -185,7 +184,7 @@ export default function EmployeesPage() {
                 <button
                   disabled={isExporting}
                   onClick={() => { handleExport(); setIoMenuOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#4A586B] hover:bg-[#F8F9FC] disabled:opacity-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#525252] hover:bg-[#F7F7F7] disabled:opacity-50 transition-colors"
                 >
                   <Download className="h-3.5 w-3.5" />
                   {isExporting ? "Exporting…" : "Export CSV"}
@@ -196,8 +195,7 @@ export default function EmployeesPage() {
 
           <Link
             href="/employees/new"
-            className="h-10 px-[17px] rounded-[10px] border-none text-white text-[13.5px] font-semibold flex items-center gap-2 shadow-[0_6px_16px_-5px_rgba(232,105,58,.6)] transition-all hover:-translate-y-px"
-            style={{ background: "linear-gradient(145deg,#f08460,#E8693A)" }}
+            className="h-7 px-2.5 rounded-[8px] bg-[var(--acc)] text-[var(--on-acc)] text-[13.5px] font-medium flex items-center gap-1.5 hover:brightness-[1.07] transition-[filter]"
           >
             <Plus className="h-4 w-4" />Add Employee
           </Link>
@@ -208,9 +206,9 @@ export default function EmployeesPage() {
       <div className="flex flex-wrap items-center gap-2.5">
         {/* Search */}
         <div className="relative flex-1 min-w-[220px] max-w-[300px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8E9AAC]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8F8F8F]" />
           <input
-            className="w-full h-[38px] border border-[#E8EBF1] rounded-[9px] bg-white pl-9 pr-3 text-[13px] text-[#0E1B2E] placeholder:text-[#8E9AAC] outline-none focus:border-[#E8693A] focus:shadow-[0_0_0_3px_#fdeee6] transition"
+            className="w-full h-7 border border-transparent rounded-[8px] bg-[var(--fill)] pl-9 pr-3 text-[13.5px] text-[#171717] placeholder:text-[#8F8F8F] outline-none focus:border-[#A3A3A3] focus:shadow-[0_0_0_2px_#E5E5E5] transition focus:bg-white"
             placeholder="Search by name or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -222,14 +220,14 @@ export default function EmployeesPage() {
           <select
             value={departmentId}
             onChange={(e) => setDepartmentId(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-7 pl-3 pr-9 border border-transparent rounded-[8px] bg-[var(--fill)] text-[13.5px] font-medium text-[#525252] appearance-none outline-none focus:border-[#A3A3A3] cursor-pointer hover:bg-[var(--fill-2)] transition focus:bg-white"
           >
             <option value="all">Department</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8E9AAC] pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8F8F8F] pointer-events-none" />
         </div>
 
         {/* Branch filter */}
@@ -237,14 +235,14 @@ export default function EmployeesPage() {
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-7 pl-3 pr-9 border border-transparent rounded-[8px] bg-[var(--fill)] text-[13.5px] font-medium text-[#525252] appearance-none outline-none focus:border-[#A3A3A3] cursor-pointer hover:bg-[var(--fill-2)] transition focus:bg-white"
           >
             <option value="all">Branch</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8E9AAC] pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8F8F8F] pointer-events-none" />
         </div>
 
         {/* Status filter */}
@@ -252,14 +250,14 @@ export default function EmployeesPage() {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="h-[38px] pl-3 pr-9 border border-[#E8EBF1] rounded-[9px] bg-white text-[13px] font-medium text-[#4A586B] appearance-none outline-none focus:border-[#E8693A] cursor-pointer hover:bg-[#F8F9FC] transition"
+            className="h-7 pl-3 pr-9 border border-transparent rounded-[8px] bg-[var(--fill)] text-[13.5px] font-medium text-[#525252] appearance-none outline-none focus:border-[#A3A3A3] cursor-pointer hover:bg-[var(--fill-2)] transition focus:bg-white"
           >
             <option value="all">Status</option>
             {EMPLOYMENT_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8E9AAC] pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8F8F8F] pointer-events-none" />
         </div>
 
         {/* Spacer */}

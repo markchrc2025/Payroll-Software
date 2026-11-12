@@ -59,7 +59,9 @@ export default async function DashboardLayout({
     tenant?.logoKey || tenant?.logoUrl ? "/api/settings/tenant/logo" : null;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    // .sx-frappe switches on the Frappe UI style (Option B) for the admin only;
+    // see the "Frappe UI style" block in src/app/globals.css.
+    <div className="sx-frappe flex min-h-screen bg-background">
       {/* Sidebar — self-contained client component with collapse logic */}
       <SidebarNav
         tenantName={tenantName}
@@ -73,13 +75,10 @@ export default async function DashboardLayout({
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top header */}
-        <header className="flex items-center gap-3 px-4 lg:px-6 py-3 border-b bg-card sticky top-0 z-20 shadow-sm">
+        <header className="flex h-12 items-center gap-3 px-4 lg:px-5 border-b bg-card sticky top-0 z-20">
           {/* Mobile: show logo inline */}
           <div className="lg:hidden shrink-0 flex items-center gap-2">
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
-              style={{ background: "#E8693A" }}
-            >
+            <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[#1F1F1F] text-xs font-bold text-white">
               S
             </div>
             <span className="text-sm font-semibold text-foreground">Sentire</span>
@@ -95,7 +94,7 @@ export default async function DashboardLayout({
           <UserMenu displayName={displayName} initials={initials} />
         </header>
 
-        <main className="flex-1 p-6 lg:p-8 overflow-auto">{children}</main>
+        <main className="flex-1 p-5 pb-10 overflow-auto">{children}</main>
       </div>
     </div>
   );

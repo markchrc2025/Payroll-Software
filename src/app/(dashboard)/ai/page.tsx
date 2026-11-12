@@ -173,7 +173,7 @@ function ChatPanel({
   return (
     <div className="flex flex-col h-[60vh]">
       {label && (
-        <p className="text-sm text-gray-500 mb-3 italic">{label}</p>
+        <p className="text-sm text-neutral-500 mb-3 italic">{label}</p>
       )}
 
       {/* Chips */}
@@ -195,7 +195,7 @@ function ChatPanel({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
         {messages.length === 0 && (
-          <p className="text-gray-400 text-sm text-center mt-8">
+          <p className="text-neutral-400 text-sm text-center mt-8">
             Start a conversation by typing a message below.
           </p>
         )}
@@ -208,7 +208,7 @@ function ChatPanel({
               className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap
                 ${msg.role === "user"
                   ? "bg-sky-500 text-white rounded-br-sm"
-                  : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                  : "bg-neutral-100 text-neutral-800 rounded-bl-sm"
                 }`}
             >
               {msg.content}
@@ -217,10 +217,10 @@ function ChatPanel({
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5 flex gap-1.5 items-center">
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+            <div className="bg-neutral-100 rounded-2xl rounded-bl-sm px-4 py-2.5 flex gap-1.5 items-center">
+              <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce [animation-delay:0ms]" />
+              <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         )}
@@ -229,7 +229,7 @@ function ChatPanel({
 
       {/* Token count */}
       {tokens && (
-        <p className="text-xs text-gray-400 mb-1">
+        <p className="text-xs text-neutral-400 mb-1">
           Prompt: {tokens.inputTokens.toLocaleString()} tokens &nbsp;|&nbsp; Response: {tokens.outputTokens.toLocaleString()} tokens
         </p>
       )}
@@ -253,7 +253,7 @@ function ChatPanel({
                 checked={useSonnet ?? false}
                 onCheckedChange={(c: boolean | "indeterminate") => onUseSonnetChange(c === true)}
               />
-              <label htmlFor="use-sonnet" className="text-xs text-gray-500 cursor-pointer">
+              <label htmlFor="use-sonnet" className="text-xs text-neutral-500 cursor-pointer">
                 Use Sonnet (better for complex queries)
               </label>
             </div>
@@ -602,7 +602,7 @@ function PayslipQaTab() {
           onSend={send}
         />
       ) : (
-        <p className="text-sm text-gray-400 italic">
+        <p className="text-sm text-neutral-400 italic">
           Select a payroll run and employee above to start the Q&amp;A.
         </p>
       )}
@@ -649,9 +649,6 @@ function UsageTab() {
   const totalOutputTokens = data
     ? Object.values(data.byTouchpoint).reduce((s, v) => s + v.outputTokens, 0)
     : 0;
-  const estCostCents = data
-    ? Number(BigInt(data.totalCostMicroUsd)) / 10000   // microUSD → USD cents-equivalent in PHP (rough)
-    : 0;
 
   const touchpoints = data ? Object.entries(data.byTouchpoint) : [];
   const totalCalls = data?.totalCalls ?? 0;
@@ -694,11 +691,11 @@ function UsageTab() {
       <Separator />
 
       {/* Touchpoint breakdown */}
-      <h3 className="text-sm font-semibold text-gray-700">Breakdown by Touchpoint</h3>
+      <h3 className="text-sm font-semibold text-neutral-700">Breakdown by Touchpoint</h3>
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
       ) : touchpoints.length === 0 ? (
-        <p className="text-sm text-gray-400 italic">No usage data for this period.</p>
+        <p className="text-sm text-neutral-400 italic">No usage data for this period.</p>
       ) : (
         <div className="rounded-md border overflow-hidden">
           <Table>
@@ -724,13 +721,13 @@ function UsageTab() {
                     <TableCell className="text-right font-mono text-sm">{stats.outputTokens.toLocaleString()}</TableCell>
                     <TableCell className="w-36">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-100 rounded overflow-hidden">
+                        <div className="flex-1 h-2 bg-neutral-100 rounded overflow-hidden">
                           <div
                             className="bg-sky-500 h-2 rounded"
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500 w-8 text-right">{pct}%</span>
+                        <span className="text-xs text-neutral-500 w-8 text-right">{pct}%</span>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -748,8 +745,8 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs text-gray-500 mb-1">{label}</p>
-        <p className="text-xl font-bold text-gray-900">{value}</p>
+        <p className="text-xs text-neutral-500 mb-1">{label}</p>
+        <p className="text-xl font-bold text-neutral-900">{value}</p>
       </CardContent>
     </Card>
   );
@@ -761,8 +758,8 @@ export default function AiPage() {
   return (
     <div className="max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">AI Assistant</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">AI Assistant</h1>
+        <p className="text-sm text-neutral-500 mt-0.5">
           Powered by Claude. HR Chat uses Haiku; Compliance uses Sonnet. All conversations are tenant-scoped.
         </p>
       </div>

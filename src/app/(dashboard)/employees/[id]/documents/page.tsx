@@ -60,7 +60,7 @@ export default async function EmployeeDocumentsPage({
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">201 File: {fullName}</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">201 File: {fullName}</h1>
           <p className="text-sm text-muted-foreground">Employee #{employee.employeeNumber}</p>
         </div>
       </div>

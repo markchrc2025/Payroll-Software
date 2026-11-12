@@ -390,7 +390,7 @@ function LeaveTypesTab() {
             </div>
 
             <div className="space-y-3 rounded-md border p-4">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Options</p>
+              <p className="text-[12.5px] font-medium text-muted-foreground">Options</p>
               {(
                 [
                   { key: "isPaid" as const, label: "Paid leave (counts as paid working days)" },
@@ -1280,7 +1280,7 @@ export default function LeavePage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Leave Management</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Leave Management</h1>
         <p className="text-sm text-muted-foreground">Configure leave types, approve requests, and manage employee balances</p>
       </div>
 

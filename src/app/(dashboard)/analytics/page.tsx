@@ -26,8 +26,8 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const INK = "#111827";
-const MUTED = "#6B7A8D";
+const INK = "#171717";
+const MUTED = "#6B6B6B";
 const ORANGE = "#E8693A";
 
 // centavos (string|number) → "₱1,234.56"
@@ -160,9 +160,9 @@ export default function AnalyticsPage() {
     return (
       <div className="space-y-6 pb-24">
         <Header />
-        <div className="rounded-xl border border-[#E8EBF1] bg-white p-10 text-center shadow-sm">
-          <p className="text-[14px] font-semibold text-[#111827]">No access to analytics</p>
-          <p className="mt-1 text-[13px] text-[#6B7A8D]">
+        <div className="rounded-xl border border-[#E8E8E8] bg-white p-10 text-center">
+          <p className="text-[14px] font-semibold text-[#171717]">No access to analytics</p>
+          <p className="mt-1 text-[13px] text-[#6B6B6B]">
             Analytics requires the <span className="font-medium">Reports</span> permission. Ask an
             administrator to grant it on your role.
           </p>
@@ -181,7 +181,7 @@ export default function AnalyticsPage() {
           <button
             onClick={() => void load()}
             title="Refresh"
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-[#E8EBF1] bg-white text-[#6B7A8D] transition-colors hover:text-[#E8693A]"
+            className="flex h-7 w-[38px] items-center justify-center rounded-[8px] border border-transparent bg-[var(--fill)] text-[#6B6B6B] transition-colors hover:text-[#E8693A]"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -220,7 +220,7 @@ export default function AnalyticsPage() {
                     style={{
                       height: `${Math.max(h, v > 0 ? 2 : 0)}%`,
                       minHeight: v > 0 ? 4 : 0,
-                      background: isSel ? ORANGE : "#F1C9B6",
+                      background: isSel ? ORANGE : "#E5E5E5",
                     }}
                   />
                   <div className="text-[10.5px] font-medium" style={{ color: isSel ? ORANGE : MUTED }}>
@@ -247,8 +247,8 @@ export default function AnalyticsPage() {
                     <span style={{ color: INK }}>{deptLabel(g.groupId)}</span>
                     <span className="font-semibold" style={{ color: MUTED }}>{g.headcount}</span>
                   </div>
-                  <div className="h-2 w-full rounded-full" style={{ background: "#F3F4F6" }}>
-                    <div className="h-2 rounded-full" style={{ width: `${(g.headcount / headMax) * 100}%`, background: ORANGE }} />
+                  <div className="h-2 w-full rounded-full" style={{ background: "#F3F3F3" }}>
+                    <div className="h-2 rounded-full" style={{ width: `${(g.headcount / headMax) * 100}%`, background: "#A3A3A3" }} />
                   </div>
                 </div>
               ))}
@@ -282,7 +282,7 @@ export default function AnalyticsPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-[18px] font-bold" style={{ color: INK }}>Analytics</h1>
+      <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]" style={{ color: INK }}>Analytics</h1>
       <p className="mt-1 text-[13px]" style={{ color: MUTED }}>
         Workforce and payroll trends across your organization. Payroll figures reflect finalized runs only.
       </p>
@@ -291,13 +291,13 @@ function Header() {
 }
 
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-[#E8EBF1] bg-white p-5 shadow-sm">{children}</div>;
+  return <div className="rounded-xl border border-[#E8E8E8] bg-white p-5">{children}</div>;
 }
 
 function Stat({ label, value, caption, accent }: { label: string; value: string; caption: string; accent?: boolean }) {
   return (
-    <div className="rounded-xl border border-[#E8EBF1] bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+    <div className="rounded-xl border border-[#E8E8E8] bg-white p-4">
+      <p className="text-[12.5px] font-medium" style={{ color: MUTED }}>{label}</p>
       <p className="mt-1.5 truncate text-[19px] font-bold" style={{ color: accent ? ORANGE : INK }} title={value}>{value}</p>
       <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{caption}</p>
     </div>
@@ -317,7 +317,7 @@ function Select<T extends number>({ value, onChange, options }: {
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value) as T)}
-      className="h-[38px] rounded-lg border border-[#E8EBF1] bg-white px-3 text-[13px] font-medium outline-none focus:border-[#E8693A]"
+      className="h-7 rounded-[8px] border border-transparent bg-[var(--fill)] px-3 text-[13.5px] font-medium outline-none focus:border-[#A3A3A3] focus:bg-white"
       style={{ color: INK }}
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

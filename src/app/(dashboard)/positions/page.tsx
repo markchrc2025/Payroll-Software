@@ -138,10 +138,10 @@ export default function PositionsPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Positions
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Job positions and levels used in employee profiles, movements, and recruitment.
           </p>
         </div>
@@ -149,22 +149,22 @@ export default function PositionsPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 text-[13px]">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white">
+          <Button size="sm" onClick={openCreate} className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]">
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Position
           </Button>
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Title</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Department</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Level</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Description</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Employees</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Title</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Department</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Level</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Description</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Employees</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -179,15 +179,15 @@ export default function PositionsPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={6} className="text-center text-[#6B6B6B] py-10">
                   No positions yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-[#FAFBFF]">
-                  <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.title}</TableCell>
-                  <TableCell className="text-[13px] text-[#6B7A8D]">
+                <TableRow key={row.id} className="hover:bg-[#FAFAFA]">
+                  <TableCell className="font-medium text-[13.5px] text-[#171717]">{row.title}</TableCell>
+                  <TableCell className="text-[13px] text-[#6B6B6B]">
                     {row.department?.name ?? <span className="italic opacity-40">—</span>}
                   </TableCell>
                   <TableCell>
@@ -201,10 +201,10 @@ export default function PositionsPage() {
                       : <span className="italic opacity-40 text-[13px]">—</span>
                     }
                   </TableCell>
-                  <TableCell className="text-[13px] text-[#6B7A8D] max-w-xs truncate">
+                  <TableCell className="text-[13px] text-[#6B6B6B] max-w-xs truncate">
                     {row.description ?? "—"}
                   </TableCell>
-                  <TableCell className="text-[13px] text-[#4A586B]">{row._count.employees}</TableCell>
+                  <TableCell className="text-[13px] text-[#525252]">{row._count.employees}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row)}>

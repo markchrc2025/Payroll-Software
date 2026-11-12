@@ -108,7 +108,7 @@ export default async function EditEmployeePage({
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Edit: {fullName}</h1>
+            <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Edit: {fullName}</h1>
             <p className="text-sm text-muted-foreground">
               Employee #{String(emp.employeeNumber ?? "")}
             </p>
@@ -116,7 +116,7 @@ export default async function EditEmployeePage({
         </div>
         <Link
           href={`/employees/${encodeURIComponent(String(emp.employeeNumber ?? ""))}/documents`}
-          className="inline-flex items-center gap-2 rounded-lg border border-[#E8EBF1] bg-white px-3.5 py-2 text-sm font-medium text-[#4A586B] transition-colors hover:bg-[#F4F6F9] hover:text-[#0E1B2E]"
+          className="inline-flex items-center gap-2 rounded-lg border border-[#E8E8E8] bg-white px-3.5 py-2 text-sm font-medium text-[#525252] transition-colors hover:bg-[#F7F7F7] hover:text-[#171717]"
         >
           <FileText className="h-4 w-4" /> 201 File / Documents
         </Link>

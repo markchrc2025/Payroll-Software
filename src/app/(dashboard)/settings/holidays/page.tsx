@@ -247,10 +247,10 @@ export default function HolidayCalendarPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Holiday Calendar
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Manage public and company holidays. Holidays drive payroll multipliers automatically.
           </p>
         </div>
@@ -271,7 +271,7 @@ export default function HolidayCalendarPage() {
         {Object.entries(CATEGORY_META).map(([key, meta]) => (
           <span key={key} className="inline-flex items-center gap-1.5">
             <span className={`h-2.5 w-2.5 rounded-full inline-block ${meta.chip}`} />
-            <span className="text-[#6B7A8D]">{meta.label} ({meta.multiplier})</span>
+            <span className="text-[#6B6B6B]">{meta.label} ({meta.multiplier})</span>
           </span>
         ))}
       </div>
@@ -279,13 +279,13 @@ export default function HolidayCalendarPage() {
       <div className="flex gap-5 items-start">
 
         {/* Calendar panel */}
-        <div className="flex-1 min-w-0 bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[#E8EBF1] bg-[#F5F6FA]">
-            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-[#E8EBF1] text-[#6B7A8D] transition-colors" aria-label="Previous month">
+        <div className="flex-1 min-w-0 bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-[#E8E8E8] bg-[#F7F7F7]">
+            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-[#E8E8E8] text-[#6B6B6B] transition-colors" aria-label="Previous month">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="flex items-center gap-3">
-              <span className="text-[15px] font-semibold text-[#111827]">{MONTH_NAMES[month]} {year}</span>
+              <span className="text-[15px] font-semibold text-[#171717]">{MONTH_NAMES[month]} {year}</span>
               <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
                 <SelectTrigger className="h-7 w-[90px] text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -293,24 +293,24 @@ export default function HolidayCalendarPage() {
                 </SelectContent>
               </Select>
             </div>
-            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-[#E8EBF1] text-[#6B7A8D] transition-colors" aria-label="Next month">
+            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-[#E8E8E8] text-[#6B6B6B] transition-colors" aria-label="Next month">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="grid grid-cols-7 border-b border-[#E8EBF1]">
+          <div className="grid grid-cols-7 border-b border-[#E8E8E8]">
             {DAY_LABELS.map((d) => (
-              <div key={d} className="py-2 text-center text-[11px] font-medium text-[#9AA5B4] uppercase">{d}</div>
+              <div key={d} className="py-2 text-center text-[12.5px] font-medium text-[#A3A3A3]">{d}</div>
             ))}
           </div>
 
           {loading ? (
-            <div className="h-64 flex items-center justify-center text-[13px] text-[#9AA5B4]">Loading…</div>
+            <div className="h-64 flex items-center justify-center text-[13px] text-[#A3A3A3]">Loading…</div>
           ) : (
             <div className="grid grid-cols-7">
               {cells.map((cell, idx) => {
                 if (!cell.day || !cell.dateStr) {
-                  return <div key={`empty-${idx}`} className="min-h-[84px] p-1.5 border-b border-r border-[#F0F2F7] bg-[#FAFAFA]" />;
+                  return <div key={`empty-${idx}`} className="min-h-[84px] p-1.5 border-b border-r border-[#F3F3F3] bg-[#FAFAFA]" />;
                 }
                 const isToday = cell.dateStr === todayStr;
                 const dayHolidays = byDate.get(cell.dateStr) ?? [];
@@ -320,14 +320,14 @@ export default function HolidayCalendarPage() {
                   <div
                     key={cell.dateStr}
                     onClick={() => openAdd(cell.dateStr ?? "")}
-                    className={`min-h-[84px] p-1.5 border-b border-r border-[#F0F2F7] cursor-pointer transition-colors hover:bg-[#fdeee6] flex flex-col gap-0.5 ${isToday ? "bg-[#fdeee6] border-[#f7c9ac]" : ""}`}
+                    className={`min-h-[84px] p-1.5 border-b border-r border-[#F3F3F3] cursor-pointer transition-colors hover:bg-[#F7F7F7] flex flex-col gap-0.5 ${isToday ? "bg-[#F7F7F7]" : ""}`}
                   >
-                    <span className={`text-[12px] font-semibold self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? "bg-[#E8693A] text-white" : "text-[#374151]"}`}>
+                    <span className={`text-[12px] font-semibold self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? "bg-[#E8693A] text-[var(--on-acc)]" : "text-[#404040]"}`}>
                       {cell.day}
                     </span>
                     <div className="flex flex-col gap-0.5 mt-0.5">
                       {visible.map((h) => <HolidayChip key={h.id} h={h} />)}
-                      {overflow > 0 && <span className="text-[10px] text-[#6B7A8D] pl-1">+{overflow} more</span>}
+                      {overflow > 0 && <span className="text-[10px] text-[#6B6B6B] pl-1">+{overflow} more</span>}
                     </div>
                   </div>
                 );
@@ -338,19 +338,19 @@ export default function HolidayCalendarPage() {
 
         {/* Right panel */}
         <div className="w-[300px] flex-shrink-0 space-y-3">
-          <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E8EBF1] bg-[#F5F6FA]">
-              <p className="text-[13px] font-semibold text-[#4A586B]">
+          <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E8E8E8] bg-[#F7F7F7]">
+              <p className="text-[13px] font-semibold text-[#525252]">
                 {MONTH_NAMES[month]} {year}
-                <span className="ml-2 text-[11px] font-normal text-[#9AA5B4]">({monthHolidays.length})</span>
+                <span className="ml-2 text-[11px] font-normal text-[#A3A3A3]">({monthHolidays.length})</span>
               </p>
             </div>
             {loading ? (
-              <div className="p-4 text-[13px] text-[#9AA5B4]">Loading…</div>
+              <div className="p-4 text-[13px] text-[#A3A3A3]">Loading…</div>
             ) : monthHolidays.length === 0 ? (
-              <div className="p-4 text-center text-[13px] text-[#9AA5B4]">No holidays this month.</div>
+              <div className="p-4 text-center text-[13px] text-[#A3A3A3]">No holidays this month.</div>
             ) : (
-              <div className="divide-y divide-[#F0F2F7] max-h-[480px] overflow-y-auto">
+              <div className="divide-y divide-[#F3F3F3] max-h-[480px] overflow-y-auto">
                 {monthHolidays.map((h) => {
                   const meta = CATEGORY_META[h.category];
                   const d = new Date(h.date);
@@ -359,32 +359,32 @@ export default function HolidayCalendarPage() {
                     <div key={h.id} className="px-4 py-3 flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-[12px] font-medium text-[#374151] truncate">{h.isTentative ? "* " : ""}{h.name}</span>
-                          {h.isTentative && <Info className="h-3 w-3 text-[#9AA5B4] flex-shrink-0" aria-label="Exact date subject to proclamation" />}
+                          <span className="text-[12px] font-medium text-[#404040] truncate">{h.isTentative ? "* " : ""}{h.name}</span>
+                          {h.isTentative && <Info className="h-3 w-3 text-[#A3A3A3] flex-shrink-0" aria-label="Exact date subject to proclamation" />}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[11px] text-[#6B7A8D]">{dateLabel}</span>
+                          <span className="text-[11px] text-[#6B6B6B]">{dateLabel}</span>
                           <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ${meta.badge}`}>{meta.label}</Badge>
                           {h.category === "AREA_SPECIFIC" && h.region && (
-                            <span className="text-[10px] text-[#9AA5B4]">{h.region.split("—")[0].trim()}</span>
+                            <span className="text-[10px] text-[#A3A3A3]">{h.region.split("—")[0].trim()}</span>
                           )}
                         </div>
                         {h.proclamationReference && (
-                          <p className="text-[10px] text-[#9AA5B4] mt-1 truncate" title={h.proclamationReference}>
+                          <p className="text-[10px] text-[#A3A3A3] mt-1 truncate" title={h.proclamationReference}>
                             {h.proclamationReference}
                           </p>
                         )}
                         {h.notes && (
-                          <p className="text-[10px] text-[#6B7A8D] mt-0.5 line-clamp-2 whitespace-pre-line" title={h.notes}>
+                          <p className="text-[10px] text-[#6B6B6B] mt-0.5 line-clamp-2 whitespace-pre-line" title={h.notes}>
                             {h.notes}
                           </p>
                         )}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <button onClick={() => openEdit(h)} className="p-1 rounded hover:bg-[#F0F2F7] text-[#6B7A8D] transition-colors" title="Edit">
+                        <button onClick={() => openEdit(h)} className="p-1 rounded hover:bg-[#F3F3F3] text-[#6B6B6B] transition-colors" title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={() => openDelete(h)} className="p-1 rounded hover:bg-red-50 text-[#9AA5B4] hover:text-red-500 transition-colors" title="Delete">
+                        <button onClick={() => openDelete(h)} className="p-1 rounded hover:bg-red-50 text-[#A3A3A3] hover:text-red-500 transition-colors" title="Delete">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -398,12 +398,12 @@ export default function HolidayCalendarPage() {
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: "Total", value: holidays.length, color: "text-[#E8693A]" },
-              { label: "This Month", value: monthHolidays.length, color: "text-[#111827]" },
+              { label: "This Month", value: monthHolidays.length, color: "text-[#171717]" },
               { label: "Legal (200%)", value: holidays.filter(h => h.category === "LEGAL").length, color: "text-red-600" },
               { label: "Special (130%)", value: holidays.filter(h => h.category !== "LEGAL").length, color: "text-amber-600" },
             ].map((s) => (
-              <div key={s.label} className="bg-white rounded-xl border border-[#E8EBF1] p-3 shadow-sm">
-                <p className="text-[11px] text-[#6B7A8D]">{s.label}</p>
+              <div key={s.label} className="bg-white rounded-xl border border-[#E8E8E8] p-3">
+                <p className="text-[11px] text-[#6B6B6B]">{s.label}</p>
                 <p className={`text-[22px] font-semibold ${s.color}`}>{s.value}</p>
               </div>
             ))}
@@ -428,7 +428,7 @@ export default function HolidayCalendarPage() {
           <DialogHeader><DialogTitle>Delete Holiday</DialogTitle></DialogHeader>
           {deleteTarget && (
             <div className="space-y-4">
-              <p className="text-[13px] text-[#374151]">
+              <p className="text-[13px] text-[#404040]">
                 Delete <span className="font-semibold">{deleteTarget.name}</span> on{" "}
                 <span className="font-semibold">
                   {new Date(deleteTarget.date).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}
@@ -436,7 +436,7 @@ export default function HolidayCalendarPage() {
               </p>
               {deleteTarget.recurringAnnually && (
                 <div className="space-y-2">
-                  <p className="text-[12px] font-medium text-[#6B7A8D]">This is a recurring holiday:</p>
+                  <p className="text-[12px] font-medium text-[#6B6B6B]">This is a recurring holiday:</p>
                   <div className="flex flex-col gap-1.5">
                     {(["single", "permanent"] as const).map((mode) => (
                       <label key={mode} className="flex items-center gap-2 cursor-pointer">
@@ -463,15 +463,15 @@ export default function HolidayCalendarPage() {
             <DialogTitle>Bulk Add Holidays</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-[13px] text-[#6B7A8D]">
+            <p className="text-[13px] text-[#6B6B6B]">
               Fill in multiple holidays at once. Leave blank rows empty — they will be skipped.
             </p>
 
             {/* Column headers */}
             <div className="grid grid-cols-[140px_1fr_160px_32px] gap-2 px-1">
-              <span className="text-[11px] font-medium text-[#9AA5B4] uppercase tracking-wide">Date <span className="text-red-400">*</span></span>
-              <span className="text-[11px] font-medium text-[#9AA5B4] uppercase tracking-wide">Holiday Name <span className="text-red-400">*</span></span>
-              <span className="text-[11px] font-medium text-[#9AA5B4] uppercase tracking-wide">Category</span>
+              <span className="text-[12.5px] font-medium text-[#A3A3A3]">Date <span className="text-red-400">*</span></span>
+              <span className="text-[12.5px] font-medium text-[#A3A3A3]">Holiday Name <span className="text-red-400">*</span></span>
+              <span className="text-[12.5px] font-medium text-[#A3A3A3]">Category</span>
               <span />
             </div>
 
@@ -504,7 +504,7 @@ export default function HolidayCalendarPage() {
                   </Select>
                   <button
                     onClick={() => setBulkRows(rows => rows.filter((_, i) => i !== idx))}
-                    className="flex items-center justify-center h-8 w-8 rounded-lg text-[#9AA5B4] hover:bg-red-50 hover:text-red-500 transition-colors"
+                    className="flex items-center justify-center h-8 w-8 rounded-lg text-[#A3A3A3] hover:bg-red-50 hover:text-red-500 transition-colors"
                     title="Remove row"
                   >
                     <X className="h-3.5 w-3.5" />

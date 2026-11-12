@@ -308,7 +308,7 @@ export default function OffboardPage() {
         </div>
       ) : (
         <div>
-          <h1 className="text-2xl font-bold">Initiate Offboarding</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Initiate Offboarding</h1>
           <p className="text-muted-foreground">
             {employee?.firstName} {employee?.lastName}{" "}
             <span className="font-mono text-xs">

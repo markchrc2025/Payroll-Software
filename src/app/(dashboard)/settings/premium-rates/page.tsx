@@ -166,8 +166,8 @@ export default function PremiumRatesPage() {
     <div className="space-y-6 pb-24">
       {/* Header */}
       <div>
-        <h1 className="text-[18px] font-bold text-[#111827]">Premium Pay Rates</h1>
-        <p className="text-[13px] text-[#6B7A8D] mt-1">
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Premium Pay Rates</h1>
+        <p className="text-[13px] text-[#6B6B6B] mt-1">
           Configure premium multipliers for overtime, holidays, and night-shift pay.
           All rates must be at or above the DOLE statutory minimum (Labor Code Art. 86–94).
           Changes take effect on the next payroll run.
@@ -175,7 +175,7 @@ export default function PremiumRatesPage() {
       </div>
 
       {/* Info banner */}
-      <div className="flex items-start gap-2 rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-4 py-3 text-[12.5px] text-[#E8693A]">
+      <div className="flex items-start gap-2 rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] px-4 py-3 text-[12.5px] text-[var(--ink)]">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
         <p>
           NSD compound rates auto-cascade from the NSD base rate (10%) × the base scenario rate.
@@ -188,14 +188,14 @@ export default function PremiumRatesPage() {
       {RATE_GROUPS.map((group) => (
         <div
           key={group.label}
-          className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm p-5 space-y-4"
+          className="bg-white rounded-xl border border-[#E8E8E8] p-5 space-y-4"
         >
           <div>
-            <p className="text-[14px] font-semibold text-[#111827]">{group.label}</p>
-            <p className="text-[12.5px] text-[#6B7A8D] mt-0.5">{group.description}</p>
+            <p className="text-[14px] font-semibold text-[#171717]">{group.label}</p>
+            <p className="text-[12.5px] text-[#6B6B6B] mt-0.5">{group.description}</p>
           </div>
 
-          <div className="divide-y divide-[#F3F4F6]">
+          <div className="divide-y divide-[#F3F3F3]">
             {group.items.map((item) => {
               const current = form[item.key] ?? item.floor;
               const isCustom = rates.find((r) => r.multiplierKey === item.key)?.isCustom ?? false;
@@ -207,10 +207,10 @@ export default function PremiumRatesPage() {
                   className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-[#111827]">{item.label}</p>
-                    <p className="text-[11.5px] text-[#6B7A8D] mt-0.5">
+                    <p className="text-[13px] font-medium text-[#171717]">{item.label}</p>
+                    <p className="text-[11.5px] text-[#6B6B6B] mt-0.5">
                       {item.unit} &nbsp;&middot;&nbsp; DOLE floor: {item.floor.toFixed(2)}&nbsp;
-                      <span className="text-[#9CA3AF]">({item.note})</span>
+                      <span className="text-[#A3A3A3]">({item.note})</span>
                       {isCustom && (
                         <span className="ml-2 inline-flex items-center rounded-full bg-[#fdeee6] px-2 py-0.5 text-[10px] font-medium text-[#E8693A]">
                           Custom
@@ -230,10 +230,10 @@ export default function PremiumRatesPage() {
                         "focus:outline-none focus:ring-2 focus:ring-[#E8693A]",
                         belowFloor
                           ? "border-red-400 bg-red-50 text-red-700"
-                          : "border-[#D1D5DB] bg-white text-[#111827]",
+                          : "border-[#D4D4D4] bg-white text-[#171717]",
                       ].join(" ")}
                     />
-                    <span className="text-[12px] text-[#9CA3AF] w-14">× hr rate</span>
+                    <span className="text-[12px] text-[#A3A3A3] w-14">× hr rate</span>
                   </div>
                 </div>
               );
@@ -244,7 +244,7 @@ export default function PremiumRatesPage() {
 
       {/* Sticky save bar */}
       {dirty && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-[#fdeee6] bg-[#fdeee6] px-5 py-3 shadow-sm">
+        <div className="sticky bottom-0 flex items-center justify-between rounded-[8px] border border-[var(--line)] border-l-[3px] border-l-[var(--acc)] bg-[var(--hover)] px-5 py-3">
           <p className="text-[13px] text-[#E8693A] font-medium">You have unsaved changes</p>
           <div className="flex gap-2">
             <Button
@@ -260,7 +260,7 @@ export default function PremiumRatesPage() {
               size="sm"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="h-8 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+              className="h-8 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
             >
               <Save className="h-3.5 w-3.5 mr-1" />
               {saving ? "Saving..." : "Save"}

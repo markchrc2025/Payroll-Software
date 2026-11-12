@@ -27,7 +27,7 @@ export default async function EssPortalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Employee Self-Service</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Employee Self-Service</h1>
         <p className="text-sm text-muted-foreground">
           Control which employees can sign in to the ESS portal. New employees
           have no access until you activate them.

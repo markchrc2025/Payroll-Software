@@ -615,7 +615,7 @@ function SubmissionDetailSheet({
           ) : (
             <>
               {/* Header */}
-              <SheetHeader className="px-6 pt-6 pb-4 border-b border-[#E8EBF1]">
+              <SheetHeader className="px-6 pt-6 pb-4 border-b border-[#E8E8E8]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <SheetTitle className="text-lg font-semibold">
@@ -683,14 +683,14 @@ function SubmissionDetailSheet({
 
               {/* Daily Breakdown */}
               <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
-                <h3 className="text-sm font-semibold text-[#111827]">
+                <h3 className="text-sm font-semibold text-[#171717]">
                   Daily Breakdown
                 </h3>
 
                 <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#F5F6FA]">
+                      <TableRow className="bg-[#F7F7F7]">
                         <TableHead className="text-xs">Date</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
                         <TableHead className="text-xs text-muted-foreground">
@@ -804,7 +804,7 @@ function SubmissionDetailSheet({
                   <div>
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 text-sm font-semibold text-[#111827] hover:text-[#E8693A] transition-colors"
+                      className="flex items-center gap-1.5 text-sm font-semibold text-[#171717] hover:text-[#E8693A] transition-colors"
                       onClick={() => setAuditOpen((v) => !v)}
                     >
                       <History className="h-4 w-4" />
@@ -821,7 +821,7 @@ function SubmissionDetailSheet({
                       <div className="mt-2 rounded-md border overflow-hidden">
                         <Table>
                           <TableHeader>
-                            <TableRow className="bg-[#F5F6FA]">
+                            <TableRow className="bg-[#F7F7F7]">
                               <TableHead className="text-xs">Actor</TableHead>
                               <TableHead className="text-xs">Field</TableHead>
                               <TableHead className="text-xs">Old</TableHead>
@@ -880,7 +880,7 @@ function SubmissionDetailSheet({
               {(canApprove || canReturn) && (
                 <>
                   <Separator />
-                  <div className="px-6 py-4 flex flex-wrap gap-2 justify-end bg-[#FAFBFC]">
+                  <div className="px-6 py-4 flex flex-wrap gap-2 justify-end bg-[#FAFAFA]">
                     {canReturn && (
                       <Button
                         variant="outline"
@@ -896,7 +896,7 @@ function SubmissionDetailSheet({
                       <Button
                         onClick={() => handleAction("approve")}
                         disabled={actionLoading === "approve"}
-                        className="bg-[#E8693A] hover:bg-[#C2552F] text-white"
+                        className="bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
                       >
                         <ShieldCheck className="h-4 w-4 mr-1.5" />
                         {actionLoading === "approve" ? "Approving…" : "Approve"}
@@ -1099,7 +1099,7 @@ export function DtrRecordsTab() {
               data.data.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="cursor-pointer hover:bg-[#F5F6FA] transition-colors"
+                  className="cursor-pointer hover:bg-[#F7F7F7] transition-colors"
                   onClick={() => setSelectedId(row.id)}
                 >
                   <TableCell className="font-medium text-sm">

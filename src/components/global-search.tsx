@@ -104,7 +104,7 @@ export function GlobalSearch() {
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-lg shadow-xl overflow-hidden z-50">
           {results.length > 0 ? (
             <>
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">
+              <div className="px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground border-b border-border">
                 Employees
               </div>
               {results.map((hit) => (

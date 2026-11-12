@@ -69,6 +69,8 @@ export function EmployeeTable({
 
   const columns = buildColumns((id, name) => setDeleteTarget({ id, name }));
 
+  // TanStack Table's API cannot be memoized by the React Compiler; same exception as AddEmployeeWizard.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -90,7 +92,7 @@ export function EmployeeTable({
   return (
     <>
       {/* Table card */}
-      <div className="bg-white rounded-[14px] border border-[#E8EBF1] shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)] overflow-hidden">
+      <div className="bg-white rounded-[14px] border border-[#E8E8E8] shadow-[0_1px_2px_rgba(16,30,54,.06),0_1px_3px_rgba(16,30,54,.04)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13.5px]">
             <thead>
@@ -99,7 +101,7 @@ export function EmployeeTable({
                   {hg.headers.map((h) => (
                     <th
                       key={h.id}
-                      className="text-left px-4 py-3 text-[10.5px] uppercase tracking-[0.7px] text-[#8E9AAC] font-bold bg-[#FBFCFE] border-b border-[#E8EBF1] whitespace-nowrap"
+                      className="text-left px-4 py-3 text-[12.5px] text-[#8F8F8F] font-medium bg-[#FAFAFA] border-b border-[#E8E8E8] whitespace-nowrap"
                       style={{ width: h.column.columnDef.size }}
                     >
                       {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
@@ -111,7 +113,7 @@ export function EmployeeTable({
             <tbody>
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i} className="border-b border-[#E8EBF1]">
+                  <tr key={i} className="border-b border-[#E8E8E8]">
                     {columns.map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <Skeleton className="h-4 w-full" />
@@ -123,7 +125,7 @@ export function EmployeeTable({
                 <tr>
                   <td
                     colSpan={columns.length}
-                    className="px-4 py-16 text-center text-[#8E9AAC] text-[13.5px]"
+                    className="px-4 py-16 text-center text-[#8F8F8F] text-[13.5px]"
                   >
                     No employees found.
                   </td>
@@ -132,7 +134,7 @@ export function EmployeeTable({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-[#E8EBF1] cursor-pointer transition-colors hover:bg-[#F8F9FC] last:border-b-0"
+                    className="border-b border-[#E8E8E8] cursor-pointer transition-colors hover:bg-[#F7F7F7] last:border-b-0"
                     onClick={() => router.push(`/employees/${encodeURIComponent(row.original.employeeNumber)}`)}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -149,8 +151,8 @@ export function EmployeeTable({
 
         {/* Pagination row */}
         {!isLoading && (
-          <div className="flex items-center justify-between px-4 py-3.5 border-t border-[#E8EBF1]">
-            <span className="text-[12.5px] text-[#8E9AAC]">
+          <div className="flex items-center justify-between px-4 py-3.5 border-t border-[#E8E8E8]">
+            <span className="text-[12.5px] text-[#8F8F8F]">
               Showing {total === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total}
             </span>
             {totalPages > 1 && (
@@ -158,21 +160,21 @@ export function EmployeeTable({
                 <button
                   onClick={() => onPageChange(Math.max(1, page - 1))}
                   disabled={page <= 1}
-                  className="w-[30px] h-[30px] rounded-[8px] border border-[#E8EBF1] bg-white flex items-center justify-center text-[#4A586B] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F4F6F9] transition-colors"
+                  className="w-[30px] h-[30px] rounded-[8px] border border-[#E8E8E8] bg-white flex items-center justify-center text-[#525252] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F7F7F7] transition-colors"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 {pageList.map((p, i) =>
                   p === "…" ? (
-                    <span key={`e${i}`} className="w-[30px] h-[30px] flex items-center justify-center text-[12.5px] text-[#8E9AAC]">…</span>
+                    <span key={`e${i}`} className="w-[30px] h-[30px] flex items-center justify-center text-[12.5px] text-[#8F8F8F]">…</span>
                   ) : (
                     <button
                       key={p}
                       onClick={() => onPageChange(p)}
                       className={`w-[30px] h-[30px] rounded-[8px] border text-[12.5px] font-semibold transition-colors ${
                         p === page
-                          ? "bg-[#E8693A] border-[#E8693A] text-white"
-                          : "bg-white border-[#E8EBF1] text-[#4A586B] hover:bg-[#F4F6F9]"
+                          ? "bg-[#E8693A] border-[#E8693A] text-[var(--on-acc)]"
+                          : "bg-white border-[#E8E8E8] text-[#525252] hover:bg-[#F7F7F7]"
                       }`}
                     >
                       {p}
@@ -182,7 +184,7 @@ export function EmployeeTable({
                 <button
                   onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                   disabled={page >= totalPages}
-                  className="w-[30px] h-[30px] rounded-[8px] border border-[#E8EBF1] bg-white flex items-center justify-center text-[#4A586B] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F4F6F9] transition-colors"
+                  className="w-[30px] h-[30px] rounded-[8px] border border-[#E8E8E8] bg-white flex items-center justify-center text-[#525252] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F7F7F7] transition-colors"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>

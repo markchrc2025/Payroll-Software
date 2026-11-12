@@ -452,7 +452,7 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">{formatPeriod(run.periodStart, run.periodEnd)}</h1>
+              <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{formatPeriod(run.periodStart, run.periodEnd)}</h1>
               <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">

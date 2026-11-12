@@ -147,7 +147,7 @@ export default function ApprovalRolesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Approval Roles</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Approval Roles</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Assign which employees hold org-wide approval roles used in Leave Approval Workflows.
         </p>
@@ -155,7 +155,7 @@ export default function ApprovalRolesPage() {
 
       {/* Assignable singleton roles */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Org-wide roles</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">Org-wide roles</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           {SINGLETON_ROLES.map((role) => {
             const Icon = role.icon;
@@ -240,7 +240,7 @@ export default function ApprovalRolesPage() {
 
       {/* Automatically resolved roles — informational */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Auto-resolved roles</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">Auto-resolved roles</h2>
         <p className="text-sm text-muted-foreground">
           These roles are resolved automatically from employee records — no assignment needed here.
         </p>

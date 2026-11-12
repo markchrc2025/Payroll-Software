@@ -144,7 +144,7 @@ export default function LevelsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Level</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">Level</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${levels.length} job level${levels.length !== 1 ? "s" : ""}`}
           </p>

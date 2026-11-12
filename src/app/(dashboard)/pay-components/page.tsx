@@ -182,10 +182,10 @@ export default function PayComponentsPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.4px] text-[#111827] leading-tight">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)] leading-tight">
             Pay Components
           </h1>
-          <p className="text-[13px] text-[#6B7A8D] mt-0.5">
+          <p className="text-[13px] text-[#6B6B6B] mt-0.5">
             Define earnings and deductions that can be assigned to employees.
           </p>
         </div>
@@ -202,7 +202,7 @@ export default function PayComponentsPage() {
           <Button
             size="sm"
             onClick={openCreate}
-            className="h-9 text-[13px] bg-[#E8693A] hover:bg-[#C2552F] text-white"
+            className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Component
           </Button>
@@ -210,15 +210,15 @@ export default function PayComponentsPage() {
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-[#E8EBF1] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#F5F6FA] hover:bg-[#F5F6FA]">
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Code</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Kind</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Tax Treatment</TableHead>
-              <TableHead className="text-[12px] font-semibold text-[#4A586B] uppercase tracking-wide">Status</TableHead>
+            <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Code</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Name</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Kind</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Tax Treatment</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Status</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -233,15 +233,15 @@ export default function PayComponentsPage() {
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-[#6B7A8D] py-10">
+                <TableCell colSpan={6} className="text-center text-[#6B6B6B] py-10">
                   No pay components yet. Add your first one.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className={`hover:bg-[#FAFBFF] ${!row.isActive ? "opacity-50" : ""}`}>
-                  <TableCell className="font-mono text-xs text-[#4A586B]">{row.code}</TableCell>
-                  <TableCell className="font-medium text-[13.5px] text-[#111827]">{row.name}</TableCell>
+                <TableRow key={row.id} className={`hover:bg-[#FAFAFA] ${!row.isActive ? "opacity-50" : ""}`}>
+                  <TableCell className="font-mono text-xs text-[#525252]">{row.code}</TableCell>
+                  <TableCell className="font-medium text-[13.5px] text-[#171717]">{row.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[12px]">{kindLabel(row.kind)}</Badge>
                   </TableCell>
@@ -262,7 +262,7 @@ export default function PayComponentsPage() {
                       className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full"
                       style={row.isActive
                         ? { background: "#E5F6EE", color: "#0FA36B" }
-                        : { background: "#F5F6FA", color: "#6B7A8D" }}
+                        : { background: "#F7F7F7", color: "#6B6B6B" }}
                     >
                       {row.isActive ? "Active" : "Inactive"}
                     </span>
@@ -361,7 +361,7 @@ export default function PayComponentsPage() {
             )}
 
             <div className="space-y-3 rounded-md border p-4">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Include in computation bases</p>
+              <p className="text-[12.5px] font-medium text-muted-foreground">Include in computation bases</p>
               {(
                 [
                   { key: "includeIn13thMonth" as const, label: "13th-Month Pay basis" },
