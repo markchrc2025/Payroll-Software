@@ -195,18 +195,21 @@ function makeInput(overrides: {
 // Formula-derived; exact. Blueprint §4.1.
 // ===========================================================================
 describe("§2 Salary type conversions", () => {
-  it("MONTHLY ₱30,000 / 261 denominator → dailyRate = ₱1,379.31 (₱137,931)", () => {
-    // Formula: (30,000 × 12) / 261 = 360,000 / 261 = 1,379.31 pesos (rounded)
-    // In centavos: 36,000,000 / 261 = 137,931 (BigInt truncation = correct here)
-    // Source: Engine_Test_Spec.md §2 row 1
+  it("MONTHLY ₱30,000 / 261 denominator → base pay is the monthly rate (unit 1.8; dailyRate ₱1,379.31 is now the unpaid-day deduction)", () => {
+    // CHANGED BY RULING R103 (decision log, unit 1.8, 3 Sep 2026), not to make
+    // a test pass: this assertion encoded defect S4. A MONTHLY salary pays the
+    // contracted amount for a full period (D-S2), whatever the days worked;
+    // (30,000 × 12) / 261 = ₱1,379.31 is what ONE UNPAID DAY deducts (D-S3),
+    // tested in src/__tests__/u1-8-salary-type-engine.test.ts T3.
+    // Superseded: Engine_Test_Spec.md §2 row 1 (marked, R104).
     const result = computeSheet(makeInput({
       salaryType: "MONTHLY",
       basicSalaryCents: 3_000_000n, // ₱30,000/month
       periodInput: { daysWorked: 1 },
       overrideStatutoryDeducted: false,
     }));
-    // basePayCents = dailyRate × 1 day = 137931n
-    expect(result.basePayCents).toBe(137_931n);
+    // Was: basePayCents = dailyRate × 1 day = 137,931n (S4). Now: the month.
+    expect(result.basePayCents).toBe(3_000_000n);
   });
 
   it("MONTHLY ₱30,000 → hourlyRate = ₱172.41 = 17,241 centavos", () => {
@@ -676,7 +679,11 @@ describe("§9 Case A — Regular monthly-paid, clean period", () => {
    * Statutory contributions DEDUCTED.
    *
    * Expected (formula-derived):
-   *   basePayCents = 137,931 × 22 = 3,034,482 centavos = ₱30,344.82
+   *   basePayCents = 3,000,000 centavos = ₱30,000.00: the monthly rate
+   *     (unit 1.8, D-S2). CHANGED BY RULING R103 (decision log, unit 1.8, 3 Sep
+   *     2026): this line read "137,931 × 22 = 3,034,482 = ₱30,344.82", defect
+   *     S4 transcribed from Engine_Test_Spec.md §9 Case A (now marked
+   *     superseded, R104). No assertion in this block reads basePayCents.
    *   PhilHealth EE = 75,000 centavos = ₱750.00 (₱30,000 × 5% / 2)
    *   PagIBIG EE    = 20,000 centavos = ₱200.00 (₱10,000 cap × 2%)
    *   SSS EE (worksheet §1b for MSC ₱30,000):

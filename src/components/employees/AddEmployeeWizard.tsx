@@ -164,6 +164,9 @@ const DIR_ROLES   = ["Guest","Employee","Manager","Admin"];
 const GENDER_OPT   = [{ value:"FEMALE",label:"Female"},{value:"MALE",label:"Male"},{value:"OTHER",label:"Other"}];
 const CIVIL_OPT    = [{ value:"SINGLE",label:"Single"},{value:"MARRIED",label:"Married"},{value:"WIDOWED",label:"Widowed"},{value:"LEGALLY_SEPARATED",label:"Separated"}];
 const PAY_FREQ_OPT   = [{ value:"MONTHLY",label:"Monthly"},{value:"SEMI_MONTHLY",label:"Semi-monthly"},{value:"WEEKLY",label:"Weekly"},{value:"DAILY",label:"Daily"}];
+// Unit 1.8 (D-S4): working days a year behind the daily equivalent of a
+// monthly or weekly salary. Left empty on Add: taken from the work schedule.
+const DIVISOR_OPT    = [{value:"261",label:"261 (5-day week)"},{value:"313",label:"313 (6-day week)"},{value:"365",label:"365 (7-day week)"}];
 const SAL_TYPE_OPT   = [{value:"MONTHLY",label:"Monthly"},{value:"DAILY",label:"Daily Rate"},{value:"WEEKLY",label:"Weekly Rate"}];
 
 // ─── Default values ───────────────────────────────────────────────────────────
@@ -988,6 +991,8 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <TF control={c} name="bankAccountNumber"    label="Bank Account"                            placeholder="0000 0000 0000" errors={e} />
             <TF control={c} name="bankAccountName"      label="Account Name"                            placeholder="JUAN DELA CRUZ" errors={e} />
             <SF control={c} name="payFrequency"         label="Pay Cycle"         options={PAY_FREQ_OPT} placeholder="Monthly"       errors={e} />
+            <SF control={c} name="workingDaysDenominator" label="Working Days / Year" options={DIVISOR_OPT} placeholder="From work schedule" errors={e} />
+            <FNote lines={["Turns a monthly or weekly salary into a daily rate for unpaid days, OT and holidays. Empty: taken from the work schedule (5-day 261, 6-day 313), else the company's."]} />
             <SF control={c} name="payMethod"            label="Method"            options={PAY_METHODS}  placeholder="Cash"           errors={e} />
           </FGrid>
         );

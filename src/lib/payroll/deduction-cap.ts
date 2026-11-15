@@ -12,6 +12,7 @@
 import type { TenantTx } from "@/lib/with-tenant";
 import { computeSSS, computePhilHealth, computePagibig } from "@/lib/statutory/compute";
 import { resolveAllRules } from "@/lib/payroll/persist";
+import { deriveSalaryRates, effectiveDivisor } from "@/lib/payroll/rates";
 
 /** Approx payroll runs per month, by pay frequency (loans deduct each run). */
 const PERIODS_PER_MONTH: Record<string, bigint> = {
@@ -21,24 +22,6 @@ const PERIODS_PER_MONTH: Record<string, bigint> = {
   WEEKLY: 4n,
   DAILY: 22n,
 };
-
-/** Monthly equivalent of a basic salary, by salary type. */
-function monthlyEquivalentCents(
-  basicSalaryCents: bigint,
-  salaryType: string,
-  workingDaysDenominator: number,
-): bigint {
-  switch (salaryType) {
-    case "MONTHLY":
-      return basicSalaryCents;
-    case "DAILY":
-      return (basicSalaryCents * BigInt(workingDaysDenominator)) / 12n;
-    case "WEEKLY":
-      return (basicSalaryCents * 52n) / 12n;
-    default:
-      return basicSalaryCents;
-  }
-}
 
 export interface DeductionCapResult {
   withinCap: boolean;
@@ -79,7 +62,7 @@ export async function checkDeductionCap(
   });
   const emp = await tx.employee.findFirst({
     where: { id: employeeId, tenantId },
-    select: { payFrequency: true },
+    select: { payFrequency: true, workingDaysDenominator: true },
   });
   if (!term?.basicSalaryCents || !term.salaryType || !emp) return null;
 
@@ -88,11 +71,14 @@ export async function checkDeductionCap(
     select: { workingDaysDenominator: true },
   });
 
-  const monthlyGrossCents = monthlyEquivalentCents(
-    term.basicSalaryCents,
-    term.salaryType,
-    tenant.workingDaysDenominator,
-  );
+  // Unit 1.8 (R89): the single rate implementation, with the employee's
+  // divisor (else the tenant's).
+  const monthlyGrossCents = deriveSalaryRates({
+    basicSalaryCents: term.basicSalaryCents,
+    salaryType: term.salaryType,
+    divisor: effectiveDivisor(emp.workingDaysDenominator, tenant.workingDaysDenominator),
+    hoursPerDay: 8,
+  }).monthlyEquivalentCents;
 
   // Monthly employee-share statutory at this gross (best-effort).
   let monthlyStatutoryCents = 0n;

@@ -4,6 +4,8 @@
  */
 
 import { z } from "zod";
+// Type-only Prisma imports are erased at build time, so rates.ts stays client-safe.
+import { pairingRefusal } from "@/lib/payroll/rates";
 
 // ---------------------------------------------------------------------------
 // Enum mirrors — defined here instead of importing from @prisma/client so that
@@ -141,7 +143,7 @@ export type StatutoryIdsInput = z.infer<typeof statutoryIdsSchema>;
 // Create / Update Employee
 // ---------------------------------------------------------------------------
 
-export const createEmployeeSchema = z.object({
+const employeeFieldsSchema = z.object({
   // Personal
   firstName: z.string().min(1, "First name is required").max(100),
   middleName: z.string().max(100).optional().nullable(),
@@ -199,6 +201,13 @@ export const createEmployeeSchema = z.object({
   salaryType: z.nativeEnum(SalaryType).default("MONTHLY"),
   standardWorkHours: z.coerce.number().min(1).max(24).default(8),
   standardWorkDays: z.coerce.number().min(1).max(31).default(22),
+  // Unit 1.8 (D-S4): working days a year for the daily equivalent (261 five-day
+  // week, 313 six-day week). Empty on create: from the work schedule, else the
+  // company's. Null: the company's.
+  workingDaysDenominator: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v === null ? null : Number(v)),
+    z.number().int().min(52).max(366).nullable().optional(),
+  ),
 
   // Initial salary (required on create) — PHP pesos. API converts to BigInt centavos.
   basicSalary: z.coerce
@@ -302,7 +311,26 @@ export const createEmployeeSchema = z.object({
   remark: z.string().max(2000).optional().nullable(),
 });
 
-export const updateEmployeeSchema = createEmployeeSchema
+/**
+ * Unit 1.8 (D-S7, R88): refuse a salary type × pay cycle that has no whole
+ * number of contract units per pay period (e.g. a monthly salary paid weekly).
+ */
+type SalaryTypeValue = (typeof SalaryType)[keyof typeof SalaryType];
+type PayFrequencyValue = (typeof PayFrequency)[keyof typeof PayFrequency];
+
+function refuseIncoherentPairing(
+  v: { salaryType?: SalaryTypeValue | null; payFrequency?: PayFrequencyValue | null },
+  ctx: z.RefinementCtx,
+  paths: { payFrequency: string; salaryType: string } = { payFrequency: "payFrequency", salaryType: "salaryType" },
+) {
+  if (!v.salaryType || !v.payFrequency) return;
+  const reason = pairingRefusal(v.salaryType, v.payFrequency);
+  if (reason) ctx.addIssue({ code: "custom", path: [paths.payFrequency], message: reason });
+}
+
+export const createEmployeeSchema = employeeFieldsSchema.superRefine((v, ctx) => refuseIncoherentPairing(v, ctx));
+
+export const updateEmployeeSchema = employeeFieldsSchema
   // Salary amount AND type are effective-dated on EmploymentTerm and change only
   // through movements — never via a plain profile edit (which would silently
   // desync the value the payroll engine reads).
@@ -376,7 +404,13 @@ export const csvEmployeeRowSchema = z.object({
   bank_name: z.string().optional(),
   bank_account_number: z.string().optional(),
   bank_account_name: z.string().optional(),
-});
+}).superRefine((v, ctx) =>
+  refuseIncoherentPairing(
+    { salaryType: v.salary_type as SalaryTypeValue | undefined, payFrequency: v.pay_frequency as PayFrequencyValue | undefined },
+    ctx,
+    { payFrequency: "pay_frequency", salaryType: "salary_type" },
+  ),
+);
 
 export type CsvEmployeeRow = z.infer<typeof csvEmployeeRowSchema>;
 
