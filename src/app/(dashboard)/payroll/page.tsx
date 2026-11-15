@@ -116,7 +116,10 @@ export default function PayrollPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error ?? "Failed to create payroll run");
+        const fieldError = Object.values(
+          (json.details?.fieldErrors ?? {}) as Record<string, string[]>,
+        ).flat()[0];
+        toast.error(fieldError ?? json.error ?? "Failed to create payroll run");
         return;
       }
       toast.success("Payroll run created (DRAFT)");
@@ -311,10 +314,14 @@ export default function PayrollPage() {
                   <SelectContent>
                     <SelectItem value="REGULAR">Regular</SelectItem>
                     <SelectItem value="OFF_CYCLE">Off-Cycle</SelectItem>
-                    <SelectItem value="FINAL_PAY">Final Pay</SelectItem>
                     <SelectItem value="YEAR_END">Year-End</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* PAY-135: a final pay is for named leavers, so it is created
+                    from Offboard on the employee's page, never for everyone. */}
+                <p className="text-xs text-muted-foreground">
+                  Final pay: use Offboard on the employee&apos;s page.
+                </p>
               </div>
             </div>
             <div className="space-y-1.5">
