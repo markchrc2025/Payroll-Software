@@ -18,8 +18,10 @@ export const createPayrollRunSchema = z
     runType: z.nativeEnum(PayrollRunType).default("REGULAR"),
     notes: z.string().max(500).optional().nullable(),
     /**
-     * Restrict sheet fan-out to these employee IDs (1–200).
-     * Omit to include all active employees (default behaviour).
+     * Restrict sheet fan-out to these employee IDs (1–200), stored on the book
+     * (targetEmployeeIds) so the background compute and every recompute keep
+     * the same people (PAY-135). Omit to include every employee the run type
+     * selects. Required for FINAL_PAY.
      */
     employeeIds: z.array(z.string().min(1)).min(1).max(200).optional(),
     /**
@@ -39,6 +41,23 @@ export const createPayrollRunSchema = z
         code: z.ZodIssueCode.custom,
         path: ["periodEnd"],
         message: "periodEnd must be on or after periodStart",
+      });
+    }
+    // PAY-135: a final pay is for named leavers. Without a selection the run
+    // would compute separation pay, leave cash-out and a prorated 13th month
+    // for every active employee.
+    if (v.runType === "FINAL_PAY" && !v.employeeIds?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["employeeIds"],
+        message: "A final pay run must name the separated employee(s).",
+      });
+    }
+    if (v.runType === "FINAL_PAY" && !v.separationReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["separationReason"],
+        message: "A final pay run needs the reason for separation.",
       });
     }
   });

@@ -251,6 +251,27 @@ export async function resolveAllRules(
 // Active-employee selection
 // ---------------------------------------------------------------------------
 
+/**
+ * PAY-135: the employees a run computes. A run created for a subset (OFF_CYCLE
+ * bonus, FINAL_PAY leaver, YEAR_END) stores it on the book as
+ * targetEmployeeIds; createDraftRun, processRun and recomputeRun all select
+ * through here so the subset survives the background job and every recompute.
+ * An empty or missing list keeps every loaded employee.
+ */
+export function selectRunEmployees<T extends { id: string }>(
+  employees: readonly T[],
+  targetEmployeeIds: readonly string[] | null | undefined,
+): T[] {
+  if (!targetEmployeeIds || targetEmployeeIds.length === 0) return [...employees];
+  const wanted = new Set(targetEmployeeIds);
+  return employees.filter((e) => wanted.has(e.id));
+}
+
+/** De-duplicated subset to store on a new book ([] = everyone). */
+function targetIdsFor(input: CreateDraftRunInput): string[] {
+  return [...new Set(input.employeeIds ?? [])];
+}
+
 async function loadActiveEmployees(
   tx: TenantTx,
   periodStart: Date,
@@ -690,6 +711,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
           createdByUserId: input.createdByUserId ?? null,
           skipStatutory: input.skipStatutory ?? false,
           separationReason: input.separationReason ?? null,
+          targetEmployeeIds: targetIdsFor(input),
         },
       })
       .catch((e) => {
@@ -706,11 +728,11 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       input.periodStart,
       input.periodEnd,
     );
-    const selected =
-      input.employeeIds && input.employeeIds.length > 0
-        ? allEmployees.filter((e) => input.employeeIds!.includes(e.id))
-        : allEmployees;
-    const employees = onRunCycle(selected, input.runType ?? "REGULAR", input.cycle);
+    const employees = onRunCycle(
+      selectRunEmployees(allEmployees, targetIdsFor(input)),
+      input.runType ?? "REGULAR",
+      input.cycle,
+    );
 
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
@@ -840,8 +862,12 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     // Wipe + recompute.
     await tx.payrollSheet.deleteMany({ where: { payrollBookId: bookId } });
 
+    // PAY-135: keep the run's own subset (it used to widen to everyone).
     const employees = onRunCycle(
-      await loadActiveEmployees(tx, book.periodStart, book.periodEnd),
+      selectRunEmployees(
+        await loadActiveEmployees(tx, book.periodStart, book.periodEnd),
+        book.targetEmployeeIds,
+      ),
       book.runType,
       book.cycle,
     );
@@ -1133,6 +1159,7 @@ export async function queueRun(input: CreateDraftRunInput) {
           createdByUserId: input.createdByUserId ?? null,
           skipStatutory: input.skipStatutory ?? false,
           separationReason: input.separationReason ?? null,
+          targetEmployeeIds: targetIdsFor(input),
           status: "PROCESSING",
         },
       })
@@ -1187,7 +1214,8 @@ export async function processRun(tenantId: string, bookId: string) {
     );
 
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
-    for (const e of onRunCycle(allEmployees, book.runType, book.cycle)) {
+    // PAY-135: the queued run computes only the employees it was created for.
+    for (const e of onRunCycle(selectRunEmployees(allEmployees, book.targetEmployeeIds), book.runType, book.cycle)) {
       const ci = await buildComputeInputForEmployee(
         tx,
         tenantId,
