@@ -74,6 +74,17 @@ export async function endAllEssSessions(tx: Tx, employeeId: string, at = new Dat
   });
 }
 
+/**
+ * Delete every ESS passkey of an employee (PAY-115, Mark's ruling of 15 Nov
+ * 2026): disabling ESS access deletes the employee's passkeys, on every disable
+ * path (HR's disable, a schedule set in the past, the hourly sweep). A
+ * re-activated employee registers again. Returns the number deleted.
+ */
+export async function retirePasskeys(tx: Tx, employeeId: string): Promise<number> {
+  const res = await tx.essWebAuthnCredential.deleteMany({ where: { employeeId } });
+  return res.count;
+}
+
 // ── INVITATION engine ────────────────────────────────────────────────────────
 
 /** Retire every unused invitation for an employee (re-invite, disable). */

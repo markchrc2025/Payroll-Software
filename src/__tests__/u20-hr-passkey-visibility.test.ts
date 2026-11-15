@@ -15,9 +15,8 @@
  *   P4  DELETE of another employee's credential id deletes nothing: 404.
  *   P5  the ESS admin list carries passkeyCount per employee.
  *
- * NOT decided here (a product ruling never made): whether disabling ESS
- * should delete passkeys or leave them. The dialog says plainly that it does
- * not remove them.
+ * Decided later (PAY-115, Mark, 15 Nov 2026): disabling ESS deletes the
+ * passkeys; see pay115-ess-disable-deletes-passkeys.test.ts.
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
