@@ -9,7 +9,10 @@
 //   QA-03 daily ₱695, semi-monthly, 6-day week
 //   QA-04 weekly ₱4,200, weekly, 6-day week (weekly run 9 to 15 Nov)
 //   QA-05 monthly ₱28,000, semi-monthly, 5-day week, hired 9 Nov (mid-cutoff)
-// then a REGULAR semi-monthly run for 1-15 Nov and a weekly run for 9-15 Nov.
+// then REGULAR semi-monthly runs for 1-15 Nov and 16-30 Nov (the second
+// cutoff is where the default SECOND_CUTOFF rule deducts SSS, PhilHealth and
+// Pag-IBIG; 16 Nov is a Monday: 11 Mon-Fri days, 13 Mon-Sat days) and a
+// weekly run for 9-15 Nov.
 
 export const SHIFTS = [
   { key: "5day", body: { name: "QA 5-day (Mon-Fri)", code: "QA5", type: "FIXED", timeIn: "08:00", timeOut: "17:00", breakMinutes: 60, workDays: ["MON", "TUE", "WED", "THU", "FRI"] } },
@@ -18,19 +21,24 @@ export const SHIFTS = [
 
 export const EMPLOYEES = [
   { tag: "QA-01", firstName: "Ana", lastName: "Santos (QA-01)", salaryType: "MONTHLY", basicSalary: 30000, payFrequency: "SEMI_MONTHLY", shift: "5day", hireDate: "2025-03-03",
-    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "10", unpaidLeaveDays: "0" }] },
+    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "10", unpaidLeaveDays: "0" },
+                 { periodStart: "2026-11-16", periodEnd: "2026-11-30", daysWorked: "11", unpaidLeaveDays: "0" }] },
   { tag: "QA-02", firstName: "Jose", lastName: "Dela Cruz (QA-02)", salaryType: "MONTHLY", basicSalary: 25000, payFrequency: "SEMI_MONTHLY", shift: "6day", hireDate: "2024-07-01",
-    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "11", unpaidLeaveDays: "1", notes: "1 day unpaid leave (QA)" }] },
+    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "11", unpaidLeaveDays: "1", notes: "1 day unpaid leave (QA)" },
+                 { periodStart: "2026-11-16", periodEnd: "2026-11-30", daysWorked: "13", unpaidLeaveDays: "0" }] },
   { tag: "QA-03", firstName: "Maria", lastName: "Garcia (QA-03)", salaryType: "DAILY", basicSalary: 695, payFrequency: "SEMI_MONTHLY", shift: "6day", hireDate: "2025-01-06",
-    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "12", unpaidLeaveDays: "0" }] },
+    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "12", unpaidLeaveDays: "0" },
+                 { periodStart: "2026-11-16", periodEnd: "2026-11-30", daysWorked: "13", unpaidLeaveDays: "0" }] },
   { tag: "QA-04", firstName: "Paolo", lastName: "Reyes (QA-04)", salaryType: "WEEKLY", basicSalary: 4200, payFrequency: "WEEKLY", shift: "6day", hireDate: "2025-05-05",
     attendance: [{ periodStart: "2026-11-09", periodEnd: "2026-11-15", daysWorked: "6", unpaidLeaveDays: "0" }] },
   { tag: "QA-05", firstName: "Liza", lastName: "Mendoza (QA-05)", salaryType: "MONTHLY", basicSalary: 28000, payFrequency: "SEMI_MONTHLY", shift: "5day", hireDate: "2026-11-09",
-    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "5", unpaidLeaveDays: "0", notes: "hired 9 Nov (QA)" }] },
+    attendance: [{ periodStart: "2026-11-01", periodEnd: "2026-11-15", daysWorked: "5", unpaidLeaveDays: "0", notes: "hired 9 Nov (QA)" },
+                 { periodStart: "2026-11-16", periodEnd: "2026-11-30", daysWorked: "11", unpaidLeaveDays: "0" }] },
 ];
 
 export const RUNS = [
   { periodStart: "2026-11-01", periodEnd: "2026-11-15", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 1-15 Nov" },
+  { periodStart: "2026-11-16", periodEnd: "2026-11-30", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 16-30 Nov (contributions)" },
   { periodStart: "2026-11-09", periodEnd: "2026-11-15", cycle: "WEEKLY", runType: "REGULAR", notes: "QA seed: weekly 9-15 Nov" },
 ];
 
@@ -46,7 +54,7 @@ export async function waitForRun(api, id, timeoutMs = 120_000) {
   }
 }
 
-/** Seeds the scenario. Safe to call twice: skips anything already there. */
+/** Seeds the scenario. Safe to call twice: existing records are reused and the standard attendance is restored. */
 export async function seedScenario(api, log = console.log) {
   const branches = await api.must("GET", "/api/branches");
   let branch = pick(branches, (b) => b.name === "QA Head Office");
@@ -67,8 +75,7 @@ export async function seedScenario(api, log = console.log) {
   const employeeIds = {};
   for (const e of EMPLOYEES) {
     const found = pick(existing, (x) => x.lastName === e.lastName);
-    if (found) { employeeIds[e.tag] = found.id; continue; }
-    const created = await api.must("POST", "/api/employees", {
+    const created = found ?? await api.must("POST", "/api/employees", {
       firstName: e.firstName,
       lastName: e.lastName,
       mobileNumber: "",
@@ -83,6 +90,8 @@ export async function seedScenario(api, log = console.log) {
       employmentStatus: "REGULAR",
     });
     employeeIds[e.tag] = created.id;
+    // POST /api/period-inputs is an upsert per employee and period, so a
+    // re-seed restores the standard attendance instead of duplicating it.
     for (const a of e.attendance) {
       await api.must("POST", "/api/period-inputs", { employeeId: created.id, ...a });
     }

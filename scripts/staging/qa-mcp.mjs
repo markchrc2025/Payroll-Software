@@ -150,7 +150,7 @@ export const TOOLS = [
   },
   {
     name: "seed_scenario",
-    description: "Re-run the standard QA scenario (5 employees covering monthly, daily, weekly, a 6-day week, an unpaid day, a mid-cutoff hire; a semi-monthly and a weekly run). Skips anything already there.",
+    description: "Re-run the standard QA scenario (5 employees covering monthly, daily, weekly, a 6-day week, an unpaid day, a mid-cutoff hire; runs for both November cutoffs and a weekly run). Reuses what is already there and restores the standard attendance; existing draft runs are not recomputed (use recompute_payroll_run).",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: (api) => seedScenario(api, () => {}),
   },

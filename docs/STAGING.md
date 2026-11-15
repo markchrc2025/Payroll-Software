@@ -31,17 +31,18 @@ At every start the container creates the QA company "Sentire QA Co." with an
 Administrator role, then seeds through the app's own API (so validation and
 permissions apply exactly as for a real HR user):
 
-| Employee | Pay setup | Attendance, 1 to 15 Nov 2026 |
-|---|---|---|
-| QA-01 | Monthly ₱30,000, semi-monthly, 5-day week | 10 days |
-| QA-02 | Monthly ₱25,000, semi-monthly, 6-day week | 11 days, 1 unpaid |
-| QA-03 | Daily ₱695, semi-monthly, 6-day week | 12 days |
-| QA-04 | Weekly ₱4,200, weekly, 6-day week | 9 to 15 Nov: 6 days |
-| QA-05 | Monthly ₱28,000, semi-monthly, hired 9 Nov | 5 days |
+| Employee | Pay setup | 1 to 15 Nov 2026 | 16 to 30 Nov 2026 |
+|---|---|---|---|
+| QA-01 | Monthly ₱30,000, semi-monthly, 5-day week | 10 days | 11 days |
+| QA-02 | Monthly ₱25,000, semi-monthly, 6-day week | 11 days, 1 unpaid | 13 days |
+| QA-03 | Daily ₱695, semi-monthly, 6-day week | 12 days | 13 days |
+| QA-04 | Weekly ₱4,200, weekly, 6-day week | 9 to 15 Nov: 6 days | |
+| QA-05 | Monthly ₱28,000, semi-monthly, hired 9 Nov | 5 days | 11 days |
 
-Two draft runs are created: semi-monthly 1 to 15 Nov 2026 and weekly 9 to 15
-Nov 2026. The 2026 statutory tables (SSS, PhilHealth, Pag-IBIG, BIR) are loaded
-at start.
+Three draft runs are created: semi-monthly 1 to 15 Nov, semi-monthly 16 to 30
+Nov (the second cutoff, where the default rule deducts SSS, PhilHealth and
+Pag-IBIG) and weekly 9 to 15 Nov. The 2026 statutory tables (SSS, PhilHealth,
+Pag-IBIG, BIR) are loaded at start.
 
 **Reset:** restart the staging app in Dokploy. The database is recreated and
 re-seeded; anything added by hand is gone. That is the point of staging.
