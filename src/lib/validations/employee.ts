@@ -384,13 +384,29 @@ export type CsvEmployeeRow = z.infer<typeof csvEmployeeRowSchema>;
 // Query params for employee list
 // ---------------------------------------------------------------------------
 
+/**
+ * Employment statuses that mean "currently employed": every status except the
+ * separations (RESIGNED, TERMINATED, RETIRED). A list query with
+ * status=ACTIVE matches these. The admin's employee pickers ask for it
+ * (movements, placement, employment terms, leave, loans, expense claims,
+ * incidents, assets); before this, "ACTIVE" was not an accepted value, every
+ * picker got a 400 and showed "No employees found".
+ */
+export const CURRENTLY_EMPLOYED_STATUSES = [
+  EmploymentStatus.PROBATIONARY,
+  EmploymentStatus.REGULAR,
+  EmploymentStatus.CONTRACTUAL,
+  EmploymentStatus.PROJECT_BASED,
+] as const;
+
 export const listEmployeesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(200).default(25),
+  // Pickers load the whole active list in one request (limit=500).
+  limit: z.coerce.number().int().min(1).max(500).default(25),
   search: z.string().optional(),
   departmentId: z.string().optional(),
   branchId: z.string().optional(),
-  status: z.nativeEnum(EmploymentStatus).optional(),
+  status: z.union([z.nativeEnum(EmploymentStatus), z.literal("ACTIVE")]).optional(),
   employmentType: z.nativeEnum(EmploymentType).optional(),
 });
 

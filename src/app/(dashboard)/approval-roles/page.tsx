@@ -100,7 +100,7 @@ export default function ApprovalRolesPage() {
 
   async function loadEmployees() {
     setLoadingEmps(true);
-    const res = await fetch("/api/employees?limit=500&status=REGULAR,PROBATIONARY,CONTRACTUAL,PROJECT_BASED");
+    const res = await fetch("/api/employees?limit=500&status=ACTIVE");
     const json = await res.json();
     setEmployees(json.data ?? []);
     setLoadingEmps(false);

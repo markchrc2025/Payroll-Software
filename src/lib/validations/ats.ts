@@ -3,6 +3,8 @@
  */
 import { z } from "zod";
 
+// Query-string flags use z.stringbool(): z.coerce.boolean() reads the text "false" as true.
+
 const cuid = z.string().min(1);
 
 // ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ export const listJobPostingsSchema = z.object({
   departmentId: cuid.optional(),
   branchId: cuid.optional(),
   positionId: cuid.optional(),
-  includeDeleted: z.coerce.boolean().default(false),
+  includeDeleted: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(20),
 });
@@ -77,7 +79,7 @@ export const listApplicantsSchema = z.object({
   source: z
     .enum(["REFERRAL", "ONLINE_POSTING", "WALK_IN", "AGENCY", "OTHER"])
     .optional(),
-  includeDeleted: z.coerce.boolean().default(false),
+  includeDeleted: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(20),
 });

@@ -3,6 +3,8 @@
  *   LeaveType catalog, LeaveBalance seeding, LeaveTransaction filing/approval.
  */
 import { z } from "zod";
+
+// Query-string flags use z.stringbool(): z.coerce.boolean() reads the text "false" as true.
 import { AccrualFrequency, ApprovalStatus, LeaveTransactionType, LeaveUnit } from "@prisma/client";
 
 const cuid = z.string().min(1);
@@ -50,8 +52,8 @@ export const updateLeaveTypeSchema = z.object({
 export type UpdateLeaveTypeInput = z.infer<typeof updateLeaveTypeSchema>;
 
 export const listLeaveTypesSchema = z.object({
-  isActive: z.coerce.boolean().optional(),
-  includeDeleted: z.coerce.boolean().default(false),
+  isActive: z.stringbool().optional(),
+  includeDeleted: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });

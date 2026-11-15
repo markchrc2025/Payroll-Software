@@ -18,6 +18,7 @@ import {
 import {
   createEmployeeSchema,
   listEmployeesSchema,
+  CURRENTLY_EMPLOYED_STATUSES,
 } from "@/lib/validations/employee";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { claimEmployeeId } from "@/lib/claim-employee-id";
@@ -45,7 +46,9 @@ export async function GET(req: NextRequest) {
     deletedAt: null,
     ...(departmentId && { departmentId }),
     ...(branchId && { branchId }),
-    ...(status && { employmentStatus: status }),
+    ...(status === "ACTIVE"
+      ? { employmentStatus: { in: [...CURRENTLY_EMPLOYED_STATUSES] } }
+      : status && { employmentStatus: status }),
     ...(employmentType && { employmentType }),
     ...(search && {
       OR: [
