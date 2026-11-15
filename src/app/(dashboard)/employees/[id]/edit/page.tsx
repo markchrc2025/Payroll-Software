@@ -86,6 +86,8 @@ export default async function EditEmployeePage({
     resignationDate: isoDate(emp.resignationDate),
     lastWorkingDate: isoDate(emp.lastWorkingDate),
     endOfContractDate: isoDate(emp.endOfContractDate),
+    // Unit 1.8: the wizard's select holds strings.
+    workingDaysDenominator: emp.workingDaysDenominator != null ? String(emp.workingDaysDenominator) : undefined,
     statutoryIds: {
       tinNumber: stat("TIN"),
       sssNumber: stat("SSS"),

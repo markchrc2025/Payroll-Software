@@ -36,6 +36,13 @@
  */
 import type { PayFrequency } from "@prisma/client";
 import {
+  contractedPeriodCents,
+  deriveSalaryRates,
+  effectiveDivisor,
+  employedWholePeriod,
+  type SalaryRates,
+} from "./rates";
+import {
   computePagibig,
   computePhilHealth,
   computeSSS,
@@ -233,53 +240,57 @@ export function isStatutoryDeducted(
 // Rate derivation
 // ---------------------------------------------------------------------------
 
-interface DerivedRates {
-  dailyRateCents: bigint;
-  hourlyRateCents: bigint;
-  /// The monthly equivalent of the employee's basic — used as the MSC/MFS
-  /// basis for SSS/PhilHealth/Pag-IBIG.
-  monthlyEquivalentCents: bigint;
+// Unit 1.8 (R89): one implementation, in rates.ts, shared with persist.ts and
+// deduction-cap.ts. The divisor is the employee's, else the tenant's (D-S4).
+function deriveRates(input: ComputeInput): SalaryRates {
+  const { salary, employee, tenant } = input;
+  return deriveSalaryRates({
+    basicSalaryCents: salary.basicSalaryCents,
+    salaryType: salary.salaryType,
+    divisor: effectiveDivisor(employee.workingDaysDenominator, tenant.workingDaysDenominator),
+    hoursPerDay: employee.standardWorkHours || 8,
+  });
 }
 
-function deriveRates(input: ComputeInput): DerivedRates {
-  const { salary, employee, tenant } = input;
-  const wdDenom = tenant.workingDaysDenominator;
-  const hoursPerDay = employee.standardWorkHours || 8;
+/**
+ * Unit 1.8, step 1 of the waterfall: base pay for a REGULAR sheet.
+ *
+ * MONTHLY and WEEKLY salaries pay the contracted amount for the period (D-S2;
+ * D-S5's fixed halves on SEMI_MONTHLY), less one daily equivalent per unpaid
+ * day (D-S3), never below zero. Paid by attendance instead (days worked ×
+ * daily rate, the pre-1.8 formula): DAILY salaries (they have no full period),
+ * a weekly rate paid daily, OFF_CYCLE runs (G1) and a period the employee
+ * joined or left part-way through (G2). An incoherent salary type × cycle
+ * throws (R88).
+ *
+ * Supersedes the blueprint's "basicSalary × daysWorked / workingDays" for
+ * MONTHLY (decision log, unit 1.8; R103 to R106). The blueprint's §4.1, cited
+ * here before, never existed.
+ */
+function computeBasePay(input: ComputeInput, rates: SalaryRates): bigint {
+  const { salary, employee, period, periodInput } = input;
+  const attendancePay = timesUnits(rates.dailyRateCents, periodInput.daysWorked);
+  if ((input.runType ?? "REGULAR") !== "REGULAR") return attendancePay;
 
-  let dailyRateCents: bigint;
-  let monthlyEquivalentCents: bigint;
-
-  switch (salary.salaryType) {
-    case "MONTHLY": {
-      // dailyRate = (monthly × 12) / workingDaysDenominator
-      const annual = salary.basicSalaryCents * 12n;
-      dailyRateCents = annual / BigInt(wdDenom);
-      monthlyEquivalentCents = salary.basicSalaryCents;
-      break;
-    }
-    case "DAILY": {
-      dailyRateCents = salary.basicSalaryCents;
-      // monthly equivalent = daily × workingDaysDenominator / 12
-      monthlyEquivalentCents =
-        (salary.basicSalaryCents * BigInt(wdDenom)) / 12n;
-      break;
-    }
-    case "WEEKLY": {
-      // assume 5 working days / week
-      dailyRateCents = salary.basicSalaryCents / 5n;
-      monthlyEquivalentCents = (salary.basicSalaryCents * 52n) / 12n;
-      break;
-    }
-    default: {
-      const _exhaustive: never = salary.salaryType;
-      throw new Error(`Unsupported salaryType: ${String(_exhaustive)}`);
-    }
+  const contracted = contractedPeriodCents({
+    basicSalaryCents: salary.basicSalaryCents,
+    salaryType: salary.salaryType,
+    cycle: period.cycle,
+    periodEnd: period.end,
+  });
+  if (contracted === null) return attendancePay;
+  if (
+    !employedWholePeriod({
+      hireDate: employee.hireDate,
+      separationDate: employee.separationDate,
+      periodStart: period.start,
+      periodEnd: period.end,
+    })
+  ) {
+    return attendancePay;
   }
-
-  const hourlyRateCents = BigInt(
-    Math.round(Number(dailyRateCents) / hoursPerDay),
-  );
-  return { dailyRateCents, hourlyRateCents, monthlyEquivalentCents };
+  const unpaid = timesUnits(rates.lwopDailyEquivalentCents, periodInput.unpaidLeaveDays);
+  return clampNonNegative(contracted - unpaid);
 }
 
 // ---------------------------------------------------------------------------
@@ -561,7 +572,7 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
     payFrequencySnapshot: employee.payFrequency,
     salaryTypeSnapshot: salary.salaryType,
     basicSalaryCentsSnapshot: salary.basicSalaryCents,
-    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    workingDaysDenominatorSnapshot: effectiveDivisor(employee.workingDaysDenominator, tenant.workingDaysDenominator), // unit 1.8 B2
     statutoryDeductedSnapshot: false,
 
     basePayCents: 0n,
@@ -861,7 +872,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     payFrequencySnapshot: employee.payFrequency,
     salaryTypeSnapshot: salary.salaryType,
     basicSalaryCentsSnapshot: salary.basicSalaryCents,
-    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    workingDaysDenominatorSnapshot: rates.divisor, // unit 1.8 B2: the divisor used
     statutoryDeductedSnapshot: deducted,
 
     basePayCents,
@@ -934,9 +945,10 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const { dailyRateCents, hourlyRateCents } = rates;
 
   // -- Step 1: base pay ------------------------------------------------------
-  // For MONTHLY salaryType on SEMI_MONTHLY/MONTHLY cycles, base = dailyRate × daysWorked.
-  // This deliberately follows the blueprint §4.1 derivation.
-  const basePayCents = timesUnits(dailyRateCents, periodInput.daysWorked);
+  // Unit 1.8: a full period pays the contract, less unpaid days (see
+  // computeBasePay). Before 1.8 this was dailyRate × daysWorked for MONTHLY
+  // too, so ₱30,000/month grossed ₱27,586.20 to ₱31,724.13 by the calendar.
+  const basePayCents = computeBasePay(input, rates);
 
   // -- Step 2: late / undertime ---------------------------------------------
   // Deduction = hourlyRate × (minutes / 60), rounded HALF-UP at the end.
@@ -1180,7 +1192,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     payFrequencySnapshot: employee.payFrequency,
     salaryTypeSnapshot: salary.salaryType,
     basicSalaryCentsSnapshot: salary.basicSalaryCents,
-    workingDaysDenominatorSnapshot: tenant.workingDaysDenominator,
+    workingDaysDenominatorSnapshot: rates.divisor, // unit 1.8 B2: the divisor used
     statutoryDeductedSnapshot: deducted,
 
     basePayCents,
