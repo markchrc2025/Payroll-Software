@@ -421,7 +421,8 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <DialogTitle>Disable ESS access</DialogTitle>
             <DialogDescription>
               {disableTarget ? `${disableTarget.firstName} ${disableTarget.lastName} (${disableTarget.employeeNumber}) ` : ""}
-              will be signed out and blocked from the ESS portal immediately. A reason is required.
+              will be signed out and blocked from the ESS portal immediately, and their ESS passkeys
+              are deleted. A reason is required.
             </DialogDescription>
           </DialogHeader>
           <Textarea rows={3} placeholder="Reason (e.g. end of contract, security)" value={disableReason}
@@ -472,8 +473,8 @@ export function EssPortalClient({ initial }: { initial: EssRow[] }) {
             <DialogTitle>ESS passkeys</DialogTitle>
             <DialogDescription>
               {passkeyTarget ? `${passkeyTarget.firstName} ${passkeyTarget.lastName} (${passkeyTarget.employeeNumber}) ` : ""}
-              registered these for signing in to ESS. Disabling ESS access does not remove them;
-              remove any you do not recognise, or when offboarding.
+              registered these for signing in to ESS. Disabling ESS access deletes them all;
+              remove any you do not recognise here.
             </DialogDescription>
           </DialogHeader>
           {passkeys === null ? (

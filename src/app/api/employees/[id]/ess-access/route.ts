@@ -19,7 +19,7 @@
  *
  * Requires EMPLOYEES:UPDATE.
  */
-import { essLinkEmail, retireInvites, retireResets } from "@/lib/ess-credential-links";
+import { essLinkEmail, retireInvites, retirePasskeys, retireResets } from "@/lib/ess-credential-links";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
@@ -130,7 +130,9 @@ export async function POST(
       // invitation could otherwise re-activate it without HR.
       await retireInvites(tx, id);
       await retireResets(tx, id);
-      return { kind: "ok" as const, message: "ESS access disabled" };
+      // PAY-115: disabling ESS deletes the employee's passkeys.
+      const passkeysRemoved = await retirePasskeys(tx, id);
+      return { kind: "ok" as const, message: "ESS access disabled", passkeysRemoved };
     }
 
     if (input.action === "schedule") {
@@ -151,7 +153,8 @@ export async function POST(
         });
         await retireInvites(tx, id);
         await retireResets(tx, id);
-        return { kind: "ok" as const, message: "ESS access disabled" };
+        const passkeysRemoved = await retirePasskeys(tx, id);
+        return { kind: "ok" as const, message: "ESS access disabled", passkeysRemoved };
       }
       await tx.employee.update({
         where: { id },
@@ -199,6 +202,7 @@ export async function POST(
       ...("deactivateAt" in input ? { deactivateAt: input.deactivateAt.toISOString() } : {}),
       ...("workEmail" in input ? { workEmail: input.workEmail.toLowerCase() } : {}),
       ...("choice" in input ? { linkEmail: input.choice } : {}),
+      ...("passkeysRemoved" in result ? { passkeysRemoved: result.passkeysRemoved } : {}),
     },
     ipAddress: getClientIp(req),
   });
