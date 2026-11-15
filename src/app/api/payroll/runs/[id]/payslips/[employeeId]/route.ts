@@ -5,7 +5,7 @@
  * Requires an authenticated tenant user (admin-scoped — ESS self-service
  * is out of scope for D4).
  *
- * Response: { data: Payslip }
+ * Response: { data: Payslip } (with ytd, tardinessMinutes and leaveBalances, as in ESS)
  */
 import type { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/require-permission";
@@ -18,6 +18,7 @@ import {
 import { getRun, PayrollRunNotFoundError } from "@/lib/payroll/persist";
 import { withTenant } from "@/lib/with-tenant";
 import { renderPayslip } from "@/lib/payslip/render";
+import { loadPayslipExtras } from "@/lib/payslip/extras";
 
 export async function GET(
   req: NextRequest,
@@ -38,7 +39,7 @@ export async function GET(
     const sheet = book.sheets.find((s) => s.employeeId === employeeId);
     if (!sheet) return notFound("PayrollSheet");
 
-    const { emp, tenantName } = await withTenant(auth.tenantId, async (tx) => {
+    const { emp, tenantName, extras } = await withTenant(auth.tenantId, async (tx) => {
       const [employee, tenant] = await Promise.all([
         tx.employee.findFirst({
           where: { id: employeeId, tenantId: auth.tenantId },
@@ -57,7 +58,16 @@ export async function GET(
         }),
         tx.tenant.findUniqueOrThrow({ where: { id: auth.tenantId }, select: { name: true } }),
       ]);
-      return { emp: employee, tenantName: tenant.name };
+      // YTD, tardiness and leave balances, as on the employee's own payslip
+      const extras = employee
+        ? await loadPayslipExtras(tx, {
+            tenantId: auth.tenantId,
+            employeeId,
+            periodEnd: book.periodEnd,
+            periodInputSnapshot: sheet.periodInputSnapshot,
+          })
+        : null;
+      return { emp: employee, tenantName: tenant.name, extras };
     });
 
     if (!emp) return notFound("Employee");
@@ -84,7 +94,8 @@ export async function GET(
       tenantName,
     });
 
-    return ok({ data: payslip });
+    // Same shape as the employee's own payslip (GET /api/ess/payslips/[bookId]).
+    return ok({ ...payslip, ...extras });
   } catch (e) {
     if (e instanceof PayrollRunNotFoundError) return notFound("PayrollBook");
     return serverError(e);

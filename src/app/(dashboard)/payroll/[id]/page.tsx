@@ -20,6 +20,7 @@ import {
   Building2,
   ChevronDown,
   Download,
+  FileText,
   Loader2,
   Plus,
   RefreshCw,
@@ -42,11 +43,23 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  type Payslip,
+  PayslipDetailBody,
+  downloadPayslipPdf,
+} from "@/components/payslip/payslip-detail";
 import {
   Sheet,
   SheetContent,
@@ -69,6 +82,7 @@ type PayrollSheet = {
   id: string;
   employeeId: string;
   employeeNumber?: string | null;
+  employeeName?: string | null;
   // monetary fields serialised as strings (centavos)
   basicSalaryCentsSnapshot: string;
   basePayCents: string;
@@ -268,7 +282,9 @@ function AdjustmentSheet({
                 <SelectItem value="">All employees</SelectItem>
                 {sheets.map((s) => (
                   <SelectItem key={s.employeeId} value={s.employeeId}>
-                    {s.employeeNumber ?? s.employeeId.substring(0, 8)}
+                    {s.employeeName
+                      ? `${s.employeeName}${s.employeeNumber ? ` (${s.employeeNumber})` : ""}`
+                      : s.employeeNumber ?? s.employeeId.substring(0, 8)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -346,6 +362,38 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [adjSheetOpen, setAdjSheetOpen] = useState(false);
+  const [payslipFor, setPayslipFor] = useState<string | null>(null);
+  const [payslip, setPayslip] = useState<Payslip | null>(null);
+  const [payslipLoading, setPayslipLoading] = useState(false);
+  const [payslipDownloading, setPayslipDownloading] = useState(false);
+
+  useEffect(() => {
+    if (!payslipFor) { setPayslip(null); return; }
+    setPayslipLoading(true);
+    fetch(`/api/payroll/runs/${id}/payslips/${payslipFor}`)
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok || !json?.data) {
+          toast.error(json?.error ?? "Payslip not available");
+          return;
+        }
+        setPayslip(json.data);
+      })
+      .catch(() => toast.error("Failed to load payslip"))
+      .finally(() => setPayslipLoading(false));
+  }, [id, payslipFor]);
+
+  async function handlePayslipDownload() {
+    if (!payslip || !payslipFor) return;
+    setPayslipDownloading(true);
+    try {
+      await downloadPayslipPdf(`/api/payroll/runs/${id}/payslips/${payslipFor}/pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to download the payslip.");
+    } finally {
+      setPayslipDownloading(false);
+    }
+  }
 
   const fetchRun = useCallback(async () => {
     setIsLoading(true);
@@ -503,7 +551,11 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                     <ChevronDown className="h-3.5 w-3.5 ml-1" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Download for</DropdownMenuLabel>
+                    {/* Base UI throws (and the whole page fails to load) if a
+                        menu label is not inside a group. */}
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Download for</DropdownMenuLabel>
+                    </DropdownMenuGroup>
                     <DropdownMenuSeparator />
                     {BANK_FILES.map((b) => (
                       <DropdownMenuItem
@@ -578,20 +630,24 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                 <TableHead className="text-right">WHT</TableHead>
                 <TableHead className="text-right">Loans</TableHead>
                 <TableHead className="text-right font-bold">Net Pay</TableHead>
+                {isFinalized && <TableHead className="w-0" />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {run.sheets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={isFinalized ? 10 : 9} className="py-10 text-center text-muted-foreground">
                     No employee sheets computed yet. Use Recompute to generate sheets.
                   </TableCell>
                 </TableRow>
               ) : (
                 run.sheets.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="font-mono text-xs">
-                      {s.employeeNumber ?? s.employeeId.substring(0, 12)}
+                    <TableCell>
+                      <span className="block text-sm font-medium">{s.employeeName ?? s.employeeId.substring(0, 12)}</span>
+                      {s.employeeNumber && (
+                        <span className="block font-mono text-xs text-muted-foreground">{s.employeeNumber}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
                       {formatPeso(s.basicSalaryCentsSnapshot)}
@@ -625,6 +681,14 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                     <TableCell className="text-right tabular-nums text-sm font-semibold">
                       {formatPeso(s.netPayCents)}
                     </TableCell>
+                    {isFinalized && (
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => setPayslipFor(s.employeeId)}>
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />
+                          Payslip
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -667,8 +731,11 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
               <TableBody>
                 {adjustments.map((adj) => (
                   <TableRow key={adj.id}>
-                    <TableCell className="font-mono text-xs">
-                      {run.sheets.find((s) => s.employeeId === adj.employeeId)?.employeeNumber ?? adj.employeeId.substring(0, 12)}
+                    <TableCell className="text-sm">
+                      {(() => {
+                        const sh = run.sheets.find((x) => x.employeeId === adj.employeeId);
+                        return sh?.employeeName ?? sh?.employeeNumber ?? adj.employeeId.substring(0, 12);
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Badge variant={adj.kind === "ADDITION" ? "default" : "destructive"} className="text-xs">
@@ -690,6 +757,24 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </section>
+
+      {/* Payslip of one employee in this finalized run (same view as ESS) */}
+      <Dialog open={payslipFor !== null} onOpenChange={(o) => { if (!o) setPayslipFor(null); }}>
+        <DialogContent className="max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Payslip</DialogTitle>
+          </DialogHeader>
+          {payslipLoading ? (
+            <div className="space-y-2 mt-2">
+              {[...Array(10)].map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+            </div>
+          ) : payslip ? (
+            <PayslipDetailBody detail={payslip} onDownload={handlePayslipDownload} downloading={payslipDownloading} />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-4 text-center">Payslip not available.</p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AdjustmentSheet
         open={adjSheetOpen}
