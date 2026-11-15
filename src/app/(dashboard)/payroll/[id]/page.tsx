@@ -384,12 +384,12 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
   }, [id, payslipFor]);
 
   async function handlePayslipDownload() {
-    if (!payslip) return;
+    if (!payslip || !payslipFor) return;
     setPayslipDownloading(true);
     try {
-      await downloadPayslipPdf(payslip);
-    } catch {
-      toast.error("Failed to generate PDF. Please try again.");
+      await downloadPayslipPdf(`/api/payroll/runs/${id}/payslips/${payslipFor}/pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to download the payslip.");
     } finally {
       setPayslipDownloading(false);
     }

@@ -64,10 +64,6 @@ export function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function fmtDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-}
-
 function PayslipRow({ label, value, bold, red, indent }: { label: string; value: string; bold?: boolean; red?: boolean; indent?: boolean }) {
   if (Number(value) === 0) return null;
   return (
@@ -82,278 +78,29 @@ function SectionTitle({ title }: { title: string }) {
   return <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mt-4 mb-1 border-b pb-1">{title}</p>;
 }
 
-// ── PDF Generator ─────────────────────────────────────────────────────────────
+// ── PDF download ─────────────────────────────────────────────────────────────
+// PAY-139: the PDF is rendered on the server (src/lib/payslip/pdf-document.tsx)
+// so the admin download, the employee's download and the stored copy are the
+// same document. This only fetches it and saves it.
 
-export async function downloadPayslipPdf(detail: Payslip) {
-  const { default: jsPDF } = await import("jspdf");
-  const { default: autoTable } = await import("jspdf-autotable");
-
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 40;
-  const contentW = pageW - margin * 2;
-  const colW = contentW / 2;
-
-  // PDF-safe currency formatter — avoids ₱ rendering as ±
-  const p = (cents: string) =>
-    "P" + (Number(cents) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const pn = (cents: string) =>
-    (Number(cents) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  // ── Header ────────────────────────────────────────────────────────────────
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(16);
-  doc.setFont("courier", "bold");
-  doc.text(detail.tenant.name.toUpperCase(), margin, 30);
-  doc.setFontSize(10);
-  doc.setFont("courier", "normal");
-  doc.text("PAYSLIP", margin, 44);
-  doc.setFontSize(8.5);
-  doc.setTextColor(0, 0, 0);
-  doc.text(
-    `Period: ${fmtDate(detail.period.start)} - ${fmtDate(detail.period.end)}  |  ${detail.period.cycle}  |  ${detail.period.runType}`,
-    margin, 57,
-  );
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Generated: ${new Date().toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-    pageW - margin, 57, { align: "right" },
-  );
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.8);
-  doc.line(margin, 64, margin + contentW, 64);
-
-  // ── Employee Info ─────────────────────────────────────────────────────────
-  let y = 78;
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(8);
-  doc.setFont("courier", "bold");
-  doc.text("EMPLOYEE INFORMATION", margin, y);
-  y += 5;
-
-  const empFields: [string, string][] = [
-    ["Employee Name:", detail.employee.name],
-    ["Employee No.:", detail.employee.employeeNumber],
-    ["Position:", detail.employee.position ?? "-"],
-    ["Tax Classification:", detail.employee.taxClassification.replace(/_/g, " ")],
-    ["Department:", detail.employee.department ?? "-"],
-    ["Branch / HQ:", detail.employee.branch ?? "-"],
-  ];
-
-  const empRowH = 14;
-  const empBoxH = Math.ceil(empFields.length / 2) * empRowH + 8;
-  doc.setLineWidth(0.4);
-  doc.setDrawColor(0, 0, 0);
-  doc.rect(margin, y, contentW, empBoxH);
-
-  doc.setFontSize(8.5);
-  empFields.forEach(([label, val], idx) => {
-    const col = idx % 2;
-    const row = Math.floor(idx / 2);
-    const ex = margin + col * colW + 6;
-    const ey = y + 11 + row * empRowH;
-    doc.setFont("courier", "bold");
-    doc.setTextColor(80, 80, 80);
-    doc.text(label, ex, ey);
-    doc.setFont("courier", "normal");
-    doc.setTextColor(0, 0, 0);
-    doc.text(val, ex + doc.getTextWidth(label) + 4, ey);
-  });
-  y += empBoxH + 12;
-
-  // ── Main grid: Earnings | Deductions ─────────────────────────────────────
-  const rowH = 14;
-  const hdrH = 16;
-  doc.setLineWidth(0.4);
-  doc.setDrawColor(0, 0, 0);
-  doc.setTextColor(0, 0, 0);
-
-  // Header cells
-  doc.rect(margin, y, colW - 2, hdrH);
-  doc.rect(margin + colW + 2, y, colW - 2, hdrH);
-  doc.setFontSize(8.5);
-  doc.setFont("courier", "bold");
-  doc.text("EARNINGS", margin + 6, y + 11);
-  doc.text("AMOUNT", margin + colW - 6, y + 11, { align: "right" });
-  doc.text("DEDUCTIONS", margin + colW + 8, y + 11);
-  doc.text("AMOUNT", margin + contentW - 4, y + 11, { align: "right" });
-  y += hdrH;
-
-  const earningRows: [string, string][] = [];
-  const deductionRows: [string, string][] = [];
-  const addE = (l: string, v: string) => { if (Number(v) !== 0) earningRows.push([l, pn(v)]); };
-  const addD = (l: string, v: string) => { if (Number(v) !== 0) deductionRows.push([l, pn(v)]); };
-
-  addE("Basic Pay", detail.earnings.basePay);
-  addE("OT Pay", detail.earnings.otPay);
-  addE("Night Shift Diff.", detail.earnings.nsdPay);
-  addE("Holiday Pay", detail.earnings.holidayPay);
-  addE("Rest Day Pay", detail.earnings.restDayPay);
-  addE("Hazard Pay", detail.earnings.hazardPay);
-  addE("Taxable Allowances", detail.earnings.taxableAllowances);
-  addE("Non-Taxable Comp.", detail.nonTaxable.nontaxableCompensation);
-  addE("13th Month (Period)", detail.nonTaxable.nontaxable13MonthAndBenefits);
-
-  addD("Late / Undertime", detail.earnings.lateUndertimeDeduction);
-  addD("SSS (EE)", detail.statutory.sssEe);
-  addD("PhilHealth (EE)", detail.statutory.philhealthEe);
-  addD("Pag-IBIG (EE)", detail.statutory.pagibigEe);
-  addD("Withholding Tax", detail.tax.withholdingTax);
-  addD("Loan Deductions", detail.loans.loanDeductions);
-
-  const maxRows = Math.max(earningRows.length, deductionRows.length);
-  doc.setFont("courier", "normal");
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(8.5);
-
-  for (let i = 0; i < maxRows; i++) {
-    const ry = y + i * rowH;
-    doc.rect(margin, ry, colW - 2, rowH);
-    doc.rect(margin + colW + 2, ry, colW - 2, rowH);
-    if (earningRows[i]) {
-      doc.text(earningRows[i][0], margin + 6, ry + 10);
-      doc.text(earningRows[i][1], margin + colW - 6, ry + 10, { align: "right" });
-    }
-    if (deductionRows[i]) {
-      doc.text(deductionRows[i][0], margin + colW + 8, ry + 10);
-      doc.text(deductionRows[i][1], margin + contentW - 4, ry + 10, { align: "right" });
-    }
+export async function downloadPayslipPdf(url: string, headers?: Record<string, string>) {
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `Download failed (${res.status})`);
   }
-  y += maxRows * rowH;
-
-  // Totals row
-  const totH = 16;
-  doc.setLineWidth(0.8);
-  doc.rect(margin, y, colW - 2, totH);
-  doc.rect(margin + colW + 2, y, colW - 2, totH);
-  doc.setLineWidth(0.4);
-  doc.setFont("courier", "bold");
-  doc.setFontSize(8.5);
-  doc.text("TOTAL EARNINGS", margin + 6, y + 11);
-  doc.text(pn(detail.earnings.grossCompensation), margin + colW - 6, y + 11, { align: "right" });
-
-  const totalDed = [
-    detail.earnings.lateUndertimeDeduction, detail.statutory.sssEe,
-    detail.statutory.philhealthEe, detail.statutory.pagibigEe,
-    detail.tax.withholdingTax, detail.loans.loanDeductions,
-  ].reduce((s, v) => s + Number(v), 0);
-
-  doc.text("TOTAL DEDUCTIONS", margin + colW + 8, y + 11);
-  doc.text(
-    (totalDed / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 }),
-    margin + contentW - 4, y + 11, { align: "right" },
-  );
-  y += totH + 10;
-
-  // ── Net Pay ────────────────────────────────────────────────────────────────
-  doc.setLineWidth(1.2);
-  doc.setDrawColor(0, 0, 0);
-  doc.rect(margin, y, contentW, 26);
-  doc.setLineWidth(0.4);
-  doc.setFontSize(11);
-  doc.setFont("courier", "bold");
-  doc.setTextColor(0, 0, 0);
-  doc.text("NET PAY (TAKE HOME)", margin + 10, y + 17);
-  doc.text(p(detail.net.netPay), margin + contentW - 10, y + 17, { align: "right" });
-  y += 26;
-  doc.setFontSize(7.5);
-  doc.setFont("courier", "normal");
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Gross Taxable Income: ${p(detail.tax.grossTaxableIncome)}`, margin + 10, y + 9);
-  y += 20;
-
-  // ── YTD + Leave grid ──────────────────────────────────────────────────────
-  doc.setFontSize(8);
-  doc.setFont("courier", "bold");
-  doc.setTextColor(0, 0, 0);
-  doc.text("YEAR-TO-DATE SUMMARY", margin, y);
-  doc.text("LEAVE BALANCES", margin + colW + 8, y);
-  y += 4;
-  doc.setLineWidth(0.6);
-  doc.line(margin, y, margin + contentW, y);
-  doc.setLineWidth(0.4);
-  y += 4;
-
-  const ytdRows: [string, string][] = [
-    ["YTD Gross", p(detail.ytd.grossCents)],
-    ["YTD Basic Pay", p(detail.ytd.basicCents)],
-    ["YTD W/Tax", p(detail.ytd.wtaxCents)],
-    ["13th Mo. Released", p(detail.ytd.released13thMonthCents)],
-    ["13th Mo. Accrued", p(detail.ytd.accrued13thMonthCents)],
-    ["Tardiness (period)", `${detail.tardinessMinutes} min`],
-  ];
-
-  const leaveRows = detail.leaveBalances.slice(0, 6);
-
-  const gridStyle = {
-    font: "courier",
-    fontSize: 8.5,
-    cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
-    textColor: [0, 0, 0] as [number, number, number],
-    lineColor: [0, 0, 0] as [number, number, number],
-    lineWidth: 0.3,
-    fillColor: [255, 255, 255] as [number, number, number],
-  };
-
-  autoTable(doc, {
-    startY: y,
-    head: [],
-    body: ytdRows,
-    theme: "grid",
-    styles: gridStyle,
-    columnStyles: {
-      0: { fontStyle: "normal", cellWidth: colW * 0.56 },
-      1: { fontStyle: "bold", halign: "right", cellWidth: colW * 0.44 },
-    },
-    margin: { left: margin, right: pageW - margin - colW + 4 },
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ytdFinalY = (doc as any).lastAutoTable.finalY;
-
-  if (leaveRows.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      head: [],
-      body: leaveRows.map((b) => [b.name, b.available + " days"]),
-      theme: "grid",
-      styles: gridStyle,
-      columnStyles: {
-        0: { fontStyle: "normal", cellWidth: colW * 0.56 },
-        1: { fontStyle: "bold", halign: "right", cellWidth: colW * 0.44 },
-      },
-      margin: { left: margin + colW + 4, right: margin },
-    });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const leaveFinalY = leaveRows.length > 0 ? (doc as any).lastAutoTable.finalY : y;
-  y = Math.max(ytdFinalY, leaveFinalY) + 18;
-
-  // ── Footer ────────────────────────────────────────────────────────────────
-  const footerY = doc.internal.pageSize.getHeight() - 28;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.4);
-  doc.line(margin, footerY, margin + contentW, footerY);
-  doc.setFontSize(7);
-  doc.setTextColor(100, 100, 100);
-  doc.setFont("courier", "normal");
-  doc.text(
-    "This payslip is system-generated. For concerns, contact your HR department.",
-    pageW / 2, footerY + 10, { align: "center" },
-  );
-  doc.text(
-    `${detail.tenant.name}  |  ${detail.period.cycle} Payroll  |  ${fmtDate(detail.period.start)} - ${fmtDate(detail.period.end)}`,
-    pageW / 2, footerY + 20, { align: "center" },
-  );
-
-  const filename = `payslip_${detail.employee.employeeNumber}_${fmtDateShort(detail.period.start)}-${fmtDateShort(detail.period.end)}.pdf`
-    .replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
-  doc.save(filename);
+  const blob = await res.blob();
+  const name =
+    /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "payslip.pdf";
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
-
-// ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function PayslipDetailBody({
   detail,
@@ -399,10 +146,14 @@ export function PayslipDetailBody({
       <PayslipRow label="Late / Undertime Deduction" value={detail.earnings.lateUndertimeDeduction} red indent />
       <PayslipRow label="Gross Compensation" value={detail.earnings.grossCompensation} bold />
 
-      {/* Non-taxable */}
-      <SectionTitle title="Non-Taxable Benefits" />
-      <PayslipRow label="Non-Taxable Compensation" value={detail.nonTaxable.nontaxableCompensation} indent />
-      <PayslipRow label="13th Month (this period)" value={detail.nonTaxable.nontaxable13MonthAndBenefits} indent />
+      {/* Non-taxable benefits actually paid. The employee's own SSS, PhilHealth
+          and Pag-IBIG are deductions, never shown here (PAY-138). */}
+      {Number(detail.nonTaxable.nontaxable13MonthAndBenefits) !== 0 && (
+        <>
+          <SectionTitle title="Non-Taxable Benefits" />
+          <PayslipRow label="13th Month (this period)" value={detail.nonTaxable.nontaxable13MonthAndBenefits} indent />
+        </>
+      )}
 
       {/* Deductions */}
       <SectionTitle title="Mandatory Deductions" />
