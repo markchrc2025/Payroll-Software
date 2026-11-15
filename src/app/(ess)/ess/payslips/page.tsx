@@ -69,17 +69,20 @@ export default function EssPayslipsPage() {
   }, [detailTarget]);
 
   async function handleDownload() {
-    if (!detail) return;
+    if (!detail || !detailTarget) return;
+    const token = localStorage.getItem("ess_token");
+    if (!token) { router.replace("/ess/login"); return; }
     setDownloading(true);
     try {
-      await downloadPayslipPdf(detail);
+      await downloadPayslipPdf(`/api/ess/payslips/${detailTarget}/pdf`, { Authorization: `Bearer ${token}` });
     } catch (e) {
       console.error(e);
-      toast.error("Failed to generate PDF. Please try again.");
+      toast.error(e instanceof Error ? e.message : "Failed to download the payslip. Please try again.");
     } finally {
       setDownloading(false);
     }
   }
+
 
   return (
     <div className="p-4 lg:p-8 space-y-3 lg:space-y-4 max-w-3xl mx-auto">

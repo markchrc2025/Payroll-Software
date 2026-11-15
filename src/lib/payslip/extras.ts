@@ -17,6 +17,9 @@ export interface PayslipExtras {
     basicCents: string;
     released13thMonthCents: string;
     accrued13thMonthCents: string;
+    sssEeCents: string;
+    philhealthEeCents: string;
+    pagibigEeCents: string;
   };
   tardinessMinutes: number;
   leaveBalances: { code: string; name: string; available: string }[];
@@ -51,6 +54,9 @@ export async function loadPayslipExtras(
         withholdingTaxCents: true,
         basePayCents: true,
         nontaxable13MonthAndBenefitsCents: true,
+        sssEeCents: true,
+        philhealthEeCents: true,
+        pagibigEeCents: true,
       },
     }),
     // Leave balances for the period's year (SL / VL)
@@ -70,7 +76,13 @@ export async function loadPayslipExtras(
   let ytdWtax = BigInt(0);
   let ytdBasic = BigInt(0);
   let ytd13Month = BigInt(0);
+  let ytdSss = BigInt(0);
+  let ytdPhic = BigInt(0);
+  let ytdHdmf = BigInt(0);
   for (const s of ytdSheets) {
+    ytdSss += s.sssEeCents;
+    ytdPhic += s.philhealthEeCents;
+    ytdHdmf += s.pagibigEeCents;
     ytdGross += s.grossCompensationCents;
     ytdWtax += s.withholdingTaxCents;
     ytdBasic += s.basePayCents;
@@ -91,6 +103,9 @@ export async function loadPayslipExtras(
       basicCents: centavosToJson(ytdBasic)!,
       released13thMonthCents: centavosToJson(ytd13Month)!,
       accrued13thMonthCents: centavosToJson(accrued13thMonth)!,
+      sssEeCents: centavosToJson(ytdSss)!,
+      philhealthEeCents: centavosToJson(ytdPhic)!,
+      pagibigEeCents: centavosToJson(ytdHdmf)!,
     },
     tardinessMinutes,
     leaveBalances: leaveBalances.map((b) => ({
