@@ -17,6 +17,16 @@ cd "$(dirname "$0")/.."
 
 BIN="./node_modules/.bin"
 
+# STAGING ONLY (docs/STAGING.md): with STAGING_EMBEDDED_DB=1 the container runs
+# its own throwaway Postgres on 127.0.0.1 and exports DATABASE_URL and
+# DIRECT_DATABASE_URL for it, so staging can never reach the shared Postgres
+# that production uses. Production never sets this variable.
+if [ "${STAGING_EMBEDDED_DB:-}" = "1" ]; then
+  # shellcheck source=staging/embedded-db.sh
+  source scripts/staging/embedded-db.sh
+  staging_embedded_db
+fi
+
 if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
   echo "::error:: DIRECT_DATABASE_URL (owner, direct connection) is not set — 'prisma migrate deploy' would connect as the app role and fail. Set the owner direct URL in the Sliplane app env before deploying." >&2
   exit 1
@@ -43,6 +53,15 @@ echo "[start] Migrations up to date"
 # and rollback configured, the previous version keeps serving.
 echo "[start] Checking the runtime database role…"
 node scripts/db/assert-runtime-role.mjs
+
+if [ "${STAGING_EMBEDDED_DB:-}" = "1" ]; then
+  echo "[staging] Loading the 2026 statutory tables…"
+  "$BIN/tsx" scripts/load-statutory-2026.ts
+  echo "[staging] Creating the QA company and its admin…"
+  node scripts/staging/bootstrap-company.mjs
+  echo "[staging] Starting the QA connector (seeds test data once the app is up)…"
+  node scripts/staging/qa-mcp.mjs &
+fi
 
 echo "[start] Starting Next.js"
 exec "$BIN/next" start

@@ -2510,6 +2510,12 @@ model PayrollBook {
   /// BIR taxability; preserved on the book so recomputeRun is idempotent.
   separationReason SeparationReason?
 
+  /// PAY-135: the employees this run is limited to (an OFF_CYCLE, FINAL_PAY
+  /// or YEAR_END subset). Stored on the book so the background compute
+  /// (processRun) and recomputeRun select exactly the people the run was
+  /// created for. Empty = every employee the run type selects.
+  targetEmployeeIds String[] @default([])
+
   createdByUserId   String?
   finalizedAt       DateTime?
   finalizedByUserId String?
