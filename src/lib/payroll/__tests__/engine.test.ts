@@ -1295,13 +1295,17 @@ describe("§AE1 Compound premium stacking matrix (Phase AE1)", () => {
 // ===========================================================================
 describe("DEF-2 zero-earnings statutory gate", () => {
   it("zero earnings → no statutory (EE & ER) and net pay is 0, not negative", () => {
-    // ₱45,000/mo salary (positive MSC basis), but 0 worked days and no other
-    // pay. overrideStatutoryDeducted: true forces the pre-fix bug trigger
-    // (statutory would otherwise be computed on the salary-derived MSC).
+    // ₱45,000/mo salary (positive MSC basis), but the whole period unpaid and
+    // no other pay. overrideStatutoryDeducted: true forces the pre-fix bug
+    // trigger (statutory would otherwise be computed on the salary-derived MSC).
+    // 1.8 amendment (Mark, 15 Nov 2026, "amend DEF-2"): a monthly employee is
+    // paid the contracted salary whatever daysWorked says, so zero earnings is
+    // now set up as a whole period of unpaid leave (22 days x the LWOP daily
+    // equivalent exceeds the salary; base pay clamps to 0). Assertions unchanged.
     const result = computeSheet(makeInput({
       salaryType: "MONTHLY",
       basicSalaryCents: 4_500_000n,
-      periodInput: { daysWorked: 0 },
+      periodInput: { daysWorked: 0, unpaidLeaveDays: 22 },
       overrideStatutoryDeducted: true,
     }));
     expect(result.sssEeCents).toBe(0n);
@@ -1318,10 +1322,13 @@ describe("DEF-2 zero-earnings statutory gate", () => {
     // Gross taxable is 0 but the employee received a non-taxable addition, so
     // periodEarnings > 0: statutory still applies (gate does not fire) and net
     // stays non-negative.
+    // 1.8 amendment (same as above): zero taxable gross for a monthly employee
+    // is a whole period of unpaid leave, otherwise contracted pay would make
+    // gross positive and this would no longer test the reimbursement.
     const result = computeSheet(makeInput({
       salaryType: "MONTHLY",
       basicSalaryCents: 4_500_000n,
-      periodInput: { daysWorked: 0 },
+      periodInput: { daysWorked: 0, unpaidLeaveDays: 22 },
       adjustments: [{ id: "reimb", kind: "ADDITION", amountCents: 500_000n, isTaxable: false, reason: "Reimbursement" }],
       overrideStatutoryDeducted: true,
     }));
