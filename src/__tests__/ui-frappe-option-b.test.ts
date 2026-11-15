@@ -45,7 +45,7 @@ describe("Frappe UI style, Option B", () => {
     expect(layout).toContain('from "next/font/local"');
     expect(layout).toMatch(/variable: "--font-inter"/);
     expect(layout).not.toMatch(/\bInter\b[^"]*from "next\/font\/google"/);
-    for (const f of ["inter-latin-wght-normal.woff2", "inter-latin-wght-italic.woff2", "OFL.txt"]) {
+    for (const f of ["inter-wght-normal.woff2", "inter-wght-italic.woff2", "OFL.txt"]) {
       expect(existsSync(`src/app/fonts/inter/${f}`), f).toBe(true);
     }
   });
