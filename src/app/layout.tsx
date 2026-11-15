@@ -3,64 +3,57 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-// Every font is served from the repo (next/font/local), never fetched from
-// Google at build time: a build that needs no network for fonts cannot fail
-// on a font download (PAY-126). Variable fonts, latin subset, from the
-// Fontsource packages; each folder keeps its SIL Open Font License as OFL.txt.
-// Fraunces was loaded but never used, so it is gone.
+// Every font is served from the repo (PAY-126): a build never downloads from
+// Google Fonts. Each file is the Google Fonts variable font covering Latin and
+// Latin Extended in one file, so the peso sign (U+20B1, Latin Extended) renders
+// in the brand font. Licences: OFL.txt beside each file. How the files were
+// made and checked: src/app/fonts/README.md.
 
+// Geist and Geist Mono are second in the stacks behind Instrument Sans and
+// JetBrains Mono (globals.css). Neither of those has a peso sign, so Geist draws
+// ₱ there. Not preloaded: the browser fetches them only when a page needs a
+// glyph the first font lacks.
 const geistSans = localFont({
-  src: "./fonts/geist/geist-latin-wght-normal.woff2",
-  weight: "100 900",
+  src: [{ path: "./fonts/geist/geist-wght-normal.woff2", weight: "100 900", style: "normal" }],
   variable: "--font-geist-sans",
-  display: "swap",
+  preload: false,
 });
 
 const geistMono = localFont({
-  src: "./fonts/geist-mono/geist-mono-latin-wght-normal.woff2",
-  weight: "100 900",
+  src: [{ path: "./fonts/geist-mono/geist-mono-wght-normal.woff2", weight: "100 900", style: "normal" }],
   variable: "--font-geist-mono",
-  display: "swap",
+  preload: false,
 });
 
 const plusJakartaSans = localFont({
-  src: "./fonts/plus-jakarta-sans/plus-jakarta-sans-latin-wght-normal.woff2",
-  weight: "200 800",
+  src: [{ path: "./fonts/plus-jakarta-sans/plus-jakarta-sans-wght-normal.woff2", weight: "200 800", style: "normal" }],
   variable: "--font-plus-jakarta-sans",
-  display: "swap",
 });
 
 // Brand fonts for the Sentire login screens (design handoff).
 const instrumentSans = localFont({
-  src: "./fonts/instrument-sans/instrument-sans-latin-wght-normal.woff2",
-  weight: "400 700",
+  src: [{ path: "./fonts/instrument-sans/instrument-sans-wght-normal.woff2", weight: "400 700", style: "normal" }],
   variable: "--font-instrument-sans",
-  display: "swap",
 });
 
 const hankenGrotesk = localFont({
-  src: "./fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2",
-  weight: "100 900",
+  src: [{ path: "./fonts/hanken-grotesk/hanken-grotesk-wght-normal.woff2", weight: "100 900", style: "normal" }],
   variable: "--font-hanken-grotesk",
-  display: "swap",
 });
 
 // Numeric / mono font for the Sentire admin design system.
 const jetbrainsMono = localFont({
-  src: "./fonts/jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2",
-  weight: "100 800",
+  src: [{ path: "./fonts/jetbrains-mono/jetbrains-mono-wght-normal.woff2", weight: "100 800", style: "normal" }],
   variable: "--font-jetbrains-mono",
-  display: "swap",
 });
 
 // Inter for the admin (Frappe UI style, Option B).
 const inter = localFont({
   src: [
-    { path: "./fonts/inter/inter-latin-wght-normal.woff2", weight: "100 900", style: "normal" },
-    { path: "./fonts/inter/inter-latin-wght-italic.woff2", weight: "100 900", style: "italic" },
+    { path: "./fonts/inter/inter-wght-normal.woff2", weight: "100 900", style: "normal" },
+    { path: "./fonts/inter/inter-wght-italic.woff2", weight: "100 900", style: "italic" },
   ],
   variable: "--font-inter",
-  display: "swap",
 });
 
 export const metadata: Metadata = {
