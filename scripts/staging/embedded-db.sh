@@ -54,8 +54,17 @@ staging_embedded_db() {
     --pwfile="$pwfile" --encoding=UTF8 --locale=C >/dev/null
   rm -f "$pwfile"
 
+  # TLS on, as on the shared server: the job queue (src/lib/jobs/client.ts)
+  # always connects with ssl, and a server without it refuses. A throwaway
+  # self-signed certificate is enough on 127.0.0.1 (openssl comes with the
+  # postgresql package via ssl-cert). Plain connections keep working too.
+  openssl req -new -x509 -days 30 -nodes -subj "/CN=127.0.0.1" \
+    -keyout "$data/server.key" -out "$data/server.crt" >/dev/null 2>&1
+  chmod 600 "$data/server.key"
+  [ "$(id -u)" = "0" ] && chown postgres:postgres "$data/server.key" "$data/server.crt"
+
   "${as_pg[@]}" "$pgbin/pg_ctl" -D "$data" -l "$log" -w \
-    -o "-c listen_addresses=127.0.0.1 -c port=$port -c unix_socket_directories=$root" start >/dev/null
+    -o "-c listen_addresses=127.0.0.1 -c port=$port -c unix_socket_directories=$root -c ssl=on" start >/dev/null
 
   # Passwords are hex, so they are safe inside SQL string literals.
   PGPASSWORD="$pw_super" "$pgbin/psql" -h 127.0.0.1 -p "$port" -U postgres -d postgres \
