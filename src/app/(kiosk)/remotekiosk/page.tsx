@@ -29,7 +29,6 @@ export default function RemoteKioskPage() {
 
   // Refs for volatile values so PIN-screen handlers always see fresh data
   const deviceTokenRef = useRef("");
-  const requiresSelfieRef = useRef(true); // Selfie is always required for kiosk punch
   const employeeNumberRef = useRef("");
   const punchTypeRef = useRef<PunchType>("IN");
   const pinRef = useRef("");
@@ -68,7 +67,6 @@ export default function RemoteKioskPage() {
     if (screen !== "PIN") {
       stopCamera();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   useEffect(() => {
