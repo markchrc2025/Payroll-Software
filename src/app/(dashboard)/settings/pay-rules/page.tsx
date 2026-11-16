@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PayScheduleEditor } from "@/components/settings/pay-schedule-editor";
 
 type TenantSettings = {
   payrollCycle: string;
@@ -162,6 +163,14 @@ export default function PayRulesPage() {
               value={form.payrollCycle}
               onChange={(v) => update("payrollCycle", v)}
             />
+          </RuleSection>
+
+          {/* PAY-141: paydays and DTR cutoffs (saved on their own) */}
+          <RuleSection
+            title="Paydays and Timekeeping Cutoffs"
+            description="When each pay cycle is paid, and which days of timekeeping feed each payday. New payroll runs take their dates from here."
+          >
+            <PayScheduleEditor />
           </RuleSection>
 
           {/* Working Days Denominator */}

@@ -668,6 +668,7 @@ model Tenant {
   periodInputs            PeriodInput[]
   loans                   Loan[]
   payrollBooks            PayrollBook[]
+  paySchedules            PaySchedule[]
   payrollSheets           PayrollSheet[]
   payrollAdjustments      PayrollAdjustment[]
   shiftSchedules          ShiftSchedule[]
@@ -2518,6 +2519,14 @@ model PayrollBook {
   /// created for. Empty = every employee the run type selects.
   targetEmployeeIds String[] @default([])
 
+  /// PAY-141: the day people are paid (moved back off Sundays and holidays)
+  /// and the DTR cutoff window whose attendance this run uses. Set when the
+  /// run is created from a payday; NULL on runs typed by date (older runs,
+  /// off-cycle), which use periodStart..periodEnd for attendance as before.
+  payDate     DateTime?
+  cutoffStart DateTime?
+  cutoffEnd   DateTime?
+
   createdByUserId   String?
   finalizedAt       DateTime?
   finalizedByUserId String?
@@ -2535,6 +2544,31 @@ model PayrollBook {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, periodEnd])
+}
+
+/// PAY-141: paydays and the DTR cutoff window feeding each payday, for a pay
+/// cycle that has a schedule (SEMI_MONTHLY: two slots; MONTHLY: one). WEEKLY
+/// (Saturday, Saturday-to-Friday cutoff) and DAILY are fixed and have no row.
+/// No row for a cycle: the default (15th and month-end, cutoff = pay period).
+/// Days are 1 to 31; 30 and 31 mean the last day of the month.
+model PaySchedule {
+  id       String       @id @default(cuid())
+  tenantId String
+  cycle    PayFrequency
+
+  payDay1         Int
+  cutoff1StartDay Int
+  cutoff1EndDay   Int
+  payDay2         Int?
+  cutoff2StartDay Int?
+  cutoff2EndDay   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, cycle])
 }
 
 /// One frozen pay-stub computation per employee per run. All monetary fields

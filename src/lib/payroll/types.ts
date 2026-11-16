@@ -68,6 +68,14 @@ export interface ComputeTenantSnapshot {
 }
 
 export interface ComputePeriodInputSnapshot {
+  /**
+   * PAY-142: where the run's attendance came from. DTR = approved timekeeping
+   * for the run's window (wins when there is any); MANUAL = a run input typed
+   * for the window; NONE = neither; DTR_NOT_APPROVED = the company requires an
+   * approved DTR submission and the window has none (manual input, if any, is
+   * used). Absent on sheets computed before PAY-142.
+   */
+  attendanceSource?: "DTR" | "MANUAL" | "NONE" | "DTR_NOT_APPROVED";
   daysWorked: number;
   lateUndertimeMinutes: number;
   regularOtHours: number;
@@ -237,6 +245,13 @@ export interface ComputeInput {
    * contracted monthly basic, as before.
    */
   sssBasis?: SssBasis;
+  /**
+   * PAY-141 (Mark, 16 Nov, ruling 2a): on a run whose DTR cutoff differs from
+   * its pay period, a salaried employee who joins or leaves inside the pay
+   * period is paid for the scheduled workdays employed in the PAY PERIOD,
+   * less unpaid days from the cutoff. Set by persist.ts only in that case.
+   */
+  employedPeriodDays?: number;
   /**
    * When present, the engine switches to FINAL_PAY computation mode.
    * The persist layer pre-computes all separation-related amounts and CY

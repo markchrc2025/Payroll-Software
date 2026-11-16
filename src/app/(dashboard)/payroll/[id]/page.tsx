@@ -101,6 +101,10 @@ type PayrollRun = {
   id: string;
   periodStart: string;
   periodEnd: string;
+  /** PAY-141: set on runs created from a payday. */
+  payDate?: string | null;
+  cutoffStart?: string | null;
+  cutoffEnd?: string | null;
   cycle: string;
   runType: string;
   status: "DRAFT" | "FINALIZED" | "CANCELLED";
@@ -508,6 +512,14 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
               {" · "}
               {run.sheets.length} employee{run.sheets.length !== 1 ? "s" : ""}
             </p>
+            {run.payDate && (
+              <p className="text-sm text-muted-foreground tabular-nums" data-testid="run-paydate-cutoff">
+                Pay date {new Date(run.payDate).toLocaleDateString("en-PH", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                {run.cutoffStart && run.cutoffEnd && (
+                  <> · Timekeeping cutoff {formatPeriod(run.cutoffStart, run.cutoffEnd)}</>
+                )}
+              </p>
+            )}
             {run.notes && <p className="text-sm text-muted-foreground italic">{run.notes}</p>}
           </div>
 
