@@ -180,7 +180,11 @@ export const ytdOpeningInput = z.discriminatedUnion("source", [
   z.object({
     source: z.literal("PREVIOUS_EMPLOYER"),
     ...common,
-    previousEmployerName: z.string().trim().min(1, "Previous employer name is required").max(200),
+    previousEmployerName: z
+      .string({ error: "Previous employer name is required" })
+      .trim()
+      .min(1, "Previous employer name is required")
+      .max(200),
     previousEmployerTin: z.string().trim().max(30).optional().nullable(),
   }),
 ]);
