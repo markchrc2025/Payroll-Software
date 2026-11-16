@@ -598,7 +598,9 @@ model Tenant {
   /// Second pay day — only used for Semi-Monthly (e.g. 1 & 15 → payDay1=1, payDay2=15).
   payDay2                 Int?
   workingDaysDenominator  Int                     @default(261)
-  statutoryCutoffRule     StatutoryCutoffRule     @default(SECOND_CUTOFF)
+  /// PAY-133: new companies deduct SSS/PhilHealth/Pag-IBIG on the FIRST payday
+  /// of the month (Mark, 16 Nov 2026). Existing companies keep their setting.
+  statutoryCutoffRule     StatutoryCutoffRule     @default(FIRST_CUTOFF)
   thirteenthMonthBasis    ThirteenthMonthBasis    @default(STRICT_DOLE)
   /// Payroll safeguard: max % of monthly gross that statutory + loan/recurring
   /// deductions may consume. New loans that would breach this are blocked

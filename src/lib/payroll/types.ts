@@ -6,6 +6,7 @@
  * The persist layer (`persist.ts`) is responsible for resolving master data
  * and statutory rules BEFORE calling the engine.
  */
+import type { SssBasis, SssBasisKind } from "./sss-basis";
 import type {
   AdjustmentKind,
   LoanType,
@@ -231,6 +232,12 @@ export interface ComputeInput {
    */
   overrideStatutoryDeducted?: boolean;
   /**
+   * PAY-133: which month's actual basic the SSS contribution is on (set by
+   * persist.ts for REGULAR runs that deduct; see sss-basis.ts). Absent: the
+   * contracted monthly basic, as before.
+   */
+  sssBasis?: SssBasis;
+  /**
    * When present, the engine switches to FINAL_PAY computation mode.
    * The persist layer pre-computes all separation-related amounts and CY
    * totals; the engine uses them for the annualized WHT true-up.
@@ -355,6 +362,15 @@ export interface StatutoryBreakdown {
     bracketFixedTaxCents: string;
     bracketPlusRate: number;
   } | null;
+  /// PAY-133: the month and actual basic the SSS contribution was based on.
+  /// Absent on runs without a basis (older sheets, non-REGULAR runs).
+  sssBasis?: {
+    kind: SssBasisKind;
+    /// YYYY-MM
+    month: string;
+    /// Compensation looked up in the SSS table ("0" when no SSS).
+    compensationCents: string;
+  };
 }
 
 export interface ComputeResult {
