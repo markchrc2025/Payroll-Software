@@ -75,6 +75,14 @@ export interface CreateDraftRunInput {
   tenantId: string;
   periodStart: Date;
   periodEnd: Date;
+  /**
+   * PAY-141: set when the run is created from a scheduled payday. The run's
+   * attendance (PeriodInput) is read for cutoffStart..cutoffEnd; without a
+   * cutoff it is read for periodStart..periodEnd, as before.
+   */
+  payDate?: Date | null;
+  cutoffStart?: Date | null;
+  cutoffEnd?: Date | null;
   cycle: Prisma.PayrollBookCreateInput["cycle"];
   runType?: Prisma.PayrollBookCreateInput["runType"];
   notes?: string | null;
@@ -320,6 +328,8 @@ async function buildComputeInputForEmployee(
   tenantSettings: ComputeInput["tenant"],
   rules: ComputeStatutoryRules,
   multiplierConfig?: ComputeMultiplierConfig,
+  /** PAY-141: the run's DTR cutoff window; attendance is read for it. */
+  attendanceWindow?: { start: Date | null; end: Date | null },
 ): Promise<ComputeInput | null> {
   const term = employee.employmentTerms[0];
   if (!term || term.basicSalaryCents == null || term.salaryType == null) {
@@ -337,8 +347,10 @@ async function buildComputeInputForEmployee(
     tx.periodInput.findFirst({
       where: {
         employeeId: employee.id,
-        periodStart,
-        periodEnd,
+        // PAY-141: a run created from a payday reads its DTR cutoff window
+        // (e.g. 26 Oct to 10 Nov for the 15 Nov payday); others their period.
+        periodStart: attendanceWindow?.start ?? periodStart,
+        periodEnd: attendanceWindow?.end ?? periodEnd,
       },
     }),
     tx.employeePayComponent.findMany({
@@ -795,6 +807,9 @@ export async function createDraftRun(input: CreateDraftRunInput) {
           skipStatutory: input.skipStatutory ?? false,
           separationReason: input.separationReason ?? null,
           targetEmployeeIds: targetIdsFor(input),
+          payDate: input.payDate ?? null,
+          cutoffStart: input.cutoffStart ?? null,
+          cutoffEnd: input.cutoffEnd ?? null,
         },
       })
       .catch((e) => {
@@ -839,6 +854,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         tenant,
         rules,
         multiplierConfig,
+        { start: input.cutoffStart ?? null, end: input.cutoffEnd ?? null },
       );
       if (!ci) continue;
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
@@ -986,6 +1002,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         tenant,
         rules,
         multiplierConfigR,
+        { start: book.cutoffStart, end: book.cutoffEnd },
       );
       if (!ci) continue;
       ci.runType = book.runType; // unit 1.8 (G1)
@@ -1264,6 +1281,9 @@ export async function queueRun(input: CreateDraftRunInput) {
           skipStatutory: input.skipStatutory ?? false,
           separationReason: input.separationReason ?? null,
           targetEmployeeIds: targetIdsFor(input),
+          payDate: input.payDate ?? null,
+          cutoffStart: input.cutoffStart ?? null,
+          cutoffEnd: input.cutoffEnd ?? null,
           status: "PROCESSING",
         },
       })
@@ -1344,6 +1364,7 @@ export async function processRun(tenantId: string, bookId: string) {
         tenant,
         rules,
         multiplierConfig,
+        { start: book.cutoffStart, end: book.cutoffEnd },
       );
       if (!ci) continue;
       ci.runType = book.runType; // unit 1.8 (G1)
