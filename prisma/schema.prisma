@@ -364,6 +364,18 @@ enum PayrollBookStatus {
   CANCELLED
 }
 
+/// PAY-144: where a year-to-date opening comes from.
+///   PRIOR_PAYROLL     this company's own pay to the employee earlier in the
+///                     year, before it used Sentire. It is this employer's
+///                     compensation: 13th month base, 2316 and alphalist.
+///   PREVIOUS_EMPLOYER another employer's 2316 for the same year (a new hire
+///                     who transferred). Used for annualization and the
+///                     90,000 exemption only.
+enum YtdOpeningSource {
+  PRIOR_PAYROLL
+  PREVIOUS_EMPLOYER
+}
+
 enum PayrollRunType {
   REGULAR
   OFF_CYCLE
@@ -669,6 +681,7 @@ model Tenant {
   loans                   Loan[]
   payrollBooks            PayrollBook[]
   paySchedules            PaySchedule[]
+  ytdOpenings             EmployeeYtdOpening[]
   payrollSheets           PayrollSheet[]
   payrollAdjustments      PayrollAdjustment[]
   shiftSchedules          ShiftSchedule[]
@@ -1336,6 +1349,7 @@ model Employee {
   payComponentAssignments EmployeePayComponent[]
   periodInputs            PeriodInput[]
   loans                   Loan[]
+  ytdOpenings             EmployeeYtdOpening[]
   payrollSheets           PayrollSheet[]
   payrollAdjustments      PayrollAdjustment[]
   shiftAssignments        EmployeeShiftAssignment[]
@@ -2569,6 +2583,51 @@ model PaySchedule {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, cycle])
+}
+
+/// PAY-144 (Mark, 16 Nov 2026, HR.my review D4 = C): year-to-date figures an
+/// employee brings into Sentire for one calendar year, so a company that joins
+/// mid-year pays the right 13th month and withholds the right year-end tax.
+/// One row per employee, year and source. Amounts in centavos. Locked once the
+/// employee has a FINALIZED YEAR_END or FINAL_PAY run in that year (the run
+/// keeps a copy of what it used in periodInputSnapshot.ytdOpening).
+model EmployeeYtdOpening {
+  id         String           @id @default(cuid())
+  tenantId   String
+  employeeId String
+  year       Int
+  source     YtdOpeningSource
+
+  /// PREVIOUS_EMPLOYER only: the employer named on its 2316.
+  previousEmployerName String?
+  previousEmployerTin  String?
+
+  /// PRIOR_PAYROLL only (0 for PREVIOUS_EMPLOYER): basic pay earned in the
+  /// year before Sentire (13th month base) and 13th month already paid.
+  basicPayEarnedCents      BigInt @default(0)
+  thirteenthMonthPaidCents BigInt @default(0)
+
+  /// Both sources: taxable compensation, tax withheld, and the non-taxable
+  /// 13th month and other benefits (the 90,000 exemption already used).
+  taxableCompensationCents          BigInt @default(0)
+  withholdingTaxCents               BigInt @default(0)
+  nontaxable13MonthAndBenefitsCents BigInt @default(0)
+
+  /// PRIOR_PAYROLL only: the other non-taxable lines of the 2316.
+  sssEeCents           BigInt @default(0)
+  philhealthEeCents    BigInt @default(0)
+  pagibigEeCents       BigInt @default(0)
+  otherNontaxableCents BigInt @default(0)
+
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([tenantId, employeeId, year, source])
+  @@index([tenantId, year])
 }
 
 /// One frozen pay-stub computation per employee per run. All monetary fields

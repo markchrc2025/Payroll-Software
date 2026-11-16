@@ -21,6 +21,11 @@ import {
   type Bir2316SheetInput,
 } from "@/lib/payroll/reports/bir-2316";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import {
+  loadYtdOpeningsByEmployee,
+  openingAsReportSheet,
+  type YtdOpening,
+} from "@/lib/payroll/ytd-openings";
 
 const querySchema = z.object({
   year: z.coerce
@@ -97,7 +102,14 @@ export async function GET(req: NextRequest) {
         byEmployee.set(s.employeeId, bucket);
       }
 
-      const employeeIds = [...byEmployee.keys()];
+      // PAY-144: openings put employees paid only before Sentire on the list too.
+      const openings = await loadYtdOpeningsByEmployee(
+        tx,
+        auth.tenantId,
+        year,
+        employeeId ? [employeeId] : undefined,
+      );
+      const employeeIds = [...new Set([...byEmployee.keys(), ...openings.keys()])];
       const tenant = await tx.tenant.findUniqueOrThrow({
         where: { id: auth.tenantId },
         select: { name: true },
@@ -156,6 +168,7 @@ export async function GET(req: NextRequest) {
         suffix: e.suffix,
         taxClassification: e.taxClassification,
         sheets: byEmployee.get(e.id) ?? [],
+        ...ytdOpeningInputs(openings.get(e.id) ?? []),
       }));
 
       const report = buildBir2316Report({
@@ -188,4 +201,23 @@ export async function GET(req: NextRequest) {
     console.error("[bir/2316]", e);
     return err("Internal server error", 500);
   }
+}
+
+/** PAY-144: the 2316 inputs that come from an employee's year-to-date openings. */
+function ytdOpeningInputs(
+  list: YtdOpening[],
+): Pick<Bir2316EmployeeInput, "priorPayrollOpening" | "previousEmployer"> {
+  const prior = list.find((o) => o.source === "PRIOR_PAYROLL");
+  const prev = list.find((o) => o.source === "PREVIOUS_EMPLOYER");
+  return {
+    priorPayrollOpening: prior ? openingAsReportSheet(prior) : undefined,
+    previousEmployer: prev
+      ? {
+          name: prev.previousEmployerName ?? "",
+          tin: prev.previousEmployerTin,
+          taxableCompensationCents: prev.taxableCompensationCents,
+          withholdingTaxCents: prev.withholdingTaxCents,
+        }
+      : null,
+  };
 }

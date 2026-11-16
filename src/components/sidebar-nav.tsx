@@ -182,6 +182,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/payroll", label: "Payroll Runs", icon: "payruns" },
       { href: "/pay-components", label: "Pay Components", icon: "components" },
       { href: "/loans", label: "Loans", icon: "loans" },
+      { href: "/payroll/ytd-openings", label: "Year-to-date Openings", icon: "bankfiles" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
@@ -289,7 +290,13 @@ export function SidebarNav({
 
   function isActive(href: string): boolean {
     if (href === "/settings") return pathname === "/settings";
-    return pathname === href || pathname.startsWith(href + "/");
+    const matches = (h: string) => pathname === h || pathname.startsWith(h + "/");
+    if (!matches(href)) return false;
+    // A more specific link wins over its parent: on /payroll/ytd-openings only
+    // "Year-to-date Openings" is active, not "Payroll Runs" (/payroll).
+    return !NAV_SECTIONS.some((s) =>
+      s.items.some((i) => i.href !== href && i.href.startsWith(href + "/") && matches(i.href)),
+    );
   }
 
   const activeSection = NAV_SECTIONS.find((s) =>
