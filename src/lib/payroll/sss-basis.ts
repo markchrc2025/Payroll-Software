@@ -5,31 +5,29 @@
  *   - SSS is on basic pay actually earned: basic after unpaid days and lates.
  *     Overtime, night differential, holiday pay, rest day pay and allowances
  *     are NOT part of the base.
- *   - When contributions are deducted on the FIRST payday of the month, the
- *     base is the PREVIOUS month's actual basic (the current month is not
- *     over yet).
- *   - An employee's first month: no SSS (no previous month to base it on).
+ *   - SSS is ALWAYS based on the PREVIOUS month's basic. The company's
+ *     deduction payday (first or second payday of the month) decides only
+ *     WHEN it is deducted, never which month it is based on.
+ *   - The deduction day is fixed: a new hire's SSS does not move to another
+ *     payday. An employee's first month has no SSS (no previous month);
  *     PhilHealth and Pag-IBIG are unchanged (contracted basic salary).
  *
- * Applied here:
- *   - SEMI_MONTHLY + FIRST_CUTOFF: previous calendar month, from finalized runs.
- *   - SEMI_MONTHLY + SECOND_CUTOFF, MONTHLY, WEEKLY, DAILY: the month being
- *     closed (the deduction run is its last run), from finalized runs earlier
- *     in that month plus this run's own basic.
- *   - If any employed day of the base month is not covered by a finalized run
- *     in Sentire (for example the company's first month on the system, or the
- *     previous month's second cutoff is not finalized yet), the base falls back
- *     to the contracted monthly basic, and the payslip says so.
+ * Applied here, for every cycle and rule: the base month is the calendar
+ * month before the month the deduction run falls in (SEMI_MONTHLY and
+ * MONTHLY: the month of the run's period end; WEEKLY and DAILY: the month
+ * whose last day is in the run). Basic comes from finalized runs only.
+ * If any employed day of the base month is not covered by a finalized run in
+ * Sentire (for example the company's first month on the system, or the
+ * previous month's last cutoff not finalized yet), the base falls back to the
+ * contracted monthly basic, and the payslip says so.
  *
  * This module is pure: no database, no clock. persist.ts loads the sheets.
  */
 import type { PayFrequency } from "@prisma/client";
 
 export type SssBasisKind =
-  /** Previous month's actual basic (FIRST_CUTOFF). */
+  /** Previous month's actual basic. */
   | "PREVIOUS_MONTH_ACTUAL"
-  /** This month's actual basic, including this run (month-closing run). */
-  | "THIS_MONTH_ACTUAL"
   /** Not hired yet in the base month: no SSS this run. */
   | "NEW_HIRE_NO_SSS"
   /** Base month not fully in Sentire: contracted monthly basic used. */
@@ -37,13 +35,11 @@ export type SssBasisKind =
 
 export type SssBasis =
   | {
-      kind: "PREVIOUS_MONTH_ACTUAL" | "THIS_MONTH_ACTUAL";
+      kind: "PREVIOUS_MONTH_ACTUAL";
       /** YYYY-MM of the base month. */
       month: string;
       /** Basic (after unpaid days and lates) from finalized runs. */
       priorBasicCents: bigint;
-      /** Add this run's own basic (base pay minus late) on top. */
-      includeThisRun: boolean;
     }
   | { kind: "NEW_HIRE_NO_SSS"; month: string }
   | { kind: "CONTRACTED_FALLBACK"; month: string };
@@ -73,41 +69,35 @@ export interface SssBaseMonth {
   monthEnd: Date;
   /** YYYY-MM */
   month: string;
-  includeThisRun: boolean;
 }
 
 /**
- * The base month for a run that DEDUCTS contributions. Call only when
- * `isStatutoryDeducted` is true for this run.
+ * The base month for a run that DEDUCTS contributions: the month before the
+ * deduction month. Call only when `isStatutoryDeducted` is true for this run.
+ * The rule (first or second payday) does not change the base month.
  */
 export function sssBaseMonth(
   cycle: PayFrequency,
-  rule: "FIRST_CUTOFF" | "SECOND_CUTOFF",
+  _rule: "FIRST_CUTOFF" | "SECOND_CUTOFF",
   periodStart: Date,
   periodEnd: Date,
 ): SssBaseMonth {
-  const month = (y: number, m: number, includeThisRun: boolean): SssBaseMonth => {
-    const monthStart = new Date(Date.UTC(y, m, 1));
-    const monthEnd = new Date(Date.UTC(y, m + 1, 0));
-    return { monthStart, monthEnd, month: monthKey(monthStart), includeThisRun };
-  };
-  const y = periodEnd.getUTCFullYear();
-  const m = periodEnd.getUTCMonth();
-
-  if (cycle === "SEMI_MONTHLY" && rule === "FIRST_CUTOFF") {
-    return month(y, m - 1, false);
-  }
+  // The deduction month: the month of the period end, except WEEKLY/DAILY,
+  // which deduct on the run containing a month's last day (month-end anchor).
+  let y = periodEnd.getUTCFullYear();
+  let m = periodEnd.getUTCMonth();
   if (cycle === "WEEKLY" || cycle === "DAILY") {
-    // Deducted on the run that contains a month's last day (month-end anchor):
-    // the base month is that month.
     const lastOfStartMonth = new Date(
       Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 0),
     );
     if (utcDay(lastOfStartMonth) <= utcDay(periodEnd)) {
-      return month(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), true);
+      y = periodStart.getUTCFullYear();
+      m = periodStart.getUTCMonth();
     }
   }
-  return month(y, m, true);
+  const monthStart = new Date(Date.UTC(y, m - 1, 1));
+  const monthEnd = new Date(Date.UTC(y, m, 0));
+  return { monthStart, monthEnd, month: monthKey(monthStart) };
 }
 
 /**
@@ -116,8 +106,6 @@ export function sssBaseMonth(
  */
 export function assessSssBasis(args: {
   base: SssBaseMonth;
-  thisPeriodStart: Date;
-  thisPeriodEnd: Date;
   hireDate: Date | null;
   separationDate: Date | null;
   sheets: SssHistorySheet[];
@@ -136,25 +124,20 @@ export function assessSssBasis(args: {
   const sep = args.separationDate ? utcDay(args.separationDate) : null;
   const empTo = Math.min(mEnd, sep ?? mEnd);
 
-  // Runs counted for the base: those that start inside the base month and,
-  // when this run is included, start before this run. A weekly period that
-  // starts in the month and ends in the next belongs to the month it starts in.
-  const thisStart = utcDay(args.thisPeriodStart);
+  // Runs counted for the base: those that start inside the base month. A
+  // weekly period that starts in the month and ends in the next belongs to the
+  // month it starts in, so no week is counted twice.
   const counted = sheets.filter((s) => {
     const st = utcDay(s.periodStart);
-    if (st < mStart || st > mEnd) return false;
-    return base.includeThisRun ? st < thisStart : true;
+    return st >= mStart && st <= mEnd;
   });
 
-  // Coverage: every employed day is inside a finalized REGULAR run, or this run.
+  // Coverage: every employed day is inside a finalized REGULAR run.
   const covered = new Set<number>();
-  const cover = (from: number, to: number) => {
-    for (let d = Math.max(from, empFrom); d <= Math.min(to, empTo); d++) covered.add(d);
-  };
   for (const s of sheets) {
-    if (s.runType === "REGULAR") cover(utcDay(s.periodStart), utcDay(s.periodEnd));
+    if (s.runType !== "REGULAR") continue;
+    for (let d = Math.max(utcDay(s.periodStart), empFrom); d <= Math.min(utcDay(s.periodEnd), empTo); d++) covered.add(d);
   }
-  if (base.includeThisRun) cover(thisStart, utcDay(args.thisPeriodEnd));
   const needed = Math.max(0, empTo - empFrom + 1);
   if (covered.size < needed) {
     return { kind: "CONTRACTED_FALLBACK", month: base.month };
@@ -164,26 +147,18 @@ export function assessSssBasis(args: {
     (sum, s) => sum + (s.basicCents > 0n ? s.basicCents : 0n),
     0n,
   );
-  return {
-    kind: base.includeThisRun ? "THIS_MONTH_ACTUAL" : "PREVIOUS_MONTH_ACTUAL",
-    month: base.month,
-    priorBasicCents,
-    includeThisRun: base.includeThisRun,
-  };
+  return { kind: "PREVIOUS_MONTH_ACTUAL", month: base.month, priorBasicCents };
 }
 
 /**
  * The compensation the SSS table is looked up with, or null for no SSS.
- * `thisRunBasicCents` is this run's base pay minus late/undertime.
+ * This run's own pay never enters it: the base is always last month's.
  */
 export function sssCompensationCents(
   basis: SssBasis | undefined,
-  thisRunBasicCents: bigint,
   contractedMonthlyCents: bigint,
 ): bigint | null {
   if (!basis || basis.kind === "CONTRACTED_FALLBACK") return contractedMonthlyCents;
   if (basis.kind === "NEW_HIRE_NO_SSS") return null;
-  const own = basis.includeThisRun && thisRunBasicCents > 0n ? thisRunBasicCents : 0n;
-  const total = basis.priorBasicCents + own;
-  return total > 0n ? total : null;
+  return basis.priorBasicCents > 0n ? basis.priorBasicCents : null;
 }

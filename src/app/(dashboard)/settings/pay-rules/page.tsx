@@ -37,12 +37,12 @@ const DENOMINATOR_OPTIONS = [
   { value: 365, label: "365 days",  sublabel: "Calendar year (daily-rate workers)" },
 ];
 
-// PAY-133: first payday is the default for new companies. SSS is on basic pay
-// after unpaid days and lates; on the first payday the month is not over yet,
-// so SSS uses last month's basic.
+// PAY-133: first payday is the default for new companies. This only decides
+// WHEN contributions are deducted. SSS is always on LAST month's basic pay
+// after unpaid days and lates, whichever payday is chosen.
 const CUTOFF_OPTIONS = [
   { value: "FIRST_CUTOFF",  label: "First payday of the month (1st to 15th payroll)", sublabel: "SSS, PhilHealth and Pag-IBIG deducted here. SSS is based on last month's basic pay after unpaid days and lates." },
-  { value: "SECOND_CUTOFF", label: "Second payday of the month (16th to month-end payroll)", sublabel: "SSS, PhilHealth and Pag-IBIG deducted here. SSS is based on this month's basic pay after unpaid days and lates." },
+  { value: "SECOND_CUTOFF", label: "Second payday of the month (16th to month-end payroll)", sublabel: "SSS, PhilHealth and Pag-IBIG deducted here. SSS is based on last month's basic pay after unpaid days and lates." },
 ];
 
 const THIRTEENTH_MONTH_OPTIONS = [

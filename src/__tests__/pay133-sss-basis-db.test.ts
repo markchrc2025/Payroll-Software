@@ -17,7 +17,8 @@
  *   D4  recomputing the 1 to 15 Nov draft gives the same SSS.
  *   D5  16 to 30 Nov on the 16 to 30 run deducts nothing under FIRST_CUTOFF.
  *   D6  a company on SECOND_CUTOFF: 16 to 30 Nov (queued, then processed)
- *       uses November's basic: the finalized 1 to 15 Nov plus this run.
+ *       deducts SSS on the 30th, still based on OCTOBER's basic; this run's
+ *       unpaid day does not change it; the 9 Nov hire has no SSS.
  */
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -231,27 +232,28 @@ describeDb("PAY-133 SSS on actual basic, end to end (real Postgres)", () => {
     await q(`DELETE FROM "PayrollBook" WHERE id = $1`, [nov2]);
   });
 
-  it("D6 second-payday company: queued 16 to 30 Nov uses November's basic (1 to 15 Nov plus this run)", async () => {
+  it("D6 second-payday company: queued 16 to 30 Nov deducts on October's basic", async () => {
     await q(`UPDATE "Tenant" SET "statutoryCutoffRule" = 'SECOND_CUTOFF' WHERE id = $1`, [T]);
     await periodInput(A, "2026-11-16", "2026-11-30", { unpaid: 1 });
     const book = await queueRun({ tenantId: T, periodStart: d("2026-11-16"), periodEnd: d("2026-11-30"), cycle: "SEMI_MONTHLY", runType: "REGULAR" });
     await processRun(T, book.id);
     const s = await sheets(book.id);
-    const nov1s = await sheets(nov1);
     const basic = (r: SheetRow) => BigInt(r.basePayCents) - BigInt(r.lateUndertimeDeductionCents);
 
     const a = s.get(A)!;
     expect(a.statutoryDeductedSnapshot).toBe(true);
-    expect(basic(nov1s.get(A)!)).toBe(1_250_000n);
-    expect(basic(a)).toBe(1_250_000n - 114_943n);
-    expect(a.statutoryBreakdown.sssBasis).toEqual({ kind: "THIS_MONTH_ACTUAL", month: "2026-11", compensationCents: "2385057" });
-    expect(BigInt(a.sssEeCents)).toBe(computeSSS(SSS, 2_385_057n).employee);
+    expect(basic(a)).toBe(1_250_000n - 114_943n); // this run's unpaid day ...
+    expect(a.statutoryBreakdown.sssBasis).toEqual({ kind: "PREVIOUS_MONTH_ACTUAL", month: "2026-10", compensationCents: "2385057" });
+    expect(BigInt(a.sssEeCents)).toBe(computeSSS(SSS, 2_385_057n).employee); // ... does not move SSS
+    expect(BigInt(a.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_500_000n).employee);
 
-    // B (hired 9 Nov) has a November basis on the second payday: 1 to 15 Nov
-    // attendance plus this full cutoff.
+    // B, hired 9 Nov: the 30 Nov deduction is based on October, when B was
+    // not employed. No SSS; PhilHealth and Pag-IBIG still deducted.
     const b = s.get(B)!;
-    const bNov = basic(nov1s.get(B)!) + basic(b);
-    expect(b.statutoryBreakdown.sssBasis).toEqual({ kind: "THIS_MONTH_ACTUAL", month: "2026-11", compensationCents: bNov.toString() });
-    expect(BigInt(b.sssEeCents)).toBe(computeSSS(SSS, bNov).employee);
+    expect(b.statutoryDeductedSnapshot).toBe(true);
+    expect([b.sssEeCents, b.sssErCents, b.sssEcCents]).toEqual(["0", "0", "0"]);
+    expect(b.statutoryBreakdown.sssBasis).toEqual({ kind: "NEW_HIRE_NO_SSS", month: "2026-10", compensationCents: "0" });
+    expect(BigInt(b.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_800_000n).employee);
+    expect(BigInt(b.pagibigEeCents)).toBe(computePagibig(PAGIBIG, 2_800_000n).employee);
   });
 });

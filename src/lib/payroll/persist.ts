@@ -453,8 +453,6 @@ async function loadSssBases(
       e.id,
       assessSssBasis({
         base,
-        thisPeriodStart: args.periodStart,
-        thisPeriodEnd: args.periodEnd,
         hireDate: e.hireDate,
         separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
         sheets: byEmployee.get(e.id) ?? [],
