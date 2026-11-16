@@ -183,12 +183,12 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/pay-components", label: "Pay Components", icon: "components" },
       { href: "/loans", label: "Loans", icon: "loans" },
       { href: "/payroll/ytd-openings", label: "Year-to-date Openings", icon: "bankfiles" },
+      { href: "/payroll/statutory-tables", label: "Statutory Table", icon: "payrules" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
       { href: "#soon-annual-salary-statement", label: "Annual Salary Statement", icon: "govreports", comingSoon: true },
       { href: "#soon-statutory-contribution", label: "Statutory Contribution", icon: "premium", comingSoon: true },
-      { href: "#soon-statutory-table", label: "Statutory Table", icon: "payrules", comingSoon: true },
     ],
   },
   {
