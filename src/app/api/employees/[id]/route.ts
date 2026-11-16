@@ -5,6 +5,7 @@
  */
 
 import type { NextRequest } from "next/server";
+import { pairingRefusal } from "@/lib/payroll/rates";
 import { StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission, checkPermission } from "@/lib/require-permission";
@@ -159,6 +160,18 @@ export async function PUT(
       if (!sched) return { error: "Shift schedule not found in your tenant" as const };
     }
 
+    // Unit 1.8 (D-S7, R88): a new pay cycle must suit the employee's salary
+    // type (salary type changes only through movements, checked there).
+    if (rest.payFrequency !== undefined) {
+      const term = await tx.employmentTerm.findFirst({
+        where: { employeeId: id, tenantId: auth.tenantId, basicSalaryCents: { not: null } },
+        orderBy: { effectiveDate: "desc" },
+        select: { salaryType: true },
+      });
+      const refusal = term?.salaryType ? pairingRefusal(term.salaryType, rest.payFrequency) : null;
+      if (refusal) return { refused: true as const, message: refusal };
+    }
+
     const emp = await tx.employee.update({
       where: { id },
       data: {
@@ -214,6 +227,7 @@ export async function PUT(
 
   if ("notFound" in result) return notFound("Employee");
   if ("selfEdit" in result) return err("You cannot modify your own employee record. Ask another administrator to make this change.", 403);
+  if (result.refused === true) return err(result.message, 422); // unit 1.8 (R88)
   if ("error" in result && result.error) return err(result.error, 404);
 
   void writeAuditLog({

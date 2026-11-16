@@ -39,6 +39,14 @@ export interface ComputeEmployeeSnapshot {
   /// Days in a standard pay period (informational; not used for derivation).
   standardWorkDays: number;
   nontaxableBasicAmountCents: bigint;
+  /// Unit 1.8 (D-S4): the employee's working-days divisor (261 five-day week,
+  /// 313 six-day week). Null or absent: the tenant's applies.
+  workingDaysDenominator?: number | null;
+  /// Unit 1.8 (G2): first and last day employed. A period that starts before
+  /// hireDate or ends after separationDate is paid by attendance, not by
+  /// contract. Absent: employed throughout.
+  hireDate?: Date | null;
+  separationDate?: Date | null;
 }
 
 export interface ComputeSalarySnapshot {
@@ -182,6 +190,12 @@ export interface ComputeStatutoryRules {
 export type ComputeMultiplierConfig = Partial<Record<PremiumMultiplierKey, number>>;
 
 export interface ComputeInput {
+  /**
+   * Unit 1.8 (G1): the run type. Only REGULAR runs (the default when absent)
+   * pay MONTHLY and WEEKLY salaries by contract; OFF_CYCLE keeps attendance
+   * pay so a bonus run never pays a salary twice.
+   */
+  runType?: "REGULAR" | "OFF_CYCLE" | "FINAL_PAY" | "YEAR_END";
   employee: ComputeEmployeeSnapshot;
   salary: ComputeSalarySnapshot;
   tenant: ComputeTenantSnapshot;

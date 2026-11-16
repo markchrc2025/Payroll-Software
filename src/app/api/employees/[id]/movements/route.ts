@@ -3,6 +3,7 @@
  * POST /api/employees/[id]/movements  — Create a new PENDING movement
  */
 import type { NextRequest } from "next/server";
+import { pairingRefusal } from "@/lib/payroll/rates";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
@@ -156,6 +157,12 @@ export async function POST(
       if (!x) return { error: "toWorkflowId not found in your tenant" as const };
     }
 
+    // Unit 1.8 (D-S7, R88): a new salary type must suit the employee's pay cycle.
+    if (v.toSalaryType) {
+      const refusal = pairingRefusal(v.toSalaryType, emp.payFrequency);
+      if (refusal) return { refused: true as const, message: refusal };
+    }
+
     const currentBasic = emp.employmentTerms[0]?.basicSalaryCents ?? null;
 
     const movement = await tx.employeeMovement.create({
@@ -218,6 +225,7 @@ export async function POST(
   if ("notFound" in result) return notFound("Employee");
   if ("forbidden" in result) return err("Only Managers and HR staff can initiate Movement Requests.", 403);
   if ("selfEdit" in result) return err("You cannot create a movement for your own employee record. Ask another administrator to submit this change.", 403);
+  if (result.refused === true) return err(result.message, 422); // unit 1.8 (R88)
   if ("error" in result && result.error) return err(result.error, 422);
   return ok(serializeMovement(result.movement), "Movement created", 201);
 }

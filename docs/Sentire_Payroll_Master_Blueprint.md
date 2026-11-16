@@ -13,6 +13,14 @@
 
 - **Monthly Paid:** Fixed monthly rate. (Formula: (Monthly Rate × 12) / Total Working Days in a Year [e.g., 261, 313, 365] = Daily Rate)
 - **Daily Paid:** Paid only for days worked. (Formula: Daily Rate × Days Worked)
+
+  > **SUPERSEDED IN PART (unit 1.8, rulings R103 to R106, docs/DECISIONS.md).** "Monthly Paid" above gives a formula
+  > for a *daily rate* and stops there, so the engine and its test spec paid MONTHLY like Daily Paid (daily rate ×
+  > days worked): defect S4. The rule now: a monthly salary pays the fixed monthly rate for a full period (fixed
+  > halves on a semi-monthly cycle); the formula gives the daily equivalent used to deduct an unpaid day and to price
+  > OT, holidays and undertime, with the working-days divisor set per employee (261 five-day week, 313 six-day
+  > week). "Daily Paid" (the line just above) is correct and stands. The spec distinguished the two concepts one line
+  > apart and then gave MONTHLY the DAILY treatment. Kept, not deleted (R92).
 - **Hourly Rate Computation:** Daily Rate / Standard Hours per Day (usually 8)
 - **Late/Undertime Deduction:** (Hourly Rate / 60) × Total Late/Undertime Minutes.
 - **System Definitions:**

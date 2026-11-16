@@ -1155,6 +1155,13 @@ model Employee {
   salaryType        SalaryType   @default(MONTHLY)
   standardWorkHours Decimal      @default(8) @db.Decimal(4, 2)
   standardWorkDays  Decimal      @default(22) @db.Decimal(4, 2)
+  /// Unit 1.8 (D-S4): working days a year used to turn a monthly or weekly
+  /// salary into a daily equivalent (unpaid-leave deductions, OT, holiday and
+  /// undertime rates). 261 for a five-day week, 313 for a six-day week. Set
+  /// from the work schedule when the employee is created; an explicit field
+  /// after that, never recomputed from the schedule. Null: the tenant's
+  /// workingDaysDenominator applies. Each payroll sheet snapshots the value used.
+  workingDaysDenominator Int?
   /// Optional IANA timezone override; used only when the tenant's
   /// timekeepingTimezoneMode is EMPLOYEE (otherwise inherits company tz).
   timezone          String?

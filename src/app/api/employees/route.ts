@@ -4,6 +4,7 @@
  */
 
 import type { NextRequest } from "next/server";
+import { divisorForWorkDays } from "@/lib/payroll/rates";
 import { Prisma, StatutoryIdType } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission, checkPermission } from "@/lib/require-permission";
@@ -193,11 +194,15 @@ export async function POST(req: NextRequest) {
       });
       if (!lvl) return { error: "Level not found in your tenant" as const };
     }
+    // Unit 1.8 (D-S4): the employee's working-days divisor defaults from the
+    // work schedule (5 days → 261, 6 days → 313); otherwise the company's applies.
+    let scheduleDivisor: number | null = null;
     if (shiftScheduleId) {
       const sched = await tx.shiftSchedule.findFirst({
         where: { id: shiftScheduleId, tenantId: auth.tenantId, deletedAt: null },
       });
       if (!sched) return { error: "Shift schedule not found in your tenant" as const };
+      if (Array.isArray(sched.workDays)) scheduleDivisor = divisorForWorkDays(sched.workDays.length);
     }
     if (jobStatusId) {
       const status = await tx.jobStatus.findFirst({
@@ -242,6 +247,7 @@ export async function POST(req: NextRequest) {
     const emp = await tx.employee.create({
       data: {
         ...rest,
+        workingDaysDenominator: rest.workingDaysDenominator ?? scheduleDivisor,
         tenantId: auth.tenantId,
         employeeNumber,
         departmentId: departmentId ?? null,

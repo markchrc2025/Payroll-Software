@@ -17,11 +17,14 @@
 import type {
   Loan,
   PayComponent,
+  PayFrequency,
   Prisma,
+  SalaryType,
   StatutoryCategory,
   SeparationReason,
 } from "@prisma/client";
 import { computeSheet } from "./engine";
+import { deriveSalaryRates, effectiveDivisor } from "./rates";
 import { multiply } from "@/lib/money";
 import type {
   ComputeInput,
@@ -354,6 +357,10 @@ async function buildComputeInputForEmployee(
       standardWorkHours: Number(employee.standardWorkHours),
       standardWorkDays: Number(employee.standardWorkDays),
       nontaxableBasicAmountCents: employee.nontaxableBasicAmountCents,
+      // Unit 1.8: the employee's divisor (null: tenant's) and the days employed.
+      workingDaysDenominator: employee.workingDaysDenominator,
+      hireDate: employee.hireDate,
+      separationDate: employee.lastWorkingDate ?? employee.resignationDate ?? null,
     },
     salary: {
       basicSalaryCents: salary.basicSalaryCents,
@@ -481,24 +488,37 @@ async function computeThirteenthMonthCents(
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal daily-rate derivation for the persist layer.
- * Mirrors engine.ts `deriveRates` (MONTHLY branch only — the common case).
+ * Daily rate for final-pay inputs (leave cash-out, separation pay). Unit 1.8
+ * (R89): delegates to the single implementation in rates.ts, with the
+ * employee's divisor (else the tenant's); the old copy here divided WEEKLY by a
+ * fixed 5 and used only the tenant's divisor.
  */
 function deriveRateForPersist(
   basicSalaryCents: bigint,
-  salaryType: string,
-  workingDaysDenominator: number,
+  salaryType: SalaryType,
+  employeeDivisor: number | null,
+  tenantDivisor: number,
 ): bigint {
-  switch (salaryType) {
-    case "MONTHLY":
-      return (basicSalaryCents * 12n) / BigInt(workingDaysDenominator);
-    case "DAILY":
-      return basicSalaryCents;
-    case "WEEKLY":
-      return basicSalaryCents / 5n;
-    default:
-      return (basicSalaryCents * 12n) / BigInt(workingDaysDenominator);
-  }
+  return deriveSalaryRates({
+    basicSalaryCents,
+    salaryType,
+    divisor: effectiveDivisor(employeeDivisor, tenantDivisor),
+    hoursPerDay: 8, // the daily rate does not depend on hours
+  }).dailyRateCents;
+}
+
+/**
+ * Unit 1.8 (G3, 15 Nov 2026): a REGULAR run pays the employees whose pay cycle
+ * is the run's. Before, every active employee was computed in every run, so a
+ * semi-monthly employee was also paid in a weekly run of overlapping dates.
+ * OFF_CYCLE, FINAL_PAY and YEAR_END keep their own selection.
+ */
+export function onRunCycle<E extends { payFrequency: PayFrequency }>(
+  employees: E[],
+  runType: string,
+  cycle: PayFrequency,
+): E[] {
+  return runType === "REGULAR" ? employees.filter((e) => e.payFrequency === cycle) : employees;
 }
 
 /** DOLE-mandated separation pay rates by reason (0 = none). */
@@ -708,7 +728,11 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       input.periodStart,
       input.periodEnd,
     );
-    const employees = selectRunEmployees(allEmployees, targetIdsFor(input));
+    const employees = onRunCycle(
+      selectRunEmployees(allEmployees, targetIdsFor(input)),
+      input.runType ?? "REGULAR",
+      input.cycle,
+    );
 
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
@@ -724,6 +748,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         multiplierConfig,
       );
       if (!ci) continue;
+      ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
 
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
@@ -742,6 +767,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,
+          e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(
@@ -837,9 +863,13 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     await tx.payrollSheet.deleteMany({ where: { payrollBookId: bookId } });
 
     // PAY-135: keep the run's own subset (it used to widen to everyone).
-    const employees = selectRunEmployees(
-      await loadActiveEmployees(tx, book.periodStart, book.periodEnd),
-      book.targetEmployeeIds,
+    const employees = onRunCycle(
+      selectRunEmployees(
+        await loadActiveEmployees(tx, book.periodStart, book.periodEnd),
+        book.targetEmployeeIds,
+      ),
+      book.runType,
+      book.cycle,
     );
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
@@ -855,6 +885,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         multiplierConfigR,
       );
       if (!ci) continue;
+      ci.runType = book.runType; // unit 1.8 (G1)
 
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
@@ -873,6 +904,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,
+          e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(
@@ -1183,7 +1215,7 @@ export async function processRun(tenantId: string, bookId: string) {
 
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     // PAY-135: the queued run computes only the employees it was created for.
-    for (const e of selectRunEmployees(allEmployees, book.targetEmployeeIds)) {
+    for (const e of onRunCycle(selectRunEmployees(allEmployees, book.targetEmployeeIds), book.runType, book.cycle)) {
       const ci = await buildComputeInputForEmployee(
         tx,
         tenantId,
@@ -1196,6 +1228,7 @@ export async function processRun(tenantId: string, bookId: string) {
         multiplierConfig,
       );
       if (!ci) continue;
+      ci.runType = book.runType; // unit 1.8 (G1)
 
       if (book.runType === "YEAR_END") {
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
@@ -1212,6 +1245,7 @@ export async function processRun(tenantId: string, bookId: string) {
         const dailyRate = deriveRateForPersist(
           salary.basicSalaryCents,
           salary.salaryType,
+          e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(

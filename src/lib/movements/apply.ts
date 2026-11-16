@@ -5,6 +5,7 @@
  * withTenant() transaction supplied by the caller.
  */
 import type { Prisma, EmployeeMovement } from "@prisma/client";
+import { pairingRefusal, SalaryConfigError } from "@/lib/payroll/rates";
 
 export async function applyMovementEffects(
   tx: Prisma.TransactionClient,
@@ -80,9 +81,15 @@ export async function applyMovementEffects(
       }),
       tx.employee.findUniqueOrThrow({
         where: { id: movement.employeeId },
-        select: { salaryType: true },
+        select: { salaryType: true, payFrequency: true },
       }),
     ]);
+    // Unit 1.8 (D-S7, R88): checked when the movement was requested; checked
+    // again here because the pay cycle may have changed while it waited.
+    if (movement.toSalaryType != null) {
+      const refusal = pairingRefusal(movement.toSalaryType, emp.payFrequency);
+      if (refusal) throw new SalaryConfigError(refusal);
+    }
     await tx.employmentTerm.create({
       data: {
         tenantId:         movement.tenantId,

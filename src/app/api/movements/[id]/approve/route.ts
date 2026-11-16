@@ -7,6 +7,7 @@
  *                              applies changes to Employee record)
  */
 import type { NextRequest } from "next/server";
+import { SalaryConfigError } from "@/lib/payroll/rates";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
@@ -25,7 +26,9 @@ export async function POST(
   if (denied) return denied;
   const { id } = await params;
 
-  const result = await withTenant(auth.tenantId, async (tx) => {
+  let result;
+  try {
+  result = await withTenant(auth.tenantId, async (tx) => {
     const m = await tx.employeeMovement.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
@@ -101,6 +104,12 @@ export async function POST(
       status: 409,
     };
   });
+  } catch (e) {
+    // Unit 1.8 (R88): the movement would give the employee a salary type × pay
+    // cycle that cannot be paid. The transaction rolled back; nothing changed.
+    if (e instanceof SalaryConfigError) return err(e.message, 422);
+    throw e;
+  }
 
   if ("notFound" in result) return notFound("Movement");
   if ("error" in result && result.error) return err(result.error, result.status);

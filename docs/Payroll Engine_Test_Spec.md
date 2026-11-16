@@ -46,9 +46,16 @@ Formula-derived; exact.
 
 | Case | Input | Formula | Expected |
 |---|---|---|---|
-| Monthly → daily | ₱30,000/mo, denom 261 | (30000×12)/261 | ₱1,379.31 (rounded) |
+| Monthly → daily † | ₱30,000/mo, denom 261 | (30000×12)/261 | ₱1,379.31 (rounded) |
 | Daily → hourly | daily ₱1,379.31, 8 hrs | daily/8 | ₱172.41 (rounded) |
 | Daily-paid gross | daily ₱1,000, 11 days | rate × days | ₱11,000.00 |
+
+> **† SUPERSEDED IN PART (unit 1.8, rulings R103 to R106, docs/DECISIONS.md, 3 Sep and 15 Nov 2026).** Row 1 is the
+> daily *equivalent* of a monthly salary: what one unpaid day deducts, and the base for OT, holiday and undertime
+> rates. It is **not** how a monthly salary is earned. This spec's tests transcribed it as "base pay = daily rate ×
+> days worked" for MONTHLY, which is defect S4: ₱30,000/month grossed ₱27,586.20 to ₱31,724.13 by the calendar.
+> A MONTHLY salary pays the contracted amount for a full period (₱30,000.00 a month, ₱15,000.00 a semi-monthly
+> cutoff), less one daily equivalent per unpaid day (D-S2, D-S3, D-S5). Rows 2 and 3 stand. Kept, not deleted (R92).
 
 **Decision under test:** whether intermediate rates are rounded or carried at full precision until final pay. The chosen behavior must be consistent and asserted (pick one and lock it in the money module).
 
@@ -173,7 +180,7 @@ Structural; no statutory table value required for the core assertions.
 
 End-to-end employee scenarios. Provide formula-derived parts exactly; mark SSS/WHT expected values as accountant-supplied.
 
-**Case A — Regular monthly-paid, clean period.** ₱30,000/mo, semi-monthly, no lates/OT. Assert: base pay, PhilHealth EE ₱750.00, Pag-IBIG EE ₱200.00, SSS EE (worksheet §1b for the matching MSC), WHT (worksheet §2b), and the net via the §4.2 waterfall.
+**Case A — Regular monthly-paid, clean period.** ₱30,000/mo, semi-monthly, no lates/OT. Assert: base pay (**superseded value, unit 1.8 / R104:** ₱15,000.00 per semi-monthly cutoff, the fixed half of the monthly rate, not daily rate × days worked), PhilHealth EE ₱750.00, Pag-IBIG EE ₱200.00, SSS EE (worksheet §1b for the matching MSC), WHT (worksheet §2b), and the net via the §4.2 waterfall.
 
 **Case B — Premiums + lates.** Monthly-paid, base hourly ₱100, with 90 min undertime and 2 OT hours on a Regular Holiday in the night window. Assert: undertime deduction ₱258.62 (from §3), holiday-OT-night premium 2 × ₱286.00 = ₱572.00 (from §4), and waterfall ordering (premiums added before tax base; non-taxable determined before WHT).
 
