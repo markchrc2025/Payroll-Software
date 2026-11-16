@@ -12,8 +12,16 @@ import {
 
 export const createPayrollRunSchema = z
   .object({
-    periodStart: z.coerce.date(),
-    periodEnd: z.coerce.date(),
+    /**
+     * PAY-141: the scheduled payday (YYYY-MM-DD, as listed by
+     * GET /api/payroll/paydays). For a REGULAR run the server fills the pay
+     * period, the pay date and the DTR cutoff from the company's schedule.
+     * Without it, periodStart and periodEnd are required (off-cycle, final
+     * pay, year-end, and older callers).
+     */
+    payday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "payday must be YYYY-MM-DD").optional(),
+    periodStart: z.coerce.date().optional(),
+    periodEnd: z.coerce.date().optional(),
     cycle: z.nativeEnum(PayFrequency),
     runType: z.nativeEnum(PayrollRunType).default("REGULAR"),
     notes: z.string().max(500).optional().nullable(),
@@ -36,7 +44,22 @@ export const createPayrollRunSchema = z
     separationReason: z.nativeEnum(SeparationReason).optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.periodEnd < v.periodStart) {
+    if (v.payday && v.runType !== "REGULAR") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["payday"],
+        message: "A payday is for regular runs; give the dates for other run types.",
+      });
+    }
+    if (!v.payday && (!v.periodStart || !v.periodEnd)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["periodStart"],
+        message: "Pick a payday, or give periodStart and periodEnd.",
+      });
+      return;
+    }
+    if (v.periodStart && v.periodEnd && v.periodEnd < v.periodStart) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["periodEnd"],

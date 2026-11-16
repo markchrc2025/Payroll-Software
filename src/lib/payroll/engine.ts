@@ -292,6 +292,13 @@ function computeBasePay(input: ComputeInput, rates: SalaryRates): bigint {
       periodEnd: period.end,
     })
   ) {
+    // PAY-141 (2a): with a lagged DTR cutoff, pay the days employed in the pay
+    // period; the cutoff only supplies the unpaid days. Otherwise (cutoff =
+    // pay period) unit 1.8 G2: days worked from attendance.
+    if (input.employedPeriodDays != null) {
+      const unpaidDays = timesUnits(rates.lwopDailyEquivalentCents, periodInput.unpaidLeaveDays);
+      return clampNonNegative(timesUnits(rates.dailyRateCents, input.employedPeriodDays) - unpaidDays);
+    }
     return attendancePay;
   }
   const unpaid = timesUnits(rates.lwopDailyEquivalentCents, periodInput.unpaidLeaveDays);

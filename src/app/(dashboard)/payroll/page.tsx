@@ -33,6 +33,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 type PayrollRun = {  id: string;
   periodStart: string;
   periodEnd: string;
+  /** PAY-141: set on runs created from a payday. */
+  payDate?: string | null;
+  cutoffStart?: string | null;
+  cutoffEnd?: string | null;
   cycle: string;
   runType: string;
   status: string;
@@ -62,7 +66,27 @@ const TYPE_LABELS: Record<string, string> = {
   YEAR_END: "Year-End",
 };
 
+// PAY-141: a regular run is picked by payday; GET /api/payroll/paydays.
+type Payday = {
+  nominalDate: string;
+  payDate: string;
+  moved: boolean;
+  periodStart: string;
+  periodEnd: string;
+  cutoffStart: string;
+  cutoffEnd: string;
+  existingRun: { id: string; status: string } | null;
+};
+
+const fmtDay = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-PH", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const fmtRange = (a: string, b: string) => {
+  const f = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-PH", { timeZone: "UTC", month: "short", day: "numeric" });
+  return `${f(a)} to ${f(b)}, ${b.slice(0, 4)}`;
+};
+
 const EMPTY_FORM = {
+  payday: "",
   periodStart: "",
   periodEnd: "",
   cycle: "SEMI_MONTHLY",
@@ -79,6 +103,31 @@ export default function PayrollPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [paydays, setPaydays] = useState<Payday[] | null>(null);
+  const [paydayError, setPaydayError] = useState<string | null>(null);
+  const isRegular = form.runType === "REGULAR";
+  const chosen = paydays?.find((p) => p.nominalDate === form.payday) ?? null;
+
+  // PAY-141: load the cycle's paydays; preselect the next one without a run.
+  useEffect(() => {
+    if (!dialogOpen || !isRegular) return;
+    let gone = false;
+    setPaydays(null);
+    setPaydayError(null);
+    fetch(`/api/payroll/paydays?cycle=${form.cycle}`)
+      .then(async (res) => {
+        const json = await res.json();
+        if (gone) return;
+        if (!res.ok) { setPaydayError(json.error ?? "Could not load paydays"); return; }
+        const list: Payday[] = json.data.paydays;
+        const today: string = json.data.today;
+        setPaydays(list);
+        const next = list.find((p) => p.nominalDate >= today && !p.existingRun) ?? list.find((p) => !p.existingRun);
+        setForm((f) => ({ ...f, payday: next?.nominalDate ?? "" }));
+      })
+      .catch(() => { if (!gone) setPaydayError("Could not load paydays"); });
+    return () => { gone = true; };
+  }, [dialogOpen, isRegular, form.cycle]);
 
   const fetchRuns = useCallback(async () => {
     setIsLoading(true);
@@ -106,8 +155,11 @@ export default function PayrollPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          periodStart: form.periodStart,
-          periodEnd: form.periodEnd,
+          // PAY-141: regular runs send only the payday; the server fills and
+          // locks the dates from the company's pay schedule.
+          ...(isRegular
+            ? { payday: form.payday }
+            : { periodStart: form.periodStart, periodEnd: form.periodEnd }),
           cycle: form.cycle,
           runType: form.runType,
           notes: form.notes.trim() || null,
@@ -180,6 +232,7 @@ export default function PayrollPage() {
           <TableHeader>
             <TableRow className="bg-[#F7F7F7] hover:bg-[#F7F7F7]">
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Pay Period</TableHead>
+              <TableHead className="text-[12.5px] font-medium text-[#525252]">Pay Date</TableHead>
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Cycle</TableHead>
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Type</TableHead>
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Status</TableHead>
@@ -191,14 +244,14 @@ export default function PayrollPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : !runs?.data?.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-[#6B6B6B]">
+                <TableCell colSpan={7} className="py-12 text-center text-[#6B6B6B]">
                   <Wallet className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No payroll runs yet. Create one to get started.
                 </TableCell>
@@ -215,6 +268,9 @@ export default function PayrollPage() {
                   <TableRow key={run.id} className="hover:bg-[#FAFAFA]">
                     <TableCell className="font-medium tabular-nums text-[13.5px] text-[#171717]">
                       {formatPeriod(run.periodStart, run.periodEnd)}
+                    </TableCell>
+                    <TableCell className="text-[13px] text-[#6B6B6B] tabular-nums">
+                      {run.payDate ? fmtDay(run.payDate.slice(0, 10)) : "Not set"}
                     </TableCell>
                     <TableCell className="text-[13px] text-[#6B6B6B]">
                       {CYCLE_LABELS[run.cycle] ?? run.cycle}
@@ -270,42 +326,6 @@ export default function PayrollPage() {
           <form onSubmit={handleCreate} className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="pr-start">Period Start <span className="text-destructive">*</span></Label>
-                <Input
-                  id="pr-start"
-                  type="date"
-                  value={form.periodStart}
-                  onChange={(e) => setForm((f) => ({ ...f, periodStart: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pr-end">Period End <span className="text-destructive">*</span></Label>
-                <Input
-                  id="pr-end"
-                  type="date"
-                  value={form.periodEnd}
-                  onChange={(e) => setForm((f) => ({ ...f, periodEnd: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Pay Cycle</Label>
-                <Select value={form.cycle} onValueChange={(v) => setForm((f) => ({ ...f, cycle: v ?? f.cycle }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SEMI_MONTHLY">Semi-Monthly</SelectItem>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                    <SelectItem value="WEEKLY">Weekly</SelectItem>
-                    <SelectItem value="DAILY">Daily</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label>Run Type</Label>
                 <Select value={form.runType} onValueChange={(v) => setForm((f) => ({ ...f, runType: v ?? f.runType }))}>
                   <SelectTrigger>
@@ -323,7 +343,87 @@ export default function PayrollPage() {
                   Final pay: use Offboard on the employee&apos;s page.
                 </p>
               </div>
+              <div className="space-y-1.5">
+                <Label>Pay Cycle</Label>
+                <Select value={form.cycle} onValueChange={(v) => setForm((f) => ({ ...f, cycle: v ?? f.cycle, payday: "" }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SEMI_MONTHLY">Semi-Monthly</SelectItem>
+                    <SelectItem value="MONTHLY">Monthly</SelectItem>
+                    <SelectItem value="WEEKLY">Weekly</SelectItem>
+                    <SelectItem value="DAILY">Daily</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {isRegular ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Payday <span className="text-destructive">*</span></Label>
+                  {paydayError ? (
+                    <p className="text-sm text-destructive">{paydayError}</p>
+                  ) : !paydays ? (
+                    <Skeleton className="h-9 w-full" />
+                  ) : (
+                    <Select value={form.payday} onValueChange={(v) => setForm((f) => ({ ...f, payday: v ?? f.payday }))}>
+                      <SelectTrigger aria-label="Payday">
+                        <SelectValue placeholder="Pick a payday" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paydays.map((p) => (
+                          <SelectItem key={p.nominalDate} value={p.nominalDate} disabled={!!p.existingRun}>
+                            {fmtDay(p.nominalDate)}
+                            {p.existingRun ? " (run exists)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Paydays and cutoffs come from Settings, Pay Rules.
+                  </p>
+                </div>
+                {chosen && (
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg border border-[#E8E8E8] bg-[#FAFAFA] p-3 text-[13px]" aria-label="Run dates (locked)">
+                    <dt className="text-[#6B6B6B]">Pay date</dt>
+                    <dd className="tabular-nums text-[#171717]" data-testid="run-paydate">
+                      {fmtDay(chosen.payDate)}
+                      {chosen.moved && <span className="text-[#6B6B6B]"> (moved from {fmtDay(chosen.nominalDate)}: Sunday or holiday)</span>}
+                    </dd>
+                    <dt className="text-[#6B6B6B]">Pay period</dt>
+                    <dd className="tabular-nums text-[#171717]" data-testid="run-period">{fmtRange(chosen.periodStart, chosen.periodEnd)}</dd>
+                    <dt className="text-[#6B6B6B]">Timekeeping cutoff</dt>
+                    <dd className="tabular-nums text-[#171717]" data-testid="run-cutoff">{fmtRange(chosen.cutoffStart, chosen.cutoffEnd)}</dd>
+                  </dl>
+                )}
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pr-start">Period Start <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="pr-start"
+                    type="date"
+                    value={form.periodStart}
+                    onChange={(e) => setForm((f) => ({ ...f, periodStart: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pr-end">Period End <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="pr-end"
+                    type="date"
+                    value={form.periodEnd}
+                    onChange={(e) => setForm((f) => ({ ...f, periodEnd: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="pr-notes">Notes</Label>
               <Input
@@ -335,7 +435,7 @@ export default function PayrollPage() {
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button type="submit" disabled={submitting} className="flex-1">
+              <Button type="submit" disabled={submitting || (isRegular && !chosen)} className="flex-1">
                 {submitting ? "Creating…" : "Create Run"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>

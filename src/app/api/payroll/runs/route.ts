@@ -24,6 +24,9 @@ import {
   listPayrollRunsSchema,
 } from "@/lib/validations/payroll-run";
 import { enqueuePayrollRun } from "@/lib/jobs/workers";
+import { withTenant } from "@/lib/with-tenant";
+import { paydaysFor } from "@/lib/payroll/pay-schedule-db";
+import { parseYmd, ymd } from "@/lib/payroll/pay-schedule";
 
 export async function GET(req: NextRequest) {
   try {
@@ -60,10 +63,40 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return err("Invalid body", 422, parsed.error.flatten());
     const d = parsed.data;
 
+    // PAY-141: a regular run picked by payday gets its dates from the
+    // company's schedule; the dates are not taken from the caller.
+    let dates: { periodStart: Date; periodEnd: Date; payDate: Date | null; cutoffStart: Date | null; cutoffEnd: Date | null };
+    if (d.payday) {
+      if (d.cycle !== "SEMI_MONTHLY" && d.cycle !== "MONTHLY" && d.cycle !== "WEEKLY" && d.cycle !== "DAILY") {
+        return err(`${d.cycle} has no pay schedule yet; give the dates instead.`, 422);
+      }
+      const cycle = d.cycle;
+      const nominal = parseYmd(d.payday);
+      const occ = await withTenant(auth.tenantId, async (tx) =>
+        (await paydaysFor(tx, auth.tenantId, cycle, nominal, nominal)).find((o) => o.nominalDate === d.payday) ?? null,
+      );
+      if (!occ) return err(`${d.payday} is not a payday on the ${cycle.toLowerCase().replace("_", "-")} schedule.`, 422);
+      if (
+        (d.periodStart && ymd(d.periodStart) !== occ.periodStart) ||
+        (d.periodEnd && ymd(d.periodEnd) !== occ.periodEnd)
+      ) {
+        return err(`The ${d.payday} payday covers ${occ.periodStart} to ${occ.periodEnd}; its dates cannot be changed.`, 422);
+      }
+      dates = {
+        periodStart: parseYmd(occ.periodStart),
+        periodEnd: parseYmd(occ.periodEnd),
+        payDate: parseYmd(occ.payDate),
+        cutoffStart: parseYmd(occ.cutoffStart),
+        cutoffEnd: parseYmd(occ.cutoffEnd),
+      };
+    } else {
+      // The schema guarantees both dates when there is no payday.
+      dates = { periodStart: d.periodStart!, periodEnd: d.periodEnd!, payDate: null, cutoffStart: null, cutoffEnd: null };
+    }
+
     const book = await queueRun({
       tenantId: auth.tenantId,
-      periodStart: d.periodStart,
-      periodEnd: d.periodEnd,
+      ...dates,
       cycle: d.cycle,
       runType: d.runType,
       notes: d.notes ?? null,
