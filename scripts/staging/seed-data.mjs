@@ -54,8 +54,13 @@ export async function waitForRun(api, id, timeoutMs = 120_000) {
   }
 }
 
-/** Seeds the scenario. Safe to call twice: existing records are reused and the standard attendance is restored. */
-export async function seedScenario(api, log = console.log) {
+/**
+ * Seeds the scenario. Safe to call twice: existing records are reused.
+ * restoreAttendance (default true) resets the seeded employees' standard
+ * attendance; at start-up on a KEPT database (PAY-140) it is false, so test
+ * edits survive a deploy. The seed_scenario tool restores it on request.
+ */
+export async function seedScenario(api, log = console.log, { restoreAttendance = true } = {}) {
   const branches = await api.must("GET", "/api/branches");
   let branch = pick(branches, (b) => b.name === "QA Head Office");
   if (!branch) branch = await api.must("POST", "/api/branches", { name: "QA Head Office", city: "Marikina", province: "Metro Manila", isHeadOffice: true });
@@ -92,8 +97,11 @@ export async function seedScenario(api, log = console.log) {
     employeeIds[e.tag] = created.id;
     // POST /api/period-inputs is an upsert per employee and period, so a
     // re-seed restores the standard attendance instead of duplicating it.
-    for (const a of e.attendance) {
-      await api.must("POST", "/api/period-inputs", { employeeId: created.id, ...a });
+    // A new employee always gets it; an existing one only when asked.
+    if (!found || restoreAttendance) {
+      for (const a of e.attendance) {
+        await api.must("POST", "/api/period-inputs", { employeeId: created.id, ...a });
+      }
     }
   }
   log(`[staging] seed: branch, department, 2 schedules, ${EMPLOYEES.length} employees with attendance`);

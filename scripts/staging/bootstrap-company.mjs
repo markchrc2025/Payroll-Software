@@ -29,8 +29,19 @@ try {
   await c.query("BEGIN");
   const existing = await c.query(`SELECT id FROM "Tenant" WHERE "companyCode" = $1`, [QA_COMPANY.companyCode]);
   if (existing.rowCount > 0) {
-    console.log(`[staging] QA company ${QA_COMPANY.companyCode} already exists; bootstrap skipped`);
-    await c.query("ROLLBACK");
+    // PAY-140: a kept database. Keep the data, but the admin's password follows
+    // STAGING_ADMIN_PASSWORD and the admin role gets any permission added by a
+    // newer migration, so the QA connector can still sign in and do everything.
+    const hash = await bcrypt.hash(password, 12);
+    await c.query(`UPDATE "User" SET "passwordHash" = $1, "isActive" = true, "updatedAt" = now() WHERE id = $2`, [hash, QA_COMPANY.userId]);
+    const added = await c.query(
+      `INSERT INTO "RolePermission" ("roleId", "permissionId")
+       SELECT $1, p.id FROM "Permission" p
+       WHERE NOT EXISTS (SELECT 1 FROM "RolePermission" rp WHERE rp."roleId" = $1 AND rp."permissionId" = p.id)`,
+      [QA_COMPANY.roleId],
+    );
+    await c.query("COMMIT");
+    console.log(`[staging] QA company ${QA_COMPANY.companyCode} kept; admin password refreshed; ${added.rowCount} new permission(s) granted`);
   } else {
     const hash = await bcrypt.hash(password, 12);
     const t = await c.query(
