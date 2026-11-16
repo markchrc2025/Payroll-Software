@@ -246,6 +246,13 @@ export interface ComputeInput {
    */
   benefitsExemptUsedCents?: bigint;
   /**
+   * PAY-154: YEAR_END only. Taxable compensation earlier this year: finalized
+   * REGULAR, OFF_CYCLE and other YEAR_END runs plus year-to-date openings.
+   * The 13th month's taxable excess is taxed at the rate this puts the
+   * employee in for the year. Absent: zero.
+   */
+  ytdTaxableCents?: bigint;
+  /**
    * When set, overrides the cutoff-rule logic for whether statutory
    * contributions (SSS/PhilHealth/Pag-IBIG) are deducted in this run.
    * `false` → always skip statutory (e.g. bonus-only OFF_CYCLE runs).

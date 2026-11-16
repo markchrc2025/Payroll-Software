@@ -324,7 +324,11 @@ describeDb("PAY-144 year-to-date openings, end to end (real Postgres)", () => {
     const b = s.get(B)!.annualizationData!;
     expect(b.ytdOpeningTaxableCents).toBe("17500000"); // this company 75,000 + Acme 100,000
     expect(b.ytdOpeningWhtCents).toBe("800000");
-    expect(BigInt(b.ytdRegularTaxableCents)).toBe(17_500_000n + (await novSum(B, "grossTaxableIncomeCents")));
+    // PAY-154 (16 Nov 2026): the year also includes this 13th month run's own
+    // taxable excess (B: ₱3,333.33 above the 5,000 left of the 90,000). Before
+    // PAY-154 annualization left it out, which is the bug PAY-154 fixed.
+    expect(b.yearEndTaxableCents).toBe("333333");
+    expect(BigInt(b.ytdRegularTaxableCents)).toBe(17_500_000n + (await novSum(B, "grossTaxableIncomeCents")) + 333_333n);
     const c = s.get(C)!.annualizationData!;
     expect(c.ytdOpeningTaxableCents).toBe("0");
     expect(BigInt(c.ytdRegularTaxableCents)).toBe(await novSum(C, "grossTaxableIncomeCents"));

@@ -50,6 +50,7 @@ import {
   lookupBIR,
 } from "@/lib/statutory/compute";
 import { sssCompensationCents } from "./sss-basis";
+import { annualTaxDueCents, marginalAnnualTaxCents } from "./annual-tax";
 import type {
   AppliedAdjustment,
   AppliedExpenseClaim,
@@ -550,12 +551,17 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
   const taxableExcess = thirteenthMonth - nonTaxable13Month; // always ≥ 0n
 
   // WHT on taxable excess + taxable adjustment additions.
+  // PAY-154: taxed at the employee's own rate for the year: the extra tax this
+  // pay adds on top of the year's taxable pay so far (ytdTaxableCents). Before,
+  // the excess was run through the MONTHLY table on its own, so anything up to
+  // about ₱20,833 was taxed at zero whatever the employee earned.
   const grossTaxableIncomeCents = taxableExcess + adjs.taxableAdditionsCents;
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
   if (grossTaxableIncomeCents > 0n) {
-    const bir = lookupBIR(rules.bir, "MONTHLY", grossTaxableIncomeCents);
-    withholdingTaxCents = bir.tax;
+    const prior = input.ytdTaxableCents ?? 0n;
+    withholdingTaxCents = marginalAnnualTaxCents(rules.bir, prior, grossTaxableIncomeCents);
+    const bir = lookupBIR(rules.bir, "MONTHLY", (prior + grossTaxableIncomeCents) / 12n);
     birBracket = {
       bracketFloorCents: bir.bracket.floor.toString(),
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
@@ -822,14 +828,16 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
   let annualizedWht = 0n;
-  if (!isMwe && cyTotalTaxable > 0n) {
+  if (!isMwe && (cyTotalTaxable > 0n || fp.cyPriorWithholdingTaxCents > 0n)) {
     // Derive annual WHT from monthly bracket (TRAIN formula: monthly × 12).
     const monthlyEquivalent = cyTotalTaxable / 12n;
     const bir = lookupBIR(rules.bir, "MONTHLY", monthlyEquivalent);
-    annualizedWht = bir.tax * 12n;
-    withholdingTaxCents = clampNonNegative(
-      annualizedWht - fp.cyPriorWithholdingTaxCents,
-    );
+    annualizedWht = annualTaxDueCents(rules.bir, cyTotalTaxable);
+    // PAY-156: the separation annualization settles the year both ways. Tax
+    // withheld above the year's tax due is REFUNDED in the final pay (a
+    // negative withholding, which raises net pay and is credited against the
+    // month's remittance); a shortfall is withheld, as before.
+    withholdingTaxCents = annualizedWht - fp.cyPriorWithholdingTaxCents;
     birBracket = {
       bracketFloorCents: bir.bracket.floor.toString(),
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
