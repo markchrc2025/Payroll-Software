@@ -705,6 +705,39 @@ async function computeThirteenthMonthCents(
 }
 
 /**
+ * PAY-154/PAY-156: taxable pay and tax withheld so far this year on FINALIZED
+ * REGULAR, OFF_CYCLE and YEAR_END runs (a draft run's own sheets are never
+ * finalized, so they are not counted).
+ */
+async function priorYearTaxSums(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employeeId: string,
+  periodEnd: Date,
+): Promise<{ taxable: bigint; withholding: bigint }> {
+  const year = periodEnd.getUTCFullYear();
+  const agg = await tx.payrollSheet.aggregate({
+    where: {
+      tenantId,
+      employeeId,
+      payrollBook: {
+        status: "FINALIZED",
+        runType: { in: ["REGULAR", "OFF_CYCLE", "YEAR_END"] },
+        periodEnd: {
+          gte: new Date(`${year}-01-01T00:00:00.000Z`),
+          lte: new Date(`${year}-12-31T23:59:59.999Z`),
+        },
+      },
+    },
+    _sum: { grossTaxableIncomeCents: true, withholdingTaxCents: true },
+  });
+  return {
+    taxable: agg._sum.grossTaxableIncomeCents ?? 0n,
+    withholding: agg._sum.withholdingTaxCents ?? 0n,
+  };
+}
+
+/**
  * PAY-144: load the employee's year-to-date openings for a YEAR_END or
  * FINAL_PAY run, set how much of the 90,000 exemption is already used, and
  * keep a copy of the openings on the run's input snapshot.
@@ -850,31 +883,13 @@ async function computeFinalPayInputsForEmployee(
     }
   }
 
-  // 4. CY prior taxable income + withholding tax from FINALIZED REGULAR/OFF_CYCLE runs.
-  const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
-  const yearEnd = new Date(`${year}-12-31T23:59:59.999Z`);
-  const priorSheets = await tx.payrollSheet.findMany({
-    where: {
-      employeeId: employee.id,
-      tenantId,
-      payrollBook: {
-        status: "FINALIZED",
-        runType: { in: ["REGULAR", "OFF_CYCLE"] },
-        periodEnd: { gte: yearStart, lte: yearEnd },
-      },
-    },
-    select: { grossTaxableIncomeCents: true, withholdingTaxCents: true },
-  });
-  // PAY-144: pay before Sentire and a previous employer's 2316 join the year.
+  // 4. CY prior taxable income + withholding tax from FINALIZED REGULAR,
+  //    OFF_CYCLE and (PAY-154) YEAR_END runs, plus (PAY-144) pay before
+  //    Sentire and a previous employer's 2316.
+  const prior = await priorYearTaxSums(tx, tenantId, employee.id, periodEnd);
   const opening = ytdOpeningTotals(openings);
-  const cyPriorTaxableIncomeCents = priorSheets.reduce(
-    (acc, s) => acc + s.grossTaxableIncomeCents,
-    opening.taxableCompensationCents,
-  );
-  const cyPriorWithholdingTaxCents = priorSheets.reduce(
-    (acc, s) => acc + s.withholdingTaxCents,
-    opening.withholdingTaxCents,
-  );
+  const cyPriorTaxableIncomeCents = prior.taxable + opening.taxableCompensationCents;
+  const cyPriorWithholdingTaxCents = prior.withholding + opening.withholdingTaxCents;
 
   return {
     proratedThirteenthMonthCents,
@@ -1013,6 +1028,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-144
+        ci.ytdTaxableCents = (await priorYearTaxSums(tx, input.tenantId, e.id, input.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           input.tenantId,
@@ -1165,6 +1181,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
+        ci.ytdTaxableCents = (await priorYearTaxSums(tx, tenantId, e.id, book.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           tenantId,
@@ -1530,6 +1547,7 @@ export async function processRun(tenantId: string, bookId: string) {
 
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
+        ci.ytdTaxableCents = (await priorYearTaxSums(tx, tenantId, e.id, book.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           tenantId,

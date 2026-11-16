@@ -11,7 +11,7 @@
  *  - `runAnnualization()` — DB-level orchestration called from the API route.
  */
 
-import { lookupBIR } from "@/lib/statutory/compute";
+import { annualTaxDueCents } from "./annual-tax";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant } from "@/lib/with-tenant";
 import { BirWithholdingPayload } from "@/lib/statutory/types";
@@ -54,6 +54,13 @@ export interface AnnualizationDataJson {
    */
   ytdOpeningTaxableCents?: string;
   ytdOpeningWhtCents?: string;
+  /**
+   * PAY-154: of the totals above, this 13th month run's own taxable pay (the
+   * excess over the 90,000) and the tax it withheld before the true-up.
+   * Absent on annualizations run before PAY-154.
+   */
+  yearEndTaxableCents?: string;
+  yearEndBaselineWhtCents?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,15 +79,9 @@ export function computeAnnualizationTrueUp(
   ytdRegularWhtCents: bigint,
   birPayload: BirWithholdingPayload,
 ): AnnualizationResult {
-  let trueAnnualLiabilityCents = 0n;
-
-  if (ytdRegularTaxableCents > 0n) {
-    // Annualized TRAIN method: compute monthly equivalent, look up bracket,
-    // multiply by 12 to get annual liability.
-    const monthlyEquivalent = ytdRegularTaxableCents / 12n;
-    const birResult = lookupBIR(birPayload, "MONTHLY", monthlyEquivalent);
-    trueAnnualLiabilityCents = birResult.tax * 12n;
-  }
+  // Annualized TRAIN method: monthly equivalent, bracket, times 12
+  // (shared with the engine since PAY-154/PAY-156: annual-tax.ts).
+  const trueAnnualLiabilityCents = annualTaxDueCents(birPayload, ytdRegularTaxableCents);
 
   const trueUpCents = trueAnnualLiabilityCents - ytdRegularWhtCents;
 
@@ -165,6 +166,7 @@ export async function runAnnualization(
         employeeId: true,
         withholdingTaxCents: true,
         netPayCents: true,
+        grossTaxableIncomeCents: true,
         taxClassificationSnapshot: true,
         annualizationData: true,
       },
@@ -206,7 +208,8 @@ export async function runAnnualization(
           payrollBookId: { not: bookId },
           payrollBook: {
             status: "FINALIZED",
-            runType: { in: ["REGULAR", "OFF_CYCLE"] },
+            // PAY-154: other 13th month runs of the year count too.
+            runType: { in: ["REGULAR", "OFF_CYCLE", "YEAR_END"] },
             periodEnd: { gte: yearStart, lte: yearEnd },
           },
         },
@@ -215,8 +218,11 @@ export async function runAnnualization(
 
       // PAY-144: pay before Sentire and a previous employer's 2316 start the sums.
       const opening = ytdOpeningTotals(openingsByEmployee.get(sheet.employeeId) ?? []);
-      let ytdRegularTaxableCents = opening.taxableCompensationCents;
-      let ytdRegularWhtCents     = opening.withholdingTaxCents;
+      // PAY-154: this run's own taxable 13th month excess and the tax it
+      // withheld before the true-up belong to the year too; leaving them out
+      // let the excess over 90,000 go untaxed.
+      let ytdRegularTaxableCents = opening.taxableCompensationCents + sheet.grossTaxableIncomeCents;
+      let ytdRegularWhtCents     = opening.withholdingTaxCents + baseWht;
       for (const ps of priorSheets) {
         ytdRegularTaxableCents += ps.grossTaxableIncomeCents;
         ytdRegularWhtCents     += ps.withholdingTaxCents;
@@ -239,6 +245,8 @@ export async function runAnnualization(
         annualizedAt:           now,
         ytdOpeningTaxableCents: opening.taxableCompensationCents.toString(),
         ytdOpeningWhtCents:     opening.withholdingTaxCents.toString(),
+        yearEndTaxableCents:    sheet.grossTaxableIncomeCents.toString(),
+        yearEndBaselineWhtCents: baseWht.toString(),
       };
 
       // 7. Write back: baseline + new true-up.
