@@ -252,7 +252,11 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
     { label: "SSS", rate: sssRate, amount: sheet.sssEeCents },
     { label: "PhilHealth", rate: basis("MBS", bases?.philHealthMscCents), amount: sheet.philhealthEeCents },
     { label: "Pag-IBIG", rate: basis("MFS", bases?.pagibigMfsCents), amount: sheet.pagibigEeCents },
-    { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
+    // PAY-156: a negative withholding is the year-end adjustment refunding tax
+    // withheld above the year's tax due (final pay); it lowers the deductions.
+    sheet.withholdingTaxCents < 0n
+      ? { label: "Tax refund (year-end adjustment)", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents }
+      : { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
   ];
   const statutoryTotal = statutory.reduce((s, l) => s + l.amount, 0n);
   const contributions = sheet.sssEeCents + sheet.philhealthEeCents + sheet.pagibigEeCents;
