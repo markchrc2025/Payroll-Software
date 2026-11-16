@@ -745,13 +745,22 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     restDayPayCents +
     hazardPayCents;
 
+  // Prorated 13th month: non-taxable up to what is left of the ₱90,000.
+  const p13th = fp.proratedThirteenthMonthCents;
+  const benefitsCap = remainingBenefitsCap(input.benefitsExemptUsedCents); // PAY-144
+  const nontaxable13Month = p13th < benefitsCap ? p13th : benefitsCap;
+  const taxable13thExcess = clampNonNegative(p13th - nontaxable13Month);
+
+  // PAY-153: the prorated 13th month is PAID in the final pay, so all of it
+  // (exempt part and taxable excess) is in gross and therefore in net pay.
   const grossCompensationCents =
     earningsSubtotal +
     buckets.taxableAllowancesCents +
     buckets.nontaxableCompensationCents +
     leaveCashOutCents +
     separationPayTaxable +
-    adjs.taxableAdditionsCents;
+    adjs.taxableAdditionsCents +
+    p13th;
 
   // -- Step 6: non-taxable buckets ------------------------------------------
   const isMwe = checkMwe(input, dailyRateCents);
@@ -760,23 +769,17 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     : 0n;
   const nontaxableBasicCents = employee.nontaxableBasicAmountCents;
 
-  // Prorated 13th month: non-taxable up to ₱90,000.
-  const p13th = fp.proratedThirteenthMonthCents;
-  const benefitsCap = remainingBenefitsCap(input.benefitsExemptUsedCents); // PAY-144
-  const nontaxable13Month = p13th < benefitsCap ? p13th : benefitsCap;
-  const taxable13thExcess = clampNonNegative(p13th - nontaxable13Month);
-  // The excess is added to gross taxable income (accounted for below).
 
   // -- Step 8: statutory (cutoff rule applies; skipStatutory via override) --
   // Statutory base is CONTRIBUTORY compensation (wages for work) only. Terminal
   // benefits are NOT part of the SSS/PhilHealth/Pag-IBIG base, so a final pay
   // consisting solely of separation pay / leave cash-out / prorated 13th month
-  // carries no contributions. grossCompensationCents folds in leaveCashOut and
-  // taxable separation pay, so subtract them back out; non-taxable separation
-  // pay, p13th and reimbursements were never in gross. Zero contributory gross
-  // → skip statutory (both EE and ER).
+  // carries no contributions. grossCompensationCents folds in leaveCashOut,
+  // taxable separation pay and (PAY-153) the prorated 13th month, so subtract
+  // them back out; non-taxable separation pay and reimbursements were never in
+  // gross. Zero contributory gross → skip statutory (both EE and ER).
   const contributoryGrossCents =
-    grossCompensationCents - leaveCashOutCents - separationPayTaxable;
+    grossCompensationCents - leaveCashOutCents - separationPayTaxable - p13th;
   const deducted =
     contributoryGrossCents <= 0n
       ? false
@@ -802,13 +805,14 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     buckets.nontaxableCompensationCents + mandatoryEeContribs;
 
   // -- Step 7: gross taxable income -----------------------------------------
+  // PAY-153: gross holds the whole 13th month, so only its exempt part comes
+  // off; the taxable excess stays in (it is no longer added a second time).
   const grossTaxableIncomeCents = clampNonNegative(
     grossCompensationCents -
       mweExemptCompensationCents -
       nontaxableBasicCents -
       nontaxableCompensationCents -
-      nontaxable13Month +
-      taxable13thExcess,
+      nontaxable13Month,
   );
 
   // -- Step 9: WHT via annualisation ----------------------------------------
