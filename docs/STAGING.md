@@ -10,7 +10,7 @@ session drive it. Production is never touched.
 |---|---|---|
 | Staging app | Dokploy, project "Sentire Solutions", app "Payroll Staging" | Deploys the `staging` branch. |
 | Web address | https://payroll-staging.apps.sentire.solutions | Sign in as the QA admin (below). |
-| Database | Inside the staging container, 127.0.0.1 only | Created fresh at every start. Never the shared Postgres. |
+| Database | Inside the staging container, 127.0.0.1 only | Kept across deploys when `STAGING_PG_DATA_DIR` is on a volume (below); otherwise created fresh at every start. Never the shared Postgres. |
 | QA connector | https://payroll-qa-mcp.apps.sentire.solutions/mcp/&lt;QA_MCP_SECRET&gt; | MCP server, staging only. |
 
 The `staging` branch is `main` plus whatever is under test, combined with
@@ -44,8 +44,23 @@ Nov (the second cutoff, where the default rule deducts SSS, PhilHealth and
 Pag-IBIG) and weekly 9 to 15 Nov. The 2026 statutory tables (SSS, PhilHealth,
 Pag-IBIG, BIR) are loaded at start.
 
-**Reset:** restart the staging app in Dokploy. The database is recreated and
-re-seeded; anything added by hand is gone. That is the point of staging.
+**Keeping test data (PAY-140).** Set `STAGING_PG_DATA_DIR` to a directory on a
+Dokploy volume (Payroll Staging, Advanced, Volumes: a named volume mounted at
+`/var/lib/sentire-staging`, and `STAGING_PG_DATA_DIR=/var/lib/sentire-staging`).
+Then the database survives restarts and deploys: migrations apply on top, the
+company bootstrap refreshes the admin password and grants any new permission,
+and the seed only adds what is missing (finalized runs and attendance edits
+stay). The role passwords are new at every start, and the database superuser
+has no password at all (reached only over the private socket). A new
+PostgreSQL major version in the image starts a fresh database.
+
+Without that variable, every restart and deploy recreates the database, as
+before.
+
+**Reset:** call the connector's `reset_staging`, then restart the staging app
+in Dokploy; the database is wiped and re-seeded. Without a kept database, a
+restart alone resets. `seed_scenario` restores the seeded employees' standard
+attendance without wiping anything else.
 
 ## The QA connector
 
@@ -54,7 +69,8 @@ admin and calls the app's HTTP API; it has no database access of its own.
 
 Tools: `staging_status`, `list_employees`, `set_attendance`,
 `create_payroll_run`, `recompute_payroll_run`, `get_payroll_run`,
-`seed_scenario`, `api_request` (any `/api/...` call except `/api/auth/...`).
+`seed_scenario`, `reset_staging`, `api_request` (any `/api/...` call except
+`/api/auth/...`).
 
 Safety, same pattern as the Sentire Dokploy connector:
 
@@ -78,6 +94,7 @@ above, taking the secret from the staging app's Environment tab.
 | `QA_MCP_PORT` | `10001` |
 | `AUTH_URL`, `NEXT_PUBLIC_APP_URL` | `https://payroll-staging.apps.sentire.solutions` |
 | `AUTH_TRUST_HOST` | `true` |
+| `STAGING_PG_DATA_DIR` | optional: a directory on a Dokploy volume, e.g. `/var/lib/sentire-staging`, to keep the database across deploys (PAY-140) |
 | `AUTH_SECRET`, `ENCRYPTION_KEY`, `STAGING_ADMIN_PASSWORD`, `QA_MCP_SECRET` | generated in Dokploy |
 
 `DATABASE_URL` and `DIRECT_DATABASE_URL` are not set on the app: the start
