@@ -49,6 +49,7 @@ import {
   getMinimumWage,
   lookupBIR,
 } from "@/lib/statutory/compute";
+import { sssCompensationCents } from "./sss-basis";
 import type {
   AppliedAdjustment,
   AppliedExpenseClaim,
@@ -195,6 +196,15 @@ function resolveMultipliers(config?: ComputeMultiplierConfig): ResolvedMultiplie
     NO_WORK_REGULAR_HOLIDAY:     config.NO_WORK_REGULAR_HOLIDAY     ?? DOLE_DEFAULTS.NO_WORK_REGULAR_HOLIDAY,
   } as ResolvedMultipliers;
 }
+
+/** PAY-133: no SSS this run (EE, ER and EC all zero). */
+const NO_SSS = {
+  msc: 0n,
+  employee: 0n,
+  employer: 0n,
+  ec: 0n,
+  breakdown: { eeRegular: 0n, erRegular: 0n, eeMpf: 0n, erMpf: 0n },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Cutoff helpers
@@ -1078,7 +1088,17 @@ export function computeSheet(input: ComputeInput): ComputeResult {
             period.start,
           );
 
-  const sss = computeSSS(rules.sss, rates.monthlyEquivalentCents);
+  // PAY-133: SSS is on actual basic (after unpaid days and lates) of the base
+  // month chosen by persist.ts (see sss-basis.ts); null means no SSS this run
+  // (a new hire's first month). Without a basis (unit tests, non-REGULAR runs)
+  // it stays on the contracted monthly basic. PhilHealth and Pag-IBIG stay on
+  // the contracted monthly basic (Mark, 15 Nov 2026).
+  const sssCompCents = sssCompensationCents(
+    input.sssBasis,
+    basePayCents - lateUndertimeDeductionCents,
+    rates.monthlyEquivalentCents,
+  );
+  const sss = sssCompCents === null ? NO_SSS : computeSSS(rules.sss, sssCompCents);
   const phic = computePhilHealth(
     rules.philHealth,
     rates.monthlyEquivalentCents,
@@ -1179,6 +1199,15 @@ export function computeSheet(input: ComputeInput): ComputeResult {
       ecCents: sssEcCents.toString(),
     },
     bir: birBracket,
+    ...(deducted && input.sssBasis
+      ? {
+          sssBasis: {
+            kind: input.sssBasis.kind,
+            month: input.sssBasis.month,
+            compensationCents: (sssCompCents ?? 0n).toString(),
+          },
+        }
+      : {}),
   };
 
   return {

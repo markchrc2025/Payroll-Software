@@ -233,8 +233,20 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const bases = breakdown?.bases;
   const basis = (label: string, cents: string | undefined) =>
     cents && BigInt(cents) > 0n ? `${label} ${peso(BigInt(cents))}` : undefined;
+  // PAY-133: say which month's basic the SSS is on.
+  const sssBasis = breakdown?.sssBasis;
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const basisMonth = sssBasis ? MONTHS[Number(sssBasis.month.slice(5, 7)) - 1] ?? sssBasis.month : "";
+  const sssRate =
+    sssBasis?.kind === "NEW_HIRE_NO_SSS"
+      ? "None in first month"
+      : sssBasis?.kind === "CONTRACTED_FALLBACK"
+        ? (basis("MSC", bases?.sssMscCents) ?? "") + " (contract)"
+        : sssBasis
+          ? (basis("MSC", bases?.sssMscCents) ?? "MSC none") + ` (${basisMonth} basic)`
+          : basis("MSC", bases?.sssMscCents);
   const statutory: PdfLine[] = [
-    { label: "SSS", rate: basis("MSC", bases?.sssMscCents), amount: sheet.sssEeCents },
+    { label: "SSS", rate: sssRate, amount: sheet.sssEeCents },
     { label: "PhilHealth", rate: basis("MBS", bases?.philHealthMscCents), amount: sheet.philhealthEeCents },
     { label: "Pag-IBIG", rate: basis("MFS", bases?.pagibigMfsCents), amount: sheet.pagibigEeCents },
     { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
