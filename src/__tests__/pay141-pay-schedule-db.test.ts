@@ -18,6 +18,16 @@
  *       date or cutoff (attendance for its own period, as before).
  *   R7  (static) the New Run screen sends only the payday for a regular run
  *       and shows the dates read-only.
+ *   R8  ruling 2a (Mark, 16 Nov): a monthly employee hired Monday 9 Nov, on
+ *       the 15 Nov payday (cutoff 26 Oct to 10 Nov), is paid the 5 workdays
+ *       employed in the pay period (9 to 13 Nov), not only the 2 days the
+ *       cutoff saw; no day falls between two runs.
+ *   R9  ruling 3a (PAY-142): the run reads APPROVED DTR for its cutoff when
+ *       the window has any (it wins over a typed run input); with none it
+ *       uses the typed input; with neither, nothing. The sheet records which.
+ *   R10 a company that requires an approved DTR submission and has none for
+ *       the window: the run does not use the unapproved DTR; it uses the
+ *       typed input and records DTR_NOT_APPROVED.
  */
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -43,7 +53,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { POST as createRun } from "@/app/api/payroll/runs/route";
 import { GET as listPaydays } from "@/app/api/payroll/paydays/route";
 import { GET as getSchedules, PUT as putSchedule } from "@/app/api/settings/pay-schedules/route";
-import { processRun } from "@/lib/payroll/persist";
+import { processRun, recomputeRun } from "@/lib/payroll/persist";
 
 const req = (url: string, method = "GET", body?: unknown) =>
   new NextRequest(`http://test.local${url}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
@@ -52,6 +62,7 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
   let admin: pg.Client;
   const q = (sql: string, args: unknown[] = []) => admin.query(sql, args);
   let A = "";
+  let B = "";
 
   beforeAll(async () => {
     // "Today" for the paydays list: Monday 16 Nov 2026. Only Date is faked.
@@ -92,6 +103,18 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
         [`${A}-${start}`, T, A, `${start}T00:00:00.000Z`, `${end}T00:00:00.000Z`, unpaid],
       );
     }
+    // B: monthly ₱28,000, hired Monday 9 Nov, no run input of any kind.
+    B = id("b");
+    await q(
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt")
+       VALUES ($1, $2, $1, 'P141', $1, '2026-11-09', now())`,
+      [B, T],
+    );
+    await q(
+      `INSERT INTO "EmploymentTerm" (id, "tenantId", "employeeId", "effectiveDate", "basicSalaryCents", "salaryType", "updatedAt")
+       VALUES ($1, $2, $3, '2026-11-09', 2800000, 'MONTHLY', now())`,
+      [`${B}-t`, T, B],
+    );
     await q(
       `INSERT INTO "Holiday" (id, "tenantId", name, category, date, "updatedAt")
        VALUES ($1, $2, 'Bonifacio Day', 'LEGAL', '2026-11-30', now())`,
@@ -103,7 +126,7 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
     vi.useRealTimers();
     await q(`DELETE FROM "PayrollSheet" WHERE "tenantId" = $1`, [T]);
     await q(`DELETE FROM "PayrollBook" WHERE "tenantId" = $1`, [T]);
-    for (const t of ["PaySchedule", "Holiday", "PeriodInput", "EmploymentTerm", "Employee", "StatutoryRule"]) {
+    for (const t of ["PaySchedule", "Holiday", "PeriodInput", "DTRRecord", "DTRApprovalConfig", "EmploymentTerm", "Employee", "StatutoryRule"]) {
       await q(`DELETE FROM "${t}" WHERE "tenantId" = $1`, [T]);
     }
     await q(`DELETE FROM "Tenant" WHERE id = $1`, [T]);
@@ -173,8 +196,11 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
     expect(row).toEqual({ ps: "2026-11-01", pe: "2026-11-15", pd: "2026-11-14", cs: "2026-10-26", ce: "2026-11-10" });
 
     await processRun(T, bookId);
-    const sheet = (await q(`SELECT "basePayCents"::text b FROM "PayrollSheet" WHERE "payrollBookId" = $1 AND "employeeId" = $2`, [bookId, A])).rows[0];
+    const sheet = (await q(
+      `SELECT "basePayCents"::text b, "periodInputSnapshot" pi FROM "PayrollSheet" WHERE "payrollBookId" = $1 AND "employeeId" = $2`, [bookId, A],
+    )).rows[0];
     expect(sheet.b).toBe((1_250_000n - 114_943n).toString()); // the cutoff's unpaid day, not the period's zero
+    expect(sheet.pi.attendanceSource).toBe("MANUAL");
   });
 
   it("R4 the payday now shows its run", async () => {
@@ -206,5 +232,54 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
     expect(src).toMatch(/aria-label="Run dates \(locked\)"/);
     const regularBranch = src.slice(src.indexOf("{isRegular ? ("), src.indexOf(") : (\n              <div className=\"grid grid-cols-2 gap-3\">"));
     expect(regularBranch).not.toMatch(/type="date"/);
+  });
+
+  const sheetOf = async (emp: string) =>
+    (await q(
+      `SELECT "basePayCents"::text b, "periodInputSnapshot" pi FROM "PayrollSheet" WHERE "payrollBookId" = $1 AND "employeeId" = $2`,
+      [bookId, emp],
+    )).rows[0] as { b: string; pi: { attendanceSource: string; unpaidLeaveDays: number; daysWorked: number } };
+
+  it("R8 a new hire on a lagged cutoff is paid the workdays employed in the pay period", async () => {
+    const b = await sheetOf(B);
+    // 28,000 x 12 / 261 = 1,287.35 a day (centavos floored), 5 workdays (Mon 9 to Fri 13 Nov).
+    expect(b.b).toBe((128_735n * 5n).toString());
+    expect(b.pi.attendanceSource).toBe("NONE");
+  });
+
+  it("R9 approved DTR in the cutoff wins over the typed input; the sheet says which", async () => {
+    for (const day of ["2026-11-03", "2026-11-04"]) {
+      await q(
+        `INSERT INTO "DTRRecord" (id, "tenantId", "employeeId", date, "dayStatus", "workedMinutes", "approvalStatus", "updatedAt")
+         VALUES ($1, $2, $3, $4, 'ABSENT', 0, 'APPROVED', now())`,
+        [`${A}-${day}`, T, A, `${day}T00:00:00.000Z`],
+      );
+    }
+    // An unapproved record is ignored.
+    await q(
+      `INSERT INTO "DTRRecord" (id, "tenantId", "employeeId", date, "dayStatus", "workedMinutes", "approvalStatus", "updatedAt")
+       VALUES ($1, $2, $3, '2026-11-05T00:00:00.000Z', 'ABSENT', 0, 'PENDING', now())`,
+      [`${A}-2026-11-05`, T, A],
+    );
+    // The company does not require a DTR submission for this check.
+    await q(
+      `INSERT INTO "DTRApprovalConfig" (id, "tenantId", "requiresEmployeeSubmission", "updatedAt") VALUES ($1, $2, false, now())`,
+      [id("dtrcfg"), T],
+    );
+    await recomputeRun(T, bookId);
+    const a = await sheetOf(A);
+    expect(a.pi.attendanceSource).toBe("DTR");
+    expect(a.pi.unpaidLeaveDays).toBe(2);
+    expect(a.b).toBe((1_250_000n - 2n * 114_943n).toString());
+    expect((await sheetOf(B)).pi.attendanceSource).toBe("NONE");
+  });
+
+  it("R10 DTR submission required but not approved: the typed input is used, flagged", async () => {
+    await q(`UPDATE "DTRApprovalConfig" SET "requiresEmployeeSubmission" = true WHERE "tenantId" = $1`, [T]);
+    await recomputeRun(T, bookId);
+    const a = await sheetOf(A);
+    expect(a.pi.attendanceSource).toBe("DTR_NOT_APPROVED");
+    expect(a.pi.unpaidLeaveDays).toBe(1); // the typed input for the cutoff
+    expect(a.b).toBe((1_250_000n - 114_943n).toString());
   });
 });

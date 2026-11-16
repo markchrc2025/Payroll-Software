@@ -24,6 +24,8 @@ import type {
   SeparationReason,
 } from "@prisma/client";
 import { computeSheet, isStatutoryDeducted } from "./engine";
+import { aggregateApprovedDtr } from "./dtr-aggregate";
+import { employedWholePeriod } from "./rates";
 import {
   assessSssBasis,
   sssBaseMonth,
@@ -318,6 +320,105 @@ async function loadActiveEmployees(
 // PER-EMPLOYEE COMPUTE — gathers inputs and calls engine
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// PAY-142: a run's attendance. Approved DTR for the window wins when there is
+// any; else the run input typed for the window (PeriodInput); else nothing.
+// ---------------------------------------------------------------------------
+const DAY_MS = 86_400_000;
+const endOfDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+
+async function runAttendance(
+  tx: TenantTx,
+  tenantId: string,
+  employee: { id: string; attendanceExempt: boolean },
+  windowStart: Date,
+  windowEnd: Date,
+  periodInputRow: Prisma.PeriodInputGetPayload<true> | null,
+): Promise<ComputePeriodInputSnapshot> {
+  const approvedRecords = await tx.dTRRecord.count({
+    where: { employeeId: employee.id, approvalStatus: "APPROVED", date: { gte: windowStart, lte: endOfDay(windowEnd) } },
+  });
+  if (approvedRecords > 0 || (employee.attendanceExempt && !periodInputRow)) {
+    const agg = await aggregateApprovedDtr(tx, {
+      tenantId,
+      employeeId: employee.id,
+      periodStartDate: windowStart,
+      periodEndDate: endOfDay(windowEnd),
+    });
+    if (agg.status === "OK") {
+      return {
+        ...periodInputSnapshot(agg.data as unknown as Prisma.PeriodInputGetPayload<true>),
+        attendanceSource: "DTR",
+      };
+    }
+    if (agg.status === "NOT_APPROVED") {
+      return {
+        ...periodInputSnapshot(periodInputRow),
+        attendanceSource: "DTR_NOT_APPROVED",
+      };
+    }
+  }
+  return {
+    ...periodInputSnapshot(periodInputRow),
+    attendanceSource: periodInputRow ? "MANUAL" : "NONE",
+  };
+}
+
+type Weekday = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
+const WEEKDAYS: Weekday[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+/**
+ * PAY-141 (ruling 2a): scheduled workdays employed inside the pay period, for
+ * an employee who joins or leaves inside it, on a run whose DTR cutoff is not
+ * the pay period. Undefined otherwise (unit 1.8 rules apply unchanged).
+ * Holidays on workdays count: a salaried rate already covers them.
+ */
+async function employedPeriodDaysFor(
+  tx: TenantTx,
+  tenantId: string,
+  employee: {
+    id: string;
+    hireDate: Date | null;
+    lastWorkingDate: Date | null;
+    resignationDate: Date | null;
+    workingDaysDenominator: number | null;
+  },
+  period: { start: Date; end: Date },
+  window: { start: Date; end: Date },
+  tenantDivisor: number,
+): Promise<number | undefined> {
+  const same = (a: Date, b: Date) => a.getTime() === b.getTime();
+  if (same(period.start, window.start) && same(period.end, window.end)) return undefined;
+  const separationDate = employee.lastWorkingDate ?? employee.resignationDate ?? null;
+  if (employedWholePeriod({ hireDate: employee.hireDate, separationDate, periodStart: period.start, periodEnd: period.end })) {
+    return undefined;
+  }
+  const assignment = await tx.employeeShiftAssignment.findFirst({
+    where: {
+      tenantId,
+      employeeId: employee.id,
+      effectiveFrom: { lte: period.end },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: period.start } }],
+    },
+    orderBy: { effectiveFrom: "desc" },
+    select: { shiftSchedule: { select: { workDays: true } } },
+  });
+  const divisor = effectiveDivisor(employee.workingDaysDenominator, tenantDivisor);
+  const workDays: Weekday[] = Array.isArray(assignment?.shiftSchedule?.workDays)
+    ? (assignment!.shiftSchedule!.workDays as Weekday[])
+    : divisor >= 300
+      ? ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
+      : ["MON", "TUE", "WED", "THU", "FRI"];
+  const day = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const from = Math.max(day(period.start), employee.hireDate ? day(employee.hireDate) : -Infinity);
+  const to = Math.min(day(period.end), separationDate ? day(separationDate) : Infinity);
+  let n = 0;
+  for (let t = from; t <= to; t += DAY_MS) {
+    if (workDays.includes(WEEKDAYS[new Date(t).getUTCDay()])) n++;
+  }
+  return n;
+}
+
 async function buildComputeInputForEmployee(
   tx: TenantTx,
   tenantId: string,
@@ -343,14 +444,17 @@ async function buildComputeInputForEmployee(
   const region =
     employee.branch?.workLocation?.region ?? employee.region ?? null;
 
+  // PAY-141: a run created from a payday reads its DTR cutoff window (e.g.
+  // 26 Oct to 10 Nov for the 15 Nov payday); other runs read their period.
+  const windowStart = attendanceWindow?.start ?? periodStart;
+  const windowEnd = attendanceWindow?.end ?? periodEnd;
+
   const [periodInputRow, payCompAssignments, activeLoans] = await Promise.all([
     tx.periodInput.findFirst({
       where: {
         employeeId: employee.id,
-        // PAY-141: a run created from a payday reads its DTR cutoff window
-        // (e.g. 26 Oct to 10 Nov for the 15 Nov payday); others their period.
-        periodStart: attendanceWindow?.start ?? periodStart,
-        periodEnd: attendanceWindow?.end ?? periodEnd,
+        periodStart: windowStart,
+        periodEnd: windowEnd,
       },
     }),
     tx.employeePayComponent.findMany({
@@ -386,7 +490,15 @@ async function buildComputeInputForEmployee(
     },
     tenant: tenantSettings,
     period: { start: periodStart, end: periodEnd, cycle },
-    periodInput: periodInputSnapshot(periodInputRow),
+    periodInput: await runAttendance(tx, tenantId, employee, windowStart, windowEnd, periodInputRow),
+    employedPeriodDays: await employedPeriodDaysFor(
+      tx,
+      tenantId,
+      employee,
+      { start: periodStart, end: periodEnd },
+      { start: windowStart, end: windowEnd },
+      tenantSettings.workingDaysDenominator,
+    ),
     payComponents: payCompAssignments.map(toComputeComponent),
     loans: activeLoans.map(toComputeLoan),
     adjustments: [], // Injected by caller after bookId is known
