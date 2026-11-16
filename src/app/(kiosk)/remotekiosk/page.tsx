@@ -29,7 +29,6 @@ export default function RemoteKioskPage() {
 
   // Refs for volatile values so PIN-screen handlers always see fresh data
   const deviceTokenRef = useRef("");
-  const requiresSelfieRef = useRef(true); // Selfie is always required for kiosk punch
   const employeeNumberRef = useRef("");
   const punchTypeRef = useRef<PunchType>("IN");
   const pinRef = useRef("");
@@ -45,6 +44,21 @@ export default function RemoteKioskPage() {
   useEffect(() => { punchTypeRef.current = punchType; }, [punchType]);
   useEffect(() => { pinRef.current = pin; }, [pin]);
 
+  // PAY-131: declared before the effects that call them (react-hooks/immutability).
+  // Same code as before; only the position moved. They touch refs only.
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch { /* Camera unavailable — proceed without selfie */ }
+  }
+
   // Start camera AFTER PIN screen is in the DOM (selfie is always required)
   useEffect(() => {
     if (screen === "PIN") {
@@ -53,7 +67,6 @@ export default function RemoteKioskPage() {
     if (screen !== "PIN") {
       stopCamera();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   useEffect(() => {
@@ -67,19 +80,6 @@ export default function RemoteKioskPage() {
       stopCamera();
     };
   }, []);
-
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }
-
-  async function startCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch { /* Camera unavailable — proceed without selfie */ }
-  }
 
   function captureFrame(): Blob | null {
     const video = videoRef.current;

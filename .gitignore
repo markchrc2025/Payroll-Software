@@ -69,5 +69,7 @@ next-env.d.ts
 /.venv/
 
 # Claude Code local state (worktrees, local permission overrides)
-.claude/
+# PAY-95 (R128): local Claude settings stay private; the team skills are committed.
+.claude/*
+!.claude/skills/
 integration-report.json

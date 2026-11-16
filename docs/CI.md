@@ -262,9 +262,15 @@ The options considered:
   the correct incentive.
 
 The repo-wide number is still printed on every run, so the debt stays visible
-and can be paid down deliberately. Cleaning the 7 `src/` errors is a one-line
-change to each file, but it is application code and belongs to whoever owns
-those routes.
+and can be paid down deliberately.
+
+**Update, 16 Nov 2026 (PAY-131).** `src/` is now at zero lint errors: the
+`prefer-const` errors were cleared earlier, and the last two (the kiosk page's
+camera functions used in an effect before their declaration) are fixed. A
+second blocking step, `npx eslint src --quiet`, keeps all of `src/` free of
+errors, including files a PR does not touch, which the changed-files gate
+cannot see. Warnings in `src/` and everything in `docs/` mockups stay
+informational.
 
 ---
 
