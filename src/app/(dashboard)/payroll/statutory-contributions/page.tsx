@@ -277,11 +277,11 @@ export default function StatutoryContributionsPage() {
             ) : (
               data.rows.map((r) => (
                 <TableRow key={`${r.month}-${r.employeeId}`}>
-                  <TableCell className="text-[13px] whitespace-nowrap">
+                  <TableCell className="text-[13px] whitespace-normal min-w-[190px] max-w-[240px]">
                     <div className="font-medium text-[#171717]">
                       {history ? monthLabel(r.month) : r.name}
                     </div>
-                    <div className="text-[11.5px] text-[#8A8A8A]">
+                    <div className="text-[11.5px] text-[#8A8A8A] leading-snug">
                       {history ? "" : `${r.employeeNumber} · `}
                       {r.sssBasis ? `SSS on ${sssBasisLabel(r.sssBasis)}` : ""}
                     </div>
