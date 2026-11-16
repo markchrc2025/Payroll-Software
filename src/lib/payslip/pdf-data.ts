@@ -148,6 +148,8 @@ export interface PayslipPdfSource {
     restDayPayCents: bigint;
     hazardPayCents: bigint;
     taxableAllowancesCents: bigint;
+    /** PAY-153: the exempt part of a 13th month (YEAR_END, FINAL_PAY). */
+    nontaxable13MonthAndBenefitsCents?: bigint;
     grossCompensationCents: bigint;
     grossTaxableIncomeCents: bigint;
     sssEeCents: bigint;
@@ -220,6 +222,7 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   add("Rest day pay", sheet.restDayPayCents);
   add("Hazard pay", sheet.hazardPayCents);
   add("Taxable allowances and additions", sheet.taxableAllowancesCents);
+  add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
   const listed = earnings.reduce((s, l) => s + l.amount, 0n);
   // Whatever else gross holds (non-taxable allowances from pay components, or
   // the 13th-month excess on a final pay) gets its own line so the column adds up.
