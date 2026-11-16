@@ -15,6 +15,8 @@
 // session id), which the protocol allows for a server that only answers.
 import http from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { StagingApi } from "./api-client.mjs";
 import { QA_COMPANY } from "./qa-company.mjs";
 import { seedScenario, waitForRun } from "./seed-data.mjs";
@@ -26,7 +28,7 @@ const MAX_BODY = 1_000_000;
 
 export const INSTRUCTIONS = [
   "Sentire Payroll QA connector: drives the STAGING Payroll app (payroll-staging.apps.sentire.solutions) as the admin of the seeded test company \"Sentire QA Co.\" (company code SENTIREQA). Never production.",
-  "Staging data is disposable: restarting the staging app (Sentire Dokploy connector, restart_app on \"Payroll Staging\") recreates the database and re-seeds it. Use that to reset.",
+  "Staging data is disposable. If the app keeps its database (STAGING_PG_DATA_DIR on a volume), data survives restarts and deploys; to wipe it, call reset_staging, then restart the staging app (Sentire Dokploy connector, restart_app on \"Payroll Staging\"). Without a kept database, every restart or deploy recreates the database and re-seeds it.",
   "Everything goes through the app's real API, so a 4xx answer is the app's own validation or permission check: report it, do not work around it.",
   "Money in the API is in centavos as strings (\"3000000\" = ₱30,000.00). Dates are YYYY-MM-DD.",
 ].join(" ");
@@ -155,6 +157,12 @@ export const TOOLS = [
     run: (api) => seedScenario(api, () => {}),
   },
   {
+    name: "reset_staging",
+    description: "Ask for a clean staging database at the next start. With a kept database (STAGING_PG_DATA_DIR) this marks it for wiping; then restart the Payroll Staging app (Sentire Dokploy connector, restart_app) and it comes back freshly seeded. Nothing is deleted until that restart.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    run: () => markStagingReset(process.env),
+  },
+  {
     name: "api_request",
     description: "Any call to the staging app's API (/api/... except /api/auth/...) as the QA admin, with the app's own validation and permission checks. Use for anything the other tools do not cover: employees, movements, leave, loans, adjustments, payslips, reports.",
     inputSchema: {
@@ -170,6 +178,17 @@ export const TOOLS = [
     run: (api, a) => api.request(a.method, a.path, a.body),
   },
 ];
+
+/** PAY-140: marks the kept staging database for wiping at the next start. */
+export function markStagingReset(env = process.env) {
+  const dir = env.STAGING_PG_DATA_DIR;
+  if (!dir) {
+    return { marked: false, message: "This staging app does not keep its database (STAGING_PG_DATA_DIR is not set): every restart already starts fresh. Restart Payroll Staging to reset." };
+  }
+  if (!existsSync(dir)) throw new Error(`STAGING_PG_DATA_DIR ${dir} does not exist`);
+  writeFileSync(join(dir, "RESET"), `requested ${new Date().toISOString()}\n`);
+  return { marked: true, message: "Marked. Restart Payroll Staging (Sentire Dokploy connector, restart_app) to wipe the database and re-seed it. Until then nothing changes." };
+}
 
 export function keyMatches(provided, expected) {
   if (typeof expected !== "string" || expected.length < MIN_SECRET || !provided) return false;
@@ -290,7 +309,10 @@ async function main() {
   await api.waitUntilUp();
   try {
     await api.signIn();
-    await seedScenario(api, (line) => console.log(`[qa-seed] ${line}`));
+    // PAY-140: on a kept database, add what is missing but leave test edits alone.
+    await seedScenario(api, (line) => console.log(`[qa-seed] ${line}`), {
+      restoreAttendance: process.env.STAGING_PG_REUSED !== "1",
+    });
     console.log("[qa-seed] scenario ready");
   } catch (e) {
     console.error(`[qa-seed] failed: ${e.message}`);
