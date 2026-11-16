@@ -50,6 +50,21 @@ export interface Bir2316EmployeeInput {
   suffix: string | null;
   taxClassification: TaxClassification;
   sheets: Bir2316SheetInput[];
+  /**
+   * PAY-144: this company's pay to the employee earlier in the year, before
+   * it used Sentire. It is this employer's compensation, so it is added to
+   * every box; it is not a pay period.
+   */
+  priorPayrollOpening?: Bir2316SheetInput;
+  /** PAY-144: a previous employer's 2316 for the same year (a transferee). */
+  previousEmployer?: Bir2316PreviousEmployerInput | null;
+}
+
+export interface Bir2316PreviousEmployerInput {
+  name: string;
+  tin: string | null;
+  taxableCompensationCents: bigint;
+  withholdingTaxCents: bigint;
 }
 
 export interface Bir2316Input {
@@ -105,6 +120,21 @@ export interface Bir2316Certificate {
   // ── Withholding tax (Box 27) ─────────────────────────────────────────────
   /** Total income tax withheld and remitted for the year. */
   totalWithholdingTaxCents: string;
+
+  // ── PAY-144: year-to-date openings ──────────────────────────────────────
+  /** True when the totals above include pay before Sentire (same employer). */
+  includesPriorPayrollOpening: boolean;
+  /** A previous employer's figures for the year, or null. */
+  previousEmployer: {
+    name: string;
+    tin: string | null;
+    taxableCompensationCents: string;
+    withholdingTaxCents: string;
+  } | null;
+  /** Taxable compensation from this employer plus the previous employer. */
+  totalGrossTaxableAllEmployersCents: string;
+  /** Tax withheld by this employer plus the previous employer. */
+  totalWithholdingAllEmployersCents: string;
 }
 
 export interface Bir2316Report {
@@ -127,7 +157,7 @@ export function buildBir2316Report(input: Bir2316Input): Bir2316Report {
   const certificates: Bir2316Certificate[] = [];
 
   for (const emp of employees) {
-    if (emp.sheets.length === 0) continue;
+    if (emp.sheets.length === 0 && !emp.priorPayrollOpening) continue;
 
     let totalGross = 0n;
     let totalMweBasic = 0n;
@@ -139,7 +169,10 @@ export function buildBir2316Report(input: Bir2316Input): Bir2316Report {
     let totalTaxable = 0n;
     let totalWht = 0n;
 
-    for (const s of emp.sheets) {
+    const rows = emp.priorPayrollOpening
+      ? [...emp.sheets, emp.priorPayrollOpening]
+      : emp.sheets;
+    for (const s of rows) {
       totalGross += s.grossCompensationCents;
       totalMweBasic += s.mweExemptCompensationCents + s.nontaxableBasicCents;
       totalNt13Month += s.nontaxable13MonthAndBenefitsCents;
@@ -156,6 +189,7 @@ export function buildBir2316Report(input: Bir2316Input): Bir2316Report {
     // them so Box 23 shows only "other" non-taxable items (de minimis, etc.)
     // and Box 24 shows the contributions separately.
     const mandatoryEe = totalSss + totalPhic + totalPagibig;
+    const prev = emp.previousEmployer ?? null;
     const otherNontaxable =
       totalNtComp > mandatoryEe ? totalNtComp - mandatoryEe : 0n;
 
@@ -180,6 +214,17 @@ export function buildBir2316Report(input: Bir2316Input): Bir2316Report {
       totalMandatoryEeCents: mandatoryEe.toString(),
       totalGrossTaxableIncomeCents: totalTaxable.toString(),
       totalWithholdingTaxCents: totalWht.toString(),
+      includesPriorPayrollOpening: !!emp.priorPayrollOpening,
+      previousEmployer: prev
+        ? {
+            name: prev.name,
+            tin: prev.tin,
+            taxableCompensationCents: prev.taxableCompensationCents.toString(),
+            withholdingTaxCents: prev.withholdingTaxCents.toString(),
+          }
+        : null,
+      totalGrossTaxableAllEmployersCents: (totalTaxable + (prev?.taxableCompensationCents ?? 0n)).toString(),
+      totalWithholdingAllEmployersCents: (totalWht + (prev?.withholdingTaxCents ?? 0n)).toString(),
     });
   }
 

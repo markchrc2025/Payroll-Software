@@ -515,6 +515,16 @@ function applyExpenseClaims(
 const ANNUAL_13TH_MONTH_CAP = 9_000_000n; // ₱90,000 in centavos
 
 /**
+ * PAY-144: what is left of the 90,000 exemption after what the employee
+ * already used this year (year-to-date openings and earlier finalized runs).
+ * Absent `used` means none, as before.
+ */
+function remainingBenefitsCap(used: bigint | undefined): bigint {
+  const left = ANNUAL_13TH_MONTH_CAP - (used ?? 0n);
+  return left > 0n ? left : 0n;
+}
+
+/**
  * YEAR_END computation path — invoked when `input.thirteenthMonthCents` is
  * set by the persist layer.
  *
@@ -534,10 +544,9 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
   // Adjustments.
   const adjs = applyAdjustments(input.adjustments);
 
+  const benefitsCap = remainingBenefitsCap(input.benefitsExemptUsedCents); // PAY-144
   const nonTaxable13Month =
-    thirteenthMonth < ANNUAL_13TH_MONTH_CAP
-      ? thirteenthMonth
-      : ANNUAL_13TH_MONTH_CAP;
+    thirteenthMonth < benefitsCap ? thirteenthMonth : benefitsCap;
   const taxableExcess = thirteenthMonth - nonTaxable13Month; // always ≥ 0n
 
   // WHT on taxable excess + taxable adjustment additions.
@@ -753,7 +762,8 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
 
   // Prorated 13th month: non-taxable up to ₱90,000.
   const p13th = fp.proratedThirteenthMonthCents;
-  const nontaxable13Month = p13th < ANNUAL_13TH_MONTH_CAP ? p13th : ANNUAL_13TH_MONTH_CAP;
+  const benefitsCap = remainingBenefitsCap(input.benefitsExemptUsedCents); // PAY-144
+  const nontaxable13Month = p13th < benefitsCap ? p13th : benefitsCap;
   const taxable13thExcess = clampNonNegative(p13th - nontaxable13Month);
   // The excess is added to gross taxable income (accounted for below).
 

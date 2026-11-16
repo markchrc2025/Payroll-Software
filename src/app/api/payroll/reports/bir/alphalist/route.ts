@@ -19,6 +19,7 @@ import {
   type AlphalistSheetInput,
 } from "@/lib/payroll/reports/bir-alphalist";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { loadYtdOpeningsByEmployee, openingAsReportSheet } from "@/lib/payroll/ytd-openings";
 
 const querySchema = z.object({
   year: z.coerce
@@ -81,7 +82,21 @@ export async function GET(req: NextRequest) {
         select: { name: true },
       });
 
-      if (sheets.length === 0) {
+      // PAY-144: pay before Sentire (same employer) counts in the year's totals.
+      const openings = await loadYtdOpeningsByEmployee(
+        tx,
+        auth.tenantId,
+        year,
+        employeeId ? [employeeId] : undefined,
+      );
+      const priorPayroll = new Map(
+        [...openings.entries()].flatMap(([id, list]) => {
+          const prior = list.find((o) => o.source === "PRIOR_PAYROLL");
+          return prior ? [[id, prior] as const] : [];
+        }),
+      );
+
+      if (sheets.length === 0 && priorPayroll.size === 0) {
         return buildAlphalistReport({
           year, tenantId: auth.tenantId, tenantName: tenant.name,
           employees: [],
@@ -112,7 +127,7 @@ export async function GET(req: NextRequest) {
       }
 
       const employees = await tx.employee.findMany({
-        where: { id: { in: [...byEmployee.keys()] } },
+        where: { id: { in: [...new Set([...byEmployee.keys(), ...priorPayroll.keys()])] } },
         select: {
           id: true, employeeNumber: true, firstName: true,
           middleName: true, lastName: true, suffix: true,
@@ -132,6 +147,9 @@ export async function GET(req: NextRequest) {
           (taxClassByEmployee.get(e.id) as AlphalistEmployeeInput["taxClassification"]) ??
           e.taxClassification,
         sheets: byEmployee.get(e.id) ?? [],
+        priorPayrollOpening: priorPayroll.has(e.id)
+          ? { ...openingAsReportSheet(priorPayroll.get(e.id)!), isMwe: e.taxClassification === "MWE" }
+          : undefined,
       }));
 
       return buildAlphalistReport({
