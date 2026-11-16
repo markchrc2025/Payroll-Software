@@ -1088,16 +1088,12 @@ export function computeSheet(input: ComputeInput): ComputeResult {
             period.start,
           );
 
-  // PAY-133: SSS is on actual basic (after unpaid days and lates) of the base
-  // month chosen by persist.ts (see sss-basis.ts); null means no SSS this run
-  // (a new hire's first month). Without a basis (unit tests, non-REGULAR runs)
-  // it stays on the contracted monthly basic. PhilHealth and Pag-IBIG stay on
-  // the contracted monthly basic (Mark, 15 Nov 2026).
-  const sssCompCents = sssCompensationCents(
-    input.sssBasis,
-    basePayCents - lateUndertimeDeductionCents,
-    rates.monthlyEquivalentCents,
-  );
+  // PAY-133: SSS is on the PREVIOUS month's actual basic (after unpaid days
+  // and lates), loaded by persist.ts (see sss-basis.ts); null means no SSS
+  // this run (a new hire's first month). Without a basis (unit tests,
+  // non-REGULAR runs) it stays on the contracted monthly basic. PhilHealth
+  // and Pag-IBIG stay on the contracted monthly basic (Mark, 15 Nov 2026).
+  const sssCompCents = sssCompensationCents(input.sssBasis, rates.monthlyEquivalentCents);
   const sss = sssCompCents === null ? NO_SSS : computeSSS(rules.sss, sssCompCents);
   const phic = computePhilHealth(
     rules.philHealth,
