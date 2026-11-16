@@ -513,7 +513,7 @@ function deriveRateForPersist(
  * semi-monthly employee was also paid in a weekly run of overlapping dates.
  * OFF_CYCLE, FINAL_PAY and YEAR_END keep their own selection.
  */
-function onRunCycle<E extends { payFrequency: PayFrequency }>(
+export function onRunCycle<E extends { payFrequency: PayFrequency }>(
   employees: E[],
   runType: string,
   cycle: PayFrequency,

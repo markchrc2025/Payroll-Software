@@ -110,8 +110,6 @@ const DE_MINIMIS: DeMinimisCeilingPayload = {
 // Helper — build a minimal ComputeInput with sensible defaults.
 // All monetary fields in centavos (BigInt). Override specific fields per test.
 // ---------------------------------------------------------------------------
-type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
-
 function makeInput(overrides: {
   salaryType?: "MONTHLY" | "DAILY";
   basicSalaryCents?: bigint;
