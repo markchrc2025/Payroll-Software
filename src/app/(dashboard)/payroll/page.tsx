@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Plus, Wallet, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Wallet, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,6 +98,7 @@ const EMPTY_FORM = {
 };
 
 export default function PayrollPage() {
+  const router = useRouter();
   const [runs, setRuns] = useState<RunsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -189,6 +192,24 @@ export default function PayrollPage() {
     return `${fmt(start)} – ${fmt(end)}`;
   }
 
+  /**
+   * PAY-158: a click anywhere on a run's row opens the run. Ctrl or Cmd click
+   * and a middle click open it in a new tab. A click on a link or button in
+   * the row is left to that control (the pay period link handles its own
+   * clicks), and so is the end of a text selection.
+   */
+  function openRun(e: MouseEvent<HTMLTableRowElement>, id: string) {
+    if ((e.target as HTMLElement).closest("a, button")) return;
+    if (window.getSelection()?.toString()) return;
+    const href = `/payroll/${id}`;
+    if (e.metaKey || e.ctrlKey || e.button === 1) {
+      window.open(href, "_blank", "noopener");
+      return;
+    }
+    if (e.button !== 0) return;
+    router.push(href);
+  }
+
   return (
     <div className="space-y-5">
       {/* ── Page header ── */}
@@ -237,21 +258,20 @@ export default function PayrollPage() {
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Type</TableHead>
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Status</TableHead>
               <TableHead className="text-[12.5px] font-medium text-[#525252]">Created</TableHead>
-              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 6 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : !runs?.data?.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-[#6B6B6B]">
+                <TableCell colSpan={6} className="py-12 text-center text-[#6B6B6B]">
                   <Wallet className="mx-auto mb-2 h-8 w-8 opacity-30" />
                   No payroll runs yet. Create one to get started.
                 </TableCell>
@@ -265,9 +285,19 @@ export default function PayrollPage() {
                 };
                 const s = statusStyle[run.status] ?? { bg: "#F7F7F7", color: "#525252" };
                 return (
-                  <TableRow key={run.id} className="hover:bg-[#FAFAFA]">
+                  <TableRow
+                    key={run.id}
+                    className="cursor-pointer hover:bg-[#FAFAFA]"
+                    onClick={(e) => openRun(e, run.id)}
+                    onAuxClick={(e) => openRun(e, run.id)}
+                  >
                     <TableCell className="font-medium tabular-nums text-[13.5px] text-[#171717]">
-                      {formatPeriod(run.periodStart, run.periodEnd)}
+                      <Link
+                        href={`/payroll/${run.id}`}
+                        className="rounded-sm hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E8693A]"
+                      >
+                        {formatPeriod(run.periodStart, run.periodEnd)}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-[13px] text-[#6B6B6B] tabular-nums">
                       {run.payDate ? fmtDay(run.payDate.slice(0, 10)) : "Not set"}
@@ -288,11 +318,6 @@ export default function PayrollPage() {
                     </TableCell>
                     <TableCell className="text-[13px] text-[#6B6B6B] tabular-nums">
                       {new Date(run.createdAt).toLocaleDateString("en-PH")}
-                    </TableCell>
-                    <TableCell>
-                      <Button size="icon" variant="ghost" nativeButton={false} className="h-7 w-7 text-[#6B6B6B]" render={<Link href={`/payroll/${run.id}`} />}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
                     </TableCell>
                   </TableRow>
                 );
