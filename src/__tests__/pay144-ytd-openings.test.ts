@@ -171,7 +171,9 @@ describe("PAY-144 O1 to O4: openings", () => {
     expect(ytdOpeningInput.safeParse({ ...base, basicPayEarnedCents: "2500000" }).success).toBe(true);
     expect(ytdOpeningInput.safeParse({ ...base, basicPayEarnedCents: "25000.00" }).success).toBe(false);
     expect(ytdOpeningInput.safeParse({ ...base, basicPayEarnedCents: "-1" }).success).toBe(false);
-    expect(ytdOpeningInput.safeParse({ ...base, source: "PREVIOUS_EMPLOYER" }).success).toBe(false); // no name
+    const noName = ytdOpeningInput.safeParse({ ...base, source: "PREVIOUS_EMPLOYER" });
+    expect(noName.success).toBe(false);
+    expect(noName.error?.issues[0]?.message).toBe("Previous employer name is required"); // staging showed zod's default wording
     const parsed = ytdOpeningInput.parse({ ...base });
     expect(parsed).toMatchObject({ basicPayEarnedCents: 0n, taxableCompensationCents: 0n });
   });
