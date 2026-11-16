@@ -67,11 +67,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Math helpers — duplicated from statutory/compute.ts to keep engine standalone.
 // ---------------------------------------------------------------------------
-function multiplyHalfUp(amountCentavos: bigint, rate: number): bigint {
-  const n = Number(amountCentavos) * rate;
-  return BigInt(Math.round(n));
-}
-
 /** Multiply BigInt centavos by a `number` hours/days value (HALF-UP). */
 function timesUnits(centavos: bigint, units: number): bigint {
   if (units === 0) return 0n;
@@ -516,7 +511,7 @@ const ANNUAL_13TH_MONTH_CAP = 9_000_000n; // ₱90,000 in centavos
  *   • Net = thirteenthMonth − WHT − loanDeductions.
  */
 function computeYearEnd(input: ComputeInput): ComputeResult {
-  const { employee, salary, tenant, period, periodInput, loans, rules } = input;
+  const { employee, salary, tenant, periodInput, loans, rules } = input;
   const thirteenthMonth = input.thirteenthMonthCents ?? 0n;
 
   // Adjustments.
