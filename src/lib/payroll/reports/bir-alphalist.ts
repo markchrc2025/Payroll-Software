@@ -49,6 +49,12 @@ export interface AlphalistEmployeeInput {
   suffix: string | null;
   taxClassification: TaxClassification;
   sheets: AlphalistSheetInput[];
+  /**
+   * PAY-144: this company's pay to the employee earlier in the year, before
+   * it used Sentire. Added to the totals; not a pay period. (A previous
+   * employer's figures are not in this schedule yet: PAY-71.)
+   */
+  priorPayrollOpening?: AlphalistSheetInput;
 }
 
 export interface AlphalistInput {
@@ -156,7 +162,7 @@ export function buildAlphalistReport(input: AlphalistInput): AlphalistReport {
   const mweEntries: AlphalistMweEntry[] = [];
 
   for (const emp of employees) {
-    if (emp.sheets.length === 0) continue;
+    if (emp.sheets.length === 0 && !emp.priorPayrollOpening) continue;
 
     let totalGross = 0n;
     let totalMweExempt = 0n;
@@ -170,7 +176,10 @@ export function buildAlphalistReport(input: AlphalistInput): AlphalistReport {
     let totalWht = 0n;
     let anyMwe = false;
 
-    for (const s of emp.sheets) {
+    const rows = emp.priorPayrollOpening
+      ? [...emp.sheets, emp.priorPayrollOpening]
+      : emp.sheets;
+    for (const s of rows) {
       totalGross += s.grossCompensationCents;
       totalMweExempt += s.mweExemptCompensationCents;
       totalNtBasic += s.nontaxableBasicCents;

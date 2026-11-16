@@ -15,15 +15,18 @@ import { lookupBIR } from "@/lib/statutory/compute";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant } from "@/lib/with-tenant";
 import { BirWithholdingPayload } from "@/lib/statutory/types";
+import { loadYtdOpeningsByEmployee, ytdOpeningTotals } from "./ytd-openings";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface AnnualizationResult {
-  /** Sum of grossTaxableIncomeCents from all finalized REGULAR/OFF_CYCLE runs. */
+  /** Sum of grossTaxableIncomeCents from all finalized REGULAR/OFF_CYCLE runs,
+   *  plus year-to-date openings (PAY-144). */
   ytdRegularTaxableCents: bigint;
-  /** Sum of withholdingTaxCents from all finalized REGULAR/OFF_CYCLE runs. */
+  /** Sum of withholdingTaxCents from all finalized REGULAR/OFF_CYCLE runs,
+   *  plus year-to-date openings (PAY-144). */
   ytdRegularWhtCents: bigint;
   /** True annual TRAIN tax liability on ytdRegularTaxableCents. */
   trueAnnualLiabilityCents: bigint;
@@ -44,6 +47,13 @@ export interface AnnualizationDataJson {
   trueUpCents: string;
   isRefund: boolean;
   annualizedAt: string; // ISO datetime
+  /**
+   * PAY-144: of the year's taxable income and tax withheld above, the part
+   * that came from year-to-date openings (pay before Sentire and a previous
+   * employer's 2316). Absent on annualizations run before PAY-144.
+   */
+  ytdOpeningTaxableCents?: string;
+  ytdOpeningWhtCents?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +170,14 @@ export async function runAnnualization(
       },
     });
 
+    // PAY-144: year-to-date openings for everyone in the book.
+    const openingsByEmployee = await loadYtdOpeningsByEmployee(
+      tx,
+      tenantId,
+      year,
+      yearEndSheets.map((s) => s.employeeId),
+    );
+
     const now = new Date().toISOString();
     const summaryRows: { trueUpCents: bigint; skipped: boolean }[] = [];
 
@@ -195,8 +213,10 @@ export async function runAnnualization(
         select: { grossTaxableIncomeCents: true, withholdingTaxCents: true },
       });
 
-      let ytdRegularTaxableCents = 0n;
-      let ytdRegularWhtCents     = 0n;
+      // PAY-144: pay before Sentire and a previous employer's 2316 start the sums.
+      const opening = ytdOpeningTotals(openingsByEmployee.get(sheet.employeeId) ?? []);
+      let ytdRegularTaxableCents = opening.taxableCompensationCents;
+      let ytdRegularWhtCents     = opening.withholdingTaxCents;
       for (const ps of priorSheets) {
         ytdRegularTaxableCents += ps.grossTaxableIncomeCents;
         ytdRegularWhtCents     += ps.withholdingTaxCents;
@@ -217,6 +237,8 @@ export async function runAnnualization(
         trueUpCents:            result.trueUpCents.toString(),
         isRefund:               result.isRefund,
         annualizedAt:           now,
+        ytdOpeningTaxableCents: opening.taxableCompensationCents.toString(),
+        ytdOpeningWhtCents:     opening.withholdingTaxCents.toString(),
       };
 
       // 7. Write back: baseline + new true-up.

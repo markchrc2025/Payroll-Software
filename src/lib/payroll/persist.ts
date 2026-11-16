@@ -25,6 +25,13 @@ import type {
 } from "@prisma/client";
 import { computeSheet, isStatutoryDeducted } from "./engine";
 import { aggregateApprovedDtr } from "./dtr-aggregate";
+import {
+  benefitsExemptUsedCents,
+  loadYtdOpenings,
+  ytdOpeningSnapshot,
+  ytdOpeningTotals,
+  type YtdOpening,
+} from "./ytd-openings";
 import { employedWholePeriod } from "./rates";
 import {
   assessSssBasis,
@@ -659,12 +666,17 @@ function resultToSheetCreate(
  *
  * Basis: STRICT_DOLE (default) — uses `basePayCents` which already reflects
  * absences / undertimes.  Other bases are deferred to a future sub-phase.
+ *
+ * PAY-144: basic pay earned before Sentire (a PRIOR_PAYROLL opening) joins
+ * the base, and 13th month already paid this year before Sentire is
+ * subtracted (never below zero). A previous employer's pay never counts.
  */
 async function computeThirteenthMonthCents(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
   tenantId: string,
   employeeId: string,
   periodEnd: Date,
+  openings: YtdOpening[] = [],
 ): Promise<bigint> {
   const year = periodEnd.getUTCFullYear();
   const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
@@ -683,11 +695,33 @@ async function computeThirteenthMonthCents(
     select: { basePayCents: true },
   });
 
+  const opening = ytdOpeningTotals(openings);
   const totalBasic = priorSheets.reduce(
     (acc, s) => acc + s.basePayCents,
-    0n,
+    opening.basicPayEarnedCents,
   );
-  return totalBasic / 12n;
+  const due = totalBasic / 12n - opening.thirteenthMonthPaidCents;
+  return due > 0n ? due : 0n;
+}
+
+/**
+ * PAY-144: load the employee's year-to-date openings for a YEAR_END or
+ * FINAL_PAY run, set how much of the 90,000 exemption is already used, and
+ * keep a copy of the openings on the run's input snapshot.
+ */
+async function applyYtdOpenings(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employeeId: string,
+  periodEnd: Date,
+  ci: ComputeInput,
+): Promise<YtdOpening[]> {
+  const year = periodEnd.getUTCFullYear();
+  const openings = await loadYtdOpenings(tx, tenantId, employeeId, year);
+  ci.benefitsExemptUsedCents = await benefitsExemptUsedCents(tx, tenantId, employeeId, year, openings);
+  const snapshot = ytdOpeningSnapshot(year, openings);
+  if (snapshot) ci.periodInput = { ...ci.periodInput, ytdOpening: snapshot };
+  return openings;
 }
 
 // ---------------------------------------------------------------------------
@@ -764,6 +798,7 @@ async function computeFinalPayInputsForEmployee(
   separationReason: SeparationReason | undefined,
   dailyRateCents: bigint,
   monthlySalaryCents: bigint,
+  openings: YtdOpening[] = [],
 ): Promise<FinalPayInputs> {
   const year = periodEnd.getUTCFullYear();
 
@@ -773,6 +808,7 @@ async function computeFinalPayInputsForEmployee(
     tenantId,
     employee.id,
     periodEnd,
+    openings,
   );
 
   // 2. Leave cash-out: sum available balances for convertible leave types.
@@ -829,13 +865,15 @@ async function computeFinalPayInputsForEmployee(
     },
     select: { grossTaxableIncomeCents: true, withholdingTaxCents: true },
   });
+  // PAY-144: pay before Sentire and a previous employer's 2316 join the year.
+  const opening = ytdOpeningTotals(openings);
   const cyPriorTaxableIncomeCents = priorSheets.reduce(
     (acc, s) => acc + s.grossTaxableIncomeCents,
-    0n,
+    opening.taxableCompensationCents,
   );
   const cyPriorWithholdingTaxCents = priorSheets.reduce(
     (acc, s) => acc + s.withholdingTaxCents,
-    0n,
+    opening.withholdingTaxCents,
   );
 
   return {
@@ -974,11 +1012,13 @@ export async function createDraftRun(input: CreateDraftRunInput) {
 
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
+        const ytdOpenings = await applyYtdOpenings(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-144
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           input.tenantId,
           e.id,
           input.periodEnd,
+          ytdOpenings,
         );
       }
 
@@ -992,6 +1032,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
           e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
+        const ytdOpenings = await applyYtdOpenings(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-144
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(
           tx,
           input.tenantId,
@@ -1000,6 +1041,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
           input.separationReason,
           dailyRate,
           salary.basicSalaryCents,
+          ytdOpenings,
         );
       }
 
@@ -1122,11 +1164,13 @@ export async function recomputeRun(tenantId: string, bookId: string) {
 
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
+        const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           tenantId,
           e.id,
           book.periodEnd,
+          ytdOpenings,
         );
       }
 
@@ -1140,6 +1184,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
           e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
+        const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(
           tx,
           tenantId,
@@ -1148,6 +1193,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
           book.separationReason ?? undefined,
           dailyRate,
           salary.basicSalaryCents,
+          ytdOpenings,
         );
       }
 
@@ -1483,11 +1529,13 @@ export async function processRun(tenantId: string, bookId: string) {
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
       if (book.runType === "YEAR_END") {
+        const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
           tx,
           tenantId,
           e.id,
           book.periodEnd,
+          ytdOpenings,
         );
       }
 
@@ -1500,6 +1548,7 @@ export async function processRun(tenantId: string, bookId: string) {
           e.workingDaysDenominator,
           tenant.workingDaysDenominator,
         );
+        const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.finalPayInputs = await computeFinalPayInputsForEmployee(
           tx,
           tenantId,
@@ -1508,6 +1557,7 @@ export async function processRun(tenantId: string, bookId: string) {
           book.separationReason ?? undefined,
           dailyRate,
           salary.basicSalaryCents,
+          ytdOpenings,
         );
       }
 

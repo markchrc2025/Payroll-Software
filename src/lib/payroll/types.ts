@@ -6,6 +6,7 @@
  * The persist layer (`persist.ts`) is responsible for resolving master data
  * and statutory rules BEFORE calling the engine.
  */
+import type { YtdOpeningSnapshot } from "./ytd-openings";
 import type { SssBasis, SssBasisKind } from "./sss-basis";
 import type {
   AdjustmentKind,
@@ -76,6 +77,12 @@ export interface ComputePeriodInputSnapshot {
    * used). Absent on sheets computed before PAY-142.
    */
   attendanceSource?: "DTR" | "MANUAL" | "NONE" | "DTR_NOT_APPROVED";
+  /**
+   * PAY-144: the year-to-date openings a YEAR_END or FINAL_PAY run used (pay
+   * before Sentire and a previous employer's 2316), kept so the sealed run
+   * reproduces. Absent when the employee has none.
+   */
+  ytdOpening?: YtdOpeningSnapshot;
   daysWorked: number;
   lateUndertimeMinutes: number;
   regularOtHours: number;
@@ -231,6 +238,13 @@ export interface ComputeInput {
    * any excess via MONTHLY BIR table; no statutory contributions.
    */
   thirteenthMonthCents?: bigint;
+  /**
+   * PAY-144: how much of the 90,000 exemption for 13th month and other
+   * benefits is already used this year (year-to-date openings plus earlier
+   * finalized runs). YEAR_END and FINAL_PAY exempt only what is left.
+   * Absent: none used, as before.
+   */
+  benefitsExemptUsedCents?: bigint;
   /**
    * When set, overrides the cutoff-rule logic for whether statutory
    * contributions (SSS/PhilHealth/Pag-IBIG) are deducted in this run.
