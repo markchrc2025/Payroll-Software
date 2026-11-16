@@ -23,7 +23,13 @@ import type {
   StatutoryCategory,
   SeparationReason,
 } from "@prisma/client";
-import { computeSheet } from "./engine";
+import { computeSheet, isStatutoryDeducted } from "./engine";
+import {
+  assessSssBasis,
+  sssBaseMonth,
+  type SssBasis,
+  type SssHistorySheet,
+} from "./sss-basis";
 import { deriveSalaryRates, effectiveDivisor } from "./rates";
 import { multiply } from "@/lib/money";
 import type {
@@ -377,6 +383,85 @@ async function buildComputeInputForEmployee(
     multiplierConfig,
     // tenantId not in ComputeInput — used by caller only
   } as ComputeInput;
+}
+
+// ---------------------------------------------------------------------------
+// PAY-133: SSS basis per employee (which month's actual basic)
+// ---------------------------------------------------------------------------
+
+/**
+ * For a REGULAR run that deducts contributions, loads each employee's
+ * finalized runs overlapping the SSS base month and decides the basis
+ * (sss-basis.ts). Returns null when the run does not deduct (or is not
+ * REGULAR): the engine then needs no basis.
+ */
+async function loadSssBases(
+  tx: TenantTx,
+  args: {
+    employees: {
+      id: string;
+      hireDate: Date | null;
+      lastWorkingDate: Date | null;
+      resignationDate: Date | null;
+    }[];
+    runType: string;
+    cycle: ComputeInput["period"]["cycle"];
+    rule: "FIRST_CUTOFF" | "SECOND_CUTOFF";
+    periodStart: Date;
+    periodEnd: Date;
+    skipStatutory: boolean;
+  },
+): Promise<Map<string, SssBasis> | null> {
+  if (args.runType !== "REGULAR" || args.skipStatutory) return null;
+  if (!isStatutoryDeducted(args.cycle, args.rule, args.periodEnd, args.periodStart)) {
+    return null;
+  }
+  const out = new Map<string, SssBasis>();
+  if (args.employees.length === 0) return out;
+
+  const base = sssBaseMonth(args.cycle, args.rule, args.periodStart, args.periodEnd);
+  const rows = await tx.payrollSheet.findMany({
+    where: {
+      employeeId: { in: args.employees.map((e) => e.id) },
+      payrollBook: {
+        status: "FINALIZED",
+        runType: { in: ["REGULAR", "OFF_CYCLE"] },
+        periodStart: { lte: base.monthEnd },
+        periodEnd: { gte: base.monthStart },
+      },
+    },
+    select: {
+      employeeId: true,
+      basePayCents: true,
+      lateUndertimeDeductionCents: true,
+      payrollBook: { select: { periodStart: true, periodEnd: true, runType: true } },
+    },
+  });
+  const byEmployee = new Map<string, SssHistorySheet[]>();
+  for (const r of rows) {
+    const list = byEmployee.get(r.employeeId) ?? [];
+    list.push({
+      periodStart: r.payrollBook.periodStart,
+      periodEnd: r.payrollBook.periodEnd,
+      basicCents: r.basePayCents - r.lateUndertimeDeductionCents,
+      runType: r.payrollBook.runType === "OFF_CYCLE" ? "OFF_CYCLE" : "REGULAR",
+    });
+    byEmployee.set(r.employeeId, list);
+  }
+  for (const e of args.employees) {
+    out.set(
+      e.id,
+      assessSssBasis({
+        base,
+        thisPeriodStart: args.periodStart,
+        thisPeriodEnd: args.periodEnd,
+        hireDate: e.hireDate,
+        separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
+        sheets: byEmployee.get(e.id) ?? [],
+      }),
+    );
+  }
+  return out;
 }
 
 function resultToSheetCreate(
@@ -734,6 +819,16 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       input.cycle,
     );
 
+    const sssBases = await loadSssBases(tx, {
+      employees,
+      runType: input.runType ?? "REGULAR",
+      cycle: input.cycle,
+      rule: tenant.statutoryCutoffRule,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      skipStatutory: input.skipStatutory ?? false,
+    });
+
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
       const ci = await buildComputeInputForEmployee(
@@ -749,6 +844,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       );
       if (!ci) continue;
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
+      ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
@@ -871,6 +967,15 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       book.runType,
       book.cycle,
     );
+    const sssBases = await loadSssBases(tx, {
+      employees,
+      runType: book.runType,
+      cycle: book.cycle,
+      rule: tenant.statutoryCutoffRule,
+      periodStart: book.periodStart,
+      periodEnd: book.periodEnd,
+      skipStatutory: book.skipStatutory,
+    });
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
       const ci = await buildComputeInputForEmployee(
@@ -886,6 +991,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       );
       if (!ci) continue;
       ci.runType = book.runType; // unit 1.8 (G1)
+      ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
@@ -1213,9 +1319,23 @@ export async function processRun(tenantId: string, bookId: string) {
       book.periodEnd,
     );
 
-    const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     // PAY-135: the queued run computes only the employees it was created for.
-    for (const e of onRunCycle(selectRunEmployees(allEmployees, book.targetEmployeeIds), book.runType, book.cycle)) {
+    const runEmployees = onRunCycle(
+      selectRunEmployees(allEmployees, book.targetEmployeeIds),
+      book.runType,
+      book.cycle,
+    );
+    const sssBases = await loadSssBases(tx, {
+      employees: runEmployees,
+      runType: book.runType,
+      cycle: book.cycle,
+      rule: tenant.statutoryCutoffRule,
+      periodStart: book.periodStart,
+      periodEnd: book.periodEnd,
+      skipStatutory: book.skipStatutory,
+    });
+    const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
+    for (const e of runEmployees) {
       const ci = await buildComputeInputForEmployee(
         tx,
         tenantId,
@@ -1229,6 +1349,7 @@ export async function processRun(tenantId: string, bookId: string) {
       );
       if (!ci) continue;
       ci.runType = book.runType; // unit 1.8 (G1)
+      ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
       if (book.runType === "YEAR_END") {
         ci.thirteenthMonthCents = await computeThirteenthMonthCents(
