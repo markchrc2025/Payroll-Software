@@ -239,7 +239,7 @@ export interface ComputeInput {
    * When present, the engine switches to YEAR_END (13th month) computation
    * mode. The value is the employee's total basic salary earned in the
    * calendar year across all FINALIZED REGULAR runs, divided by 12
-   * (computed by the persist layer via `computeThirteenthMonthCents`).
+   * (computed by the persist layer via `computeThirteenthMonth`).
    *
    * In YEAR_END mode: no regular pay is computed; grossCompensation =
    * thirteenthMonthCents; non-taxable capped at ₱90,000 (TRAIN); WHT on

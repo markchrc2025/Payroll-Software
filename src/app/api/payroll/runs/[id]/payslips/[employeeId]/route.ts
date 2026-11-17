@@ -1,7 +1,10 @@
 /**
  * GET /api/payroll/runs/[id]/payslips/[employeeId]
  *
- * Returns the payslip for a single employee within a FINALIZED payroll run.
+ * Returns the payslip for a single employee within a payroll run. On a
+ * FINALIZED run it is the payslip; on a DRAFT run it is a preview of the
+ * computation (PAY-168, `preview: true`), which can still change. A CANCELLED
+ * run has none. The PDF stays finalized-only.
  * Requires an authenticated tenant user (admin-scoped — ESS self-service
  * is out of scope for D4).
  *
@@ -32,9 +35,10 @@ export async function GET(
   try {
     const book = await getRun(auth.tenantId, id);
 
-    if (book.status !== "FINALIZED") {
-      return err("Payslips are only available for FINALIZED runs", 400);
+    if (book.status !== "FINALIZED" && book.status !== "DRAFT") {
+      return err("A cancelled run has no payslips", 400);
     }
+    const preview = book.status === "DRAFT"; // PAY-168
 
     const sheet = book.sheets.find((s) => s.employeeId === employeeId);
     if (!sheet) return notFound("PayrollSheet");
@@ -92,6 +96,7 @@ export async function GET(
       runType: book.runType,
       tenantId: auth.tenantId,
       tenantName,
+      preview,
     });
 
     // Same shape as the employee's own payslip (GET /api/ess/payslips/[bookId]).
