@@ -18,6 +18,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowLeft,
   Building2,
   ChevronDown,
@@ -604,6 +605,41 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
+        {/* PAY-61 (Mark, 17 Nov 2026: option B): a net pay below zero is
+            allowed. It is money the employee owes the company, so it is never
+            credited and those employees are left out of every bank file. */}
+        {(() => {
+          const negatives = run.sheets.filter((s) => BigInt(s.netPayCents) < 0n);
+          if (negatives.length === 0) return null;
+          return (
+            <div
+              role="alert"
+              data-testid="negative-net-warning"
+              className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {negatives.length === 1
+                    ? "1 employee has a net pay below zero."
+                    : `${negatives.length} employees have a net pay below zero.`}
+                </p>
+                <p className="mt-0.5">
+                  Deductions are more than this period&apos;s pay. The amount is owed to the company,
+                  nothing is credited, and these employees are left out of the bank files.
+                </p>
+                <ul className="mt-1 list-disc pl-5">
+                  {negatives.map((s) => (
+                    <li key={s.id ?? s.employeeId}>
+                      {s.employeeName ?? s.employeeId.substring(0, 12)}: {formatPeso(s.netPayCents)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Summary strip */}
         {run.sheets.length > 0 && (
           <>
@@ -692,7 +728,9 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-semibold">
+                    <TableCell
+                      className={`text-right tabular-nums text-sm font-semibold${BigInt(s.netPayCents) < 0n ? " text-red-600" : ""}`}
+                    >
                       {formatPeso(s.netPayCents)}
                     </TableCell>
                     {isFinalized && (
