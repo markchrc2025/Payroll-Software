@@ -32,7 +32,7 @@ type RuleClient = {
   statutoryRule: {
     findMany: (args: {
       where: Prisma.StatutoryRuleWhereInput;
-      orderBy?: Prisma.StatutoryRuleOrderByWithRelationInput;
+      orderBy?: Prisma.StatutoryRuleOrderByWithRelationInput | Prisma.StatutoryRuleOrderByWithRelationInput[];
     }) => Promise<
       Array<{
         id: string;
@@ -76,8 +76,10 @@ export async function getActiveRule<C extends StatutoryCategory>(
   asOf: Date,
 ): Promise<ResolvedRule<C>> {
   // Pull every candidate row (tenant override OR global) that could be active
-  // at `asOf`. Order by tenantId DESC NULLS LAST so tenant rows come first,
-  // then by effectiveFrom DESC for "most recently published wins".
+  // at `asOf`, newest start first. Two versions with the same start date are
+  // broken by the one published last (createdAt), then by id so the pick is
+  // always the same: Mark, 17 Nov 2026 (PAY-163), "latest posted SSS version
+  // is right". Before this the tie was left to Postgres's row order.
   const rows = await client.statutoryRule.findMany({
     where: {
       category,
@@ -94,7 +96,7 @@ export async function getActiveRule<C extends StatutoryCategory>(
         },
       ],
     },
-    orderBy: { effectiveFrom: "desc" },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "desc" }],
   });
 
   // Prefer the latest tenant-scoped row; fall back to the latest global row.
