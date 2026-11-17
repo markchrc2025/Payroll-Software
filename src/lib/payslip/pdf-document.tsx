@@ -43,7 +43,8 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   company: { fontSize: 15, fontWeight: 700 },
   muted: { color: MUTED },
-  title: { fontSize: 14, fontWeight: 700, color: ACCENT, textAlign: "right", letterSpacing: 0.6 },
+  // PAY-169 (Mark, 17 Nov 2026): the title is centred on the page, just above the line.
+  title: { fontSize: 14, fontWeight: 700, color: ACCENT, textAlign: "center", letterSpacing: 0.6, marginTop: 10 },
   metaRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 1.5 },
   metaLabel: { color: MUTED, width: 52, textAlign: "right", marginRight: 6 },
   metaValue: { minWidth: 96 },
@@ -139,14 +140,14 @@ export function PayslipPdf({ data }: { data: PayslipPdfData }) {
             {data.company.address && <Text style={[s.muted, { marginTop: 3, maxWidth: 260 }]}>{data.company.address}</Text>}
           </View>
           <View>
-            <Text style={s.title}>PAYSLIP</Text>
             <View style={s.metaRow}><Text style={s.metaLabel}>Period</Text><Text style={s.metaValue}>{d(m.periodStart)} to {d(m.periodEnd)}</Text></View>
             <View style={s.metaRow}><Text style={s.metaLabel}>Pay run</Text><Text style={s.metaValue}>{m.cycle} · {m.runType}</Text></View>
             <View style={s.metaRow}><Text style={s.metaLabel}>Issued</Text><Text style={s.metaValue}>{m.issuedAt ? d(m.issuedAt) : "-"}</Text></View>
             <View style={s.metaRow}><Text style={s.metaLabel}>Reference</Text><Text style={s.metaValue}>{m.reference}</Text></View>
           </View>
         </View>
-        <View style={s.rule} />
+        <Text style={s.title}>PAYSLIP</Text>
+        <View style={[s.rule, { marginTop: 4 }]} />
 
         {/* Employee strip */}
         <View style={s.strip}>
