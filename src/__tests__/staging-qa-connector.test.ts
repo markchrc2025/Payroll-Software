@@ -119,11 +119,11 @@ describe("staging QA connector", () => {
 
     const list = await (await rpc(base, { jsonrpc: "2.0", id: 1, method: "tools/list" })).json();
     expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
-      "staging_status", "list_employees", "set_attendance", "create_payroll_run",
+      "staging_status", "list_employees", "set_attendance", "import_punches", "create_payroll_run",
       "recompute_payroll_run", "get_payroll_run", "seed_scenario", "reset_staging", "api_request",
     ]);
     expect(list.result.tools.every((t: { inputSchema: { type: string } }) => t.inputSchema.type === "object")).toBe(true);
-    expect(TOOLS.length).toBe(9); // PAY-140 added reset_staging
+    expect(TOOLS.length).toBe(10); // PAY-140 added reset_staging; PAY-170 added import_punches
 
     const call = await (await rpc(base, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "api_request", arguments: { method: "GET", path: "/api/employees" } } })).json();
     expect(call.result.isError).toBe(true);

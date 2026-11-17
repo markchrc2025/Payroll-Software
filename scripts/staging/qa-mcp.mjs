@@ -115,6 +115,33 @@ export const TOOLS = [
     run: (api, a) => api.must("POST", "/api/period-inputs", a),
   },
   {
+    name: "import_punches",
+    description: "Import time-clock punches the way a biometric device export comes in (PAY-170): the app writes an attendance log per punch and works out each day's DTR exactly as for a live punch. Times are company time, \"YYYY-MM-DD HH:mm\". All or nothing: a 422 lists every wrong row and nothing is written. Punches already there are skipped.",
+    inputSchema: {
+      type: "object",
+      required: ["rows"],
+      properties: {
+        rows: {
+          type: "array",
+          minItems: 1,
+          maxItems: 5000,
+          items: {
+            type: "object",
+            required: ["employeeNumber", "punchedAt", "punchType"],
+            properties: {
+              employeeNumber: str("Employee number, e.g. EMP-0001"),
+              punchedAt: str("Company time, YYYY-MM-DD HH:mm"),
+              punchType: { type: "string", enum: ["IN", "OUT"] },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    run: (api, a) => api.must("POST", "/api/attendance-logs/import", { rows: a.rows }),
+  },
+  {
     name: "create_payroll_run",
     description: "Create a payroll run (draft) and wait until it is computed; returns every sheet: base, OT, gross, contributions, tax, net, divisor used. Nothing is finalised or sent.",
     inputSchema: {
