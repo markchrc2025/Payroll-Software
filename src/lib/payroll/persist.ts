@@ -942,6 +942,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
+        maxDeductionPctOfGross: true,
       },
     });
     const rules = await resolveAllRules(tx, input.tenantId, input.periodEnd);
@@ -1125,6 +1126,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
+        maxDeductionPctOfGross: true,
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
@@ -1493,6 +1495,7 @@ export async function processRun(tenantId: string, bookId: string) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
+        maxDeductionPctOfGross: true,
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
