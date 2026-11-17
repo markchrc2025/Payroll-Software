@@ -107,6 +107,7 @@ export async function PATCH(
         timekeepingTimezoneMode: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
+        breakDeductAfterMinutes: true,
       },
     });
     const empTz = await tx.employee.findFirst({
@@ -146,6 +147,7 @@ export async function PATCH(
           breakPolicy: shiftRow.breakPolicy ?? "FIXED_DEDUCTION",
           crossesMidnight: shiftRow.crossesMidnight ?? false,
           otThresholdMinutes: shiftRow.otThresholdMinutes ?? null,
+          breakDeductAfterMinutes: tenant?.breakDeductAfterMinutes,
         }
       : null;
     const punches: AttendancePunch[] = [];

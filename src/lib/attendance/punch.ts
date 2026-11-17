@@ -64,6 +64,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         timekeepingTimezoneMode: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
+        breakDeductAfterMinutes: true,
       },
     });
     const tz = resolveTimezone(
@@ -225,6 +226,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
             breakPolicy:        shift.breakPolicy        ?? "FIXED_DEDUCTION",
             crossesMidnight:    shift.crossesMidnight    ?? false,
             otThresholdMinutes: shift.otThresholdMinutes ?? null,
+            breakDeductAfterMinutes: tenant?.breakDeductAfterMinutes,
           }
         : null,
       nsdWindow,
