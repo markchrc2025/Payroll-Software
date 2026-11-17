@@ -66,6 +66,14 @@ export interface ComputeTenantSnapshot {
    * make it negative. REGULAR/YEAR_END runs are always floored regardless.
    */
   allowNegativeFinalPay: boolean;
+  /**
+   * PAY-62 (unit 1.7, S3): Tenant.maxDeductionPctOfGross. In a REGULAR,
+   * OFF_CYCLE or YEAR_END run, government contributions plus loan
+   * installments may not exceed this % of the period's gross; installments
+   * over it are deferred in the loan balance. Omitted = no cap (FINAL_PAY
+   * never applies it).
+   */
+  maxDeductionPctOfGross?: number;
 }
 
 export interface ComputePeriodInputSnapshot {
