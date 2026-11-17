@@ -96,3 +96,14 @@ export function csvField(value: string): string {
   const escaped = value.replace(/"/g, '""');
   return `"${escaped}"`;
 }
+
+/**
+ * PAY-61 (Mark, 17 Nov 2026: option B, negative net pay is allowed): only
+ * sheets with a net pay above zero go into a bank credit file. A zero net has
+ * nothing to credit, and a negative net is money the employee owes the
+ * company, never a credit. (The formatters print the absolute amount, so a
+ * negative net used to appear as a credit while lowering the batch total.)
+ */
+export function payableSheets<T extends { netPayCents: bigint }>(sheets: readonly T[]): T[] {
+  return sheets.filter((s) => s.netPayCents > 0n);
+}

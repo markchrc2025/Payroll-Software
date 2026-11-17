@@ -7,6 +7,7 @@
  * Returns: text/plain with Content-Disposition: attachment
  * Filename: "bpi-payroll-YYYYMMDD.txt"
  */
+import { payableSheets } from "@/lib/payroll/bank-files/types";
 import type { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/require-permission";
 import { notFound, serverError } from "@/lib/api-response";
@@ -57,7 +58,7 @@ export async function GET(
     const empMap = new Map(employees.map((e) => [e.id, e]));
 
     // Build detail rows — one per sheet, in sheet order.
-    const rows = book.sheets.map((sheet) => {
+    const rows = payableSheets(book.sheets).map((sheet) => {
       const emp = empMap.get(sheet.employeeId);
       return {
         employeeNumber: emp?.employeeNumber ?? sheet.employeeId.substring(0, 12),
