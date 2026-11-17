@@ -61,6 +61,8 @@ const patchSchema = z.object({
   // "No negative pay" safeguard: max % of monthly gross that statutory + loan
   // deductions may consume. New loans breaching this are blocked at creation.
   maxDeductionPctOfGross: z.number().int().min(1).max(100).optional(),
+  // PAY-146: deduct an unpaid meal break only on days longer than this (minutes).
+  breakDeductAfterMinutes: z.number().int().min(0).max(1440).optional(),
   // Whether FINAL_PAY runs may go negative (terminal charges on separation).
   // REGULAR/YEAR_END runs are always floored regardless of this flag.
   allowNegativeFinalPay: z.boolean().optional(),
@@ -113,6 +115,7 @@ export async function GET(req: NextRequest) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         maxDeductionPctOfGross: true,
+        breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
@@ -185,6 +188,7 @@ export async function PATCH(req: NextRequest) {
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
         maxDeductionPctOfGross: true,
+        breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
