@@ -215,7 +215,7 @@ export default function PayRulesPage() {
           {/* Deduction Cap — "no negative pay" safeguard */}
           <RuleSection
             title="Maximum Deduction Limit"
-            description="No-negative-pay safeguard. The combined SSS, PhilHealth, Pag-IBIG, and loan deductions may not exceed this share of an employee's monthly gross. A new loan that would breach the limit is blocked when it is added."
+            description="No-negative-pay safeguard. The combined SSS, PhilHealth, Pag-IBIG, and loan deductions may not exceed this share of an employee's monthly gross. It is checked twice: a new loan that would breach the limit is blocked when it is added, and every payroll run (regular, off-cycle and 13th month) deducts loan installments only up to the limit; the rest of an installment waits for a later payday and stays in the loan balance."
           >
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1.5">

@@ -17,7 +17,8 @@ export default async function CompliancePage() {
   // history or upcoming.
   const rules = await prismaAdmin.statutoryRule.findMany({
     where: { tenantId: null, category: { in: [...CATEGORIES] } },
-    orderBy: { effectiveFrom: "desc" },
+    // Same order as the payroll (getActiveRule): newest start, then last published.
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true, category: true, version: true, legalBasis: true,
       effectiveFrom: true, effectiveTo: true, payload: true,
