@@ -124,4 +124,9 @@ describe("PAY-62 the maximum-deduction cap applies when payroll runs", () => {
     // REGULAR/OFF_CYCLE and YEAR_END apply it; FINAL_PAY does not.
     expect(engine.match(/loanCapHeadroom\(tenant\.maxDeductionPctOfGross/g)).toHaveLength(2);
   });
+
+  it("C5 Pay Rules says the limit is applied in every run, not only when a loan is added", () => {
+    const page = readFileSync("src/app/(dashboard)/settings/pay-rules/page.tsx", "utf8");
+    expect(page).toContain("every payroll run (regular, off-cycle and 13th month) deducts loan installments only up to the limit");
+  });
 });
