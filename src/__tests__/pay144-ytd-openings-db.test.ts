@@ -313,8 +313,9 @@ describeDb("PAY-144 year-to-date openings, end to end (real Postgres)", () => {
   });
 
   it("D4 annualization adds both sources", async () => {
-    await q(`UPDATE "PayrollBook" SET status = 'FINALIZED' WHERE id = $1`, [yearEndId]);
+    // PAY-155: annualize while the 13th month run is a draft, then seal it.
     await runAnnualization(T, yearEndId);
+    await q(`UPDATE "PayrollBook" SET status = 'FINALIZED' WHERE id = $1`, [yearEndId]);
     const s = await sheets(yearEndId);
     const a = s.get(A)!.annualizationData!;
     expect(a.ytdOpeningTaxableCents).toBe("25000000");
