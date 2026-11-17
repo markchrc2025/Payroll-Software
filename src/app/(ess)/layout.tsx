@@ -150,10 +150,10 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
               key={href}
               href={href}
               className={`flex flex-col items-center gap-0.5 text-xs transition-colors ${
-                active ? "text-[#1E3A5F] font-medium" : "text-gray-400"
+                active ? "text-[#E8693A] font-semibold" : "text-[#9B9085]"
               }`}
             >
-              <Icon className={`h-5 w-5 ${active ? "text-[#1E3A5F]" : "text-gray-400"}`} />
+              <Icon className={`h-5 w-5 ${active ? "text-[#E8693A]" : "text-[#9B9085]"}`} />
               {label}
             </Link>
           );
