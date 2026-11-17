@@ -22,6 +22,7 @@ import { getEssContext } from "@/lib/ess-auth";
 import { executePunch } from "@/lib/attendance/punch";
 import { err, ok, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
+import { atLocalWallClock, localDay, resolveTimezone } from "@/lib/time/zone";
 
 const bodySchema = z.object({
   punchType: z.enum(["IN", "OUT"]),
@@ -74,22 +75,36 @@ export async function POST(req: NextRequest) {
  * GET /api/ess/clock?date=YYYY-MM-DD
  *
  * Returns the employee's AttendanceLogs for the given date (defaults to today).
+ *
+ * PAY-189: the date is a local calendar day in the employee's time zone (the
+ * same rule punches use), and "today" is worked out here. It used to be a UTC
+ * day picked by the browser, so in Manila a clock-in before 8:00 AM fell on
+ * the previous day and the home screen offered Clock In again.
  */
 export async function GET(req: NextRequest) {
   const ess = await getEssContext(req);
   if (!ess) return unauthorized();
 
   const dateParam = new URL(req.url).searchParams.get("date");
-  const date = dateParam ? new Date(dateParam) : new Date();
-  const startOfDay = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0));
-  const endOfDay   = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999));
+  if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) return err("date must be YYYY-MM-DD", 422);
 
-  const logs = await withTenant(ess.tenantId, (tx) =>
-    tx.attendanceLog.findMany({
+  const logs = await withTenant(ess.tenantId, async (tx) => {
+    const [tenant, emp] = await Promise.all([
+      tx.tenant.findUnique({ where: { id: ess.tenantId }, select: { timezone: true, timekeepingTimezoneMode: true } }),
+      tx.employee.findFirst({ where: { id: ess.employeeId, tenantId: ess.tenantId }, select: { timezone: true } }),
+    ]);
+    const tz = resolveTimezone(
+      { timezone: tenant?.timezone ?? "Asia/Manila", timekeepingTimezoneMode: tenant?.timekeepingTimezoneMode ?? "COMPANY" },
+      { timezone: emp?.timezone ?? null },
+    );
+    const day = dateParam ? new Date(`${dateParam}T00:00:00.000Z`) : localDay(new Date(), tz);
+    const start = atLocalWallClock(day, "00:00", tz);
+    const end = new Date(start.getTime() + 86_400_000);
+    return tx.attendanceLog.findMany({
       where: {
         tenantId:   ess.tenantId,
         employeeId: ess.employeeId,
-        punchedAt:  { gte: startOfDay, lte: endOfDay },
+        punchedAt:  { gte: start, lt: end },
       },
       orderBy: { punchedAt: "asc" },
       select: {
@@ -102,8 +117,8 @@ export async function GET(req: NextRequest) {
         outsideGeofence: true,
         distanceMeters:  true,
       },
-    }),
-  );
+    });
+  });
 
   return ok(logs);
 }

@@ -91,8 +91,7 @@ export default function EssClockPage() {
     if (!token) return;
     setHistoryLoading(true);
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/api/ess/clock?date=${today}`, { headers: authHeaders() });
+      const res = await fetch("/api/ess/clock", { headers: authHeaders() });
       if (res.status === 401) { localStorage.removeItem("ess_token"); router.replace("/ess/login"); return; }
       const data = await res.json();
       setHistory(data?.data ?? []);

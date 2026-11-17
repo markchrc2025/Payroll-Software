@@ -95,11 +95,10 @@ export function HomeScreen() {
   const nav = useContext(ESSNav);
   const now = useNow();
   const tnow = now ? fmtTime(now) : null;
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const payslips = useEssData<ApiList<PayslipSummary>>("/api/ess/payslips?limit=3");
   const balances = useEssData<ApiList<LeaveBalanceRow>>("/api/ess/leave-balances");
-  const punches = useEssData<ApiList<ClockPunch>>(`/api/ess/clock?date=${today}`);
+  const punches = useEssData<ApiList<ClockPunch>>("/api/ess/clock");
   const announcements = useEssData<ApiList<Announcement>>("/api/ess/announcements");
 
   // Reflect today's last punch into the shared clocked-in state.
