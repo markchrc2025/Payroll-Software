@@ -22,7 +22,6 @@ import {
   Building2,
   ChevronDown,
   Download,
-  FileText,
   Loader2,
   Plus,
   RefreshCw,
@@ -97,7 +96,29 @@ type PayrollSheet = {
   loanDeferredCents: string;
   nontaxableAdditionsCents: string;
   netPayCents: string;
+  /** PAY-168: 13th month run fields. */
+  nontaxable13MonthAndBenefitsCents?: string;
+  taxableAllowancesCents?: string;
+  thirteenthMonthBreakdown?: { dueCents: string } | null;
+  annualizationData?: { trueUpCents: string; yearEndBaselineWhtCents?: string } | null;
 };
+
+/**
+ * PAY-168: the figures a 13th month (YEAR_END) sheet is read by. Gross on
+ * such a run IS the 13th month (plus any taxable adjustment); the tax is the
+ * tax on its taxable excess plus, once annualized, the year-end adjustment
+ * (negative = refund).
+ */
+function yearEndFigures(s: PayrollSheet) {
+  const nonTaxable = BigInt(s.nontaxable13MonthAndBenefitsCents ?? "0");
+  const pay = s.thirteenthMonthBreakdown
+    ? BigInt(s.thirteenthMonthBreakdown.dueCents)
+    : nonTaxable + BigInt(s.taxableAllowancesCents ?? "0");
+  const excess = pay - nonTaxable > 0n ? pay - nonTaxable : 0n;
+  const trueUp = s.annualizationData ? BigInt(s.annualizationData.trueUpCents) : 0n;
+  const taxOnExcess = BigInt(s.withholdingTaxCents) - trueUp;
+  return { pay, nonTaxable, excess, taxOnExcess, trueUp };
+}
 
 type PayrollRun = {
   id: string;
@@ -492,7 +513,64 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
     { gross: 0, sss: 0, philhealth: 0, pagibig: 0, tax: 0, loans: 0, net: 0 },
   );
 
-  function centsStr(n: number) { return String(Math.round(n)); }
+  // PAY-168: a 13th month run is read as 13th month pay, its tax-free part,
+  // the taxable excess, the tax on it and the year-end adjustment. SSS,
+  // PhilHealth and Pag-IBIG are never deducted on it, so they are not shown.
+  const ye = run.sheets.reduce(
+    (acc, s) => {
+      const f = yearEndFigures(s);
+      return {
+        pay: acc.pay + f.pay, nonTaxable: acc.nonTaxable + f.nonTaxable, excess: acc.excess + f.excess,
+        taxOnExcess: acc.taxOnExcess + f.taxOnExcess, trueUp: acc.trueUp + f.trueUp,
+      };
+    },
+    { pay: 0n, nonTaxable: 0n, excess: 0n, taxOnExcess: 0n, trueUp: 0n },
+  );
+  const anyAnnualized = run.sheets.some((s) => s.annualizationData);
+
+  type Col = { label: string; value: (s: PayrollSheet) => string; strong?: boolean; muted?: boolean };
+  const columns: Col[] = isYearEnd
+    ? [
+        { label: "Basic Salary", value: (s) => s.basicSalaryCentsSnapshot },
+        { label: "13th Month Pay", value: (s) => yearEndFigures(s).pay.toString(), strong: true },
+        { label: "Tax-free", value: (s) => yearEndFigures(s).nonTaxable.toString(), muted: true },
+        { label: "Taxable Excess", value: (s) => yearEndFigures(s).excess.toString(), muted: true },
+        { label: "Tax on Excess", value: (s) => yearEndFigures(s).taxOnExcess.toString(), muted: true },
+        ...(anyAnnualized
+          ? [{ label: "Year-end Tax Adj.", value: (s: PayrollSheet) => yearEndFigures(s).trueUp.toString(), muted: true }]
+          : []),
+        { label: "Loans", value: (s) => s.loanDeductionsCents, muted: true },
+      ]
+    : [
+        { label: "Basic Salary", value: (s) => s.basicSalaryCentsSnapshot },
+        { label: "Gross", value: (s) => s.grossCompensationCents },
+        { label: "SSS EE", value: (s) => s.sssEeCents, muted: true },
+        { label: "PhilHealth EE", value: (s) => s.philhealthEeCents, muted: true },
+        { label: "Pag-IBIG EE", value: (s) => s.pagibigEeCents, muted: true },
+        { label: "WHT", value: (s) => s.withholdingTaxCents, muted: true },
+        { label: "Loans", value: (s) => s.loanDeductionsCents, muted: true },
+      ];
+  const summary: { label: string; value: string }[] = isYearEnd
+    ? [
+        { label: "13th Month Pay", value: ye.pay.toString() },
+        { label: "Tax-free", value: ye.nonTaxable.toString() },
+        { label: "Taxable Excess", value: ye.excess.toString() },
+        { label: "Tax on Excess", value: ye.taxOnExcess.toString() },
+        ...(anyAnnualized ? [{ label: "Year-end Tax Adj.", value: ye.trueUp.toString() }] : []),
+        { label: "Loan Deductions", value: String(Math.round(totals.loans)) },
+        { label: "Net Pay", value: String(Math.round(totals.net)) },
+      ]
+    : [
+        { label: "Gross", value: String(Math.round(totals.gross)) },
+        { label: "SSS EE", value: String(Math.round(totals.sss)) },
+        { label: "PhilHealth EE", value: String(Math.round(totals.philhealth)) },
+        { label: "Pag-IBIG EE", value: String(Math.round(totals.pagibig)) },
+        { label: "Withholding Tax", value: String(Math.round(totals.tax)) },
+        { label: "Loan Deductions", value: String(Math.round(totals.loans)) },
+        { label: "Net Pay", value: String(Math.round(totals.net)) },
+      ];
+  // PAY-168: any employee line opens the payslip (finalized) or its preview (draft).
+  const canPreview = run.status === "DRAFT" || run.status === "FINALIZED";
 
   return (
     <div className="space-y-6">
@@ -609,15 +687,7 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           <>
             <Separator />
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-              {[
-                { label: "Gross", value: centsStr(totals.gross) },
-                { label: "SSS EE", value: centsStr(totals.sss) },
-                { label: "PhilHealth EE", value: centsStr(totals.philhealth) },
-                { label: "Pag-IBIG EE", value: centsStr(totals.pagibig) },
-                { label: "Withholding Tax", value: centsStr(totals.tax) },
-                { label: "Loan Deductions", value: centsStr(totals.loans) },
-                { label: "Net Pay", value: centsStr(totals.net) },
-              ].map((item) => (
+              {summary.map((item) => (
                 <div key={item.label} className="space-y-0.5">
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                   <p className="text-sm font-semibold tabular-nums">{formatPeso(item.value)}</p>
@@ -636,73 +706,64 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead className="text-right">Basic Salary</TableHead>
-                <TableHead className="text-right">Gross</TableHead>
-                <TableHead className="text-right">SSS EE</TableHead>
-                <TableHead className="text-right">PhilHealth EE</TableHead>
-                <TableHead className="text-right">Pag-IBIG EE</TableHead>
-                <TableHead className="text-right">WHT</TableHead>
-                <TableHead className="text-right">Loans</TableHead>
+                {columns.map((c) => (
+                  <TableHead key={c.label} className="text-right">{c.label}</TableHead>
+                ))}
                 <TableHead className="text-right font-bold">Net Pay</TableHead>
-                {isFinalized && <TableHead className="w-0" />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {run.sheets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isFinalized ? 10 : 9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={columns.length + 2} className="py-10 text-center text-muted-foreground">
                     No employee sheets computed yet. Use Recompute to generate sheets.
                   </TableCell>
                 </TableRow>
               ) : (
                 run.sheets.map((s) => (
-                  <TableRow key={s.id}>
+                  <TableRow
+                    key={s.id}
+                    data-testid="sheet-row"
+                    className={canPreview ? "cursor-pointer hover:bg-muted/50" : undefined}
+                    tabIndex={canPreview ? 0 : undefined}
+                    title={canPreview ? (isFinalized ? "View payslip" : "Preview payslip") : undefined}
+                    onClick={canPreview ? () => setPayslipFor(s.employeeId) : undefined}
+                    onKeyDown={
+                      canPreview
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setPayslipFor(s.employeeId);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
                     <TableCell>
                       <span className="block text-sm font-medium">{s.employeeName ?? s.employeeId.substring(0, 12)}</span>
                       {s.employeeNumber && (
                         <span className="block font-mono text-xs text-muted-foreground">{s.employeeNumber}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {formatPeso(s.basicSalaryCentsSnapshot)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {formatPeso(s.grossCompensationCents)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {formatPeso(s.sssEeCents)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {formatPeso(s.philhealthEeCents)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {formatPeso(s.pagibigEeCents)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {formatPeso(s.withholdingTaxCents)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {formatPeso(s.loanDeductionsCents)}
-                      {Number(s.loanDeferredCents) > 0 && (
-                        <span
-                          className="block text-[11px] font-medium text-amber-600"
-                          title="Loan amortization deferred to keep net pay at or above zero. The unpaid amount stays in the loan balance and carries to the next period."
-                        >
-                          {formatPeso(s.loanDeferredCents)} deferred
-                        </span>
-                      )}
-                    </TableCell>
+                    {columns.map((c) => (
+                      <TableCell
+                        key={c.label}
+                        className={`text-right tabular-nums text-sm${c.muted ? " text-muted-foreground" : ""}${c.strong ? " font-medium" : ""}`}
+                      >
+                        {formatPeso(c.value(s))}
+                        {c.label === "Loans" && Number(s.loanDeferredCents) > 0 && (
+                          <span
+                            className="block text-[11px] font-medium text-amber-600"
+                            title="Loan amortization deferred to keep net pay at or above zero. The unpaid amount stays in the loan balance and carries to the next period."
+                          >
+                            {formatPeso(s.loanDeferredCents)} deferred
+                          </span>
+                        )}
+                      </TableCell>
+                    ))}
                     <TableCell className="text-right tabular-nums text-sm font-semibold">
                       {formatPeso(s.netPayCents)}
                     </TableCell>
-                    {isFinalized && (
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => setPayslipFor(s.employeeId)}>
-                          <FileText className="h-3.5 w-3.5 mr-1.5" />
-                          Payslip
-                        </Button>
-                      </TableCell>
-                    )}
                   </TableRow>
                 ))
               )}
@@ -772,11 +833,11 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
         )}
       </section>
 
-      {/* Payslip of one employee in this finalized run (same view as ESS) */}
+      {/* PAY-168: payslip of one employee (same view as ESS); a preview on a draft run */}
       <Dialog open={payslipFor !== null} onOpenChange={(o) => { if (!o) setPayslipFor(null); }}>
         <DialogContent className="max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">Payslip</DialogTitle>
+            <DialogTitle className="text-base">{isFinalized ? "Payslip" : "Payslip preview"}</DialogTitle>
           </DialogHeader>
           {payslipLoading ? (
             <div className="space-y-2 mt-2">
