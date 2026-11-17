@@ -1,6 +1,7 @@
 /**
  * Zod schemas for DTR / Timesheet (Phase J)
  */
+import { mealBreakProblem } from "@/lib/attendance/meal-break";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -70,6 +71,9 @@ export const createShiftScheduleSchema = z
       if (!data.timeOut) ctx.addIssue({ code: "custom", path: ["timeOut"], message: "timeOut is required for FIXED shifts" });
     }
     refineOtPolicy(data, ctx);
+    // PAY-146: an unpaid meal break under 20 minutes is refused.
+    const breakProblem = mealBreakProblem(data.breakMinutes, data.breakPolicy);
+    if (breakProblem) ctx.addIssue({ code: "custom", path: ["breakMinutes"], message: breakProblem });
   });
 
 export const updateShiftScheduleSchema = z

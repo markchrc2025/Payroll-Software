@@ -1,5 +1,6 @@
 "use client";
 
+import { mealBreakProblem, mealBreakWarning } from "@/lib/attendance/meal-break";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Dialog,
@@ -251,6 +252,9 @@ function computeSummary(f: FormState): { paidHours: string; rangeText: string; d
 function validate(f: FormState): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.name.trim()) e.name = "Name is required";
+  // PAY-146: an unpaid meal break under 20 minutes is refused (the API checks too).
+  const breakProblem = mealBreakProblem(parseInt(f.breakMin, 10) || 0, API_POLICY[f.breakPolicy]);
+  if (breakProblem) e.breakMin = breakProblem;
   if (f.type === "Fixed") {
     if (!f.timeIn)  e.timeIn  = "Required";
     if (!f.timeOut) e.timeOut = "Required";
@@ -428,13 +432,14 @@ export function ShiftScheduleFormModal({
     "Paid break",
   ];
 
+  const breakWarning = mealBreakWarning(parseInt(form.breakMin, 10) || 0, API_POLICY[form.breakPolicy]);
   const breakNote = form.breakPolicy === "Paid break"
-    ? "Break time is paid — nothing is deducted from worked hours."
+    ? "Break time is paid, so nothing is deducted from worked hours."
     : form.breakPolicy === "Punch in / out"
     ? "Employee must punch out and back in for break. System sums paired IN-OUT intervals."
     : form.breakPolicy === "Floating"
-    ? `Worked hours = (last clock-out − first clock-in) − ${form.breakMin} min. Employee can take the break at any time.`
-    : `Worked hours = (last clock-out − first clock-in) − ${form.breakMin} min. No lunch punch needed.`;
+    ? `Worked hours = (last clock-out − first clock-in) − ${form.breakMin} min, on days longer than the Pay Rules meal break setting (default 5 hours). Employee can take the break at any time.`
+    : `Worked hours = (last clock-out − first clock-in) − ${form.breakMin} min, on days longer than the Pay Rules meal break setting (default 5 hours). No lunch punch needed.`;
 
   return (
     <>
@@ -798,7 +803,8 @@ export function ShiftScheduleFormModal({
                     max={480}
                     value={form.breakMin}
                     onChange={(e) => set("breakMin", e.target.value)}
-                    className="pr-[72px]"
+                    aria-label="Break duration (minutes)"
+                    className={`pr-[72px] ${errors.breakMin ? "border-destructive" : ""}`}
                   />
                   <span
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] pointer-events-none"
@@ -807,6 +813,11 @@ export function ShiftScheduleFormModal({
                     minutes
                   </span>
                 </div>
+                {errors.breakMin ? (
+                  <p className="text-[11.5px] text-destructive">{errors.breakMin}</p>
+                ) : breakWarning ? (
+                  <p className="text-[11.5px]" style={{ color: "#B26A00" }}>{breakWarning}</p>
+                ) : null}
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[12.5px] font-medium text-[#171717]">Break policy</Label>
