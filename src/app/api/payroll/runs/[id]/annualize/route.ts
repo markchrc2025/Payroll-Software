@@ -5,7 +5,8 @@
  * Delegates all business logic to runAnnualization() in @/lib/payroll/annualize.
  *
  * Requires PAYROLL:APPROVE permission.
- * Book must be YEAR_END + FINALIZED.
+ * Book must be a YEAR_END run that is still a DRAFT (PAY-155: a finalized run
+ * is a sealed record and is never changed). 409 on a finalized run.
  * Idempotent.
  */
 
@@ -16,7 +17,8 @@ import {
   runAnnualization,
   AnnualizationBookNotFoundError,
   AnnualizationNotYearEndError,
-  AnnualizationNotFinalizedError,
+  AnnualizationSealedError,
+  AnnualizationNotDraftError,
 } from "@/lib/payroll/annualize";
 
 export async function POST(
@@ -40,7 +42,8 @@ export async function POST(
   } catch (e) {
     if (e instanceof AnnualizationBookNotFoundError) return notFound("PayrollBook");
     if (e instanceof AnnualizationNotYearEndError)   return err(e.message, 400);
-    if (e instanceof AnnualizationNotFinalizedError) return err(e.message, 400);
+    if (e instanceof AnnualizationSealedError)       return err(e.message, 409);
+    if (e instanceof AnnualizationNotDraftError)     return err(e.message, 409);
     return serverError(e);
   }
 }
