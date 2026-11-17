@@ -246,7 +246,7 @@ export default function PayRulesPage() {
           {/* Allow negative final pay toggle */}
           <RuleSection
             title="Allow Negative Final Pay"
-            description="Regular and 13th-month runs are always floored at zero — loan installments are automatically deferred (and carried forward) so net pay can never go negative. Final-pay settlements on separation are the exception: charges against an employee's last pay (e.g. unreturned assets, outstanding loan balances) may legitimately make it negative."
+            description="In regular and 13th month runs, loan installments never push net pay below zero: what does not fit is deferred and stays in the loan balance. Net pay can still go below zero when contributions, tax and other deductions are more than the period's pay (for example, few approved DTR days). That amount is owed to the company, nothing is credited, and the employee is left out of the bank files. Final-pay settlements on separation may also make it negative when this is on: charges against an employee's last pay (for example, unreturned assets or outstanding loan balances)."
           >
             <div className="flex items-center justify-between gap-4 rounded-lg border border-[#E8E8E8] bg-white px-4 py-3">
               <div>
