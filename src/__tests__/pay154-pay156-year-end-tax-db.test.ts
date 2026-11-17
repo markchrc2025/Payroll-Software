@@ -138,8 +138,9 @@ describeDb("PAY-154 and PAY-156 year-end and final pay tax, end to end (real Pos
   });
 
   it("D2 annualization counts the 13th month run itself", async () => {
-    await q(`UPDATE "PayrollBook" SET status = 'FINALIZED' WHERE id = $1`, [yearEndId]);
+    // PAY-155: annualize while the 13th month run is a draft, then seal it.
     await runAnnualization(T, yearEndId);
+    await q(`UPDATE "PayrollBook" SET status = 'FINALIZED' WHERE id = $1`, [yearEndId]);
     const s = await sheet(yearEndId, A);
     const ann = s.annualizationData!;
     expect(ann.yearEndTaxableCents).toBe(s.taxable);

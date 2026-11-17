@@ -20,6 +20,7 @@ type TenantSettings = {
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
   maxDeductionPctOfGross: number;
+  breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
   nsdWindowStart: string;
   nsdWindowEnd: string;
@@ -59,6 +60,7 @@ export default function PayRulesPage() {
     statutoryCutoffRule: "FIRST_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
     maxDeductionPctOfGross: 50,
+    breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
@@ -79,6 +81,7 @@ export default function PayRulesPage() {
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
+        breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
@@ -240,6 +243,39 @@ export default function PayRulesPage() {
                   settlements on separation are exempt from this limit.
                 </p>
               </div>
+            </div>
+          </RuleSection>
+
+          <RuleSection
+            title="Meal break"
+            description="An unpaid meal break is deducted only on days long enough to have one. A day counts when the time from first clock-in to last clock-out is longer than this. A half day of 4 hours loses no break, and a day just over the limit never drops below it."
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[12.5px] font-medium text-[#171717]">
+                Deduct the break only on days longer than
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  className="w-28"
+                  aria-label="Deduct the break only on days longer than (hours)"
+                  value={form.breakDeductAfterMinutes / 60}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n)) {
+                      update("breakDeductAfterMinutes", Math.min(1440, Math.max(0, Math.round(n * 60))));
+                    }
+                  }}
+                />
+                <span className="text-[13px] text-[#6B6B6B]">hours</span>
+              </div>
+              <p className="text-[12px] text-[#6B6B6B]">
+                Default 5 hours. Each shift&apos;s break length is set in Shift Schedules; an unpaid break under 20
+                minutes is not allowed (Labor Code Art. 85).
+              </p>
             </div>
           </RuleSection>
 

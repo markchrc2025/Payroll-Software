@@ -18,7 +18,8 @@
  *                         window is defined; 0 when there is no core start.
  *      undertimeMinutes = max(requiredMinutes − workedMinutes, coreTimeOut − actualOut).
  *  - Break policies (all five):
- *      FIXED_DEDUCTION / FLOATING → span − breakMinutes.
+ *      FIXED_DEDUCTION / FLOATING → span − breakMinutes, only when the span is
+ *        over Tenant.breakDeductAfterMinutes (PAY-146, src/lib/attendance/meal-break.ts).
  *      PAID_BREAK                 → span (no deduction).
  *      TRACK_ACTUAL / PUNCH_IN_OUT → sum of paired IN-OUT intervals.
  *  - Auto-OT: when otThresholdMinutes is set and workedMinutes exceeds it,
@@ -26,6 +27,7 @@
  *  - nsdMinutes = overlap of [actualIn, actualOut] with 22:00–06:00.
  */
 
+import { breakDeduction } from "./meal-break";
 import { zonedTimeToUtc, atLocalWallClock, localDay } from "@/lib/time/zone";
 
 export interface AttendancePunch {
@@ -66,6 +68,11 @@ export interface ShiftContext {
   gracePeriodMinutes: number;
   /** Auto-flag OT when workedMinutes exceeds this. null = manual pre-approval only. */
   otThresholdMinutes: number | null;
+  /**
+   * PAY-146: Tenant.breakDeductAfterMinutes. An unpaid break is deducted only
+   * when the day's span is longer than this (default 300, 5 hours).
+   */
+  breakDeductAfterMinutes?: number;
 }
 
 export interface DtrComputed {
@@ -171,6 +178,7 @@ function computeWorkedMinutes(
   actualOut: Date | null,
   breakPolicy: BreakPolicy,
   breakMinutes: number,
+  breakDeductAfterMinutes?: number,
 ): number {
   if (!actualOut) return 0;
 
@@ -202,8 +210,9 @@ function computeWorkedMinutes(
     return Math.max(0, spanMinutes);
   }
 
-  // FIXED_DEDUCTION / FLOATING: span minus the fixed break amount.
-  return Math.max(0, spanMinutes - breakMinutes);
+  // FIXED_DEDUCTION / FLOATING: span minus the break, but only on a day long
+  // enough to have one (PAY-146): a 4-hour half day loses no break.
+  return Math.max(0, spanMinutes - breakDeduction(spanMinutes, breakMinutes, breakDeductAfterMinutes));
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +261,7 @@ export function computeDtrFields(
 
   const workedMinutes = computeWorkedMinutes(
     inPunches, outPunches, actualIn, actualOut,
-    shift.breakPolicy, shift.breakMinutes,
+    shift.breakPolicy, shift.breakMinutes, shift.breakDeductAfterMinutes,
   );
   const nsdMinutes = actualOut ? nsdOverlapMinutes(actualIn, actualOut, nsdWindow, timezone) : 0;
 
