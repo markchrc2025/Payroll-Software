@@ -4,6 +4,7 @@
  *   PATCH  — update shift schedule
  *   DELETE — soft-delete shift schedule
  */
+import { mealBreakProblem } from "@/lib/attendance/meal-break";
 import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
@@ -48,9 +49,16 @@ export async function PATCH(
   const updated = await withTenant(auth.tenantId, async (tx) => {
     const existing = await tx.shiftSchedule.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, breakMinutes: true, breakPolicy: true },
     });
     if (!existing) return null;
+
+    // PAY-146: the break as it will be saved (this change over what is stored).
+    const breakProblem = mealBreakProblem(
+      d.breakMinutes ?? existing.breakMinutes,
+      d.breakPolicy ?? existing.breakPolicy,
+    );
+    if (breakProblem) return { breakProblem };
 
     // Name uniqueness check
     if (d.name) {
@@ -96,6 +104,7 @@ export async function PATCH(
 
   if (!updated) return notFound();
   if (updated === "CONFLICT") return err("Shift schedule name already exists", 409);
+  if ("breakProblem" in updated) return err(updated.breakProblem, 422, { fieldErrors: { breakMinutes: [updated.breakProblem] } });
   return ok(updated);
 }
 
