@@ -147,9 +147,29 @@ export const createDtrRecordSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
 });
 
-export const updateDtrRecordSchema = createDtrRecordSchema
-  .omit({ employeeId: true, date: true })
-  .partial();
+/**
+ * PAY-175: an edit changes only the fields it sends. This schema has no
+ * defaults: `createDtrRecordSchema.partial()` kept them, so a field left out
+ * of an edit came back as 0 (or PRESENT) and overwrote the stored value
+ * (sending only otMinutes reset workedMinutes to 0).
+ */
+export const updateDtrRecordSchema = z.object({
+  shiftScheduleId: z.string().optional().nullable(),
+  dayStatus: z
+    .enum(["PRESENT", "ABSENT", "PAID_LEAVE", "UNPAID_LEAVE", "HOLIDAY", "REST_DAY"])
+    .optional(),
+  workedMinutes: z.number().int().min(0).optional(),
+  lateMinutes: z.number().int().min(0).optional(),
+  undertimeMinutes: z.number().int().min(0).optional(),
+  otMinutes: z.number().int().min(0).optional(),
+  nsdMinutes: z.number().int().min(0).optional(),
+  hazardMinutes: z.number().int().min(0).optional(),
+  holidayType: z
+    .enum(["REGULAR_HOLIDAY", "SPECIAL_HOLIDAY"])
+    .optional()
+    .nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+});
 
 export const listDtrRecordsSchema = z.object({
   employeeId: z.string().optional(),
