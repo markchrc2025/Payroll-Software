@@ -145,184 +145,229 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
       select: { id: true, outsideGeofence: true, distanceMeters: true },
     });
 
-    // 5. Find the employee's active shift for the punch date.
-    //    Priority: (1) EmployeeShiftAssignment (effective-dated) → (2) Employee.shiftScheduleId fallback.
-    const SHIFT_SELECT = {
-      id:                  true,
-      timeIn:              true,
-      timeOut:             true,
-      coreTimeIn:          true,
-      coreTimeOut:         true,
-      requiredHours:       true,
-      gracePeriodMinutes:  true,
-      breakMinutes:        true,
-      breakPolicy:         true,
-      crossesMidnight:     true,
-      otThresholdMinutes:  true,
-      otAutoApprove:       true,
-      otBreakMode:         true,
-      otBreakTriggerHours: true,
-      otBreakBlockHours:   true,
-      otBreakMinutes:      true,
-    } as const;
-
-    const shiftAssignment = await tx.employeeShiftAssignment.findFirst({
-      where: {
-        tenantId:     input.tenantId,
-        employeeId:   input.employeeId,
-        effectiveFrom: { lte: now },
-        OR: [
-          { effectiveTo: null },
-          { effectiveTo: { gte: punchDate } },
-        ],
-      },
-      orderBy: { effectiveFrom: "desc" },
-      select: { shiftSchedule: { select: SHIFT_SELECT } },
-    });
-
-    let shift = shiftAssignment?.shiftSchedule ?? null;
-
-    // Fallback: no EmployeeShiftAssignment found — use Employee.shiftScheduleId directly.
-    if (!shift && employee.shiftScheduleId) {
-      shift = await tx.shiftSchedule.findFirst({
-        where: { id: employee.shiftScheduleId, deletedAt: null },
-        select: SHIFT_SELECT,
-      });
-    }
-
-    // 6. Load all punches for this employee on this (local) calendar date
-    const dayStart = atLocalWallClock(punchDate, "00:00", tz);
-    const dayEnd   = new Date(dayStart.getTime() + 86_400_000);
-    const allPunches = await tx.attendanceLog.findMany({
-      where: {
-        tenantId:  input.tenantId,
-        employeeId: input.employeeId,
-        punchedAt: { gte: dayStart, lt: dayEnd },
-      },
-      select: { punchType: true, punchedAt: true },
-    });
-
-    // Tenant's configurable NSD window (always-on; window only).
-    const nsdWindow = {
-      startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
-      endMin:   parseWindowMinutes(tenant?.nsdWindowEnd)   ?? 6 * 60,
-    };
-
-    const computed = computeDtrFields(
+    // 5 to 7. Recompute this day's DTR from all of its punches.
+    const day = await recomputeDayDtr(tx, {
+      tenantId: input.tenantId,
+      employeeId: input.employeeId,
+      employeeShiftScheduleId: employee.shiftScheduleId,
       punchDate,
-      allPunches.map((p) => ({
-        punchType: p.punchType as PunchType,
-        punchedAt: p.punchedAt,
-      })),
-      shift
-        ? {
-            timeIn:             shift.timeIn             ?? null,
-            timeOut:            shift.timeOut            ?? null,
-            coreTimeIn:         shift.coreTimeIn         ?? null,
-            coreTimeOut:        shift.coreTimeOut        ?? null,
-            requiredHours:      shift.requiredHours      ?? null,
-            gracePeriodMinutes: shift.gracePeriodMinutes ?? 0,
-            breakMinutes:       shift.breakMinutes       ?? 60,
-            breakPolicy:        shift.breakPolicy        ?? "FIXED_DEDUCTION",
-            crossesMidnight:    shift.crossesMidnight    ?? false,
-            otThresholdMinutes: shift.otThresholdMinutes ?? null,
-            breakDeductAfterMinutes: tenant?.breakDeductAfterMinutes,
-          }
-        : null,
-      nsdWindow,
       tz,
-    );
-
-    // 7. Upsert DTRRecord — skip if locked (payroll finalized)
-    const existingDtr = await tx.dTRRecord.findUnique({
-      where: {
-        tenantId_employeeId_date: {
-          tenantId:   input.tenantId,
-          employeeId: input.employeeId,
-          date:       punchDate,
-        },
-      },
-      select: { id: true, isLocked: true },
+      tenant,
+      now,
+      shiftAsOf: now,
     });
-
-    if (existingDtr?.isLocked) {
-      return { ok: false, code: "DTR_LOCKED" };
-    }
-
-    // Overtime is never paid from the threshold alone. The threshold only
-    // *suggests* OT (advisory). Paid OT comes solely from an approved OT
-    // application. When the shift opts into auto-approve, create one here.
-    const suggestedOtMinutes = computed.suggestedOtMinutes ?? 0;
-    let autoApprovedOtMinutes: number | null = null;
-    if (shift?.otAutoApprove && suggestedOtMinutes > 0) {
-      const existingOtApp = await tx.oTApplication.findFirst({
-        where: {
-          tenantId:   input.tenantId,
-          employeeId: input.employeeId,
-          date:       punchDate,
-          status:     { in: ["PENDING", "APPROVED"] },
-        },
-        select: { id: true },
-      });
-      if (!existingOtApp) {
-        const payable = applyOtBreakRule(suggestedOtMinutes, {
-          otBreakMode:         shift.otBreakMode,
-          otBreakTriggerHours: shift.otBreakTriggerHours,
-          otBreakBlockHours:   shift.otBreakBlockHours,
-          otBreakMinutes:      shift.otBreakMinutes,
-        });
-        if (payable > 0) {
-          await tx.oTApplication.create({
-            data: {
-              tenantId:      input.tenantId,
-              employeeId:    input.employeeId,
-              date:          punchDate,
-              hours:         (payable / 60).toFixed(2),
-              justification: "Auto-approved: worked beyond scheduled hours.",
-              status:        "APPROVED",
-              approvedAt:    now,
-            },
-          });
-          autoApprovedOtMinutes = payable;
-        }
-      }
-    }
-
-    const dtr = existingDtr
-      ? await tx.dTRRecord.update({
-          where: { id: existingDtr.id },
-          data: {
-            dayStatus:          computed.dayStatus,
-            workedMinutes:      computed.workedMinutes,
-            lateMinutes:        computed.lateMinutes,
-            undertimeMinutes:   computed.undertimeMinutes,
-            nsdMinutes:         computed.nsdMinutes,
-            suggestedOtMinutes,
-            hasMissingPunch:    computed.missingOut ?? false,
-            ...(shift && { shiftScheduleId: shift.id }),
-            // Paid OT only changes here when this punch just auto-approved it.
-            ...(autoApprovedOtMinutes !== null && { otMinutes: autoApprovedOtMinutes }),
-          },
-          select: { id: true },
-        })
-      : await tx.dTRRecord.create({
-          data: {
-            tenant:             { connect: { id: input.tenantId } },
-            employee:           { connect: { id: input.employeeId } },
-            date:               punchDate,
-            shiftSchedule:      shift ? { connect: { id: shift.id } } : undefined,
-            dayStatus:          computed.dayStatus,
-            workedMinutes:      computed.workedMinutes,
-            lateMinutes:        computed.lateMinutes,
-            undertimeMinutes:   computed.undertimeMinutes,
-            nsdMinutes:         computed.nsdMinutes,
-            suggestedOtMinutes,
-            hasMissingPunch:    computed.missingOut ?? false,
-            otMinutes:          autoApprovedOtMinutes ?? 0,
-          },
-          select: { id: true },
-        });
+    if (!day.ok) return day;
+    const dtr = day.dtr;
 
     return { ok: true, log, dtr };
   });
+}
+
+type DayTx = Parameters<Parameters<typeof withTenant>[1]>[0];
+
+/**
+ * PAY-170: recompute one employee's DTRRecord for one local calendar day from
+ * every AttendanceLog on that day. Used by a live punch (executePunch) and by
+ * the attendance import, so both compute the DTR the same way. A locked DTR
+ * (its payroll is finalized) is never changed.
+ */
+export async function recomputeDayDtr(
+  tx: DayTx,
+  p: {
+    tenantId: string;
+    employeeId: string;
+    employeeShiftScheduleId: string | null;
+    /** UTC midnight of the local calendar day. */
+    punchDate: Date;
+    tz: string;
+    tenant: {
+      nsdWindowStart: string | null;
+      nsdWindowEnd: string | null;
+      breakDeductAfterMinutes: number;
+    } | null;
+    now: Date;
+    /** Which shift assignment applies: now for a live punch, the day for an import. */
+    shiftAsOf: Date;
+  },
+): Promise<{ ok: true; dtr: { id: string } } | { ok: false; code: "DTR_LOCKED" }> {
+  const { tenant, tz } = p;
+  // 5. Find the employee's active shift for the punch date.
+  //    Priority: (1) EmployeeShiftAssignment (effective-dated) → (2) Employee.shiftScheduleId fallback.
+  const SHIFT_SELECT = {
+    id:                  true,
+    timeIn:              true,
+    timeOut:             true,
+    coreTimeIn:          true,
+    coreTimeOut:         true,
+    requiredHours:       true,
+    gracePeriodMinutes:  true,
+    breakMinutes:        true,
+    breakPolicy:         true,
+    crossesMidnight:     true,
+    otThresholdMinutes:  true,
+    otAutoApprove:       true,
+    otBreakMode:         true,
+    otBreakTriggerHours: true,
+    otBreakBlockHours:   true,
+    otBreakMinutes:      true,
+  } as const;
+
+  const shiftAssignment = await tx.employeeShiftAssignment.findFirst({
+    where: {
+      tenantId:     p.tenantId,
+      employeeId:   p.employeeId,
+      effectiveFrom: { lte: p.shiftAsOf },
+      OR: [
+        { effectiveTo: null },
+        { effectiveTo: { gte: p.punchDate } },
+      ],
+    },
+    orderBy: { effectiveFrom: "desc" },
+    select: { shiftSchedule: { select: SHIFT_SELECT } },
+  });
+
+  let shift = shiftAssignment?.shiftSchedule ?? null;
+
+  // Fallback: no EmployeeShiftAssignment found — use Employee.shiftScheduleId directly.
+  if (!shift && p.employeeShiftScheduleId) {
+    shift = await tx.shiftSchedule.findFirst({
+      where: { id: p.employeeShiftScheduleId, deletedAt: null },
+      select: SHIFT_SELECT,
+    });
+  }
+
+  // 6. Load all punches for this employee on this (local) calendar date
+  const dayStart = atLocalWallClock(p.punchDate, "00:00", tz);
+  const dayEnd   = new Date(dayStart.getTime() + 86_400_000);
+  const allPunches = await tx.attendanceLog.findMany({
+    where: {
+      tenantId:  p.tenantId,
+      employeeId: p.employeeId,
+      punchedAt: { gte: dayStart, lt: dayEnd },
+    },
+    select: { punchType: true, punchedAt: true },
+  });
+
+  // Tenant's configurable NSD window (always-on; window only).
+  const nsdWindow = {
+    startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
+    endMin:   parseWindowMinutes(tenant?.nsdWindowEnd)   ?? 6 * 60,
+  };
+
+  const computed = computeDtrFields(
+    p.punchDate,
+    allPunches.map((p) => ({
+      punchType: p.punchType as PunchType,
+      punchedAt: p.punchedAt,
+    })),
+    shift
+      ? {
+          timeIn:             shift.timeIn             ?? null,
+          timeOut:            shift.timeOut            ?? null,
+          coreTimeIn:         shift.coreTimeIn         ?? null,
+          coreTimeOut:        shift.coreTimeOut        ?? null,
+          requiredHours:      shift.requiredHours      ?? null,
+          gracePeriodMinutes: shift.gracePeriodMinutes ?? 0,
+          breakMinutes:       shift.breakMinutes       ?? 60,
+          breakPolicy:        shift.breakPolicy        ?? "FIXED_DEDUCTION",
+          crossesMidnight:    shift.crossesMidnight    ?? false,
+          otThresholdMinutes: shift.otThresholdMinutes ?? null,
+          breakDeductAfterMinutes: tenant?.breakDeductAfterMinutes,
+        }
+      : null,
+    nsdWindow,
+    p.tz,
+  );
+
+  // 7. Upsert DTRRecord — skip if locked (payroll finalized)
+  const existingDtr = await tx.dTRRecord.findUnique({
+    where: {
+      tenantId_employeeId_date: {
+        tenantId:   p.tenantId,
+        employeeId: p.employeeId,
+        date:       p.punchDate,
+      },
+    },
+    select: { id: true, isLocked: true },
+  });
+
+  if (existingDtr?.isLocked) {
+    return { ok: false, code: "DTR_LOCKED" };
+  }
+
+  // Overtime is never paid from the threshold alone. The threshold only
+  // *suggests* OT (advisory). Paid OT comes solely from an approved OT
+  // application. When the shift opts into auto-approve, create one here.
+  const suggestedOtMinutes = computed.suggestedOtMinutes ?? 0;
+  let autoApprovedOtMinutes: number | null = null;
+  if (shift?.otAutoApprove && suggestedOtMinutes > 0) {
+    const existingOtApp = await tx.oTApplication.findFirst({
+      where: {
+        tenantId:   p.tenantId,
+        employeeId: p.employeeId,
+        date:       p.punchDate,
+        status:     { in: ["PENDING", "APPROVED"] },
+      },
+      select: { id: true },
+    });
+    if (!existingOtApp) {
+      const payable = applyOtBreakRule(suggestedOtMinutes, {
+        otBreakMode:         shift.otBreakMode,
+        otBreakTriggerHours: shift.otBreakTriggerHours,
+        otBreakBlockHours:   shift.otBreakBlockHours,
+        otBreakMinutes:      shift.otBreakMinutes,
+      });
+      if (payable > 0) {
+        await tx.oTApplication.create({
+          data: {
+            tenantId:      p.tenantId,
+            employeeId:    p.employeeId,
+            date:          p.punchDate,
+            hours:         (payable / 60).toFixed(2),
+            justification: "Auto-approved: worked beyond scheduled hours.",
+            status:        "APPROVED",
+            approvedAt:    p.now,
+          },
+        });
+        autoApprovedOtMinutes = payable;
+      }
+    }
+  }
+
+  const dtr = existingDtr
+    ? await tx.dTRRecord.update({
+        where: { id: existingDtr.id },
+        data: {
+          dayStatus:          computed.dayStatus,
+          workedMinutes:      computed.workedMinutes,
+          lateMinutes:        computed.lateMinutes,
+          undertimeMinutes:   computed.undertimeMinutes,
+          nsdMinutes:         computed.nsdMinutes,
+          suggestedOtMinutes,
+          hasMissingPunch:    computed.missingOut ?? false,
+          ...(shift && { shiftScheduleId: shift.id }),
+          // Paid OT only changes here when this punch just auto-approved it.
+          ...(autoApprovedOtMinutes !== null && { otMinutes: autoApprovedOtMinutes }),
+        },
+        select: { id: true },
+      })
+    : await tx.dTRRecord.create({
+        data: {
+          tenant:             { connect: { id: p.tenantId } },
+          employee:           { connect: { id: p.employeeId } },
+          date:               p.punchDate,
+          shiftSchedule:      shift ? { connect: { id: shift.id } } : undefined,
+          dayStatus:          computed.dayStatus,
+          workedMinutes:      computed.workedMinutes,
+          lateMinutes:        computed.lateMinutes,
+          undertimeMinutes:   computed.undertimeMinutes,
+          nsdMinutes:         computed.nsdMinutes,
+          suggestedOtMinutes,
+          hasMissingPunch:    computed.missingOut ?? false,
+          otMinutes:          autoApprovedOtMinutes ?? 0,
+        },
+        select: { id: true },
+      });
+
+  return { ok: true, dtr };
 }
