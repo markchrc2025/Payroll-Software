@@ -102,6 +102,23 @@ export function tableVersions<P>(
     }));
 }
 
+/**
+ * The version in effect on `now` among one category's versions: the latest
+ * start on or before `now` that has not ended, the rule getActiveRule uses
+ * for global versions. A version starting later is upcoming, not in effect.
+ * Two versions with the same start date tie (PAY-163); the first in `rows`
+ * wins here, so pass rows newest first, as the payroll's query orders them.
+ */
+export function versionInEffect<T extends { effectiveFrom: string | Date; effectiveTo: string | Date | null }>(
+  rows: T[],
+  now: Date,
+): T | undefined {
+  const t = now.getTime();
+  return rows
+    .filter((r) => new Date(r.effectiveFrom).getTime() <= t && (r.effectiveTo === null || new Date(r.effectiveTo).getTime() > t))
+    .sort((a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime())[0];
+}
+
 export type BirRange = {
   /** Taxable pay from (centavos), inclusive. */
   from: number;

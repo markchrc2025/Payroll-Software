@@ -6,14 +6,15 @@ import { ComplianceClient, type RuleRow } from "./ComplianceClient";
 
 export const dynamic = "force-dynamic";
 
-const CATEGORIES = ["SSS_SCHEDULE", "PHILHEALTH_SCHEDULE", "PAGIBIG_SCHEDULE"] as const;
+const CATEGORIES = ["SSS_SCHEDULE", "PHILHEALTH_SCHEDULE", "PAGIBIG_SCHEDULE", "BIR_WITHHOLDING_TABLE"] as const;
 
 export default async function CompliancePage() {
   const ctx = await getSuperAdminContext();
   if (!ctx) redirect("/centralportal/login");
 
-  // Global (tenantId null) statutory rules, newest first. The most recent per
-  // category is the one in effect; older rows are history.
+  // Global (tenantId null) statutory rules, newest first. The one in effect is
+  // the latest that has started and not ended (versionInEffect); the rest are
+  // history or upcoming.
   const rules = await prismaAdmin.statutoryRule.findMany({
     where: { tenantId: null, category: { in: [...CATEGORIES] } },
     orderBy: { effectiveFrom: "desc" },
@@ -37,7 +38,7 @@ export default async function CompliancePage() {
     <>
       <PageHead
         title="Compliance"
-        sub="Statutory contribution rates — SSS, PhilHealth and Pag-IBIG. Publish a new version when the government updates rates; it applies to all tenants from its effectivity date."
+        sub="Statutory rates: SSS, PhilHealth, Pag-IBIG and the BIR withholding tax table. Publish a new version when the government changes a rate; it applies to every company from its start date, and earlier payrolls keep the version they used."
       />
       <ComplianceClient rules={serial} />
     </>

@@ -14,6 +14,7 @@ import { getSuperAdminContext } from "@/lib/super-admin-auth";
 import { ok, err, unauthorized, notFound, serverError, paginated } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { parseStatutoryPayload } from "@/lib/statutory/types";
+import { birTableProblems, type BirTableInput } from "@/lib/statutory/bir-table";
 
 // ---------------------------------------------------------------------------
 // Shared create schema (payload validated by each route via parseStatutoryPayload)
@@ -92,6 +93,17 @@ export async function createStatutoryRule(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return err(`Payload validation failed for ${category}: ${msg}`, 400);
+  }
+
+  // PAY-161: a new BIR table must be one the engine can apply as written:
+  // every pay frequency, starting at ₱0, floors going up. Checked on publish
+  // only, so versions already stored (and the payroll that reads them) are
+  // untouched.
+  if (category === "BIR_WITHHOLDING_TABLE") {
+    const problems = birTableProblems(parsed.data.payload as BirTableInput);
+    if (problems.length > 0) {
+      return err(`The BIR table has ${problems.length} problem(s): ${problems.join(" ")}`, 400, { problems });
+    }
   }
 
   try {
