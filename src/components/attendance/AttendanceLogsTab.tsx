@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { AttendanceLogDetailSheet } from "@/components/attendance/AttendanceLogDetailSheet";
+import { ImportPunchesDialog } from "@/components/attendance/ImportPunchesDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -168,6 +169,8 @@ export function AttendanceLogsTab() {
         <p className="text-sm text-muted-foreground ml-auto">
           {data ? `${data.total} punch${data.total !== 1 ? "es" : ""}` : ""}
         </p>
+
+        <ImportPunchesDialog onImported={fetchData} />
       </div>
 
       {/* Table */}

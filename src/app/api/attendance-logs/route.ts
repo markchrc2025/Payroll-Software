@@ -18,6 +18,7 @@ import { z } from "zod";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { err, paginated } from "@/lib/api-response";
+import { atLocalWallClock } from "@/lib/time/zone";
 
 const listSchema = z.object({
   employeeId:      z.string().optional(),
@@ -39,6 +40,13 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return err("Invalid query", 422, parsed.error.flatten());
   const { employeeId, dateFrom, dateTo, outsideGeofence, source, page, limit } = parsed.data;
 
+  // PAY-170: the date filter is in company time (a 07:30 Manila punch is
+  // 23:30 UTC the day before, and must show on its own Manila day).
+  const tz =
+    (await withTenant(auth.tenantId, (tx) =>
+      tx.tenant.findUnique({ where: { id: auth.tenantId }, select: { timezone: true } }),
+    ))?.timezone ?? "Asia/Manila";
+  const dayStart = (ymd: string) => atLocalWallClock(new Date(ymd + "T00:00:00.000Z"), "00:00", tz);
   const where: Prisma.AttendanceLogWhereInput = {
     tenantId: auth.tenantId,
     ...(employeeId       && { employeeId }),
@@ -46,8 +54,8 @@ export async function GET(req: NextRequest) {
     ...(source           && { source }),
     ...((dateFrom || dateTo) && {
       punchedAt: {
-        ...(dateFrom && { gte: new Date(dateFrom + "T00:00:00.000Z") }),
-        ...(dateTo   && { lte: new Date(dateTo   + "T23:59:59.999Z") }),
+        ...(dateFrom && { gte: dayStart(dateFrom) }),
+        ...(dateTo   && { lt: new Date(dayStart(dateTo).getTime() + 86_400_000) }),
       },
     }),
   };
