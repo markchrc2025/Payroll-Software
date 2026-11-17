@@ -30,3 +30,33 @@ export function marginalAnnualTaxCents(
   const due = annualTaxDueCents(bir, prior + extraTaxableCents) - annualTaxDueCents(bir, prior);
   return due > 0n ? due : 0n;
 }
+
+/** Pay periods in a year for cycles the BIR table has no column for. */
+const PERIODS_PER_YEAR_WITHOUT_TABLE: Partial<Record<string, bigint>> = {
+  BI_WEEKLY: 26n,
+};
+
+/**
+ * PAY-134 (Mark, 17 Nov 2026: option A): the tax withheld in one pay period.
+ * Cycles with their own column in the BIR table (DAILY, WEEKLY, SEMI_MONTHLY,
+ * MONTHLY) use it. BI_WEEKLY has no column, so its tax is annualized: the
+ * period's taxable pay times 26 is taxed for the year (annualTaxDueCents),
+ * and one twenty-sixth of that tax is withheld (rounded half up to the
+ * centavo). The bracket returned is the MONTHLY bracket the year falls in.
+ */
+export function periodWithholdingTax(
+  bir: BirWithholdingPayload,
+  cycle: string,
+  taxableCents: bigint,
+): { tax: bigint; bracket: { floor: bigint; fixedTax: bigint; plusRate: number } } {
+  const periods = PERIODS_PER_YEAR_WITHOUT_TABLE[cycle];
+  if (periods === undefined) {
+    const r = lookupBIR(bir, cycle as Parameters<typeof lookupBIR>[1], taxableCents);
+    return { tax: r.tax, bracket: r.bracket };
+  }
+  const annual = taxableCents * periods;
+  const annualTax = annualTaxDueCents(bir, annual);
+  const tax = (annualTax + periods / 2n) / periods;
+  const bracket = lookupBIR(bir, "MONTHLY", annual / 12n).bracket;
+  return { tax, bracket };
+}

@@ -50,7 +50,7 @@ import {
   lookupBIR,
 } from "@/lib/statutory/compute";
 import { sssCompensationCents } from "./sss-basis";
-import { annualTaxDueCents, marginalAnnualTaxCents } from "./annual-tax";
+import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax } from "./annual-tax";
 import type {
   AppliedAdjustment,
   AppliedExpenseClaim,
@@ -1172,7 +1172,8 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
   if (grossTaxableIncomeCents > 0n) {
-    const bir = lookupBIR(
+    // PAY-134: BI_WEEKLY has no BIR column and is annualized (annual-tax.ts).
+    const bir = periodWithholdingTax(
       rules.bir,
       period.cycle,
       grossTaxableIncomeCents,
