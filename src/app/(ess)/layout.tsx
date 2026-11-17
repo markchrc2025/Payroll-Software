@@ -5,13 +5,18 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { LayoutDashboard, FileText, CalendarDays, UserCircle, LogOut, ClipboardList } from "lucide-react";
 
+// PAY-191: the same five places as the ESS app's bottom bar (Home, Pay, Leave,
+// Time, Profile), so the menu no longer changes between screens. `match` lists
+// the standalone pages that belong to each place.
 const NAV_ITEMS = [
-  { href: "/ess", label: "Home", icon: LayoutDashboard },
-  { href: "/ess/payslips", label: "Payslips", icon: FileText },
-  { href: "/ess/leaves", label: "Leave", icon: CalendarDays },
-  { href: "/ess/dtr", label: "My DTR", icon: ClipboardList },
-  { href: "/ess/profile", label: "Profile", icon: UserCircle },
+  { href: "/ess", label: "Home", icon: LayoutDashboard, match: ["/ess/expense-claims"] },
+  { href: "/ess?tab=pay", label: "Pay", icon: FileText, match: ["/ess/payslips"] },
+  { href: "/ess?tab=leave", label: "Leave", icon: CalendarDays, match: ["/ess/leaves"] },
+  { href: "/ess?tab=time", label: "Time", icon: ClipboardList, match: ["/ess/dtr", "/ess/clock", "/ess/undertime", "/ess/ot-applications"] },
+  { href: "/ess?tab=profile", label: "Profile", icon: UserCircle, match: ["/ess/profile"] },
 ];
+const isActive = (pathname: string, item: (typeof NAV_ITEMS)[number]) =>
+  item.match.some((m) => pathname === m || pathname.startsWith(`${m}/`));
 
 export default function EssLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -66,9 +71,7 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
     router.replace("/ess/login");
   }
 
-  const activeLabel = NAV_ITEMS.find(
-    ({ href }) => pathname === href || (href !== "/ess" && pathname.startsWith(href)),
-  )?.label ?? "Home";
+  const activeLabel = NAV_ITEMS.find((item) => isActive(pathname, item))?.label ?? "Home";
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] lg:flex" style={{ fontFamily: "var(--font-plus-jakarta-sans, sans-serif)" }}>
@@ -90,8 +93,9 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== "/ess" && pathname.startsWith(href));
+          {NAV_ITEMS.map((item) => {
+            const { href, label, icon: Icon } = item;
+            const active = isActive(pathname, item);
             return (
               <Link
                 key={href}
@@ -138,8 +142,9 @@ export default function EssLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Mobile bottom nav ───────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-white border-t border-gray-100 flex items-center justify-around z-50">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== "/ess" && pathname.startsWith(href));
+        {NAV_ITEMS.map((item) => {
+          const { href, label, icon: Icon } = item;
+          const active = isActive(pathname, item);
           return (
             <Link
               key={href}

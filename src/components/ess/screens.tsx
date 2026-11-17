@@ -22,6 +22,8 @@ import {
   fmtTime,
 } from "./primitives";
 import { useEssData } from "./use-ess-data";
+import { QuickLinks, RequestsPanel } from "./requests";
+import { useRouter } from "next/navigation";
 import { ESS_PASSKEYS_ENABLED } from "@/lib/ess-passkeys";
 import { ESS_PIN_LENGTH, pinProblem } from "@/lib/ess-pin-policy";
 import {
@@ -93,6 +95,7 @@ function Loading() {
 // ============================ HOME ============================
 export function HomeScreen() {
   const nav = useContext(ESSNav);
+  const router = useRouter();
   const now = useNow();
   const tnow = now ? fmtTime(now) : null;
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -174,13 +177,19 @@ export function HomeScreen() {
         </ECard>
       )}
 
-      {/* quick actions */}
-      <div className="e-qa-row">
-        <QuickAction icon="leave" label="Request leave" tone="sage" onClick={() => nav.go("leaveRequest")} />
-        <QuickAction icon="clock" label="File OT" tone="blue" onClick={() => nav.go("request", "ot")} />
-        <QuickAction icon="wallet" label="Reimburse" tone="amber" onClick={() => nav.go("request", "reimb")} />
-        <QuickAction icon="doc" label="COE" tone="slate" onClick={() => nav.go("request", "coe")} />
-      </div>
+      {/* PAY-191: quick links as a list (Frappe HR mobile pattern); only
+          forms that work today. */}
+      <ESection>Quick links</ESection>
+      <QuickLinks
+        items={[
+          { icon: "leave", label: "Request leave", onClick: () => nav.go("leaveRequest") },
+          { icon: "clock", label: "File overtime", onClick: () => nav.go("request", "ot") },
+          { icon: "clock", label: "File undertime", onClick: () => router.push("/ess/undertime") },
+          { icon: "wallet", label: "Claim an expense", onClick: () => router.push("/ess/expense-claims") },
+          { icon: "cal", label: "My DTR", onClick: () => router.push("/ess/dtr") },
+          { icon: "doc", label: "View payslips", onClick: () => nav.tab("pay") },
+        ]}
+      />
 
       {/* leave balances */}
       {bals.length > 0 && (
@@ -202,6 +211,10 @@ export function HomeScreen() {
           </ECard>
         </>
       )}
+
+      {/* PAY-191: requests with their status; tap for details */}
+      <ESection>Requests</ESection>
+      <RequestsPanel />
 
       {/* announcements */}
       {announcements.data && announcements.data.data.length > 0 && (
@@ -251,27 +264,6 @@ export function HomeScreen() {
         </>
       )}
     </div>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  tone,
-  onClick,
-}: {
-  icon: EIconName;
-  label: string;
-  tone: string;
-  onClick: () => void;
-}) {
-  return (
-    <button className="e-qa" onClick={onClick}>
-      <span className="e-qa-ic" data-tone={tone}>
-        <EIcon name={icon} size={21} />
-      </span>
-      <span className="e-qa-lb">{label}</span>
-    </button>
   );
 }
 

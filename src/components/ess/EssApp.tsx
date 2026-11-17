@@ -7,7 +7,7 @@
  * the selfie clock flow updates Home. Ported from the design handoff ess-app.jsx.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EIcon, type EIconName } from "./icons";
 import { ESSNav, type EssView } from "./primitives";
@@ -86,6 +86,11 @@ interface Frame {
 export default function EssApp() {
   const router = useRouter();
   const [stack, setStack] = useState<Frame[]>([{ tab: "home", view: null, param: null }]);
+  // PAY-191: the standalone pages link back with ?tab=pay|leave|time|profile.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && TABS.some((x) => x.id === t) && t !== "home") setStack([{ tab: t, view: t, param: null }]);
+  }, []);
   const top = stack[stack.length - 1];
   const activeTab = top.tab;
   const [clockedIn, setClockedIn] = useState(false);
