@@ -288,8 +288,22 @@ export async function recomputeDayDtr(
         date:       p.punchDate,
       },
     },
-    select: { id: true, isLocked: true },
+    select: { id: true, isLocked: true, manualTimeIn: true, manualTimeOut: true },
   });
+
+  // PAY-186: the day's times come from its punches (first IN, last OUT), so
+  // every screen that reads officialTimeIn/Out or effectiveTimeIn/Out (ESS
+  // My DTR, HR DTR, the manual override) sees them. A supervisor's manual
+  // time still wins for the effective time.
+  const sortedPunches = [...allPunches].sort((a, b) => a.punchedAt.getTime() - b.punchedAt.getTime());
+  const officialTimeIn = sortedPunches.find((x) => x.punchType === "IN")?.punchedAt ?? null;
+  const officialTimeOut = [...sortedPunches].reverse().find((x) => x.punchType === "OUT")?.punchedAt ?? null;
+  const dayTimes = {
+    officialTimeIn,
+    officialTimeOut,
+    effectiveTimeIn: existingDtr?.manualTimeIn ?? officialTimeIn,
+    effectiveTimeOut: existingDtr?.manualTimeOut ?? officialTimeOut,
+  };
 
   if (existingDtr?.isLocked) {
     return { ok: false, code: "DTR_LOCKED" };
@@ -345,6 +359,7 @@ export async function recomputeDayDtr(
           nsdMinutes:         computed.nsdMinutes,
           suggestedOtMinutes,
           hasMissingPunch:    computed.missingOut ?? false,
+          ...dayTimes,
           ...(shift && { shiftScheduleId: shift.id }),
           // Paid OT only changes here when this punch just auto-approved it.
           ...(autoApprovedOtMinutes !== null && { otMinutes: autoApprovedOtMinutes }),
@@ -364,6 +379,7 @@ export async function recomputeDayDtr(
           nsdMinutes:         computed.nsdMinutes,
           suggestedOtMinutes,
           hasMissingPunch:    computed.missingOut ?? false,
+          ...dayTimes,
           otMinutes:          autoApprovedOtMinutes ?? 0,
         },
         select: { id: true },
