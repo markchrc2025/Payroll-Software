@@ -28,8 +28,14 @@ const V = (k: string) => `p161-${k}-${sfx}`;
 
 const admin = vi.hoisted(() => ({ ctx: { userId: "p161-sentire-admin" } as { userId: string } | null }));
 vi.mock("@/lib/super-admin-auth", () => ({ getSuperAdminContext: vi.fn(async () => admin.ctx) }));
+// The publish API files its audit entry under the oldest active company, which
+// in a shared test database can be another test's company (its cleanup would
+// then fail on the foreign key). Stub the writer, as other DB tests do, and
+// assert the call instead.
+vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn(async () => {}), getClientIp: () => "203.0.113.9" }));
 
 import { POST } from "@/app/api/admin/statutory/bir/route";
+import { writeAuditLog } from "@/lib/audit";
 import { withTenant } from "@/lib/with-tenant";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { lookupBIR } from "@/lib/statutory/compute";
@@ -89,6 +95,14 @@ describeDb("PAY-161 BIR editor publish API (real Postgres)", () => {
     admin.ctx = { userId: "p161-sentire-admin" };
     const r = await publish(V("ok"), table());
     expect(r.status).toBe(201);
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "p161-sentire-admin",
+        action: "CREATE",
+        entity: "StatutoryRule",
+        changes: { category: "BIR_WITHHOLDING_TABLE", version: V("ok") },
+      }),
+    );
 
     const rule = await withTenant(T, (tx) =>
       getActiveRule(tx, T, "BIR_WITHHOLDING_TABLE", new Date("2099-06-30T00:00:00.000Z")),
@@ -124,8 +138,10 @@ describeDb("PAY-161 BIR editor publish API (real Postgres)", () => {
 
   it("D4 someone who is not a Sentire admin is refused", async () => {
     admin.ctx = null;
+    vi.mocked(writeAuditLog).mockClear();
     const r = await publish(V("noadmin"), table());
     expect(r.status).toBe(401);
     expect(await stored(V("noadmin"))).toBe(0);
+    expect(vi.mocked(writeAuditLog)).not.toHaveBeenCalled();
   });
 });
