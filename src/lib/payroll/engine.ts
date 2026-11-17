@@ -103,6 +103,29 @@ function clampNonNegative(v: bigint): bigint {
  * Pass `maxDeductibleCents = null` to disable the floor (unbounded deductions,
  * e.g. FINAL_PAY when negative final pay is allowed).
  */
+/**
+ * PAY-62 (unit 1.7, S3): the most that loan installments may take this
+ * period under the company's maximum-deduction cap: pct% of the period's
+ * gross, less the government contributions already taken. Null = no cap.
+ */
+function loanCapHeadroom(
+  pct: number | undefined,
+  grossCents: bigint,
+  contributionsCents: bigint,
+): bigint | null {
+  if (pct === undefined || pct === null) return null;
+  const cap = (grossCents * BigInt(Math.round(pct))) / 100n;
+  const room = cap - contributionsCents;
+  return room > 0n ? room : 0n;
+}
+
+/** The smaller of two limits, where null means unlimited. */
+function minLimit(a: bigint | null, b: bigint | null): bigint | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a < b ? a : b;
+}
+
 function applyLoanDeductions(
   loans: ComputeInput["loans"],
   maxDeductibleCents: bigint | null,
@@ -582,7 +605,13 @@ function computeYearEnd(input: ComputeInput): ComputeResult {
     nontaxableAdditionsCents -
     adjustmentDeductionsCents;
   const { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents } =
-    applyLoanDeductions(loans, clampNonNegative(preLoanNetCents));
+    applyLoanDeductions(
+      loans,
+      minLimit(
+        clampNonNegative(preLoanNetCents),
+        loanCapHeadroom(tenant.maxDeductionPctOfGross, grossCompensationCents, 0n),
+      ),
+    );
 
   const netPayCents = preLoanNetCents - loanDeductionsCents;
 
@@ -1203,8 +1232,16 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     withholdingTaxCents +
     nontaxableAdditionsCents -
     adjustmentDeductionsCents;
+  // PAY-62: and within the company's maximum-deduction cap (contributions plus
+  // loans at most maxDeductionPctOfGross% of this period's gross).
   const { loanPaymentsApplied, loanDeductionsCents, loanDeferredCents } =
-    applyLoanDeductions(loans, clampNonNegative(preLoanNetCents));
+    applyLoanDeductions(
+      loans,
+      minLimit(
+        clampNonNegative(preLoanNetCents),
+        loanCapHeadroom(tenant.maxDeductionPctOfGross, grossCompensationCents, mandatoryEeContribs),
+      ),
+    );
 
   // -- Step 12: net pay ------------------------------------------------------
   const netPayCents = preLoanNetCents - loanDeductionsCents;
