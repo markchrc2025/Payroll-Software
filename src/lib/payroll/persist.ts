@@ -55,6 +55,7 @@ import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
+import { staleAnnualizations } from "./annualize";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -1288,6 +1289,21 @@ export async function finalizeRun(
       throw new PayrollRunConflictError(
         `Cannot finalize a ${book.status} run.`,
       );
+    }
+
+    // PAY-155: a 13th month run is annualized while it is a draft, and the
+    // finalized run is never changed afterwards. If the year's figures moved
+    // since the true-up was worked out (another run finalized, an opening or
+    // the tax table changed), sealing it would lock in a wrong true-up.
+    if (book.runType === "YEAR_END") {
+      const stale = await staleAnnualizations(tx, tenantId, book);
+      if (stale.length > 0) {
+        throw new PayrollRunConflictError(
+          `The year's figures changed since this 13th month run was annualized ` +
+            `(${stale.length} employee${stale.length === 1 ? "" : "s"}). ` +
+            `Annualize again, then finalize.`,
+        );
+      }
     }
 
     // 1. Aggregate loan payments from all sheets.

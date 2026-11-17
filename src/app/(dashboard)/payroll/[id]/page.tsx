@@ -6,8 +6,10 @@
  * Displays the full detail of a single payroll run:
  *  - Header: period, cycle, type, status, notes
  *  - Action bar (status-dependent):
- *      DRAFT      → Recompute | Finalize
- *      FINALIZED  → Bank file downloads (6 banks) | Annualize (YEAR_END only)
+ *      DRAFT      → Recompute | Annualize (YEAR_END only) | Finalize
+ *      FINALIZED  → Bank file downloads (6 banks)
+ *  PAY-155: a 13th month run is annualized while it is a draft; a finalized
+ *  run is a sealed record and is never changed.
  *  - Employee sheets table (gross → deductions → net)
  *  - Adjustments section (list + add on DRAFT)
  */
@@ -538,6 +540,19 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                     : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                   Recompute
                 </Button>
+                {isYearEnd && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={actionLoading !== null}
+                    onClick={() => handleAction("annualize")}
+                  >
+                    {actionLoading === "annualize"
+                      ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                    Annualize
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   disabled={actionLoading !== null}
@@ -584,19 +599,6 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {isYearEnd && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={actionLoading !== null}
-                    onClick={() => handleAction("annualize")}
-                  >
-                    {actionLoading === "annualize"
-                      ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                    Annualize
-                  </Button>
-                )}
               </>
             )}
           </div>
