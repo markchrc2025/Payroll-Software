@@ -4,6 +4,10 @@
  * The rendered payslip: the employee's own view in ESS (/ess/payslips) and the
  * admin's view from a finalized payroll run (/payroll/[id]) use the same body
  * and the same PDF, so both always show the same figures.
+ *
+ * PAY-168: on a draft run the admin sees the same body as a preview (banner,
+ * no download), and a 13th month run shows the 13th month and how it was
+ * worked out instead of the regular earnings lines.
  */
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +57,48 @@ export interface Payslip {
   };
   tardinessMinutes: number;
   leaveBalances: { code: string; name: string; available: string }[];
+  /** PAY-168: a draft run's preview (figures can still change). */
+  preview?: boolean;
+  /** PAY-168: 13th month (YEAR_END) runs only. */
+  thirteenthMonth?: {
+    pay: string;
+    nonTaxable: string;
+    taxableExcess: string;
+    breakdown: {
+      year: number;
+      basicFromRuns: string;
+      runSheetCount: number;
+      basicFromOpenings: string;
+      totalBasic: string;
+      thirteenthForYear: string;
+      alreadyPaid: string;
+    } | null;
+  };
+  /** PAY-168: a 13th month run that was annualized. */
+  annualization?: {
+    taxOnThisPay: string;
+    yearEndAdjustment: string;
+    isRefund: boolean;
+    yearTaxable: string;
+    yearTaxDue: string;
+    yearWithheldBefore: string;
+  };
+}
+
+function abs(cents: string): string {
+  return cents.startsWith("-") ? cents.slice(1) : cents;
+}
+
+/** A line that is shown even when it is zero (for a worked computation). */
+function WorkRow({ label, value, bold, sign }: { label: string; value: string; bold?: boolean; sign?: "-" | "÷" }) {
+  return (
+    <div className={`flex justify-between text-sm py-0.5 pl-4 ${bold ? "border-t mt-1 pt-1" : ""}`}>
+      <span className={bold ? "font-semibold" : "text-muted-foreground"}>{label}</span>
+      <span className={bold ? "font-semibold" : ""}>
+        {sign === "-" ? "less " : ""}{sign === "÷" ? value : fmt(value)}
+      </span>
+    </div>
+  );
 }
 
 export function fmt(cents: string) {
@@ -114,6 +160,12 @@ export function PayslipDetailBody({
   return (
     <div className="space-y-1 text-sm">
 
+      {detail.preview && (
+        <div role="status" data-testid="payslip-preview-banner" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Preview. This run is still a draft, so these figures can change until it is finalized.
+        </div>
+      )}
+
       {/* Tenant + period header */}
       <div className="bg-[#1E3A5F] rounded-xl p-4 text-white">
         <p className="font-bold text-base">{detail.tenant.name}</p>
@@ -134,24 +186,55 @@ export function PayslipDetailBody({
         </div>
       </div>
 
-      {/* Earnings */}
-      <SectionTitle title="Earnings" />
-      <PayslipRow label="Basic Pay" value={detail.earnings.basePay} indent />
-      <PayslipRow label="OT Pay" value={detail.earnings.otPay} indent />
-      <PayslipRow label="Night Shift Differential" value={detail.earnings.nsdPay} indent />
-      <PayslipRow label="Holiday Pay" value={detail.earnings.holidayPay} indent />
-      <PayslipRow label="Rest Day Pay" value={detail.earnings.restDayPay} indent />
-      <PayslipRow label="Hazard Pay" value={detail.earnings.hazardPay} indent />
-      <PayslipRow label="Taxable Allowances" value={detail.earnings.taxableAllowances} indent />
-      <PayslipRow label="Late / Undertime Deduction" value={detail.earnings.lateUndertimeDeduction} red indent />
-      <PayslipRow label="Gross Compensation" value={detail.earnings.grossCompensation} bold />
-
-      {/* Non-taxable benefits actually paid. The employee's own SSS, PhilHealth
-          and Pag-IBIG are deductions, never shown here (PAY-138). */}
-      {Number(detail.nonTaxable.nontaxable13MonthAndBenefits) !== 0 && (
+      {detail.thirteenthMonth ? (
         <>
-          <SectionTitle title="Non-Taxable Benefits" />
-          <PayslipRow label="13th Month (this period)" value={detail.nonTaxable.nontaxable13MonthAndBenefits} indent />
+          {/* PAY-168: 13th month run */}
+          <SectionTitle title="13th Month Pay" />
+          {detail.thirteenthMonth.breakdown ? (
+            <>
+              <WorkRow
+                label={`Basic pay earned on finalized pay periods, ${detail.thirteenthMonth.breakdown.year} (${detail.thirteenthMonth.breakdown.runSheetCount})`}
+                value={detail.thirteenthMonth.breakdown.basicFromRuns}
+              />
+              {Number(detail.thirteenthMonth.breakdown.basicFromOpenings) !== 0 && (
+                <WorkRow label="Basic pay earned before Sentire (year-to-date opening)" value={detail.thirteenthMonth.breakdown.basicFromOpenings} />
+              )}
+              <WorkRow label="Total basic pay for the year" value={detail.thirteenthMonth.breakdown.totalBasic} bold />
+              <WorkRow label="Divided by 12" value={detail.thirteenthMonth.breakdown.thirteenthForYear} />
+              {Number(detail.thirteenthMonth.breakdown.alreadyPaid) !== 0 && (
+                <WorkRow label="13th month already paid this year" value={detail.thirteenthMonth.breakdown.alreadyPaid} sign="-" />
+              )}
+            </>
+          ) : (
+            <p className="pl-4 text-xs text-muted-foreground">Recompute this run to see how the 13th month was worked out.</p>
+          )}
+          <WorkRow label="13th Month Pay" value={detail.thirteenthMonth.pay} bold />
+          <PayslipRow label="Tax-free part (up to ₱90,000 a year with other benefits)" value={detail.thirteenthMonth.nonTaxable} indent />
+          <PayslipRow label="Taxable excess" value={detail.thirteenthMonth.taxableExcess} indent />
+          <PayslipRow label="Other taxable additions" value={String(Number(detail.earnings.taxableAllowances) - Number(detail.thirteenthMonth.taxableExcess))} indent />
+        </>
+      ) : (
+        <>
+        {/* Earnings */}
+        <SectionTitle title="Earnings" />
+        <PayslipRow label="Basic Pay" value={detail.earnings.basePay} indent />
+        <PayslipRow label="OT Pay" value={detail.earnings.otPay} indent />
+        <PayslipRow label="Night Shift Differential" value={detail.earnings.nsdPay} indent />
+        <PayslipRow label="Holiday Pay" value={detail.earnings.holidayPay} indent />
+        <PayslipRow label="Rest Day Pay" value={detail.earnings.restDayPay} indent />
+        <PayslipRow label="Hazard Pay" value={detail.earnings.hazardPay} indent />
+        <PayslipRow label="Taxable Allowances" value={detail.earnings.taxableAllowances} indent />
+        <PayslipRow label="Late / Undertime Deduction" value={detail.earnings.lateUndertimeDeduction} red indent />
+        <PayslipRow label="Gross Compensation" value={detail.earnings.grossCompensation} bold />
+
+        {/* Non-taxable benefits actually paid. The employee's own SSS, PhilHealth
+            and Pag-IBIG are deductions, never shown here (PAY-138). */}
+        {!detail.thirteenthMonth && Number(detail.nonTaxable.nontaxable13MonthAndBenefits) !== 0 && (
+          <>
+            <SectionTitle title="Non-Taxable Benefits" />
+            <PayslipRow label="13th Month (this period)" value={detail.nonTaxable.nontaxable13MonthAndBenefits} indent />
+          </>
+        )}
         </>
       )}
 
@@ -160,7 +243,25 @@ export function PayslipDetailBody({
       <PayslipRow label="SSS (EE)" value={detail.statutory.sssEe} red indent />
       <PayslipRow label="PhilHealth (EE)" value={detail.statutory.philhealthEe} red indent />
       <PayslipRow label="Pag-IBIG (EE)" value={detail.statutory.pagibigEe} red indent />
-      <PayslipRow label="Withholding Tax" value={detail.tax.withholdingTax} red indent />
+      {detail.annualization ? (
+        <>
+          <PayslipRow label="Tax on the taxable excess" value={detail.annualization.taxOnThisPay} red indent />
+          {detail.annualization.isRefund ? (
+            <div className="flex justify-between text-sm py-0.5 pl-4">
+              <span className="text-muted-foreground">Year-end tax refund (annualization)</span>
+              <span className="text-emerald-700">+{fmt(abs(detail.annualization.yearEndAdjustment))}</span>
+            </div>
+          ) : (
+            <PayslipRow label="Year-end tax shortfall (annualization)" value={detail.annualization.yearEndAdjustment} red indent />
+          )}
+          <p className="pl-4 text-[11px] text-muted-foreground">
+            Year&apos;s taxable pay {fmt(detail.annualization.yearTaxable)}, tax due for the year {fmt(detail.annualization.yearTaxDue)},
+            withheld before this adjustment {fmt(detail.annualization.yearWithheldBefore)}.
+          </p>
+        </>
+      ) : (
+        <PayslipRow label="Withholding Tax" value={detail.tax.withholdingTax} red indent />
+      )}
       <PayslipRow label="Loan Deductions" value={detail.loans.loanDeductions} red indent />
 
       {/* Net pay */}
@@ -209,7 +310,8 @@ export function PayslipDetailBody({
         </>
       )}
 
-      {/* Download button */}
+      {/* Download button (a draft preview has no PDF) */}
+      {!detail.preview && (
       <Button
         className="w-full mt-5 bg-[#1E3A5F] hover:bg-[#2D5A8E] text-white"
         onClick={onDownload}
@@ -218,6 +320,7 @@ export function PayslipDetailBody({
         <Download className="h-4 w-4 mr-2" />
         {downloading ? "Generating PDF…" : "Download Payslip (PDF)"}
       </Button>
+      )}
     </div>
   );
 }

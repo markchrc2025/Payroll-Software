@@ -2716,8 +2716,13 @@ model PayrollSheet {
   /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
   /// annualization inputs/outputs.  Null for REGULAR / OFF_CYCLE / YEAR_END.
   finalPayBreakdown    Json?
+  /// PAY-168: how a YEAR_END sheet's 13th month was worked out (basic pay
+  /// earned this year, divided by 12, less 13th month already paid). Null on
+  /// other run types and on sheets computed before PAY-168.
+  thirteenthMonthBreakdown Json?
   /// YEAR_END-only: year-end annualization true-up result.  Written by the
-  /// POST /api/payroll/runs/[id]/annualize endpoint after finalization.
+  /// POST /api/payroll/runs/[id]/annualize endpoint while the run is a DRAFT
+  /// (PAY-155: a finalized run is never changed).
   annualizationData    Json?
   /// Array of { id, kind, amountCents, isTaxable, reason } applied in this run.
   adjustmentsApplied   Json?

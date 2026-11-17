@@ -11,8 +11,10 @@
  *
  *   B1  every dropdown label in the app sits inside a dropdown group, so no
  *       menu can crash its page this way again.
- *   B2  the run page offers a Payslip action only on finalized runs, loads
- *       the admin payslip endpoint and renders the same body as ESS.
+ *   B2  every employee line of a draft or finalized run opens the payslip
+ *       (a preview on a draft; PAY-168, Mark 17 Nov 2026, replacing the
+ *       finalized-only Payslip button), loads the admin payslip endpoint and
+ *       renders the same body as ESS.
  *   B3  the admin and ESS payslip endpoints both add YTD, tardiness and leave
  *       through the shared loader, so the two views show the same figures.
  *   B4  the run endpoint returns each sheet's employee name and number, and
@@ -55,9 +57,10 @@ describe("payroll run page: bank file, payslips, names", () => {
     expect(loose).toEqual([]);
   });
 
-  it("B2 finalized runs offer each employee's payslip, rendered like ESS", () => {
+  it("B2 every employee line of a draft or finalized run opens the payslip, rendered like ESS", () => {
     const page = read("src/app/(dashboard)/payroll/[id]/page.tsx");
-    expect(page).toMatch(/\{isFinalized && \(\s*<TableCell[\s\S]*?setPayslipFor\(s\.employeeId\)/);
+    expect(page).toContain('const canPreview = run.status === "DRAFT" || run.status === "FINALIZED";');
+    expect(page).toContain("onClick={canPreview ? () => setPayslipFor(s.employeeId) : undefined}");
     expect(page).toMatch(/fetch\(`\/api\/payroll\/runs\/\$\{id\}\/payslips\/\$\{payslipFor\}`\)/);
     expect(page).toMatch(/<PayslipDetailBody detail=\{payslip\}/);
     const ess = read("src/app/(ess)/ess/payslips/page.tsx");

@@ -37,6 +37,8 @@ export interface RenderPayslipInput {
   runType: PayrollRunType;
   tenantId: string;
   tenantName: string;
+  /** PAY-168: true when the run is still a DRAFT (a preview, not a payslip). */
+  preview?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +107,40 @@ export interface Payslip {
   net: {
     netPay: string;
   };
+  /** PAY-168: true when the run is still a DRAFT; the figures can change. */
+  preview: boolean;
+  /**
+   * PAY-168: on a 13th month (YEAR_END) run, the 13th month pay, its tax-free
+   * part and taxable excess, and how it was worked out (null on sheets
+   * computed before PAY-168). Absent on other run types.
+   */
+  thirteenthMonth?: {
+    pay: string;
+    nonTaxable: string;
+    taxableExcess: string;
+    breakdown: {
+      year: number;
+      basicFromRuns: string;
+      runSheetCount: number;
+      basicFromOpenings: string;
+      totalBasic: string;
+      thirteenthForYear: string;
+      alreadyPaid: string;
+    } | null;
+  };
+  /**
+   * PAY-168: when the 13th month run was annualized, the tax on its own
+   * taxable excess and the year-end adjustment (negative = refund) that
+   * together make withholdingTax.
+   */
+  annualization?: {
+    taxOnThisPay: string;
+    yearEndAdjustment: string;
+    isRefund: boolean;
+    yearTaxable: string;
+    yearTaxDue: string;
+    yearWithheldBefore: string;
+  };
   /** Frozen computation parameters for auditability. */
   snapshots: {
     payFrequency: PayFrequency;
@@ -135,8 +171,62 @@ function c(v: bigint): string {
   return centavosToJson(v)!;
 }
 
+type BreakdownJson = {
+  year: number; basicFromRunsCents: string; runSheetCount: number; basicFromOpeningsCents: string;
+  totalBasicCents: string; thirteenthForYearCents: string; alreadyPaidCents: string; dueCents: string;
+};
+type AnnualizationJson = {
+  trueUpCents: string; isRefund: boolean; ytdRegularTaxableCents: string; ytdRegularWhtCents: string;
+  trueAnnualLiabilityCents: string; yearEndBaselineWhtCents?: string;
+};
+
+/** PAY-168: the 13th month section of a YEAR_END payslip. */
+function thirteenthMonthOf(sheet: PayrollSheet): Payslip["thirteenthMonth"] {
+  const bd = sheet.thirteenthMonthBreakdown as unknown as BreakdownJson | null;
+  const nonTaxable = sheet.nontaxable13MonthAndBenefitsCents;
+  // The engine puts a YEAR_END run's taxable 13th month excess (plus any
+  // taxable adjustment) in taxableAllowances; with the stored breakdown the
+  // excess is exact: the 13th month due less its tax-free part.
+  const pay = bd ? BigInt(bd.dueCents) : nonTaxable + sheet.taxableAllowancesCents;
+  const excess = pay - nonTaxable;
+  return {
+    pay: c(pay),
+    nonTaxable: c(nonTaxable),
+    taxableExcess: c(excess > 0n ? excess : 0n),
+    breakdown: bd
+      ? {
+          year: bd.year,
+          basicFromRuns: bd.basicFromRunsCents,
+          runSheetCount: bd.runSheetCount,
+          basicFromOpenings: bd.basicFromOpeningsCents,
+          totalBasic: bd.totalBasicCents,
+          thirteenthForYear: bd.thirteenthForYearCents,
+          alreadyPaid: bd.alreadyPaidCents,
+        }
+      : null,
+  };
+}
+
+function annualizationOf(sheet: PayrollSheet): Payslip["annualization"] {
+  const a = sheet.annualizationData as unknown as AnnualizationJson | null;
+  if (!a) return undefined;
+  const trueUp = BigInt(a.trueUpCents);
+  const taxOnThisPay = a.yearEndBaselineWhtCents !== undefined
+    ? BigInt(a.yearEndBaselineWhtCents)
+    : sheet.withholdingTaxCents - trueUp;
+  return {
+    taxOnThisPay: c(taxOnThisPay),
+    yearEndAdjustment: c(trueUp),
+    isRefund: a.isRefund,
+    yearTaxable: a.ytdRegularTaxableCents,
+    yearTaxDue: a.trueAnnualLiabilityCents,
+    yearWithheldBefore: a.ytdRegularWhtCents,
+  };
+}
+
 export function renderPayslip(input: RenderPayslipInput): Payslip {
   const { sheet, employee, periodStart, periodEnd, cycle, runType, tenantId, tenantName } = input;
+  const yearEnd = runType === "YEAR_END";
 
   return {
     version: "v1",
@@ -198,6 +288,9 @@ export function renderPayslip(input: RenderPayslipInput): Payslip {
     net: {
       netPay: c(sheet.netPayCents),
     },
+    preview: input.preview === true,
+    ...(yearEnd ? { thirteenthMonth: thirteenthMonthOf(sheet) } : {}),
+    ...(yearEnd && sheet.annualizationData ? { annualization: annualizationOf(sheet) } : {}),
     snapshots: {
       payFrequency: sheet.payFrequencySnapshot,
       salaryType: sheet.salaryTypeSnapshot,

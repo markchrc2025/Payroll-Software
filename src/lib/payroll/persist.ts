@@ -672,13 +672,31 @@ function resultToSheetCreate(
  * the base, and 13th month already paid this year before Sentire is
  * subtracted (never below zero). A previous employer's pay never counts.
  */
-async function computeThirteenthMonthCents(
+/** PAY-168: how a 13th month was worked out (all amounts in centavos, as strings). */
+export interface ThirteenthMonthBreakdown {
+  year: number;
+  basis: "STRICT_DOLE";
+  /** Basic pay on this year's finalized regular runs. */
+  basicFromRunsCents: string;
+  runSheetCount: number;
+  /** Basic pay earned before Sentire (PAY-144 opening). */
+  basicFromOpeningsCents: string;
+  totalBasicCents: string;
+  /** totalBasic / 12, rounded down to the centavo. */
+  thirteenthForYearCents: string;
+  /** 13th month already paid this year before Sentire (PAY-144 opening). */
+  alreadyPaidCents: string;
+  /** What this run pays: thirteenthForYear less alreadyPaid, never below zero. */
+  dueCents: string;
+}
+
+async function computeThirteenthMonth(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
   tenantId: string,
   employeeId: string,
   periodEnd: Date,
   openings: YtdOpening[] = [],
-): Promise<bigint> {
+): Promise<{ dueCents: bigint; breakdown: ThirteenthMonthBreakdown }> {
   const year = periodEnd.getUTCFullYear();
   const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
   const yearEnd   = new Date(`${year}-12-31T23:59:59.999Z`);
@@ -697,12 +715,25 @@ async function computeThirteenthMonthCents(
   });
 
   const opening = ytdOpeningTotals(openings);
-  const totalBasic = priorSheets.reduce(
-    (acc, s) => acc + s.basePayCents,
-    opening.basicPayEarnedCents,
-  );
-  const due = totalBasic / 12n - opening.thirteenthMonthPaidCents;
-  return due > 0n ? due : 0n;
+  const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n);
+  const totalBasic = fromRuns + opening.basicPayEarnedCents;
+  const forYear = totalBasic / 12n;
+  const raw = forYear - opening.thirteenthMonthPaidCents;
+  const due = raw > 0n ? raw : 0n;
+  return {
+    dueCents: due,
+    breakdown: {
+      year,
+      basis: "STRICT_DOLE",
+      basicFromRunsCents: fromRuns.toString(),
+      runSheetCount: priorSheets.length,
+      basicFromOpeningsCents: opening.basicPayEarnedCents.toString(),
+      totalBasicCents: totalBasic.toString(),
+      thirteenthForYearCents: forYear.toString(),
+      alreadyPaidCents: opening.thirteenthMonthPaidCents.toString(),
+      dueCents: due.toString(),
+    },
+  };
 }
 
 /**
@@ -837,13 +868,9 @@ async function computeFinalPayInputsForEmployee(
   const year = periodEnd.getUTCFullYear();
 
   // 1. Prorated 13th month (same helper as YEAR_END).
-  const proratedThirteenthMonthCents = await computeThirteenthMonthCents(
-    tx,
-    tenantId,
-    employee.id,
-    periodEnd,
-    openings,
-  );
+  const proratedThirteenthMonthCents = (
+    await computeThirteenthMonth(tx, tenantId, employee.id, periodEnd, openings)
+  ).dueCents;
 
   // 2. Leave cash-out: sum available balances for convertible leave types.
   const leaveBalances = await tx.leaveBalance.findMany({
@@ -1024,6 +1051,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         { start: input.cutoffStart ?? null, end: input.cutoffEnd ?? null },
       );
       if (!ci) continue;
+      let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
@@ -1031,13 +1059,11 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-144
         ci.ytdTaxableCents = (await priorYearTaxSums(tx, input.tenantId, e.id, input.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
-        ci.thirteenthMonthCents = await computeThirteenthMonthCents(
-          tx,
-          input.tenantId,
-          e.id,
-          input.periodEnd,
-          ytdOpenings,
-        );
+        {
+          const t = await computeThirteenthMonth(tx, input.tenantId, e.id, input.periodEnd, ytdOpenings);
+          ci.thirteenthMonthCents = t.dueCents;
+          thirteenthBreakdown = t.breakdown; // PAY-168
+        }
       }
 
       // FINAL_PAY: inject leave cash-out, prorated 13th, separation pay, CY priors.
@@ -1089,7 +1115,10 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       }));
 
       const result = computeSheet(ci);
-      sheets.push(resultToSheetCreate(input.tenantId, book.id, e.id, result));
+      sheets.push({
+        ...resultToSheetCreate(input.tenantId, book.id, e.id, result),
+        ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+      });
     }
 
     if (sheets.length > 0) {
@@ -1178,6 +1207,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         { start: book.cutoffStart, end: book.cutoffEnd },
       );
       if (!ci) continue;
+      let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
@@ -1185,13 +1215,11 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.ytdTaxableCents = (await priorYearTaxSums(tx, tenantId, e.id, book.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
-        ci.thirteenthMonthCents = await computeThirteenthMonthCents(
-          tx,
-          tenantId,
-          e.id,
-          book.periodEnd,
-          ytdOpenings,
-        );
+        {
+          const t = await computeThirteenthMonth(tx, tenantId, e.id, book.periodEnd, ytdOpenings);
+          ci.thirteenthMonthCents = t.dueCents;
+          thirteenthBreakdown = t.breakdown; // PAY-168
+        }
       }
 
       // FINAL_PAY: re-inject from stored separationReason.
@@ -1243,7 +1271,10 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       }));
 
       const result = computeSheet(ci);
-      sheets.push(resultToSheetCreate(tenantId, bookId, e.id, result));
+      sheets.push({
+        ...resultToSheetCreate(tenantId, bookId, e.id, result),
+        ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+      });
     }
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
@@ -1561,19 +1592,18 @@ export async function processRun(tenantId: string, bookId: string) {
         { start: book.cutoffStart, end: book.cutoffEnd },
       );
       if (!ci) continue;
+      let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
 
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
         ci.ytdTaxableCents = (await priorYearTaxSums(tx, tenantId, e.id, book.periodEnd)).taxable + ytdOpeningTotals(ytdOpenings).taxableCompensationCents; // PAY-154
-        ci.thirteenthMonthCents = await computeThirteenthMonthCents(
-          tx,
-          tenantId,
-          e.id,
-          book.periodEnd,
-          ytdOpenings,
-        );
+        {
+          const t = await computeThirteenthMonth(tx, tenantId, e.id, book.periodEnd, ytdOpenings);
+          ci.thirteenthMonthCents = t.dueCents;
+          thirteenthBreakdown = t.breakdown; // PAY-168
+        }
       }
 
       if (book.runType === "FINAL_PAY") {
@@ -1626,7 +1656,10 @@ export async function processRun(tenantId: string, bookId: string) {
       }));
 
       const result = computeSheet(ci);
-      sheets.push(resultToSheetCreate(tenantId, bookId, e.id, result));
+      sheets.push({
+        ...resultToSheetCreate(tenantId, bookId, e.id, result),
+        ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+      });
     }
 
     if (sheets.length > 0) {
