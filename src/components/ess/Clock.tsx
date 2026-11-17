@@ -18,7 +18,7 @@ export function ClockScreen({ param }: { param?: string | null }) {
   const now = useNow();
   const t = now ? fmtTime(now) : null;
 
-  const { step, shot, geoLabel, busy, err, videoRef, capture, retake, confirm } = useSelfieClock(
+  const { step, shot, geoLabel, busy, err, videoRef, capture, retake, confirm, needsConsent, agreeAndConfirm } = useSelfieClock(
     out,
     nav.setClockedIn,
   );
@@ -124,8 +124,8 @@ export function ClockScreen({ param }: { param?: string | null }) {
           <EBtn kind="ghost" icon="retake" onClick={retake}>
             Retake
           </EBtn>
-          <EBtn kind="primary" onClick={confirm} disabled={busy}>
-            {busy ? "Recording…" : "Confirm"}
+          <EBtn kind="primary" onClick={needsConsent ? agreeAndConfirm : confirm} disabled={busy}>
+            {busy ? "Recording…" : needsConsent ? "I agree, record it" : "Confirm"}
           </EBtn>
         </div>
       )}
