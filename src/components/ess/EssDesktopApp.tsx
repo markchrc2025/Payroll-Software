@@ -31,7 +31,7 @@ const D_NAV_ITEMS: { id: DPage; label: string; icon: EIconName }[] = [
 function DesktopClockModal({ out, onClose, onClocked }: { out: boolean; onClose: () => void; onClocked: (v: boolean) => void }) {
   const now = useNow();
   const t = now ? fmtTime(now) : null;
-  const { step, shot, geoLabel, busy, err, camReady, videoRef, capture, retake, confirm, needsConsent, agreeAndConfirm } =
+  const { step, shot, geoLabel, busy, err, videoRef, capture, retake, confirm, needsConsent, agreeAndConfirm } =
     useSelfieClock(out, onClocked);
   const stamp = shot?.at ?? t?.full ?? "";
 
