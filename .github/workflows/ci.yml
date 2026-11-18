@@ -34,7 +34,7 @@ concurrency:
 jobs:
   gates:
     name: gates
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sentire]
     timeout-minutes: 20
 
     # Pattern copied from db-restore-drill.yml (unit 0.1) rather than written
@@ -257,7 +257,7 @@ jobs:
   # ════════════════════════════════════════════════════════════════════════
   secrets:
     name: secret scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sentire]
     timeout-minutes: 10
 
     steps:
@@ -392,7 +392,7 @@ jobs:
   # it blocking once 0.7 is merged and this job has been green on main.
   integration:
     name: integration (advisory)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sentire]
     timeout-minutes: 20
     continue-on-error: true
     services:
