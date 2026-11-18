@@ -9,6 +9,8 @@
  *   E2  a second call changes nothing (already active with the QA PIN).
  *   E3  an employee active with some other PIN is refused, and reset: true
  *       re-invites them and sets the QA PIN; the old link is retired.
+ *       Times are UTC wall time like every Prisma DateTime (E1 checks the
+ *       link's expiry; CI caught it stored 8 hours off in a Manila process).
  *   E4  every derived PIN passes the app's own PIN rules (pinProblem), for
  *       many employee numbers and birth dates, and depends on the secret.
  *   E5  ess_request refuses sign-in, activation and credential routes and
@@ -93,9 +95,15 @@ describeDb("PAY-180 QA connector ESS logins (real Postgres)", () => {
     const out = await createEssLogin({ employeeNumber: NUM_A }, ENV, deps);
     expect(out).toMatchObject({ employeeNumber: NUM_A, status: "ACTIVE", created: true });
     expect(await status(A)).toBe("ACTIVE");
-    const used = await q(`SELECT "usedAt" FROM "EssInvite" WHERE "employeeId" = $1`, [A]);
+    const used = await q(
+      `SELECT "usedAt", extract(epoch FROM "expiresAt" - (now() AT TIME ZONE 'UTC')) AS secs FROM "EssInvite" WHERE "employeeId" = $1`,
+      [A],
+    );
     expect(used.rows.length).toBe(1);
     expect(used.rows[0].usedAt).not.toBeNull();
+    // Stored as UTC wall time like every Prisma DateTime: about an hour ahead, whatever the process time zone.
+    expect(Number(used.rows[0].secs)).toBeGreaterThan(3500);
+    expect(Number(used.rows[0].secs)).toBeLessThanOrEqual(3600);
     const pin = deriveQaPin(SECRET, NUM_A, new Date("1990-04-12"));
     expect(await essSignIn(NUM_A, pin, CODE)).toMatch(/.{20,}/);
     expect(JSON.stringify(out)).not.toContain(pin);
@@ -111,10 +119,10 @@ describeDb("PAY-180 QA connector ESS logins (real Postgres)", () => {
     await expect(createEssLogin({ employeeNumber: NUM_B }, ENV, deps)).rejects.toThrow(/reset: true/);
     expect(await status(B)).toBe("ACTIVE");
     // An unused link from earlier must not survive the reset.
-    await q(`INSERT INTO "EssInvite" (id, "tenantId", "employeeId", "tokenHash", "expiresAt") VALUES ($1, $2, $3, $4, now() + interval '1 day')`, [`old${sfx}`, T, B, `h${sfx}`]);
+    await q(`INSERT INTO "EssInvite" (id, "tenantId", "employeeId", "tokenHash", "expiresAt") VALUES ($1, $2, $3, $4, (now() AT TIME ZONE 'UTC') + interval '1 day')`, [`old${sfx}`, T, B, `h${sfx}`]);
     const out = await createEssLogin({ employeeNumber: NUM_B, reset: true }, ENV, deps);
     expect(out).toMatchObject({ status: "ACTIVE", created: true });
-    const old = await q(`SELECT "expiresAt" <= now() AS retired FROM "EssInvite" WHERE id = $1`, [`old${sfx}`]);
+    const old = await q(`SELECT "expiresAt" <= (now() AT TIME ZONE 'UTC') AS retired FROM "EssInvite" WHERE id = $1`, [`old${sfx}`]);
     expect(old.rows[0].retired).toBe(true);
     await expect(essSignIn(NUM_B, "482916", CODE)).rejects.toThrow();
   });

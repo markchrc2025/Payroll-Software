@@ -21,6 +21,7 @@ import { QA_COMPANY } from "./qa-company.mjs";
 
 const BASE = () => `http://127.0.0.1:${process.env.PORT || 10000}`;
 const INVITE_TTL_MS = 60 * 60 * 1000;
+const UTC_NOW = `(now() AT TIME ZONE 'UTC')`;
 
 // Same refusals as src/lib/ess-pin-policy.ts (pinProblem); the test checks
 // every derived PIN against the real function.
@@ -144,14 +145,20 @@ export async function createEssLogin({ employeeNumber, reset = false }, env = pr
   }
 
   const rawToken = randomBytes(32).toString("base64url");
+  // Prisma keeps DateTime columns as UTC wall time in "timestamp without time
+  // zone". A JS Date sent by pg lands as the process's local time instead
+  // (8 hours off in Manila), so every time here is computed in SQL as UTC.
   await tenantTx(env, async (db, tenantId) => {
-    const now = new Date();
-    await db.query(`UPDATE "EssInvite" SET "expiresAt" = $2 WHERE "employeeId" = $1 AND "usedAt" IS NULL AND "expiresAt" > $2`, [emp.id, now]);
     await db.query(
-      `INSERT INTO "EssInvite" (id, "tenantId", "employeeId", "tokenHash", "expiresAt", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-      [randomUUID(), tenantId, emp.id, createHash("sha256").update(rawToken).digest("hex"), new Date(now.getTime() + INVITE_TTL_MS), now],
+      `UPDATE "EssInvite" SET "expiresAt" = ${UTC_NOW} WHERE "employeeId" = $1 AND "usedAt" IS NULL AND "expiresAt" > ${UTC_NOW}`,
+      [emp.id],
     );
-    await db.query(`UPDATE "Employee" SET "essAccessStatus" = 'INVITED', "essInvitedAt" = $2 WHERE id = $1`, [emp.id, now]);
+    await db.query(
+      `INSERT INTO "EssInvite" (id, "tenantId", "employeeId", "tokenHash", "expiresAt", "createdAt")
+       VALUES ($1, $2, $3, $4, ${UTC_NOW} + make_interval(secs => $5), ${UTC_NOW})`,
+      [randomUUID(), tenantId, emp.id, createHash("sha256").update(rawToken).digest("hex"), INVITE_TTL_MS / 1000],
+    );
+    await db.query(`UPDATE "Employee" SET "essAccessStatus" = 'INVITED', "essInvitedAt" = ${UTC_NOW} WHERE id = $1`, [emp.id]);
   }, code);
 
   const act = await post("/api/ess/activate", { token: rawToken, pin });
