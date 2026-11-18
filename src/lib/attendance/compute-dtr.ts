@@ -336,9 +336,18 @@ export function computeDtrFields(
     Math.round((actualIn.getTime() - expectedIn.getTime() - gracePeriodMs) / 60_000),
   );
 
-  const undertimeMinutes = actualOut
+  // PAY-185: a day's late and undertime together never exceed the day's
+  // scheduled working minutes (shift span less the break). Leaving before the
+  // shift even started (or long before its end) used to count the whole gap
+  // to the shift end, so one day could dock more than a day's pay.
+  const scheduledWorkMinutes = Math.max(
+    0,
+    Math.round((expectedOut.getTime() - expectedIn.getTime()) / 60_000) - (shift.breakMinutes ?? 60),
+  );
+  const rawUndertime = actualOut
     ? Math.max(0, Math.round((expectedOut.getTime() - actualOut.getTime()) / 60_000))
     : 0;
+  const undertimeMinutes = Math.min(rawUndertime, Math.max(0, scheduledWorkMinutes - lateMinutes));
 
   return {
     dayStatus: "PRESENT",
