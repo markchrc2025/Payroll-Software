@@ -38,6 +38,23 @@ export interface SelfieClock {
   capture: () => void;
   retake: () => void;
   confirm: () => Promise<void>;
+  /** The server needs selfie and location consent before it records a punch. */
+  needsConsent: boolean;
+  /** Records selfie and location consent, then records the punch. */
+  agreeAndConfirm: () => Promise<void>;
+}
+
+/** Same version the Profile page records (DPA 10173 consent is versioned). */
+const CONSENT_POLICY_VERSION = "v2026-01";
+
+/** base64 of a Blob, for the no-object-storage fallback. */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -52,6 +69,7 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [camReady, setCamReady] = useState(false);
+  const [needsConsent, setNeedsConsent] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -94,7 +112,7 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
         setCamReady(true);
       } catch {
         setCamReady(false);
-        setErr("Camera unavailable. You can still record without a selfie.");
+        setErr("Camera unavailable. A selfie is required: allow camera access, then try again.");
       }
     })();
     return () => {
@@ -108,9 +126,8 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
     const video = videoRef.current;
     const at = fmtTime(new Date()).full;
     if (!video || !camReady) {
-      // No camera — proceed to review with no image (selfie optional).
-      setShot(null);
-      setStep("review");
+      // PAY-183: a selfie is required, so there is nothing to review.
+      setErr("Camera unavailable. A selfie is required: allow camera access, then try again.");
       return;
     }
     const size = Math.min(video.videoWidth, video.videoHeight) || 480;
@@ -139,10 +156,15 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
 
   async function confirm() {
     if (busy) return;
+    if (!shot) {
+      setErr("A selfie is required. Take your photo first.");
+      return;
+    }
     setBusy(true);
     setErr("");
     try {
       let selfieKey: string | null = null;
+      let selfieData: string | null = null;
 
       if (shot) {
         // Upload through our own server (same-origin, no bucket CORS) —
@@ -162,21 +184,43 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
             selfieKey = json.data?.storageKey ?? null;
           }
         } catch {
-          selfieKey = null; // storage not configured / upload failed — continue
+          selfieKey = null; // storage not configured / upload failed
         }
+        // PAY-183: no object storage (or the upload failed): send the photo
+        // with the punch, as the kiosk does, so it is never lost.
+        if (!selfieKey) selfieData = await blobToBase64(shot.blob);
       }
 
       // 3) record the punch
-      await essFetch<ApiOne<ClockResp>>("/api/ess/clock", {
+      const token = essToken();
+      const res = await fetch("/api/ess/clock", {
         method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           punchType: out ? "OUT" : "IN",
           selfieKey,
+          selfieData,
           latitude: coords?.lat ?? null,
           longitude: coords?.lng ?? null,
         }),
       });
+      const json = (await res.json().catch(() => null)) as
+        | (ApiOne<ClockResp> & { error?: string; details?: { code?: string } })
+        | null;
+      if (res.status === 401) {
+        window.location.replace("/ess/login");
+        return;
+      }
+      if (!res.ok) {
+        if (json?.details?.code === "CONSENT_REQUIRED") {
+          setNeedsConsent(true);
+          setErr("Before your first punch, agree to the use of your selfie and location for attendance.");
+          return;
+        }
+        throw new Error(json?.error || `Request failed (${res.status})`);
+      }
 
+      setNeedsConsent(false);
       onClocked(!out);
       setStep("done");
     } catch (e) {
@@ -186,5 +230,29 @@ export function useSelfieClock(out: boolean, onClocked: (next: boolean) => void)
     }
   }
 
-  return { step, shot, coords, geoLabel, busy, err, camReady, videoRef, capture, retake, confirm };
+  async function agreeAndConfirm() {
+    if (busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      for (const type of ["BIOMETRIC_SELFIE", "GEOLOCATION"] as const) {
+        await essFetch("/api/ess/consent", {
+          method: "POST",
+          body: JSON.stringify({ type, granted: true, policyVersion: CONSENT_POLICY_VERSION }),
+        });
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't record your consent. Please try again.");
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    setNeedsConsent(false);
+    await confirm();
+  }
+
+  return {
+    step, shot, coords, geoLabel, busy, err, camReady, videoRef, capture, retake, confirm,
+    needsConsent, agreeAndConfirm,
+  };
 }
