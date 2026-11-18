@@ -266,6 +266,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The filename guard below runs `node`. GitHub's ubuntu-latest image has
+      # Node preinstalled; the self-hosted runner image does not.
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       # Uses the repository's OWN installer, so CI runs the same pinned,
       # sha256-verified gitleaks 8.30.1 as the local hook. If the download or
       # the checksum fails, the script exits non-zero and this step goes red —
