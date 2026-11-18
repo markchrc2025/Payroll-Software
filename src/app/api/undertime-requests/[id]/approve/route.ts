@@ -35,7 +35,8 @@ export async function POST(
   const { id } = await params;
 
   const rawBody = await req.json().catch(() => null);
-  const { note } = bodySchema.parse(rawBody) ?? {};
+  // The Approve button posts with no body; read that as "no note" (PAY-182).
+  const { note } = bodySchema.parse(rawBody ?? undefined) ?? {};
 
   const result = await withTenant(auth.tenantId, async (tx) => {
     const utr = await tx.undertimeRequest.findFirst({
