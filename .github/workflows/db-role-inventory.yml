@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   inventory:
-    runs-on: [self-hosted, sentire]
+    runs-on: ubuntu-latest
     steps:
       - name: Guard — BACKUP_DATABASE_URL present
         env:
