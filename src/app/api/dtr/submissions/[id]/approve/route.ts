@@ -10,6 +10,11 @@
  *   2. No-workflow: a TIMESHEETS:APPROVE holder approves directly to
  *      MANAGER_APPROVED (matches the legacy single-action behaviour).
  *
+ * PAY-181: payroll reads DTR days, not submissions. Final approval therefore
+ * approves every PENDING, unlocked day of the employee inside the submission
+ * period, and no step can be approved while a day in the period still has a
+ * missing punch (the PAY-177 rule for single days).
+ *
  * Body (optional): { note?: string }
  */
 import { requireApprover } from "@/lib/approvals/second-party";
@@ -31,12 +36,13 @@ export async function POST(
   const { id } = await params;
 
   const rawBody = await req.json().catch(() => null);
-  const { note } = bodySchema.parse(rawBody) ?? {};
+  // The Approve button posts with no body; read that as "no note" (PAY-181).
+  const { note } = bodySchema.parse(rawBody ?? undefined) ?? {};
 
   const result = await withTenant(auth.tenantId, async (tx) => {
     const submission = await tx.dTRSubmission.findFirst({
       where: { id, tenantId: auth.tenantId },
-      select: { id: true, status: true, currentStepIndex: true, employeeId: true },
+      select: { id: true, status: true, currentStepIndex: true, employeeId: true, periodStart: true, periodEnd: true },
     });
     if (!submission) return "not_found" as const;
     if (submission.status === "MANAGER_APPROVED") return submission;
@@ -52,6 +58,26 @@ export async function POST(
 
     if (actorEmployee?.id && actorEmployee.id === submission.employeeId)
       return "self" as const;
+
+    const periodDays = {
+      tenantId: auth.tenantId,
+      employeeId: submission.employeeId,
+      date: { gte: submission.periodStart, lte: submission.periodEnd },
+    };
+    const missing = await tx.dTRRecord.findMany({
+      where: { ...periodDays, hasMissingPunch: true },
+      select: { date: true },
+      orderBy: { date: "asc" },
+    });
+    if (missing.length > 0)
+      return { missing: missing.map((m) => m.date.toISOString().slice(0, 10)) };
+
+    // Final approval: the period's days become APPROVED so payroll uses them.
+    const approveDays = () =>
+      tx.dTRRecord.updateMany({
+        where: { ...periodDays, approvalStatus: "PENDING", isLocked: false },
+        data: { approvalStatus: "APPROVED", approvedById: auth.userId ?? null, approvedAt: new Date() },
+      });
 
     const steps = await tx.approvalStep.findMany({
       where: { tenantId: auth.tenantId, module: "DTR", entityId: id },
@@ -94,6 +120,7 @@ export async function POST(
         });
       }
 
+      await approveDays();
       return tx.dTRSubmission.update({
         where: { id },
         data: {
@@ -105,6 +132,7 @@ export async function POST(
     }
 
     // ----- No-workflow mode (direct final approval) -----
+    await approveDays();
     return tx.dTRSubmission.update({
       where: { id },
       data: {
@@ -120,6 +148,12 @@ export async function POST(
     return forbidden("You cannot approve your own DTR submission");
   if (result === "returned")
     return err("Submission was returned and cannot be approved", 409);
+  if (typeof result === "object" && result && "missing" in result)
+    return err(
+      `These days have a missing punch: ${result.missing.join(", ")}. Enter the missing times first, then approve.`,
+      409,
+      { missingPunchDates: result.missing },
+    );
   if (result === "no_pending")
     return err("No pending approval step for this submission", 409);
   return ok(result, "DTR submission approved");
