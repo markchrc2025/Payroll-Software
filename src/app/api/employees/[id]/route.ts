@@ -239,7 +239,19 @@ export async function PUT(
     ipAddress: getClientIp(req),
   });
 
-  return ok(result.employee, "Employee updated");
+  // PAY-167: the saved record holds a BigInt (nontaxableBasicAmountCents) and
+  // the bcrypt hashes of the ESS and kiosk PINs. Answer with the same safe
+  // shape as GET: centavos as strings, hashes replaced by booleans.
+  const { essPin, kioskPinHash, ...saved } = result.employee;
+  return ok(
+    {
+      ...saved,
+      hasEssPin: essPin !== null,
+      hasKioskPin: kioskPinHash !== null,
+      nontaxableBasicAmountCents: centavosToJson(saved.nontaxableBasicAmountCents),
+    },
+    "Employee updated",
+  );
 }
 
 /** Convert empty / undefined strings to null for DB storage. */
