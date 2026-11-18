@@ -252,7 +252,7 @@ export default function EssClockPage() {
       setCapturedDataUrl(null);
       setPendingPunchType(null);
     }
-  }, [router, loadHistory]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, loadHistory]);
 
   return (
     <div className="p-4 lg:p-8 space-y-4 max-w-xl mx-auto">
