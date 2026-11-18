@@ -31,7 +31,7 @@ const D_NAV_ITEMS: { id: DPage; label: string; icon: EIconName }[] = [
 function DesktopClockModal({ out, onClose, onClocked }: { out: boolean; onClose: () => void; onClocked: (v: boolean) => void }) {
   const now = useNow();
   const t = now ? fmtTime(now) : null;
-  const { step, shot, geoLabel, busy, err, camReady, videoRef, capture, retake, confirm } =
+  const { step, shot, geoLabel, busy, err, videoRef, capture, retake, confirm, needsConsent, agreeAndConfirm } =
     useSelfieClock(out, onClocked);
   const stamp = shot?.at ?? t?.full ?? "";
 
@@ -106,7 +106,7 @@ function DesktopClockModal({ out, onClose, onClocked }: { out: boolean; onClose:
                   Cancel
                 </EBtn>
                 <EBtn kind="primary" icon="camera" onClick={capture}>
-                  {camReady ? "Capture" : "Continue"}
+                  Capture
                 </EBtn>
               </div>
             ) : (
@@ -114,8 +114,8 @@ function DesktopClockModal({ out, onClose, onClocked }: { out: boolean; onClose:
                 <EBtn kind="ghost" icon="retake" onClick={retake}>
                   Retake
                 </EBtn>
-                <EBtn kind="primary" onClick={confirm} disabled={busy}>
-                  {busy ? "Recording…" : "Confirm"}
+                <EBtn kind="primary" onClick={needsConsent ? agreeAndConfirm : confirm} disabled={busy}>
+                  {busy ? "Recording…" : needsConsent ? "I agree, record it" : "Confirm"}
                 </EBtn>
               </div>
             )}
