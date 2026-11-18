@@ -43,6 +43,7 @@ import {
   type ClockPunch,
   type EssProfile,
   type Announcement,
+  downloadPayslipPdf,
 } from "./api";
 
 // ---- shared helpers ----
@@ -444,7 +445,7 @@ export function PayslipDetail({ param }: { param?: string | null }) {
         <EIcon name="shield" size={14} /> {p.tenant.name} · {p.employee.employeeNumber}
       </p>
 
-      <EBtn kind="primary" icon="download" full onClick={() => printPayslip(p)}>
+      <EBtn kind="primary" icon="download" full onClick={() => param && downloadPayslipPdf(param).catch((e) => toast.error(e instanceof Error ? e.message : "Couldn't download your payslip."))}>
         Download payslip (PDF)
       </EBtn>
     </div>
@@ -452,40 +453,6 @@ export function PayslipDetail({ param }: { param?: string | null }) {
 }
 
 /** Open a clean, print-ready payslip in a new window (Save as PDF). */
-function printPayslip(p: PayslipDetailData) {
-  const w = window.open("", "_blank", "width=480,height=720");
-  if (!w) {
-    toast.error("Pop-up blocked. Allow pop-ups to download your payslip.");
-    return;
-  }
-  const row = (l: string, v: string) =>
-    `<tr><td style="padding:6px 0;color:#555">${l}</td><td style="padding:6px 0;text-align:right;font-weight:600">${v}</td></tr>`;
-  const P = (c: string) => "P" + (Number(c) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 });
-  w.document.write(`<!doctype html><html><head><title>Payslip ${p.period.start}</title>
-    <style>body{font-family:system-ui,sans-serif;color:#2A2420;padding:28px;max-width:520px;margin:auto}
-    h1{font-size:18px}h2{font-size:13px;text-transform:uppercase;color:#888;margin:18px 0 4px}
-    table{width:100%;border-collapse:collapse;font-size:13px}.net{font-size:24px;font-weight:700;margin:4px 0}</style></head>
-    <body onload="window.print()">
-    <h1>${p.tenant.name}</h1>
-    <div>${p.employee.name} · ${p.employee.employeeNumber}</div>
-    <div style="color:#888;font-size:13px">${p.period.start.slice(0, 10)} – ${p.period.end.slice(0, 10)}</div>
-    <h2>Net pay</h2><div class="net">${P(p.net.netPay)}</div>
-    <h2>Earnings</h2><table>
-      ${row("Basic pay", P(p.earnings.basePay))}
-      ${Number(p.earnings.otPay) ? row("Overtime", P(p.earnings.otPay)) : ""}
-      ${Number(p.earnings.taxableAllowances) ? row("Allowances", P(p.earnings.taxableAllowances)) : ""}
-      ${row("Gross", P(p.earnings.grossCompensation))}
-    </table>
-    <h2>Deductions</h2><table>
-      ${row("SSS", P(p.statutory.sssEe))}
-      ${row("PhilHealth", P(p.statutory.philhealthEe))}
-      ${row("Pag-IBIG", P(p.statutory.pagibigEe))}
-      ${row("Withholding tax", P(p.tax.withholdingTax))}
-      ${Number(p.loans.loanDeductions) ? row("Loans", P(p.loans.loanDeductions)) : ""}
-      ${Number(p.loans.loanDeferred) ? row("Loan deferred (carried forward)", P(p.loans.loanDeferred)) : ""}
-    </table></body></html>`);
-  w.document.close();
-}
 
 // ============================ LEAVE ============================
 export function LeaveScreen() {
