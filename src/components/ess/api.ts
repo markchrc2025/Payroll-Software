@@ -239,3 +239,32 @@ export interface EssProfile {
   bank: { name: string | null; accountMasked: string | null };
   government: { SSS: string | null; PHILHEALTH: string | null; PAGIBIG: string | null; TIN: string | null; GSIS: string | null };
 }
+
+/**
+ * PAY-188: saves the signed-in employee's payslip as the real PDF (the same
+ * document HR downloads and the stored copy), not a hand-built print pop-up.
+ */
+export async function downloadPayslipPdf(bookId: string): Promise<void> {
+  const token = essToken();
+  const res = await fetch(`/api/ess/payslips/${encodeURIComponent(bookId)}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (res.status === 401) {
+    if (typeof window !== "undefined") window.location.replace("/ess/login");
+    throw new EssUnauthorized("Session expired");
+  }
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    throw new Error((json && (json.error || json.message)) || `Download failed (${res.status})`);
+  }
+  const name =
+    /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `Payslip_${bookId}.pdf`;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
