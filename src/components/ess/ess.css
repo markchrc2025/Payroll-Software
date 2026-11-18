@@ -2222,3 +2222,141 @@
 @media (min-width: 1024px) {
   .d-app { background: var(--e-bg); }
 }
+
+/* ---- PAY-191: quick links, requests and the request sheet (Frappe HR mobile pattern) ---- */
+.e-links {
+  display: flex;
+  flex-direction: column;
+  background: var(--e-paper);
+  border: 1px solid var(--e-line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.e-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--e-line);
+  background: transparent;
+  color: var(--e-ink);
+  font: inherit;
+  font-size: 14.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.e-link:last-child { border-bottom: 0; }
+.e-link > span { flex: 1; }
+.e-link > svg:first-child { color: var(--e-muted); }
+.e-link > svg:last-child { color: var(--e-muted2); }
+.e-link:active { background: var(--e-bg); }
+
+.e-reqpanel { display: flex; flex-direction: column; gap: 10px; }
+.e-reqtabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--e-paper);
+  border: 1px solid var(--e-line);
+  border-radius: 12px;
+}
+.e-reqtabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 0;
+  background: transparent;
+  color: var(--e-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.e-reqtabs button.is-on { background: var(--e-acc-soft); color: var(--e-ink); }
+.e-reqlist {
+  display: flex;
+  flex-direction: column;
+  background: var(--e-paper);
+  border: 1px solid var(--e-line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.e-req {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--e-line);
+  background: transparent;
+  color: var(--e-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.e-req:last-child { border-bottom: 0; }
+.e-req:active { background: var(--e-bg); }
+.e-req-ic {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--e-bg);
+  color: var(--e-muted);
+  flex: none;
+}
+.e-req-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.e-req-t b { font-size: 14.5px; font-weight: 600; }
+.e-req-t i { font-style: normal; font-size: 12.5px; color: var(--e-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.e-req > svg:last-child { color: var(--e-muted2); flex: none; }
+
+.e-sheet-ov {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(42 36 32 / 0.42);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: e-fade 0.16s ease-out;
+}
+.e-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 82vh;
+  overflow: auto;
+  background: var(--e-paper);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(18px + env(safe-area-inset-bottom));
+  animation: e-up 0.2s ease-out;
+}
+.e-sheet-grip { display: block; width: 40px; height: 4px; margin: 0 auto 12px; border-radius: 4px; background: var(--e-line); }
+.e-sheet-h { margin: 0 0 12px; text-align: center; font-size: 17px; font-weight: 700; }
+.e-sheet-dl { margin: 0; display: flex; flex-direction: column; border-top: 1px solid var(--e-line); }
+.e-sheet-dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--e-line);
+}
+.e-sheet-dl > div.is-long { flex-direction: column; align-items: flex-start; gap: 6px; }
+.e-sheet-dl dt { color: var(--e-muted); font-size: 13.5px; }
+.e-sheet-dl dd { margin: 0; font-size: 14.5px; font-weight: 600; text-align: right; }
+.e-sheet-dl > div.is-long dd { text-align: left; font-weight: 500; }
+.e-sheet-close {
+  width: 100%;
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid var(--e-line);
+  border-radius: 12px;
+  background: var(--e-paper);
+  color: var(--e-ink);
+  font: inherit;
+  font-weight: 600;
+}
+@keyframes e-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+@keyframes e-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .e-sheet, .e-sheet-ov { animation: none; } }
