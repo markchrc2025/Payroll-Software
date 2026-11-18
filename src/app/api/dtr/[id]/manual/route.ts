@@ -18,7 +18,7 @@ import {
   type AttendancePunch,
   type ShiftContext,
 } from "@/lib/attendance/compute-dtr";
-import { resolveTimezone } from "@/lib/time/zone";
+import { resolveTimezone, atLocalWallClock } from "@/lib/time/zone";
 
 export async function PATCH(
   req: NextRequest,
@@ -95,8 +95,6 @@ export async function PATCH(
     const newManualTimeOut =
       field === "manualTimeOut" ? newValue : record.manualTimeOut;
 
-    const effectiveTimeIn = newManualTimeIn ?? record.officialTimeIn ?? null;
-    const effectiveTimeOut = newManualTimeOut ?? record.officialTimeOut ?? null;
 
     // Recompute DTR metrics from the corrected effective times so the override
     // actually flows into payroll (worked/late/undertime/NSD).
@@ -121,6 +119,27 @@ export async function PATCH(
       },
       { timezone: empTz?.timezone ?? null },
     );
+    // PAY-176: punch-based DTRs never fill officialTimeIn/Out, so the side
+    // that was not overridden falls back to the day's actual punches (first
+    // IN, last OUT in the local day), the same punches recomputeDayDtr reads.
+    const dayStart = atLocalWallClock(record.date, "00:00", tz);
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+    const dayPunches = await tx.attendanceLog.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        employeeId: record.employeeId,
+        punchedAt: { gte: dayStart, lt: dayEnd },
+      },
+      select: { punchType: true, punchedAt: true },
+      orderBy: { punchedAt: "asc" },
+    });
+    const firstIn = dayPunches.find((x) => x.punchType === "IN")?.punchedAt ?? null;
+    const lastOut =
+      [...dayPunches].reverse().find((x) => x.punchType === "OUT")?.punchedAt ?? null;
+
+    const effectiveTimeIn = newManualTimeIn ?? record.officialTimeIn ?? firstIn;
+    const effectiveTimeOut = newManualTimeOut ?? record.officialTimeOut ?? lastOut;
+
     const nsdWindow = {
       startMin: parseWindowMinutes(tenant?.nsdWindowStart) ?? 22 * 60,
       endMin: parseWindowMinutes(tenant?.nsdWindowEnd) ?? 6 * 60,
@@ -167,6 +186,8 @@ export async function PATCH(
         manualUpdatedAt: new Date(),
         effectiveTimeIn,
         effectiveTimeOut,
+        dayStatus: computed.dayStatus,
+        hasMissingPunch: computed.missingOut ?? false,
         workedMinutes: computed.workedMinutes,
         lateMinutes: computed.lateMinutes,
         undertimeMinutes: computed.undertimeMinutes,
