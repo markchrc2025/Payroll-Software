@@ -20,6 +20,7 @@ import { NexusMark } from "@/components/sentire-login/glyphs";
 import { EIcon } from "@/components/ess/icons";
 import { ESS_PASSKEYS_ENABLED } from "@/lib/ess-passkeys";
 import "@/components/ess/ess.css";
+import { companyCodeFromHost } from "@/lib/ess/company-code-from-host";
 
 const IDENTITY_KEY = "ess_identity";
 const TOKEN_KEY = "ess_token";
@@ -118,8 +119,8 @@ function EssLoginContent() {
     if (tenant) {
       setCompanyCode(tenant.toUpperCase().replace(/[^A-Z0-9]/g, ""));
     } else {
-      const parts = window.location.hostname.split(".");
-      if (parts.length >= 3) setCompanyCode(parts[0].toUpperCase().replace(/[^A-Z0-9]/g, ""));
+      const fromHost = companyCodeFromHost(window.location.hostname, process.env.NEXT_PUBLIC_APP_URL);
+      if (fromHost) setCompanyCode(fromHost);
     }
   }, [sp]);
 
