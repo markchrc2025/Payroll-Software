@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   migrate:
-    runs-on: [self-hosted, sentire]
+    runs-on: ubuntu-latest
     env:
       DIRECT_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
     steps:
