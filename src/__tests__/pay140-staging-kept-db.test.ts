@@ -29,7 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import { markStagingReset, TOOLS } from "../../scripts/staging/qa-mcp.mjs";
-import { EMPLOYEES, RUNS, SHIFTS, seedScenario } from "../../scripts/staging/seed-data.mjs";
+import { EMPLOYEES, LEAVE_TYPES, RUNS, SHIFTS, seedScenario } from "../../scripts/staging/seed-data.mjs";
 import { QA_COMPANY } from "../../scripts/staging/qa-company.mjs";
 
 const DB = process.env.TEST_DATABASE_URL;
@@ -76,6 +76,7 @@ describe("PAY-140 K2 the seed on a kept database", () => {
       if (path === "/api/branches") return [{ id: "b1", name: "QA Head Office" }];
       if (path === "/api/departments") return [{ id: "d1", name: "QA Test Data" }];
       if (path === "/api/shifts") return SHIFTS.map((s, i) => ({ id: `s${i}`, code: s.body.code }));
+      if (path.startsWith("/api/leave-types")) return { items: LEAVE_TYPES.map((l, i) => ({ id: `lt${i}`, code: l.code })) };
       if (path.startsWith("/api/employees")) return employees;
       if (path.startsWith("/api/payroll/runs?")) return runs;
       const m = path.match(/^\/api\/payroll\/runs\/(.+)$/);
@@ -96,6 +97,19 @@ describe("PAY-140 K2 the seed on a kept database", () => {
     const { api, posts } = fakeApi();
     await seedScenario(api, () => {});
     expect(attendancePosts(posts)).toHaveLength(totalAttendance);
+  });
+  it("K2b (PAY-180, T1) a database with no leave types gets SIL, VL, SL and LWOP; a kept one gets none again", async () => {
+    const posted: { path: string; body: { code?: string } }[] = [];
+    const empty = {
+      must: async (method: string, path: string, body?: { code?: string }) => {
+        if (method === "GET" && path.startsWith("/api/leave-types")) return { items: [] };
+        if (method === "POST" && path === "/api/leave-types") posted.push({ path, body: body ?? {} });
+        return fakeApi().api.must(method, path, body as { lastName?: string });
+      },
+    };
+    await seedScenario({ ...empty, request: empty.must }, () => {}, { restoreAttendance: false });
+    expect(posted.map((p) => p.body.code)).toEqual(["SIL", "VL", "SL", "LWOP"]);
+    expect(LEAVE_TYPES.find((l) => l.code === "SIL")).toMatchObject({ isPaid: true, accrualFrequency: "ANNUALLY", accrualAmount: 5 });
   });
   it("a missing employee is created with its attendance even when keeping", async () => {
     const { api, posts } = fakeApi("QA-05");

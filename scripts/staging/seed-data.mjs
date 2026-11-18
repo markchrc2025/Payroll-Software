@@ -36,6 +36,15 @@ export const EMPLOYEES = [
                  { periodStart: "2026-11-16", periodEnd: "2026-11-30", daysWorked: "11", unpaidLeaveDays: "0" }] },
 ];
 
+// PAY-180: leave types, so leave can be filed in ESS on staging. Service
+// Incentive Leave is the statutory 5 days a year (Labor Code Art. 95).
+export const LEAVE_TYPES = [
+  { code: "SIL", name: "Service Incentive Leave", isPaid: true, isConvertibleToCash: true, accrualFrequency: "ANNUALLY", accrualAmount: 5 },
+  { code: "VL", name: "Vacation Leave", isPaid: true, accrualFrequency: "MONTHLY", accrualAmount: 1.25 },
+  { code: "SL", name: "Sick Leave", isPaid: true, accrualFrequency: "MONTHLY", accrualAmount: 1.25 },
+  { code: "LWOP", name: "Leave Without Pay", isPaid: false, accrualFrequency: "MONTHLY", accrualAmount: 0 },
+];
+
 export const RUNS = [
   { periodStart: "2026-11-01", periodEnd: "2026-11-15", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 1-15 Nov" },
   { periodStart: "2026-11-16", periodEnd: "2026-11-30", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 16-30 Nov (contributions)" },
@@ -76,6 +85,11 @@ export async function seedScenario(api, log = console.log, { restoreAttendance =
     shiftIds[s.key] = (found ?? (await api.must("POST", "/api/shifts", s.body))).id;
   }
 
+  const leaveTypes = await api.must("GET", "/api/leave-types?limit=100");
+  for (const lt of LEAVE_TYPES) {
+    if (!pick(leaveTypes, (x) => x.code === lt.code)) await api.must("POST", "/api/leave-types", lt);
+  }
+
   const existing = await api.must("GET", "/api/employees?limit=500");
   const employeeIds = {};
   for (const e of EMPLOYEES) {
@@ -104,7 +118,7 @@ export async function seedScenario(api, log = console.log, { restoreAttendance =
       }
     }
   }
-  log(`[staging] seed: branch, department, 2 schedules, ${EMPLOYEES.length} employees with attendance`);
+  log(`[staging] seed: branch, department, 2 schedules, ${LEAVE_TYPES.length} leave types, ${EMPLOYEES.length} employees with attendance`);
 
   const runList = await api.must("GET", "/api/payroll/runs?limit=100");
   const runs = [];
