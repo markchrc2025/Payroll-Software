@@ -16,6 +16,7 @@ import { expandHolidays } from "@/lib/holidays/recurrence";
 import { holidayAppliesToBranch } from "@/lib/holidays/scope";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
+import { localDay } from "@/lib/time/zone";
 
 type Weekday = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 const DOW_TO_WEEKDAY: Weekday[] = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
@@ -174,12 +175,16 @@ export type DtrAggregateResult =
  */
 export async function aggregateApprovedDtr(
   tx: TenantTx,
-  args: { tenantId: string; employeeId: string; periodStartDate: Date; periodEndDate: Date },
+  args: { tenantId: string; employeeId: string; periodStartDate: Date; periodEndDate: Date; now?: Date },
 ): Promise<DtrAggregateResult> {
   const { tenantId, employeeId, periodStartDate, periodEndDate } = args;
     const employee = await tx.employee.findFirst({
       where: { id: employeeId, tenantId: tenantId },
-      select: { id: true, attendanceExempt: true, branchId: true },
+      select: {
+        id: true, attendanceExempt: true, branchId: true,
+        hireDate: true, lastWorkingDate: true, resignationDate: true,
+        tenant: { select: { timezone: true } },
+      },
     });
     if (!employee) return { status: "NOT_FOUND" } as const;
 
@@ -300,6 +305,7 @@ export async function aggregateApprovedDtr(
     })();
 
     const acc = emptyAcc();
+    let absentNoRecordDays = 0;
 
     if (employee.attendanceExempt) {
       // Calendar-day scan: attendance-exempt employees (executives, C-level) are
@@ -441,13 +447,42 @@ export async function aggregateApprovedDtr(
         continue;
       }
     }
+
+    // PAY-173: a scheduled workday with no DTR at all (no punches, no leave,
+    // nothing filed) is an absence. It used to be skipped, so a monthly-paid
+    // employee was paid for it. Only plain workdays count: rest days and
+    // holidays keep their own rules, days before hire or after the last
+    // working day are handled by proration, and days still to come are not
+    // absences yet. A day with any DTR row (even unapproved) is not counted.
+    const anyDays = await tx.dTRRecord.findMany({
+      where: { tenantId, employeeId, date: { gte: periodStartDate, lte: periodEndDate } },
+      select: { date: true },
+    });
+    const hasRow = new Set(anyDays.map((r) => dateKey(new Date(r.date))));
+    const today = dateKey(localDay(args.now ?? new Date(), employee.tenant?.timezone ?? "Asia/Manila"));
+    const firstDay = dateKey(employee.hireDate);
+    const separation = employee.lastWorkingDate ?? employee.resignationDate ?? null;
+    const lastDay = separation ? dateKey(separation) : null;
+    for (
+      let d = new Date(Date.UTC(periodStartDate.getUTCFullYear(), periodStartDate.getUTCMonth(), periodStartDate.getUTCDate()));
+      d <= periodEndDate;
+      d = new Date(d.getTime() + 86_400_000)
+    ) {
+      const k = dateKey(d);
+      if (k >= today || k < firstDay || (lastDay !== null && k > lastDay)) continue;
+      if (!workDays.includes(DOW_TO_WEEKDAY[d.getUTCDay()])) continue;
+      if (holidayMap.has(k) || hasRow.has(k)) continue;
+      acc.unpaidLeaveDays++;
+      absentNoRecordDays++;
+    }
     } // end non-exempt branch
 
     const data = toPeriodInputData(
       acc,
       employee.attendanceExempt
       ? `Attendance-exempt: calendar-day scan, ${records.length} leave record(s) applied`
-      : `Aggregated from ${records.length} DTR records`,
+      : `Aggregated from ${records.length} DTR records` +
+        (absentNoRecordDays > 0 ? `; ${absentNoRecordDays} scheduled workday(s) with no DTR counted as absent` : ""),
     );
   return { status: "OK", data, recordCount: records.length, attendanceExempt: employee.attendanceExempt };
 }

@@ -261,6 +261,17 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
        VALUES ($1, $2, $3, '2026-11-05T00:00:00.000Z', 'ABSENT', 0, 'PENDING', now())`,
       [`${A}-2026-11-05`, T, A],
     );
+    // PAY-173: the other workdays of the cutoff (26 Oct to 10 Nov) are
+    // present. Without rows they would now count as absences (a workday with
+    // no DTR), which is not what R9 checks.
+    for (const day of ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30",
+                       "2026-11-02", "2026-11-06", "2026-11-09", "2026-11-10"]) {
+      await q(
+        `INSERT INTO "DTRRecord" (id, "tenantId", "employeeId", date, "dayStatus", "workedMinutes", "approvalStatus", "updatedAt")
+         VALUES ($1, $2, $3, $4, 'PRESENT', 480, 'APPROVED', now())`,
+        [`${A}-${day}`, T, A, `${day}T00:00:00.000Z`],
+      );
+    }
     // The company does not require a DTR submission for this check.
     await q(
       `INSERT INTO "DTRApprovalConfig" (id, "tenantId", "requiresEmployeeSubmission", "updatedAt") VALUES ($1, $2, false, now())`,
