@@ -427,6 +427,11 @@ async function employedPeriodDaysFor(
   return n;
 }
 
+/** The last instant of a date stored as UTC midnight. */
+function endOfDayUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
 async function buildComputeInputForEmployee(
   tx: TenantTx,
   tenantId: string,
@@ -473,8 +478,10 @@ async function buildComputeInputForEmployee(
       },
       include: { payComponent: true },
     }),
+    // PAY-174: a loan is deducted only from runs whose period has reached its
+    // start date (a loan starting 1 Dec is not deducted in October).
     tx.loan.findMany({
-      where: { employeeId: employee.id, status: "ACTIVE" },
+      where: { employeeId: employee.id, status: "ACTIVE", startDate: { lte: endOfDayUtc(periodEnd) } },
     }),
   ]);
 
