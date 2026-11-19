@@ -194,6 +194,8 @@ function toComputeComponent(
     taxability: c.taxability,
     amountCents: assn.amountCents,
     deMinimisCode: c.deMinimisCode,
+    isBonus: c.isBonus, // PAY-171
+    isOneOff: c.isOneOff, // PAY-171
   };
 }
 
@@ -836,6 +838,27 @@ async function applyYtdOpenings(
   return openings;
 }
 
+/**
+ * PAY-171: a REGULAR run that pays a bonus (or a 13th month) needs what is
+ * left of the year's 90,000 and the year's taxable pay so far, to tax the
+ * excess at the employee's rate for the year.
+ */
+async function applyBenefitsContext(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employeeId: string,
+  periodEnd: Date,
+  ci: ComputeInput,
+): Promise<void> {
+  const paysBenefits = ci.payComponents.some((c) => c.isBonus || c.isOneOff) || (ci.thirteenthMonthInRunCents ?? 0n) > 0n;
+  if (!paysBenefits || (ci.runType ?? "REGULAR") !== "REGULAR") return;
+  const year = periodEnd.getUTCFullYear();
+  const openings = await loadYtdOpenings(tx, tenantId, employeeId, year);
+  ci.benefitsExemptUsedCents = await benefitsExemptUsedCents(tx, tenantId, employeeId, year, openings);
+  ci.ytdTaxableCents =
+    (await priorYearTaxSums(tx, tenantId, employeeId, periodEnd)).taxable + ytdOpeningTotals(openings).taxableCompensationCents;
+}
+
 // ---------------------------------------------------------------------------
 // Private: separation pay helpers (FINAL_PAY runs)
 // ---------------------------------------------------------------------------
@@ -1105,6 +1128,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-171
 
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
@@ -1270,6 +1294,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, tenantId, e.id, book.periodEnd, ci); // PAY-171
 
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
@@ -1664,6 +1689,7 @@ export async function processRun(tenantId: string, bookId: string) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, tenantId, e.id, book.periodEnd, ci); // PAY-171
 
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144

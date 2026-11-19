@@ -2326,6 +2326,17 @@ model PayComponent {
   includeInPhilHealthBase Boolean @default(false)
   includeInPagibigBase    Boolean @default(false)
 
+  /// PAY-171 (Mark, 17 and 19 Nov 2026): a bonus (14th month, 15th month,
+  /// incentives, any company bonus). Counts with the 13th month toward the
+  /// year's 90,000 exemption for "13th month and other benefits"; the excess
+  /// is taxed at the employee's rate for the year, not through the period's
+  /// table. Nothing is seeded: each company ticks its own components.
+  isBonus Boolean @default(false)
+  /// PAY-171: one-off taxable pay (leave conversion, a one-time incentive that
+  /// is not a bonus): taxed at the employee's rate for the year instead of
+  /// through the period's table, as on Mark's Smart payslips (finding 2).
+  isOneOff Boolean @default(false)
+
   isActive Boolean @default(true)
 
   createdAt DateTime  @default(now())

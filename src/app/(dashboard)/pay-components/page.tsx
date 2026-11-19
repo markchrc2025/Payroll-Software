@@ -80,6 +80,8 @@ const EMPTY_FORM = {
   includeInSssBase: false,
   includeInPhilHealthBase: false,
   includeInPagibigBase: false,
+  isBonus: false,
+  isOneOff: false,
   isActive: true,
 };
 
@@ -94,6 +96,8 @@ type PayComponent = {
   includeInSssBase: boolean;
   includeInPhilHealthBase: boolean;
   includeInPagibigBase: boolean;
+  isBonus: boolean;
+  isOneOff: boolean;
   isActive: boolean;
 };
 
@@ -135,6 +139,8 @@ export default function PayComponentsPage() {
       includeInSssBase: row.includeInSssBase,
       includeInPhilHealthBase: row.includeInPhilHealthBase,
       includeInPagibigBase: row.includeInPagibigBase,
+      isBonus: row.isBonus,
+      isOneOff: row.isOneOff,
       isActive: row.isActive,
     });
     setSheetOpen(true);
@@ -379,6 +385,36 @@ export default function PayComponentsPage() {
                   <Label htmlFor={key} className="font-normal cursor-pointer">{label}</Label>
                 </div>
               ))}
+            </div>
+
+            {/* PAY-171: bonus tick box */}
+            <div className="space-y-1 rounded-md border p-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="pc-isBonus"
+                  checked={form.isBonus}
+                  onCheckedChange={(v) => setForm({ ...form, isBonus: !!v })}
+                />
+                <Label htmlFor="pc-isBonus" className="font-normal cursor-pointer">Bonus</Label>
+              </div>
+              <p className="text-[12px] text-muted-foreground">
+                For 14th month, 15th month, incentives and other bonuses. Tax-free together with the 13th month up to
+                ₱90,000 a year; any excess is taxed at the employee&apos;s rate for the year. The Taxability above is not
+                used for a bonus.
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <Checkbox
+                  id="pc-isOneOff"
+                  checked={form.isOneOff}
+                  disabled={form.isBonus}
+                  onCheckedChange={(v) => setForm({ ...form, isOneOff: !!v })}
+                />
+                <Label htmlFor="pc-isOneOff" className="font-normal cursor-pointer">One-off pay</Label>
+              </div>
+              <p className="text-[12px] text-muted-foreground">
+                For taxable one-time pay that is not a bonus, such as leave conversion. Taxed at the employee&apos;s
+                rate for the year instead of through the payroll period&apos;s tax table.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">

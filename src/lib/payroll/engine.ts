@@ -50,7 +50,7 @@ import {
   lookupBIR,
 } from "@/lib/statutory/compute";
 import { sssCompensationCents } from "./sss-basis";
-import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax } from "./annual-tax";
+import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax, projectedAnnualTaxableCents } from "./annual-tax";
 import type {
   AppliedAdjustment,
   AppliedExpenseClaim,
@@ -353,6 +353,11 @@ interface ComponentBuckets {
   nontaxableCompensationCents: bigint;
   /// Reimbursements — added BACK after taxable computation (Step 10).
   nontaxableAdditionsCents: bigint;
+  /// PAY-171: bonuses (13th month and other benefits), whatever their
+  /// taxability; split into exempt and taxable later against the 90,000.
+  benefitsCents: bigint;
+  /// PAY-171: taxable one-off pay, inside taxableAllowancesCents, taxed at the year's rate.
+  oneOffCents: bigint;
   applied: AppliedPayComponent[];
 }
 
@@ -363,6 +368,8 @@ function classifyComponents(
   let taxableAllowancesCents = 0n;
   let nontaxableCompensationCents = 0n;
   let nontaxableAdditionsCents = 0n;
+  let benefitsCents = 0n;
+  let oneOffCents = 0n;
   const applied: AppliedPayComponent[] = [];
 
   for (const c of components) {
@@ -376,6 +383,14 @@ function classifyComponents(
     } else if (c.kind === "DEDUCTION") {
       // D3 SCOPE: deductions other than statutory + loans are deferred.
       // Skip silently but record on payslip so caller can audit.
+    } else if (c.isBonus) {
+      // PAY-171: portions are set once the year's 90,000 is applied.
+      benefitsCents += c.amountCents;
+    } else if (c.isOneOff) {
+      // PAY-171: taxable in full, taxed at the employee's rate for the year.
+      taxableAllowancesCents += c.amountCents;
+      oneOffCents += c.amountCents;
+      taxablePortion = c.amountCents;
     } else {
       // ALLOWANCE / BONUS / COMMISSION / OTHER_EARNING.
       switch (c.taxability) {
@@ -429,8 +444,44 @@ function classifyComponents(
     taxableAllowancesCents,
     nontaxableCompensationCents,
     nontaxableAdditionsCents,
+    benefitsCents,
+    oneOffCents,
     applied,
   };
+}
+
+/**
+ * PAY-171: the year's 90,000 for 13th month and other benefits, applied to
+ * this run's bonuses in the order they are listed; fills each bonus line's
+ * tax-free and taxable portions.
+ */
+function splitBenefits(
+  applied: AppliedPayComponent[],
+  bonusCodes: Set<string>,
+  extraBenefitsCents: bigint,
+  capLeftCents: bigint,
+): { totalCents: bigint; exemptCents: bigint; excessCents: bigint } {
+  let left = capLeftCents;
+  let total = 0n;
+  let exempt = 0n;
+  // A 13th month paid in this run uses the cap first (it is the statutory benefit).
+  if (extraBenefitsCents > 0n) {
+    const e = extraBenefitsCents < left ? extraBenefitsCents : left;
+    left -= e;
+    exempt += e;
+    total += extraBenefitsCents;
+  }
+  for (const a of applied) {
+    if (!bonusCodes.has(a.id)) continue;
+    const amount = BigInt(a.amountCents);
+    const e = amount < left ? amount : left;
+    left -= e;
+    exempt += e;
+    total += amount;
+    a.nonTaxablePortionCents = e.toString();
+    a.taxablePortionCents = (amount - e).toString();
+  }
+  return { totalCents: total, exemptCents: exempt, excessCents: total - exempt };
 }
 
 // ---------------------------------------------------------------------------
@@ -781,10 +832,15 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     hazardPayCents;
 
   // Prorated 13th month: non-taxable up to what is left of the ₱90,000.
+  // PAY-171: bonuses paid in the final pay share the same 90,000 (13th month
+  // first); the excess is taxable and settled by the separation annualization.
   const p13th = fp.proratedThirteenthMonthCents;
   const benefitsCap = remainingBenefitsCap(input.benefitsExemptUsedCents); // PAY-144
-  const nontaxable13Month = p13th < benefitsCap ? p13th : benefitsCap;
-  const taxable13thExcess = clampNonNegative(p13th - nontaxable13Month);
+  const fpBonusIds = new Set(input.payComponents.filter((c) => c.isBonus && c.kind !== "REIMBURSEMENT" && c.kind !== "DEDUCTION").map((c) => c.id));
+  const fpBenefits = splitBenefits(buckets.applied, fpBonusIds, p13th, benefitsCap);
+  const fpBonusCents = fpBenefits.totalCents - p13th;
+  const nontaxable13Month = fpBenefits.exemptCents;
+  const taxable13thExcess = fpBenefits.excessCents;
 
   // PAY-153: the prorated 13th month is PAID in the final pay, so all of it
   // (exempt part and taxable excess) is in gross and therefore in net pay.
@@ -795,7 +851,8 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     leaveCashOutCents +
     separationPayTaxable +
     adjs.taxableAdditionsCents +
-    p13th;
+    p13th +
+    fpBonusCents; // PAY-171
 
   // -- Step 6: non-taxable buckets ------------------------------------------
   const isMwe = checkMwe(input, dailyRateCents);
@@ -814,7 +871,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   // them back out; non-taxable separation pay and reimbursements were never in
   // gross. Zero contributory gross → skip statutory (both EE and ER).
   const contributoryGrossCents =
-    grossCompensationCents - leaveCashOutCents - separationPayTaxable - p13th;
+    grossCompensationCents - leaveCashOutCents - separationPayTaxable - p13th - fpBonusCents;
   const deducted =
     contributoryGrossCents <= 0n
       ? false
@@ -1094,6 +1151,12 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     deMinimisCeilingByCode,
   );
 
+  // PAY-171: bonuses (and a 13th month paid in this regular run) against what
+  // is left of the year's 90,000.
+  const bonusIds = new Set(input.payComponents.filter((c) => c.isBonus && c.kind !== "REIMBURSEMENT" && c.kind !== "DEDUCTION").map((c) => c.id));
+  const capLeftBefore = remainingBenefitsCap(input.benefitsExemptUsedCents);
+  const benefits = splitBenefits(buckets.applied, bonusIds, input.thirteenthMonthInRunCents ?? 0n, capLeftBefore);
+
   // Subtotal of base + premiums + late deduction.
   const earningsSubtotal =
     basePayCents -
@@ -1109,6 +1172,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     earningsSubtotal +
     buckets.taxableAllowancesCents +
     buckets.nontaxableCompensationCents +
+    benefits.totalCents + // PAY-171
     adjs.taxableAdditionsCents +
     claims.taxableAdditionsCents +
     claims.nontaxableCompensationCents;
@@ -1180,8 +1244,8 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     claims.nontaxableCompensationCents +
     mandatoryEeContribs;
 
-  // 13th-month / benefits residual — deferred to year-end phase.
-  const nontaxable13MonthAndBenefitsCents = 0n;
+  // PAY-171: bonuses and a 13th month paid in this run, within the year's 90,000.
+  const nontaxable13MonthAndBenefitsCents = benefits.exemptCents;
 
   // -- Step 7: gross taxable income -----------------------------------------
   const grossTaxableIncomeCents = clampNonNegative(
@@ -1198,20 +1262,42 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // WHT. The MWE exemption only zeroes GTI for the exempt components; if GTI
   // is still > 0 after the §6 non-taxable buckets are applied (because of
   // taxable pay components), WHT is due on that residual taxable income.
+  // PAY-171: the bonus excess over the 90,000 is supplementary pay. Regular
+  // pay goes through the period's table; the excess is taxed at the
+  // employee's rate for the year (the year's tax with it, less without it, on
+  // the year's projected regular taxable pay), as on Mark's Smart payslips.
+  const supplementaryCents = benefits.excessCents + buckets.oneOffCents;
+  const regularTaxableCents = clampNonNegative(grossTaxableIncomeCents - supplementaryCents);
   let withholdingTaxCents = 0n;
   let birBracket: StatutoryBreakdown["bir"] = null;
-  if (grossTaxableIncomeCents > 0n) {
+  if (regularTaxableCents > 0n) {
     // PAY-134: BI_WEEKLY has no BIR column and is annualized (annual-tax.ts).
     const bir = periodWithholdingTax(
       rules.bir,
       period.cycle,
-      grossTaxableIncomeCents,
+      regularTaxableCents,
     );
     withholdingTaxCents = bir.tax;
     birBracket = {
       bracketFloorCents: bir.bracket.floor.toString(),
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
       bracketPlusRate: bir.bracket.plusRate,
+    };
+  }
+  let benefitsBreakdown: StatutoryBreakdown["benefits"];
+  if (benefits.totalCents > 0n || buckets.oneOffCents > 0n) {
+    const projected = projectedAnnualTaxableCents(period.cycle, period.start, input.ytdTaxableCents ?? 0n, regularTaxableCents);
+    // MWE: only the excess and one-off pay are taxable here, the same way.
+    const excessTax = marginalAnnualTaxCents(rules.bir, projected, supplementaryCents);
+    withholdingTaxCents += excessTax;
+    benefitsBreakdown = {
+      oneOffCents: buckets.oneOffCents.toString(),
+      totalCents: benefits.totalCents.toString(),
+      exemptCents: benefits.exemptCents.toString(),
+      excessCents: benefits.excessCents.toString(),
+      capLeftBeforeCents: capLeftBefore.toString(),
+      excessTaxCents: excessTax.toString(),
+      projectedAnnualTaxableCents: projected.toString(),
     };
   }
 
@@ -1262,6 +1348,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
       ecCents: sssEcCents.toString(),
     },
     bir: birBracket,
+    ...(benefitsBreakdown ? { benefits: benefitsBreakdown } : {}),
     ...(deducted && input.sssBasis
       ? {
           sssBasis: {

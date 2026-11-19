@@ -28,6 +28,8 @@ export const createPayComponentSchema = z
     includeInSssBase: z.boolean().default(false),
     includeInPhilHealthBase: z.boolean().default(false),
     includeInPagibigBase: z.boolean().default(false),
+    isBonus: z.boolean().default(false), // PAY-171
+    isOneOff: z.boolean().default(false), // PAY-171
     isActive: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
@@ -52,6 +54,8 @@ export const updatePayComponentSchema = z
     includeInSssBase: z.boolean().optional(),
     includeInPhilHealthBase: z.boolean().optional(),
     includeInPagibigBase: z.boolean().optional(),
+    isBonus: z.boolean().optional(), // PAY-171
+    isOneOff: z.boolean().optional(), // PAY-171
     isActive: z.boolean().optional(),
   });
 
