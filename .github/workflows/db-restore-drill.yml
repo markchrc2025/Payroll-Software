@@ -39,7 +39,7 @@ env:
 
 jobs:
   restore-drill:
-    runs-on: [self-hosted, sentire]
+    runs-on: ubuntu-latest
     services:
       scratch:
         image: postgres:18
