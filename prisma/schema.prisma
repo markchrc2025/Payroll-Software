@@ -2551,6 +2551,10 @@ model PayrollBook {
   /// created for. Empty = every employee the run type selects.
   targetEmployeeIds String[] @default([])
 
+  /// PAY-171 (Mark, 17 Nov 2026): this REGULAR run also pays the 13th month on
+  /// the regular payslip (HR ticks it, for example for the 15 December payday).
+  includeThirteenthMonth Boolean @default(false)
+
   /// PAY-172: employees who need a time clock and lacked an approved DTR for
   /// days of this run's cutoff, as [{ employeeId, days, held, notifiedAt? }].
   /// held = left out of the run (strict DTR policy); otherwise the days were

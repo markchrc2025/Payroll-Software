@@ -37,6 +37,8 @@ export const createPayrollRunSchema = z
      * WHT is still applied.  Stored on the book so recompute preserves it.
      */
     skipStatutory: z.boolean().default(false),
+    /** PAY-171: a REGULAR run that also pays the 13th month on its payslips. */
+    includeThirteenthMonth: z.boolean().default(false),
     /**
      * Required for FINAL_PAY runs. Determines DOLE separation pay entitlement
      * and taxability of the payment.
@@ -44,6 +46,13 @@ export const createPayrollRunSchema = z
     separationReason: z.nativeEnum(SeparationReason).optional(),
   })
   .superRefine((v, ctx) => {
+    if (v.includeThirteenthMonth && v.runType !== "REGULAR") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["includeThirteenthMonth"],
+        message: "Only a regular run can include the 13th month; a Year-End run pays it on its own.",
+      });
+    }
     if (v.payday && v.runType !== "REGULAR") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

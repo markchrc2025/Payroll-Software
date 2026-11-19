@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
       employeeIds: d.employeeIds,
       skipStatutory: d.skipStatutory,
       separationReason: d.separationReason,
+      includeThirteenthMonth: d.includeThirteenthMonth, // PAY-171
     });
 
     // Fire-and-forget enqueue — computation happens asynchronously

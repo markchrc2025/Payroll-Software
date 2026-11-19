@@ -95,6 +95,7 @@ const EMPTY_FORM = {
   runType: "REGULAR",
   notes: "",
   skipStatutory: false,
+  includeThirteenthMonth: false, // PAY-171
 };
 
 export default function PayrollPage() {
@@ -167,6 +168,7 @@ export default function PayrollPage() {
           runType: form.runType,
           notes: form.notes.trim() || null,
           skipStatutory: form.skipStatutory,
+          ...(isRegular ? { includeThirteenthMonth: form.includeThirteenthMonth } : {}),
         }),
       });
       const json = await res.json();
@@ -448,6 +450,26 @@ export default function PayrollPage() {
                   />
                 </div>
               </div>
+            )}
+            {/* PAY-171: the 13th month on this regular run's payslips */}
+            {isRegular && (
+              <label htmlFor="pr-13th" className="flex items-start gap-2 rounded-md border p-3 text-sm cursor-pointer">
+                <input
+                  id="pr-13th"
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={form.includeThirteenthMonth}
+                  onChange={(e) => setForm((f) => ({ ...f, includeThirteenthMonth: e.target.checked }))}
+                />
+                <span>
+                  <span className="font-medium">Include 13th month pay</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Pays the 13th month on this run&apos;s payslips (due on or before 24 December): 1/12 of the
+                    year&apos;s basic pay, counting this run&apos;s basic for the rest of the year, less what was
+                    already paid. A later run or the Year-End run settles any difference.
+                  </span>
+                </span>
+              </label>
             )}
             <div className="space-y-1.5">
               <Label htmlFor="pr-notes">Notes</Label>

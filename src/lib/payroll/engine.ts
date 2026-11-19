@@ -437,6 +437,7 @@ function classifyComponents(
       amountCents: c.amountCents.toString(),
       nonTaxablePortionCents: nonTaxablePortion.toString(),
       taxablePortionCents: taxablePortion.toString(),
+      ...(c.isBonus ? { isBonus: true } : c.isOneOff ? { isOneOff: true } : {}),
     });
   }
 

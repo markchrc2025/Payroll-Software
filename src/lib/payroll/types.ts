@@ -354,6 +354,9 @@ export interface AppliedPayComponent {
   nonTaxablePortionCents: string;
   /// For DE_MINIMIS: any excess pushed to taxable.
   taxablePortionCents: string;
+  /// PAY-171: a bonus (13th month and other benefits) or one-off pay line.
+  isBonus?: boolean;
+  isOneOff?: boolean;
 }
 
 export interface AppliedLoanPayment {
