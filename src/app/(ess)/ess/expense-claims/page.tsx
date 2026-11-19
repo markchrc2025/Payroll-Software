@@ -44,6 +44,7 @@ interface ExpenseClaim {
   claimDate: string;
   status: ClaimStatus;
   rejectionReason: string | null;
+  receiptKey: string | null;
   createdAt: string;
 }
 
@@ -113,6 +114,8 @@ export default function EssExpenseClaimsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  // PAY-190: the receipt (OR) photo or PDF, uploaded before the claim is filed.
+  const [receipt, setReceipt] = useState<File | null>(null);
 
   function authHeaders() {
     const token = localStorage.getItem("ess_token");
@@ -157,6 +160,21 @@ export default function EssExpenseClaimsPage() {
     // Convert pesos → centavos (integer)
     const amountCents = Math.round(amountPesos * 100);
 
+    // Step 0 (PAY-190): upload the receipt, if one is attached
+    let receiptKey: string | undefined;
+    if (receipt) {
+      const fd = new FormData();
+      fd.append("file", receipt);
+      const upRes = await fetch("/api/ess/expense-claims/upload", { method: "POST", headers: authHeaders(), body: fd });
+      const upData = await upRes.json().catch(() => null);
+      if (!upRes.ok) {
+        toast.error(upData?.error ?? "The receipt could not be uploaded.");
+        setSaving(false);
+        return;
+      }
+      receiptKey = upData?.data?.storageKey;
+    }
+
     // Step 1: Create claim (as DRAFT)
     const createRes = await fetch("/api/ess/expense-claims", {
       method: "POST",
@@ -166,6 +184,7 @@ export default function EssExpenseClaimsPage() {
         description: form.description.trim(),
         amountCents,
         claimDate: form.claimDate,
+        ...(receiptKey ? { receiptKey } : {}),
       }),
     });
     const createData = await createRes.json();
@@ -193,7 +212,18 @@ export default function EssExpenseClaimsPage() {
     toast.success("Expense claim submitted for Finance review!");
     setSheetOpen(false);
     setForm({ ...EMPTY_FORM, claimDate: todayIso() });
+    setReceipt(null);
     fetchClaims();
+  }
+
+  async function viewReceipt(id: string) {
+    const res = await fetch(`/api/ess/expense-claims/${id}/receipt`, { headers: authHeaders() });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.data?.url) {
+      toast.error(data?.error ?? "The receipt could not be opened.");
+      return;
+    }
+    window.open(data.data.url, "_blank", "noopener");
   }
 
   const canSubmitForm =
@@ -216,6 +246,7 @@ export default function EssExpenseClaimsPage() {
           size="sm"
           onClick={() => {
             setForm({ ...EMPTY_FORM, claimDate: todayIso() });
+            setReceipt(null);
             setSheetOpen(true);
           }}
         >
@@ -240,13 +271,14 @@ export default function EssExpenseClaimsPage() {
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Receipt</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {claims.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center text-muted-foreground py-10"
                   >
                     No expense claims yet
@@ -278,6 +310,15 @@ export default function EssExpenseClaimsPage() {
                     {fmtPeso(c.amountCents)}
                   </TableCell>
                   <TableCell>{statusBadge(c.status)}</TableCell>
+                  <TableCell>
+                    {c.receiptKey ? (
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => viewReceipt(c.id)}>
+                        View
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">None</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -287,8 +328,8 @@ export default function EssExpenseClaimsPage() {
 
       {/* Note about receipts */}
       <p className="text-xs text-muted-foreground px-1">
-        Please attach your official receipts (ORs) when submitting claims to Finance.
-        Claims without valid ORs may be rejected.
+        Attach a photo or PDF of your official receipt (OR) when you file a claim.
+        Claims without a valid OR may be rejected.
       </p>
 
       {/* File Claim Sheet */}
@@ -367,6 +408,15 @@ export default function EssExpenseClaimsPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="claim-receipt">Official receipt (photo or PDF, up to 10 MB)</Label>
+              <Input
+                id="claim-receipt"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
               />
             </div>
           </div>
