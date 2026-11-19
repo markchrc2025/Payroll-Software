@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { StagingApi } from "./api-client.mjs";
 import { QA_COMPANY } from "./qa-company.mjs";
 import { seedScenario, waitForRun } from "./seed-data.mjs";
+import { createEssClient, createEssLogin } from "./ess-login.mjs";
 
 export const SERVER_INFO = { name: "sentire-payroll-qa", version: "1.0.0" };
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -61,6 +62,9 @@ async function employeeNames(api) {
 
 const str = (description) => ({ type: "string", description });
 const date = (description) => ({ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description });
+
+let essClient;
+const essRequest = (a) => (essClient ??= createEssClient())(a);
 
 export const TOOLS = [
   {
@@ -188,6 +192,36 @@ export const TOOLS = [
     description: "Ask for a clean staging database at the next start. With a kept database (STAGING_PG_DATA_DIR) this marks it for wiping; then restart the Payroll Staging app (Sentire Dokploy connector, restart_app) and it comes back freshly seeded. Nothing is deleted until that restart.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => markStagingReset(process.env),
+  },
+  {
+    name: "create_ess_login",
+    description: "STAGING ONLY. Give a QA employee a working ESS (employee self-service) login, so ess_request can act as them. Access is granted and the one-time link is claimed through the app's own /api/ess/activate, so the PIN passes the app's real PIN rules. The PIN is derived inside the connector and never shown. If the employee already has ESS with a PIN this tool did not set, pass reset: true to re-invite them.",
+    inputSchema: {
+      type: "object",
+      required: ["employeeNumber"],
+      properties: {
+        employeeNumber: str("e.g. QA-001 (see list_employees)"),
+        reset: { type: "boolean", description: "Re-invite an employee whose ESS PIN this tool did not set" },
+      },
+      additionalProperties: false,
+    },
+    run: (_api, a) => createEssLogin(a),
+  },
+  {
+    name: "ess_request",
+    description: "STAGING ONLY. Call the ESS API (/api/ess/...) as a QA employee, after create_ess_login. Signs in through /api/ess/auth inside the connector; the session never leaves it. Sign-in, activation and PIN or password routes are refused. Use for clock-in and out, DTR, leave, OT and undertime filings, expense claims, payslips, profile.",
+    inputSchema: {
+      type: "object",
+      required: ["employeeNumber", "method", "path"],
+      properties: {
+        employeeNumber: str("e.g. QA-001"),
+        method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        path: { type: "string", pattern: "^/api/ess/", description: "e.g. /api/ess/dtr?from=2026-11-01&to=2026-11-15" },
+        body: { type: "object", description: "JSON body for POST/PUT/PATCH" },
+      },
+      additionalProperties: false,
+    },
+    run: (_api, a) => essRequest(a),
   },
   {
     name: "api_request",
