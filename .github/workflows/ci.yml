@@ -151,10 +151,11 @@ jobs:
 
       # ── Gate 1: the test suite ──────────────────────────────────────────
       - name: Test suite (vitest)
-        # --maxWorkers=2: the real-Postgres test files share one database and assume at most two
-        # run at once (the 2-CPU runners they were written on). Public-repository runners have
-        # 4 CPUs, and four files at once delete each other's rows.
-        run: npx vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile=vitest-results.json
+        # --no-file-parallelism: the real-Postgres test files share one database, and on the faster
+        # GitHub-hosted runners two files at once still race in their cleanup (a PayrollSheet row
+        # appears between deleting the PayrollBook and the Employee). One file at a time removes
+        # that; the whole suite takes under a minute here.
+        run: npx vitest run --no-file-parallelism --reporter=default --reporter=json --outputFile=vitest-results.json
 
       - name: ASSERT zero skipped tests
         run: |
