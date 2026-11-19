@@ -29,6 +29,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ProcessingRunPanel } from "@/components/payroll/ProcessingRunPanel";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,7 +132,7 @@ type PayrollRun = {
   cutoffEnd?: string | null;
   cycle: string;
   runType: string;
-  status: "DRAFT" | "FINALIZED" | "CANCELLED";
+  status: "DRAFT" | "PROCESSING" | "FINALIZED" | "CANCELLED";
   notes: string | null;
   createdAt: string;
   sheets: PayrollSheet[];
@@ -153,6 +154,7 @@ type PayrollAdjustment = {
 
 const STATUS_VARIANT: Record<string, "secondary" | "default" | "destructive"> = {
   DRAFT: "secondary",
+  PROCESSING: "secondary",
   FINALIZED: "default",
   CANCELLED: "destructive",
 };
@@ -429,6 +431,13 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
     const json = await res.json();
     if (res.ok) setRun(json.data ?? json);
     setIsLoading(false);
+  }, [id]);
+
+  // PAY-192: refresh without the loading skeleton while a run is computing.
+  const refreshRunQuietly = useCallback(async () => {
+    const res = await fetch(`/api/payroll/runs/${id}`);
+    const json = await res.json().catch(() => null);
+    if (res.ok && json) setRun(json.data ?? json);
   }, [id]);
 
   const fetchAdjustments = useCallback(async () => {
@@ -733,6 +742,10 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           </>
         )}
       </div>
+
+      {run.status === "PROCESSING" && (
+        <ProcessingRunPanel runId={run.id} createdAt={run.createdAt} onRefresh={refreshRunQuietly} />
+      )}
 
       {/* Employee sheets table */}
       <section className="space-y-3">
