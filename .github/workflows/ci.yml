@@ -151,7 +151,10 @@ jobs:
 
       # ── Gate 1: the test suite ──────────────────────────────────────────
       - name: Test suite (vitest)
-        run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-results.json
+        # --maxWorkers=2: the real-Postgres test files share one database and assume at most two
+        # run at once (the 2-CPU runners they were written on). Public-repository runners have
+        # 4 CPUs, and four files at once delete each other's rows.
+        run: npx vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile=vitest-results.json
 
       - name: ASSERT zero skipped tests
         run: |
