@@ -102,7 +102,7 @@ export class AnnualizationBookNotFoundError extends Error {
   constructor() { super("PayrollBook not found"); }
 }
 export class AnnualizationNotYearEndError extends Error {
-  constructor() { super("PayrollBook is not a YEAR_END run"); }
+  constructor() { super("Only a 13th month run or the year's last regular run can be annualized"); }
 }
 /**
  * PAY-155 (Mark, 17 Nov 2026 Q1b): a finalized run is a sealed record and is
@@ -300,6 +300,46 @@ export async function staleAnnualizations(
 }
 
 /**
+ * PAY-171 (Mark, 17 Nov 2026: the year-end adjustment goes on the last
+ * regular payroll of the year, as its own line): a REGULAR run whose pay
+ * period is the year's last (the next period would start in the next year).
+ */
+export function isLastRegularOfYear(book: { runType: string; periodEnd: Date }): boolean {
+  if (book.runType !== "REGULAR") return false;
+  const next = new Date(book.periodEnd.getTime() + 86_400_000);
+  return next.getUTCFullYear() > book.periodEnd.getUTCFullYear();
+}
+
+/** Runs that carry the year-end true-up: a 13th month run, or the year's last regular run. */
+export function annualizes(book: { runType: string; periodEnd: Date }): boolean {
+  return book.runType === "YEAR_END" || isLastRegularOfYear(book);
+}
+
+/**
+ * Write the true-up onto every sheet of the book, inside the caller's
+ * transaction (runAnnualization, and the last regular run's compute).
+ */
+export async function annualizeInTx(
+  tx: Tx,
+  tenantId: string,
+  book: { id: string; periodEnd: Date },
+): Promise<PlannedSheet[]> {
+  const planned = await planAnnualization(tx, tenantId, book);
+  for (const p of planned) {
+    if (p.skipped) continue;
+    await tx.payrollSheet.update({
+      where: { id: p.sheetId },
+      data: {
+        withholdingTaxCents: p.baseWht + p.result!.trueUpCents,
+        netPayCents:         p.baseNetPay - p.result!.trueUpCents,
+        annualizationData:   p.annData as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      },
+    });
+  }
+  return planned;
+}
+
+/**
  * Run year-end annualization for all employees in a DRAFT YEAR_END book.
  *
  * PAY-155 (Mark, 17 Nov 2026): a finalized run is a sealed record, so the
@@ -324,26 +364,14 @@ export async function runAnnualization(
     await tx.$queryRaw`SELECT id FROM "PayrollBook" WHERE id = ${bookId} AND "tenantId" = ${tenantId} FOR UPDATE`;
     const book = await tx.payrollBook.findFirst({
       where: { id: bookId, tenantId },
-      select: { id: true, runType: true, status: true, periodEnd: true },
+      select: { id: true, runType: true, status: true, periodEnd: true, periodStart: true },
     });
     if (!book) throw new AnnualizationBookNotFoundError();
-    if (book.runType !== "YEAR_END") throw new AnnualizationNotYearEndError();
+    if (!annualizes(book)) throw new AnnualizationNotYearEndError();
     if (book.status === "FINALIZED") throw new AnnualizationSealedError();
     if (book.status !== "DRAFT") throw new AnnualizationNotDraftError(book.status);
 
-    const planned = await planAnnualization(tx, tenantId, book);
-
-    for (const p of planned) {
-      if (p.skipped) continue;
-      await tx.payrollSheet.update({
-        where: { id: p.sheetId },
-        data: {
-          withholdingTaxCents: p.baseWht + p.result!.trueUpCents,
-          netPayCents:         p.baseNetPay - p.result!.trueUpCents,
-          annualizationData:   p.annData as unknown as import("@prisma/client").Prisma.InputJsonValue,
-        },
-      });
-    }
+    const planned = await annualizeInTx(tx, tenantId, book);
 
     const processed       = planned.filter((p) => !p.skipped).map((p) => p.result!.trueUpCents);
     return {

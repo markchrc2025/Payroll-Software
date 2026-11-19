@@ -50,7 +50,7 @@ import {
   lookupBIR,
 } from "@/lib/statutory/compute";
 import { sssCompensationCents } from "./sss-basis";
-import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax, projectedAnnualTaxableCents } from "./annual-tax";
+import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax, periodsElapsedBefore, projectedAnnualTaxableCents } from "./annual-tax";
 import type {
   AppliedAdjustment,
   AppliedExpenseClaim,
@@ -437,6 +437,7 @@ function classifyComponents(
       amountCents: c.amountCents.toString(),
       nonTaxablePortionCents: nonTaxablePortion.toString(),
       taxablePortionCents: taxablePortion.toString(),
+      ...(c.isBonus ? { isBonus: true } : c.isOneOff ? { isOneOff: true } : {}),
     });
   }
 
@@ -1283,6 +1284,30 @@ export function computeSheet(input: ComputeInput): ComputeResult {
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
       bracketPlusRate: bir.bracket.plusRate,
     };
+  }
+  // PAY-171: cumulative average method (RR 11-2018), REGULAR runs with a
+  // table column for the cycle.
+  const ca = input.cumulativeAverage;
+  const caTable = rules.bir.frequencies[period.cycle as keyof typeof rules.bir.frequencies];
+  if (ca && caTable && !isMwe) {
+    const level = BigInt(caTable.find((b) => b.plusRate > 0)?.floor ?? 0);
+    const basicBelow = basePayCents - lateUndertimeDeductionCents < level;
+    if (ca.usedThisYear || (basicBelow && regularTaxableCents > level)) {
+      const n = periodsElapsedBefore(period.cycle, period.start) + 1n;
+      const prior = ca.priorTaxableCents > 0n ? ca.priorTaxableCents : 0n;
+      const average = (prior + regularTaxableCents) / n;
+      const onAverage = lookupBIR(rules.bir, period.cycle as Parameters<typeof lookupBIR>[1], average);
+      const due = onAverage.tax * n - ca.priorWithheldCents;
+      withholdingTaxCents = due > 0n ? due : 0n;
+      birBracket = {
+        bracketFloorCents: onAverage.bracket.floor.toString(),
+        bracketFixedTaxCents: onAverage.bracket.fixedTax.toString(),
+        bracketPlusRate: onAverage.bracket.plusRate,
+        method: "CUMULATIVE_AVERAGE",
+        averageTaxableCents: average.toString(),
+        periodsSoFar: Number(n),
+      };
+    }
   }
   let benefitsBreakdown: StatutoryBreakdown["benefits"];
   if (benefits.totalCents > 0n || buckets.oneOffCents > 0n) {

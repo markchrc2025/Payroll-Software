@@ -257,6 +257,15 @@ export interface ComputeInput {
    */
   thirteenthMonthInRunCents?: bigint;
   /**
+   * PAY-171 (RR 11-2018 cumulative average method; Mark's Smart payslips,
+   * finding 5): REGULAR runs. When the period's basic is below the table's
+   * taxable level but other pay lifts the period above it, or the method was
+   * already used this year, the period's tax is the table on the year's
+   * average taxable pay per period, times the periods so far, less tax
+   * already withheld this year.
+   */
+  cumulativeAverage?: { priorTaxableCents: bigint; priorWithheldCents: bigint; usedThisYear: boolean };
+  /**
    * PAY-144: how much of the 90,000 exemption for 13th month and other
    * benefits is already used this year (year-to-date openings plus earlier
    * finalized runs). YEAR_END and FINAL_PAY exempt only what is left.
@@ -354,6 +363,9 @@ export interface AppliedPayComponent {
   nonTaxablePortionCents: string;
   /// For DE_MINIMIS: any excess pushed to taxable.
   taxablePortionCents: string;
+  /// PAY-171: a bonus (13th month and other benefits) or one-off pay line.
+  isBonus?: boolean;
+  isOneOff?: boolean;
 }
 
 export interface AppliedLoanPayment {
@@ -415,6 +427,10 @@ export interface StatutoryBreakdown {
     bracketFloorCents: string;
     bracketFixedTaxCents: string;
     bracketPlusRate: number;
+    /// PAY-171: "CUMULATIVE_AVERAGE" when that method set the period's tax.
+    method?: "CUMULATIVE_AVERAGE";
+    averageTaxableCents?: string;
+    periodsSoFar?: number;
   } | null;
   /// PAY-171: bonuses (and a 13th month paid in this regular run): what was
   /// tax-free within what is left of the year's 90,000, and the tax on the
