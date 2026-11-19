@@ -45,6 +45,32 @@ export const LEAVE_TYPES = [
   { code: "LWOP", name: "Leave Without Pay", isPaid: false, accrualFrequency: "MONTHLY", accrualAmount: 0 },
 ];
 
+// PAY-180: the 2026 Philippine national holidays, from Proclamation No. 1006
+// (3 Sep 2025), Section 1 A, B and D. The special working day (25 Feb, EDSA)
+// is an ordinary workday for pay and is not loaded. Eid'l Fitr and Eid'l Adha
+// come by separate proclamations (Section 2) and are not loaded here.
+const P1006 = "Proclamation No. 1006 (2025)";
+export const HOLIDAYS_2026 = [
+  ["New Year's Day", "LEGAL", "2026-01-01"],
+  ["Maundy Thursday", "LEGAL", "2026-04-02"],
+  ["Good Friday", "LEGAL", "2026-04-03"],
+  ["Araw ng Kagitingan", "LEGAL", "2026-04-09"],
+  ["Labor Day", "LEGAL", "2026-05-01"],
+  ["Independence Day", "LEGAL", "2026-06-12"],
+  ["National Heroes Day", "LEGAL", "2026-08-31"],
+  ["Bonifacio Day", "LEGAL", "2026-11-30"],
+  ["Christmas Day", "LEGAL", "2026-12-25"],
+  ["Rizal Day", "LEGAL", "2026-12-30"],
+  ["Ninoy Aquino Day", "SPECIAL_NON_WORKING", "2026-08-21"],
+  ["All Saints' Day", "SPECIAL_NON_WORKING", "2026-11-01"],
+  ["Feast of the Immaculate Conception of Mary", "SPECIAL_NON_WORKING", "2026-12-08"],
+  ["Last Day of the Year", "SPECIAL_NON_WORKING", "2026-12-31"],
+  ["Chinese New Year", "SPECIAL_NON_WORKING", "2026-02-17"],
+  ["Black Saturday", "SPECIAL_NON_WORKING", "2026-04-04"],
+  ["All Souls' Day", "SPECIAL_NON_WORKING", "2026-11-02"],
+  ["Christmas Eve", "SPECIAL_NON_WORKING", "2026-12-24"],
+].map(([name, category, date]) => ({ name, category, date, proclamationReference: P1006 }));
+
 export const RUNS = [
   { periodStart: "2026-11-01", periodEnd: "2026-11-15", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 1-15 Nov" },
   { periodStart: "2026-11-16", periodEnd: "2026-11-30", cycle: "SEMI_MONTHLY", runType: "REGULAR", notes: "QA seed: semi-monthly 16-30 Nov (contributions)" },
@@ -90,6 +116,15 @@ export async function seedScenario(api, log = console.log, { restoreAttendance =
     if (!pick(leaveTypes, (x) => x.code === lt.code)) await api.must("POST", "/api/leave-types", lt);
   }
 
+  // Only the holidays not yet on file (same date and name), so a kept
+  // database gets no writes on restart.
+  const onFile = (await api.must("GET", "/api/holidays?year=2026")) ?? [];
+  const have = new Set(
+    onFile.map((h) => `${String(h.date).slice(0, 10)}|${String(h.name).toLowerCase()}`),
+  );
+  const missingHolidays = HOLIDAYS_2026.filter((h) => !have.has(`${h.date}|${h.name.toLowerCase()}`));
+  if (missingHolidays.length > 0) await api.must("POST", "/api/holidays/bulk", { rows: missingHolidays });
+
   const existing = await api.must("GET", "/api/employees?limit=500");
   const employeeIds = {};
   for (const e of EMPLOYEES) {
@@ -118,7 +153,7 @@ export async function seedScenario(api, log = console.log, { restoreAttendance =
       }
     }
   }
-  log(`[staging] seed: branch, department, 2 schedules, ${LEAVE_TYPES.length} leave types, ${EMPLOYEES.length} employees with attendance`);
+  log(`[staging] seed: branch, department, 2 schedules, ${LEAVE_TYPES.length} leave types, ${HOLIDAYS_2026.length} holidays, ${EMPLOYEES.length} employees with attendance`);
 
   const runList = await api.must("GET", "/api/payroll/runs?limit=100");
   const runs = [];
