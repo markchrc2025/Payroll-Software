@@ -15,8 +15,13 @@ permissions:
 
 jobs:
   inventory:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sentire]
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 18 client
+        run: bash scripts/db/install-ci-db-tools.sh
+
       - name: Guard — BACKUP_DATABASE_URL present
         env:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}

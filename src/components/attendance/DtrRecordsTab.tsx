@@ -57,6 +57,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { BulkApproveDaysDialog } from "@/components/attendance/BulkApproveDaysDialog";
 
 // =============================================================================
 // Types
@@ -1050,6 +1051,10 @@ export function DtrRecordsTab() {
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
+
+        {/* PAY-178: approve pending days in a date range, including days from
+            the biometric import and the kiosk, which have no ESS submission. */}
+        <BulkApproveDaysDialog defaultFrom={periodStart || undefined} defaultTo={periodEnd || undefined} onApproved={fetchData} />
 
         {/* PAY-121 (ruling B6): no one submits a DTR for another employee.
             Employees submit their own in ESS; HR approves or returns here. */}
