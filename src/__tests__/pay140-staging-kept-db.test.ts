@@ -29,7 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import { markStagingReset, TOOLS } from "../../scripts/staging/qa-mcp.mjs";
-import { EMPLOYEES, LEAVE_TYPES, RUNS, SHIFTS, seedScenario } from "../../scripts/staging/seed-data.mjs";
+import { EMPLOYEES, HOLIDAYS_2026, LEAVE_TYPES, RUNS, SHIFTS, seedScenario } from "../../scripts/staging/seed-data.mjs";
 import { QA_COMPANY } from "../../scripts/staging/qa-company.mjs";
 
 const DB = process.env.TEST_DATABASE_URL;
@@ -77,6 +77,7 @@ describe("PAY-140 K2 the seed on a kept database", () => {
       if (path === "/api/departments") return [{ id: "d1", name: "QA Test Data" }];
       if (path === "/api/shifts") return SHIFTS.map((s, i) => ({ id: `s${i}`, code: s.body.code }));
       if (path.startsWith("/api/leave-types")) return { items: LEAVE_TYPES.map((l, i) => ({ id: `lt${i}`, code: l.code })) };
+      if (path.startsWith("/api/holidays")) return HOLIDAYS_2026.map((h) => ({ ...h, date: `${h.date}T00:00:00.000Z` }));
       if (path.startsWith("/api/employees")) return employees;
       if (path.startsWith("/api/payroll/runs?")) return runs;
       const m = path.match(/^\/api\/payroll\/runs\/(.+)$/);
