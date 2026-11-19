@@ -47,7 +47,7 @@ env:
 
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sentire]
     steps:
       - uses: actions/checkout@v4
 
@@ -65,12 +65,9 @@ jobs:
           done
           [ "$missing" = 0 ] || exit 1
 
-      - name: Install PostgreSQL 18 client
+      - name: Install PostgreSQL 18 client, gpg and aws-cli
         run: |
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-18
+          bash scripts/db/install-ci-db-tools.sh
           "$PG_BIN/pg_dump" --version
 
       - name: Guard — pg_dump major must not be older than the server
