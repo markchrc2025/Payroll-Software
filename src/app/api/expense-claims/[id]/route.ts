@@ -1,4 +1,5 @@
 import { callerEmployeeId, maySeeEmployeeRecords } from "@/lib/approvals/second-party";
+import { isTenantReceiptKey } from "@/lib/expense-receipts";
 import { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
@@ -50,6 +51,10 @@ export async function PATCH(
     return err("Validation error", 400, parsed.error.flatten());
 
   const d = parsed.data;
+  // PAY-190: only a receipt uploaded for this company.
+  if (d.receiptKey && !isTenantReceiptKey(auth.tenantId, d.receiptKey)) {
+    return err("Upload the receipt again, then save the claim.", 422);
+  }
 
   try {
     return await withTenant(auth.tenantId, async (tx) => {
