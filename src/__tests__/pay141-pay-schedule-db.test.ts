@@ -106,8 +106,9 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
     // B: monthly ₱28,000, hired Monday 9 Nov, no run input of any kind.
     B = id("b");
     await q(
-      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt")
-       VALUES ($1, $2, $1, 'P141', $1, '2026-11-09', now())`,
+      // PAY-172: no time clock, so R8 checks proration alone (with a time clock and no DTR the days would be absent).
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "needsTimeClock", "updatedAt")
+       VALUES ($1, $2, $1, 'P141', $1, '2026-11-09', false, now())`,
       [B, T],
     );
     await q(
@@ -255,7 +256,8 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
         [`${A}-${day}`, T, A, `${day}T00:00:00.000Z`],
       );
     }
-    // An unapproved record is ignored.
+    // PAY-172 (Mark, 19 Nov 2026): a day whose DTR is not approved counts as
+    // absent (it used to be ignored, i.e. paid).
     await q(
       `INSERT INTO "DTRRecord" (id, "tenantId", "employeeId", date, "dayStatus", "workedMinutes", "approvalStatus", "updatedAt")
        VALUES ($1, $2, $3, '2026-11-05T00:00:00.000Z', 'ABSENT', 0, 'PENDING', now())`,
@@ -280,8 +282,8 @@ describeDb("PAY-141 pay schedules, paydays and cutoffs (real Postgres)", () => {
     await recomputeRun(T, bookId);
     const a = await sheetOf(A);
     expect(a.pi.attendanceSource).toBe("DTR");
-    expect(a.pi.unpaidLeaveDays).toBe(2);
-    expect(a.b).toBe((1_250_000n - 2n * 114_943n).toString());
+    expect(a.pi.unpaidLeaveDays).toBe(3);
+    expect(a.b).toBe((1_250_000n - 3n * 114_943n).toString());
     expect((await sheetOf(B)).pi.attendanceSource).toBe("NONE");
   });
 

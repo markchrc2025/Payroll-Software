@@ -22,6 +22,7 @@ type TenantSettings = {
   maxDeductionPctOfGross: number;
   breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
+  strictDtrPolicy: boolean;
   nsdWindowStart: string;
   nsdWindowEnd: string;
 };
@@ -62,6 +63,7 @@ export default function PayRulesPage() {
     maxDeductionPctOfGross: 50,
     breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
+    strictDtrPolicy: false,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
   });
@@ -83,6 +85,7 @@ export default function PayRulesPage() {
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
         breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
+        strictDtrPolicy: d.strictDtrPolicy ?? false,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
@@ -297,6 +300,26 @@ export default function PayRulesPage() {
               <Switch
                 checked={form.allowNegativeFinalPay}
                 onCheckedChange={(v) => update("allowNegativeFinalPay", v)}
+              />
+            </div>
+          </RuleSection>
+
+          {/* PAY-172: strict DTR policy */}
+          <RuleSection
+            title="Strict DTR Policy"
+            description="For employees with Time Clock Needed on. Off: in a regular payroll run, a scheduled workday without an approved DTR counts as absent and is not paid. On: an employee whose DTR for the cutoff is not fully approved is left out of the run, and their whole salary for that cutoff is held until it is approved (approve it, then recompute the run, or pay it in an off-cycle run for that cutoff). Either way, HR and the employee's immediate supervisor are emailed and the run page lists them."
+          >
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-[#E8E8E8] bg-white px-4 py-3">
+              <div>
+                <p className="text-[13.5px] font-medium text-[#171717]">Hold pay until the cutoff&apos;s DTR is approved</p>
+                <p className="text-[12px] text-[#6B6B6B] mt-0.5">
+                  DTR approval is for the whole cutoff, not per day.
+                </p>
+              </div>
+              <Switch
+                checked={form.strictDtrPolicy}
+                onCheckedChange={(v) => update("strictDtrPolicy", v)}
+                aria-label="Hold pay until the cutoff's DTR is approved"
               />
             </div>
           </RuleSection>

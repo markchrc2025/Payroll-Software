@@ -60,8 +60,9 @@ describeDb("PAY-133 SSS on actual basic, end to end (real Postgres)", () => {
 
   async function employee(key: string, hire: string, basic: number) {
     await q(
-      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt")
-       VALUES ($1, $2, $1, 'P133', $1, $3, now())`,
+      // PAY-172: no time clock, so a run without DTR pays the full basic (what these SSS checks need).
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "needsTimeClock", "updatedAt")
+       VALUES ($1, $2, $1, 'P133', $1, $3, false, now())`,
       [id(key), T, hire],
     );
     await q(

@@ -352,6 +352,50 @@ export async function sendDtrSubmittedEmail({
   await dispatch({ to, subject: `DTR review needed: ${employeeName} (${periodStart} – ${periodEnd})`, html });
 }
 
+/**
+ * PAY-172: employees in a payroll run without an approved DTR for some days
+ * of the cutoff. Sent to HR (all of them) and to each immediate supervisor
+ * (their own people).
+ */
+export async function sendDtrGapEmail({
+  to,
+  recipientName,
+  periodLabel,
+  rows,
+  runUrl,
+}: {
+  to: string;
+  recipientName: string;
+  periodLabel: string;
+  rows: { name: string; days: number; held: boolean }[];
+  runUrl: string;
+}): Promise<void> {
+  const list = rows
+    .map((r) => {
+      const what = r.held
+        ? "salary held until the DTR for the cutoff is approved"
+        : `${r.days} day${r.days === 1 ? "" : "s"} counted as absent`;
+      return `<li style="margin:0 0 6px;"><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(what)}</li>`;
+    })
+    .join("");
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">DTR not approved for payroll</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(recipientName)}, the payroll run for <strong>${escapeHtml(periodLabel)}</strong>
+      found employees without an approved DTR for some days of the cutoff:
+    </p>
+    <ul style="margin:0 0 24px;padding-left:18px;font-size:13px;color:#374151;line-height:1.6;">${list}</ul>
+    <p style="margin:0 0 24px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Approve their DTR, then recompute the run before it is finalized.
+    </p>
+    <a href="${escapeHtml(runUrl)}"
+       style="display:inline-block;padding:12px 28px;background:#1E3A5F;color:#FFFFFF;font-size:14px;font-weight:600;border-radius:8px;text-decoration:none;">
+      Open the payroll run
+    </a>
+  `);
+  await dispatch({ to, subject: `DTR not approved: payroll ${periodLabel}`, html });
+}
+
 // ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------

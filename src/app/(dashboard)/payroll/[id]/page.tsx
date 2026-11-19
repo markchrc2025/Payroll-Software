@@ -136,6 +136,8 @@ type PayrollRun = {
   notes: string | null;
   createdAt: string;
   sheets: PayrollSheet[];
+  /** PAY-172: employees without an approved DTR for days of the cutoff. */
+  dtrGaps?: { employeeId: string; days: number; held: boolean; employeeName: string | null; employeeNumber: string | null }[];
 };
 
 type PayrollAdjustment = {
@@ -742,6 +744,26 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           </>
         )}
       </div>
+
+      {(run.dtrGaps?.length ?? 0) > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
+          <p className="font-medium">Employees without an approved DTR for this cutoff</p>
+          <ul className="list-disc pl-5 space-y-1">
+            {run.dtrGaps!.map((g) => (
+              <li key={g.employeeId}>
+                {g.employeeName ?? g.employeeId}
+                {g.employeeNumber ? ` (${g.employeeNumber})` : ""}:{" "}
+                {g.held
+                  ? "left out of this run; salary held until the DTR for the cutoff is approved"
+                  : `${g.days} day${g.days === 1 ? "" : "s"} counted as absent`}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs">
+            HR and each employee&apos;s immediate supervisor were emailed. Approve the DTR, then recompute this run.
+          </p>
+        </div>
+      )}
 
       {run.status === "PROCESSING" && (
         <ProcessingRunPanel runId={run.id} createdAt={run.createdAt} onRefresh={refreshRunQuietly} />

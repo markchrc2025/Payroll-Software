@@ -34,6 +34,10 @@ function toHolidayBucket(categories: HolidayCategory[]): HolidayBucket | null {
   return null;
 }
 
+function strictRowsNote(args: { requireApproved?: boolean; noApprovedSubmission?: boolean }): string {
+  return args.requireApproved || args.noApprovedSubmission ? "approved " : "";
+}
+
 function dateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -166,6 +170,12 @@ export type DtrAggregateResult =
       /** Approved DTR records found in the window. */
       recordCount: number;
       attendanceExempt: boolean;
+      /**
+       * PAY-172: scheduled workdays counted absent because they had no
+       * approved DTR (no row at all, or, with requireApproved, a row not yet
+       * approved).
+       */
+      gapDays: number;
     };
 
 /**
@@ -175,7 +185,23 @@ export type DtrAggregateResult =
  */
 export async function aggregateApprovedDtr(
   tx: TenantTx,
-  args: { tenantId: string; employeeId: string; periodStartDate: Date; periodEndDate: Date; now?: Date },
+  args: {
+    tenantId: string;
+    employeeId: string;
+    periodStartDate: Date;
+    periodEndDate: Date;
+    now?: Date;
+    /**
+     * PAY-172 (Mark, 19 Nov 2026): a day whose DTR row is not approved
+     * (pending or rejected) counts as absent, like a day with no row.
+     */
+    requireApproved?: boolean;
+    /**
+     * PAY-172: the company requires an approved DTR submission and the window
+     * has none: skip that gate and count every scheduled workday as absent.
+     */
+    noApprovedSubmission?: boolean;
+  },
 ): Promise<DtrAggregateResult> {
   const { tenantId, employeeId, periodStartDate, periodEndDate } = args;
     const employee = await tx.employee.findFirst({
@@ -194,7 +220,7 @@ export async function aggregateApprovedDtr(
       where: { tenantId: tenantId },
       select: { requiresEmployeeSubmission: true },
     });
-    if (dtrConfig?.requiresEmployeeSubmission) {
+    if (dtrConfig?.requiresEmployeeSubmission && !args.noApprovedSubmission) {
       const approved = await tx.dTRSubmission.findFirst({
         where: {
           tenantId: tenantId,
@@ -208,14 +234,16 @@ export async function aggregateApprovedDtr(
       if (!approved) return { status: "NOT_APPROVED" } as const;
     }
 
-    const records = await tx.dTRRecord.findMany({
-      where: {
-        tenantId: tenantId,
-        employeeId,
-        approvalStatus: "APPROVED",
-        date: { gte: periodStartDate, lte: periodEndDate },
-      },
-    });
+    const records = args.noApprovedSubmission
+      ? []
+      : await tx.dTRRecord.findMany({
+          where: {
+            tenantId: tenantId,
+            employeeId,
+            approvalStatus: "APPROVED",
+            date: { gte: periodStartDate, lte: periodEndDate },
+          },
+        });
 
     // Approved undertime requests EXCUSE that day's undertime (it is not
     // deducted). Build a date -> excused-minutes map. Only unfiled/unapproved
@@ -458,7 +486,11 @@ export async function aggregateApprovedDtr(
       where: { tenantId, employeeId, date: { gte: periodStartDate, lte: periodEndDate } },
       select: { date: true },
     });
-    const hasRow = new Set(anyDays.map((r) => dateKey(new Date(r.date))));
+    // PAY-172: with requireApproved (or no approved submission) only an
+    // approved row keeps a day from counting as absent.
+    const approvedDays = new Set(records.map((r) => dateKey(new Date(r.date))));
+    const strictRows = args.requireApproved || args.noApprovedSubmission;
+    const hasRow = strictRows ? approvedDays : new Set(anyDays.map((r) => dateKey(new Date(r.date))));
     const today = dateKey(localDay(args.now ?? new Date(), employee.tenant?.timezone ?? "Asia/Manila"));
     const firstDay = dateKey(employee.hireDate);
     const separation = employee.lastWorkingDate ?? employee.resignationDate ?? null;
@@ -482,7 +514,9 @@ export async function aggregateApprovedDtr(
       employee.attendanceExempt
       ? `Attendance-exempt: calendar-day scan, ${records.length} leave record(s) applied`
       : `Aggregated from ${records.length} DTR records` +
-        (absentNoRecordDays > 0 ? `; ${absentNoRecordDays} scheduled workday(s) with no DTR counted as absent` : ""),
+        (absentNoRecordDays > 0
+          ? `; ${absentNoRecordDays} scheduled workday(s) with no ${strictRowsNote(args)}DTR counted as absent`
+          : ""),
     );
-  return { status: "OK", data, recordCount: records.length, attendanceExempt: employee.attendanceExempt };
+  return { status: "OK", data, recordCount: records.length, attendanceExempt: employee.attendanceExempt, gapDays: absentNoRecordDays };
 }
