@@ -14,6 +14,8 @@ import { handlePayslipPublish, PayslipPublishJobData } from "./handlers/payslip-
 import { handleLeaveAccrual } from "./handlers/leave-accrual";
 import { handleEssDeactivationSweep } from "./handlers/ess-deactivation";
 import { handleBillingOverdueSweep } from "./handlers/billing-overdue";
+import prismaAdmin from "@/lib/prisma-admin";
+import { isLiveState, requeueStuckRuns } from "./stuck-runs";
 
 export const JOB_NAMES = {
   PAYROLL_RUN: "payroll.run",
@@ -23,6 +25,7 @@ export const JOB_NAMES = {
   LEAVE_ACCRUAL: "leave.accrual",
   ESS_DEACTIVATION: "ess.deactivation",
   BILLING_OVERDUE: "billing.overdue",
+  PAYROLL_STUCK_SWEEP: "payroll.stuck-sweep",
 } as const;
 
 const RETRY_LIMIT = 3;
@@ -138,7 +141,25 @@ export async function registerWorkers(): Promise<void> {
     () => handleBillingOverdueSweep(),
   );
 
+  // PAY-192: a run left PROCESSING with no live job (enqueue failed or the
+  // job was lost) gets a new job, now and every 10 minutes.
+  await boss.schedule(JOB_NAMES.PAYROLL_STUCK_SWEEP, "*/10 * * * *", {}, { tz: "UTC" });
+  await boss.work(JOB_NAMES.PAYROLL_STUCK_SWEEP, { localConcurrency: 1 }, () => sweepStuckRuns());
+  void sweepStuckRuns().catch((e) => console.error("[jobs/payroll.stuck-sweep] start-up sweep failed:", e));
+
   console.log("[pg-boss] Workers registered:", Object.values(JOB_NAMES).join(", "));
+}
+
+/** True when a payroll.run job for this book is waiting, retrying or running. */
+export async function hasLivePayrollJob(bookId: string): Promise<boolean> {
+  const boss = await startJobQueue();
+  const jobs = await boss.findJobs(JOB_NAMES.PAYROLL_RUN, { data: { bookId } });
+  return jobs.some((j) => isLiveState(String(j.state)));
+}
+
+async function sweepStuckRuns(): Promise<void> {
+  const { requeued } = await requeueStuckRuns(prismaAdmin, { hasLiveJob: hasLivePayrollJob, enqueue: enqueuePayrollRun });
+  if (requeued.length) console.warn(`[jobs/payroll.stuck-sweep] requeued ${requeued.length} stuck run(s): ${requeued.join(", ")}`);
 }
 
 // ---------------------------------------------------------------------------
