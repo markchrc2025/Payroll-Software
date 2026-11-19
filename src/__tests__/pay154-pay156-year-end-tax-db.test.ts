@@ -40,8 +40,9 @@ describeDb("PAY-154 and PAY-156 year-end and final pay tax, end to end (real Pos
 
   async function employee(key: string, basic: number) {
     await q(
-      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt")
-       VALUES ($1, $2, $1, 'P154', $1, '2025-01-06', now())`,
+      // PAY-172: no time clock, so regular runs without DTR pay the full basic (what these checks need).
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "needsTimeClock", "updatedAt")
+       VALUES ($1, $2, $1, 'P154', $1, '2025-01-06', false, now())`,
       [key, T],
     );
     await q(

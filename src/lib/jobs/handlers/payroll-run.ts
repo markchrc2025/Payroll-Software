@@ -10,6 +10,8 @@
  */
 
 import { processRun, PayrollRunNotFoundError, PayrollRunConflictError } from "@/lib/payroll/persist";
+import prismaAdmin from "@/lib/prisma-admin";
+import { notifyDtrGaps } from "@/lib/payroll/dtr-gap-notify";
 
 export interface PayrollRunJobData {
   tenantId: string;
@@ -22,6 +24,10 @@ export async function handlePayrollRun(job: { data: PayrollRunJobData }): Promis
   try {
     await processRun(tenantId, bookId);
     console.log(`[jobs/payroll.run] Completed — book ${bookId} is now DRAFT`);
+    // PAY-172: warn HR and supervisors about employees without approved DTR.
+    await notifyDtrGaps(prismaAdmin, tenantId, bookId).catch((e) =>
+      console.error(`[jobs/payroll.run] DTR warning email failed for book ${bookId}:`, e),
+    );
   } catch (err) {
     if (err instanceof PayrollRunNotFoundError) {
       // Book was deleted before job ran — nothing to do.

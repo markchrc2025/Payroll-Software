@@ -23,6 +23,7 @@ import type {
   StatutoryCategory,
   SeparationReason,
 } from "@prisma/client";
+import { Prisma as PrismaValues } from "@prisma/client";
 import { computeSheet, isStatutoryDeducted } from "./engine";
 import { aggregateApprovedDtr } from "./dtr-aggregate";
 import {
@@ -338,22 +339,31 @@ const endOfDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMont
 async function runAttendance(
   tx: TenantTx,
   tenantId: string,
-  employee: { id: string; attendanceExempt: boolean },
+  employee: { id: string; attendanceExempt: boolean; needsTimeClock?: boolean },
   windowStart: Date,
   windowEnd: Date,
   periodInputRow: Prisma.PeriodInputGetPayload<true> | null,
+  /**
+   * PAY-172 (Mark, 19 Nov 2026), REGULAR runs only: an employee who needs a
+   * time clock is paid only for days with an approved DTR. Days without one
+   * (no row, a row not yet approved, or no approved submission when the
+   * company requires one) count as absent, and `onGap` hears how many.
+   * Typed run input (PeriodInput) still wins when there is no approved DTR.
+   */
+  dtrPolicy?: { onGap: (days: number) => void },
 ): Promise<ComputePeriodInputSnapshot> {
   const approvedRecords = await tx.dTRRecord.count({
     where: { employeeId: employee.id, approvalStatus: "APPROVED", date: { gte: windowStart, lte: endOfDay(windowEnd) } },
   });
-  if (approvedRecords > 0 || (employee.attendanceExempt && !periodInputRow)) {
-    const agg = await aggregateApprovedDtr(tx, {
-      tenantId,
-      employeeId: employee.id,
-      periodStartDate: windowStart,
-      periodEndDate: endOfDay(windowEnd),
-    });
+  const dtrRequired = !!dtrPolicy && employee.needsTimeClock !== false && !employee.attendanceExempt;
+  if (approvedRecords > 0 || (employee.attendanceExempt && !periodInputRow) || (dtrRequired && !periodInputRow)) {
+    const base = { tenantId, employeeId: employee.id, periodStartDate: windowStart, periodEndDate: endOfDay(windowEnd) };
+    let agg = await aggregateApprovedDtr(tx, { ...base, requireApproved: dtrRequired });
+    if (agg.status === "NOT_APPROVED" && dtrRequired && !periodInputRow) {
+      agg = await aggregateApprovedDtr(tx, { ...base, noApprovedSubmission: true });
+    }
     if (agg.status === "OK") {
+      if (dtrRequired && agg.gapDays > 0) dtrPolicy!.onGap(agg.gapDays);
       return {
         ...periodInputSnapshot(agg.data as unknown as Prisma.PeriodInputGetPayload<true>),
         attendanceSource: "DTR",
@@ -369,6 +379,34 @@ async function runAttendance(
   return {
     ...periodInputSnapshot(periodInputRow),
     attendanceSource: periodInputRow ? "MANUAL" : "NONE",
+  };
+}
+
+/**
+ * PAY-172: collects, for one REGULAR run, the employees who lacked an approved
+ * DTR for days of the cutoff. Under the strict DTR policy they are held out of
+ * the run. `notifiedAt` from the previous compute is kept, so a recompute does
+ * not email HR and the supervisor again about the same employee.
+ */
+export type DtrGap = { employeeId: string; days: number; held: boolean; notifiedAt?: string };
+
+export function dtrGapCollector(runType: string, strict: boolean) {
+  const gaps: DtrGap[] = [];
+  return {
+    policyFor(employeeId: string) {
+      if (runType !== "REGULAR") return undefined;
+      return { onGap: (days: number) => { gaps.push({ employeeId, days, held: strict }); } };
+    },
+    isHeld(employeeId: string) {
+      return strict && gaps.some((g) => g.employeeId === employeeId);
+    },
+    toJson(previous: Prisma.JsonValue | null): DtrGap[] | null {
+      if (gaps.length === 0) return null;
+      const before = new Map(
+        (Array.isArray(previous) ? (previous as DtrGap[]) : []).map((g) => [g.employeeId, g.notifiedAt]),
+      );
+      return gaps.map((g) => (before.get(g.employeeId) ? { ...g, notifiedAt: before.get(g.employeeId) } : g));
+    },
   };
 }
 
@@ -444,6 +482,8 @@ async function buildComputeInputForEmployee(
   multiplierConfig?: ComputeMultiplierConfig,
   /** PAY-141: the run's DTR cutoff window; attendance is read for it. */
   attendanceWindow?: { start: Date | null; end: Date | null },
+  /** PAY-172: REGULAR runs only (see runAttendance). */
+  dtrPolicy?: { onGap: (days: number) => void },
 ): Promise<ComputeInput | null> {
   const term = employee.employmentTerms[0];
   if (!term || term.basicSalaryCents == null || term.salaryType == null) {
@@ -505,7 +545,7 @@ async function buildComputeInputForEmployee(
     },
     tenant: tenantSettings,
     period: { start: periodStart, end: periodEnd, cycle },
-    periodInput: await runAttendance(tx, tenantId, employee, windowStart, windowEnd, periodInputRow),
+    periodInput: await runAttendance(tx, tenantId, employee, windowStart, windowEnd, periodInputRow, dtrPolicy),
     employedPeriodDays: await employedPeriodDaysFor(
       tx,
       tenantId,
@@ -978,6 +1018,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        strictDtrPolicy: true, // PAY-172
       },
     });
     const rules = await resolveAllRules(tx, input.tenantId, input.periodEnd);
@@ -1043,6 +1084,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       skipStatutory: input.skipStatutory ?? false,
     });
 
+    const dtr = dtrGapCollector(input.runType ?? "REGULAR", tenant.strictDtrPolicy); // PAY-172
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
       const ci = await buildComputeInputForEmployee(
@@ -1056,8 +1098,10 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         rules,
         multiplierConfig,
         { start: input.cutoffStart ?? null, end: input.cutoffEnd ?? null },
+        dtr.policyFor(e.id),
       );
       if (!ci) continue;
+      if (dtr.isHeld(e.id)) continue; // PAY-172: strict DTR policy
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
@@ -1131,6 +1175,11 @@ export async function createDraftRun(input: CreateDraftRunInput) {
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
     }
+    // PAY-172: who lacked an approved DTR for days of this cutoff.
+    await tx.payrollBook.update({
+      where: { id: book.id },
+      data: { dtrGaps: dtr.toJson(null) ?? PrismaValues.DbNull },
+    });
 
     return tx.payrollBook.findUniqueOrThrow({
       where: { id: book.id },
@@ -1164,6 +1213,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        strictDtrPolicy: true, // PAY-172
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
@@ -1199,6 +1249,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       periodEnd: book.periodEnd,
       skipStatutory: book.skipStatutory,
     });
+    const dtr = dtrGapCollector(book.runType, tenant.strictDtrPolicy); // PAY-172
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of employees) {
       const ci = await buildComputeInputForEmployee(
@@ -1212,8 +1263,10 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         rules,
         multiplierConfigR,
         { start: book.cutoffStart, end: book.cutoffEnd },
+        dtr.policyFor(e.id),
       );
       if (!ci) continue;
+      if (dtr.isHeld(e.id)) continue; // PAY-172: strict DTR policy
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
@@ -1286,6 +1339,11 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
     }
+    // PAY-172: who lacked an approved DTR for days of this cutoff.
+    await tx.payrollBook.update({
+      where: { id: bookId },
+      data: { dtrGaps: dtr.toJson(book.dtrGaps) ?? PrismaValues.DbNull },
+    });
 
     await tx.payrollBook.update({
       where: { id: bookId },
@@ -1550,6 +1608,7 @@ export async function processRun(tenantId: string, bookId: string) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        strictDtrPolicy: true, // PAY-172
       },
     });
     const rules = await resolveAllRules(tx, tenantId, book.periodEnd);
@@ -1584,6 +1643,7 @@ export async function processRun(tenantId: string, bookId: string) {
       periodEnd: book.periodEnd,
       skipStatutory: book.skipStatutory,
     });
+    const dtr = dtrGapCollector(book.runType, tenant.strictDtrPolicy); // PAY-172
     const sheets: Prisma.PayrollSheetCreateManyInput[] = [];
     for (const e of runEmployees) {
       const ci = await buildComputeInputForEmployee(
@@ -1597,8 +1657,10 @@ export async function processRun(tenantId: string, bookId: string) {
         rules,
         multiplierConfig,
         { start: book.cutoffStart, end: book.cutoffEnd },
+        dtr.policyFor(e.id),
       );
       if (!ci) continue;
+      if (dtr.isHeld(e.id)) continue; // PAY-172: strict DTR policy
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
@@ -1672,6 +1734,11 @@ export async function processRun(tenantId: string, bookId: string) {
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
     }
+    // PAY-172: who lacked an approved DTR for days of this cutoff.
+    await tx.payrollBook.update({
+      where: { id: bookId },
+      data: { dtrGaps: dtr.toJson(book.dtrGaps) ?? PrismaValues.DbNull },
+    });
 
     return tx.payrollBook.update({
       where: { id: bookId },

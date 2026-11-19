@@ -17,6 +17,8 @@ import {
   recomputeRun,
 } from "@/lib/payroll/persist";
 import { serializePayrollBook } from "@/lib/payroll/serialize";
+import prismaAdmin from "@/lib/prisma-admin";
+import { notifyDtrGaps } from "@/lib/payroll/dtr-gap-notify";
 
 export async function POST(
   req: NextRequest,
@@ -29,6 +31,10 @@ export async function POST(
 
   try {
     const book = await recomputeRun(auth.tenantId, id);
+    // PAY-172: warn HR and supervisors about employees without approved DTR.
+    void notifyDtrGaps(prismaAdmin, auth.tenantId, id).catch((e) =>
+      console.error(`[api/payroll/runs/recompute] DTR warning email failed for ${id}:`, e),
+    );
     return ok(serializePayrollBook(book), "Payroll run recomputed");
   } catch (e) {
     if (e instanceof PayrollRunNotFoundError) return notFound("PayrollBook");

@@ -93,8 +93,9 @@ describeDb("PAY-144 year-to-date openings, end to end (real Postgres)", () => {
 
   async function employee(key: string, hire: string, basic: number, lastDay?: string) {
     await q(
-      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "lastWorkingDate", "updatedAt")
-       VALUES ($1, $2, $1, 'P144', $1, $3, $4, now())`,
+      // PAY-172: no time clock, so regular runs without DTR pay the full basic (what these checks need).
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "lastWorkingDate", "needsTimeClock", "updatedAt")
+       VALUES ($1, $2, $1, 'P144', $1, $3, $4, false, now())`,
       [key, T, hire, lastDay ?? null],
     );
     await q(

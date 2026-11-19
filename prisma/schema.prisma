@@ -626,6 +626,11 @@ model Tenant {
   /// against a separating employee's last pay may legitimately make it
   /// negative. Set false to also floor FINAL_PAY. Default true.
   allowNegativeFinalPay   Boolean                 @default(true)
+  /// PAY-172 (Mark, 19 Nov 2026): strict DTR policy. On: an employee who needs a
+  /// time clock and whose DTR for the run's cutoff is not fully approved is held
+  /// out of the run (no pay until it is approved; DTR approval is one cutoff,
+  /// not per day). Off (default): days without an approved DTR count as absent.
+  strictDtrPolicy         Boolean                 @default(false)
   defaultDtrApproverId    String?
   /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
   /// be turned off); only the window is configurable. The premium multiplier
@@ -2534,6 +2539,13 @@ model PayrollBook {
   /// (processRun) and recomputeRun select exactly the people the run was
   /// created for. Empty = every employee the run type selects.
   targetEmployeeIds String[] @default([])
+
+  /// PAY-172: employees who need a time clock and lacked an approved DTR for
+  /// days of this run's cutoff, as [{ employeeId, days, held, notifiedAt? }].
+  /// held = left out of the run (strict DTR policy); otherwise the days were
+  /// counted as absent. Shown on the run page; HR and each employee's
+  /// immediate supervisor are emailed once per employee.
+  dtrGaps Json?
 
   /// PAY-141: the day people are paid (moved back off Sundays and holidays)
   /// and the DTR cutoff window whose attendance this run uses. Set when the

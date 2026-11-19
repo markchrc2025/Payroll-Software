@@ -66,6 +66,8 @@ const patchSchema = z.object({
   // Whether FINAL_PAY runs may go negative (terminal charges on separation).
   // REGULAR/YEAR_END runs are always floored regardless of this flag.
   allowNegativeFinalPay: z.boolean().optional(),
+  // PAY-172: hold the pay of an employee whose cutoff DTR is not fully approved.
+  strictDtrPolicy: z.boolean().optional(),
   // Night-shift differential window (NSD is always computed; only the window
   // is configurable). HH:MM, 24-hour.
   nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
@@ -117,6 +119,7 @@ export async function GET(req: NextRequest) {
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
+        strictDtrPolicy: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
@@ -190,6 +193,7 @@ export async function PATCH(req: NextRequest) {
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
+        strictDtrPolicy: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
