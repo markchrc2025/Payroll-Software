@@ -172,6 +172,8 @@ export interface PayslipPdfSource {
     /** PAY-171: bonus and one-off lines; the 13th month paid in a regular run. */
     payComponentsApplied?: unknown;
     thirteenthMonthBreakdown?: unknown;
+    /** PAY-171: the year-end true-up on the year's last regular run. */
+    annualizationData?: unknown;
   };
   employee: {
     employeeNumber: string;
@@ -265,15 +267,26 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
         : sssBasis
           ? (basis("MSC", bases?.sssMscCents) ?? "MSC none") + ` (${basisMonth} basic)`
           : basis("MSC", bases?.sssMscCents);
+  const ann = (sheet.annualizationData ?? null) as { trueUpCents?: string } | null;
+  const trueUp = ann?.trueUpCents !== undefined ? BigInt(ann.trueUpCents) : null;
   const statutory: PdfLine[] = [
     { label: "SSS", rate: sssRate, amount: sheet.sssEeCents },
     { label: "PhilHealth", rate: basis("MBS", bases?.philHealthMscCents), amount: sheet.philhealthEeCents },
     { label: "Pag-IBIG", rate: basis("MFS", bases?.pagibigMfsCents), amount: sheet.pagibigEeCents },
-    // PAY-156: a negative withholding is the year-end adjustment refunding tax
-    // withheld above the year's tax due (final pay); it lowers the deductions.
-    sheet.withholdingTaxCents < 0n
-      ? { label: "Tax refund (year-end adjustment)", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents }
-      : { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
+    // PAY-171: the year's last regular run shows the year-end adjustment as
+    // its own line (as on Mark's Smart payslip: "Withholding Tax Adjustments").
+    ...(trueUp !== null && book.runType === "REGULAR"
+      ? [
+          { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents - trueUp },
+          { label: trueUp < 0n ? "Tax refund (year-end adjustment)" : "Withholding tax adjustment (year-end)", amount: trueUp },
+        ]
+      : [
+          // PAY-156: a negative withholding is the year-end adjustment refunding tax
+          // withheld above the year's tax due (final pay); it lowers the deductions.
+          sheet.withholdingTaxCents < 0n
+            ? { label: "Tax refund (year-end adjustment)", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents }
+            : { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
+        ]),
   ];
   const statutoryTotal = statutory.reduce((s, l) => s + l.amount, 0n);
   const contributions = sheet.sssEeCents + sheet.philhealthEeCents + sheet.pagibigEeCents;
