@@ -65,12 +65,27 @@ attendance without wiping anything else.
 ## The QA connector
 
 An MCP server inside the staging container (port 10001). It signs in as the QA
-admin and calls the app's HTTP API; it has no database access of its own.
+admin and calls the app's HTTP API. Its one database write is in
+`create_ess_login` (below), as the RLS-limited runtime role with the QA tenant
+set.
 
-Tools: `staging_status`, `list_employees`, `set_attendance`,
+Tools: `staging_status`, `list_employees`, `set_attendance`, `import_punches`,
 `create_payroll_run`, `recompute_payroll_run`, `get_payroll_run`,
-`seed_scenario`, `reset_staging`, `api_request` (any `/api/...` call except
-`/api/auth/...`).
+`seed_scenario`, `reset_staging`, `create_ess_login`, `ess_request`,
+`api_request` (any `/api/...` call except `/api/auth/...`).
+
+ESS as an employee (PAY-180, Mark, 19 Nov 2026: staging-only tool):
+
+- `create_ess_login {employeeNumber}` does in the database the step HR does by
+  email (grant access, issue the one-time link), then claims the link through
+  the real `POST /api/ess/activate`, so the app checks and hashes the PIN. An
+  employee already using ESS with another PIN is refused unless `reset: true`.
+- `ess_request {employeeNumber, method, path, body}` signs in through the real
+  `POST /api/ess/auth` and calls `/api/ess/...` with the session. Sign-in,
+  activation, PIN, password and passkey routes are refused.
+- The PIN is derived from `QA_MCP_SECRET` and the employee number inside the
+  connector. No PIN or session token is stored or returned; `token`, `pin` and
+  password fields are hidden in answers. Code: `scripts/staging/ess-login.mjs`.
 
 Safety, same pattern as the Sentire Dokploy connector:
 
