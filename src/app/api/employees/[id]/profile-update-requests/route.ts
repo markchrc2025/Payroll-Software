@@ -51,7 +51,7 @@ export async function GET(
   const employee = await withTenant(auth.tenantId, (tx) =>
     tx.employee.findFirst({ where: { id: employeeId, tenantId: auth.tenantId, deletedAt: null } })
   );
-  if (!employee) return notFound("Employee not found");
+  if (!employee) return notFound("Employee");
 
   const rows = await withTenant(auth.tenantId, (tx) =>
     tx.profileUpdateRequest.findMany({
@@ -104,6 +104,6 @@ export async function POST(
     return { notFound: false as const, row };
   });
 
-  if (result.notFound) return notFound("Employee not found");
+  if (result.notFound) return notFound("Employee");
   return ok(result.row, "Profile update request filed", 201);
 }

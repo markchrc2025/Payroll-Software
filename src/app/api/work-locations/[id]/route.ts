@@ -34,7 +34,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Work location not found");
+  if (!row) return notFound("Work location");
   return ok(row);
 }
 
@@ -79,7 +79,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Work location not found");
+  if (result.notFound) return notFound("Work location");
   if (result.conflict) return err(`Name already taken`, 409);
   return ok(result.row);
 }
@@ -112,7 +112,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Work location not found");
+  if (result.notFound) return notFound("Work location");
   if (result.inUse)
     return err("Cannot delete: active branches are assigned to this work location", 409);
   return ok({ id }, "Work location deleted");

@@ -31,6 +31,6 @@ export async function POST(
     });
   });
 
-  if (!updated) return notFound("Kiosk not found");
+  if (!updated) return notFound("Kiosk");
   return ok(updated, "Token regenerated");
 }

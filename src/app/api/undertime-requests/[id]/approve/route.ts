@@ -115,7 +115,7 @@ export async function POST(
     return { row: updated };
   });
 
-  if ("notFound" in result && result.notFound) return notFound("Undertime request not found");
+  if ("notFound" in result && result.notFound) return notFound("Undertime request");
   if ("terminal" in result && result.terminal)
     return err(`Cannot approve a ${result.status} request`, 409);
   if ("self" in result && result.self)

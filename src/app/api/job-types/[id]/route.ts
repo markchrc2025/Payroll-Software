@@ -38,7 +38,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Job type not found");
+  if (!row) return notFound("Job type");
   return ok(row);
 }
 
@@ -82,7 +82,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Job type not found");
+  if (result.notFound) return notFound("Job type");
   if (result.conflict) return err("Job type name already taken", 409);
   return ok(result.row);
 }
@@ -122,7 +122,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Job type not found");
+  if (result.notFound) return notFound("Job type");
   if (result.inUse)
     return err("Cannot delete: employees or terms are assigned to this job type", 409);
   void writeAuditLog({

@@ -33,9 +33,9 @@ export async function POST(
       return { notFound: false as const, notPending: false as const, row: updated };
     });
 
-    if (result.notFound) return notFound("Undertime request not found");
+    if (result.notFound) return notFound("Undertime request");
     if (result.notPending)
-      return err(`Cannot cancel a ${result.status} request`, 409);
+      return err(`This request is ${result.status.toLowerCase()} and can no longer be cancelled.`, 409);
 
     return ok(result.row, "Undertime request cancelled");
   } catch (e) {

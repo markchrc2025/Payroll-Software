@@ -92,7 +92,7 @@ export async function POST(
     return { notFound: false as const, notRejectable: false as const, row: updated };
   });
 
-  if ("notFound" in result && result.notFound) return notFound("OT application not found");
+  if ("notFound" in result && result.notFound) return notFound("OT application");
   if ("notRejectable" in result && result.notRejectable)
     return err(`Cannot reject a ${result.status} application`, 409);
   if ("forbidden" in result && result.forbidden)

@@ -37,7 +37,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Job status not found");
+  if (!row) return notFound("Job status");
   return ok(row);
 }
 
@@ -81,7 +81,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Job status not found");
+  if (result.notFound) return notFound("Job status");
   if (result.conflict) return err("Job status name already taken", 409);
   return ok(result.row);
 }
@@ -120,7 +120,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Job status not found");
+  if (result.notFound) return notFound("Job status");
   if (result.inUse)
     return err("Cannot delete: employment terms are assigned to this job status", 409);
   void writeAuditLog({

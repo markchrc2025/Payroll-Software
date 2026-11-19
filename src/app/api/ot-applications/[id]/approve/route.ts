@@ -120,7 +120,7 @@ export async function POST(
     return { row: updated };
   });
 
-  if ("notFound" in result && result.notFound) return notFound("OT application not found");
+  if ("notFound" in result && result.notFound) return notFound("OT application");
   if ("self" in result && result.self)
     return forbidden("You cannot approve your own OT application");
   if ("terminal" in result && result.terminal)

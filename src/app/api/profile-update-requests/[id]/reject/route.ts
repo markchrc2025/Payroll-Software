@@ -48,7 +48,7 @@ export async function POST(
     return { notFound: false as const, notPending: false as const, row: updated };
   });
 
-  if (result.notFound) return notFound("Profile update request not found");
+  if (result.notFound) return notFound("Profile update request");
   if (result.notPending)
     return err(`Cannot reject a ${result.status} request`, 409);
   return ok(result.row, "Profile update request rejected");

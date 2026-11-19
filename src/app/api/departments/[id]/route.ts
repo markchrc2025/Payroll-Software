@@ -35,7 +35,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Department not found");
+  if (!row) return notFound("Department");
   return ok(row);
 }
 
@@ -79,7 +79,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Department not found");
+  if (result.notFound) return notFound("Department");
   if (result.conflict) return err("Department name already taken", 409);
   return ok(result.row);
 }
@@ -112,7 +112,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Department not found");
+  if (result.notFound) return notFound("Department");
   if (result.inUse)
     return err("Cannot delete: employees are assigned to this department", 409);
   void writeAuditLog({

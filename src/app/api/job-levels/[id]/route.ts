@@ -36,7 +36,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Level not found");
+  if (!row) return notFound("Level");
   return ok(row);
 }
 
@@ -80,7 +80,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Level not found");
+  if (result.notFound) return notFound("Level");
   if (result.conflict) return err("Level name already taken", 409);
   return ok(result.row);
 }
@@ -113,7 +113,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Level not found");
+  if (result.notFound) return notFound("Level");
   if (result.inUse)
     return err("Cannot delete: employees are assigned to this level", 409);
   void writeAuditLog({

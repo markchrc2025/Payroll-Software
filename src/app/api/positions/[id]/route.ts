@@ -38,7 +38,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Position not found");
+  if (!row) return notFound("Position");
   return ok(row);
 }
 
@@ -91,7 +91,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Position not found");
+  if (result.notFound) return notFound("Position");
   if (result.conflict) return err("Position title already taken", 409);
   return ok(result.row);
 }
@@ -124,7 +124,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Position not found");
+  if (result.notFound) return notFound("Position");
   if (result.inUse)
     return err("Cannot delete: employees are assigned to this position", 409);
   void writeAuditLog({
