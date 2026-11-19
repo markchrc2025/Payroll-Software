@@ -26,6 +26,7 @@ import type {
 import { Prisma as PrismaValues } from "@prisma/client";
 import { computeSheet, isStatutoryDeducted } from "./engine";
 import { aggregateApprovedDtr } from "./dtr-aggregate";
+import { periodsElapsedBefore, periodsPerYear } from "./annual-tax";
 import {
   benefitsExemptUsedCents,
   loadYtdOpenings,
@@ -56,7 +57,7 @@ import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
-import { staleAnnualizations } from "./annualize";
+import { annualizeInTx, isLastRegularOfYear, staleAnnualizations } from "./annualize";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -109,6 +110,8 @@ export interface CreateDraftRunInput {
    * `recomputeRun` preserves the behaviour.
    */
   skipStatutory?: boolean;
+  /** PAY-171: a REGULAR run that also pays the 13th month. */
+  includeThirteenthMonth?: boolean;
   /**
    * Reason for separation — required for FINAL_PAY runs to compute DOLE
    * separation pay and its taxability.
@@ -194,6 +197,8 @@ function toComputeComponent(
     taxability: c.taxability,
     amountCents: assn.amountCents,
     deMinimisCode: c.deMinimisCode,
+    isBonus: c.isBonus, // PAY-171
+    isOneOff: c.isOneOff, // PAY-171
   };
 }
 
@@ -729,6 +734,12 @@ export interface ThirteenthMonthBreakdown {
   /** Basic pay earned before Sentire (PAY-144 opening). */
   basicFromOpeningsCents: string;
   totalBasicCents: string;
+  /**
+   * PAY-171: a 13th month paid on a regular run before the year ends: this
+   * run's basic for this and each later pay period of the year.
+   */
+  basicProjectedCents?: string;
+  periodsProjected?: number;
   /** totalBasic / 12, rounded down to the centavo. */
   thirteenthForYearCents: string;
   /** 13th month already paid this year before Sentire (PAY-144 opening). */
@@ -743,6 +754,13 @@ async function computeThirteenthMonth(
   employeeId: string,
   periodEnd: Date,
   openings: YtdOpening[] = [],
+  /**
+   * PAY-171: paid on a REGULAR run before the year ends: that run's basic and
+   * the same basic for each later pay period of the year count as earned.
+   * A later run (or the Year-End run) trues it up, since what was paid is
+   * subtracted.
+   */
+  inRun?: { thisRunBasicCents: bigint; periodsAfter: bigint },
 ): Promise<{ dueCents: bigint; breakdown: ThirteenthMonthBreakdown }> {
   const year = periodEnd.getUTCFullYear();
   const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
@@ -760,12 +778,29 @@ async function computeThirteenthMonth(
     },
     select: { basePayCents: true },
   });
+  // PAY-171: 13th month already paid this year by Sentire, on regular runs
+  // that included it and on Year-End runs.
+  const paidSheets = await tx.payrollSheet.findMany({
+    where: {
+      employeeId,
+      tenantId,
+      thirteenthMonthBreakdown: { not: PrismaValues.DbNull },
+      payrollBook: { status: "FINALIZED", runType: { in: ["REGULAR", "YEAR_END"] }, periodEnd: { gte: yearStart, lte: yearEnd } },
+    },
+    select: { thirteenthMonthBreakdown: true },
+  });
+  const paidBySentire = paidSheets.reduce(
+    (acc, s) => acc + BigInt(((s.thirteenthMonthBreakdown ?? {}) as { dueCents?: string }).dueCents ?? "0"),
+    0n,
+  );
 
   const opening = ytdOpeningTotals(openings);
   const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n);
-  const totalBasic = fromRuns + opening.basicPayEarnedCents;
+  const projected = inRun ? inRun.thisRunBasicCents * (1n + inRun.periodsAfter) : 0n;
+  const totalBasic = fromRuns + opening.basicPayEarnedCents + projected;
   const forYear = totalBasic / 12n;
-  const raw = forYear - opening.thirteenthMonthPaidCents;
+  const alreadyPaid = opening.thirteenthMonthPaidCents + paidBySentire;
+  const raw = forYear - alreadyPaid;
   const due = raw > 0n ? raw : 0n;
   return {
     dueCents: due,
@@ -775,9 +810,10 @@ async function computeThirteenthMonth(
       basicFromRunsCents: fromRuns.toString(),
       runSheetCount: priorSheets.length,
       basicFromOpeningsCents: opening.basicPayEarnedCents.toString(),
+      ...(inRun ? { basicProjectedCents: projected.toString(), periodsProjected: Number(1n + inRun.periodsAfter) } : {}),
       totalBasicCents: totalBasic.toString(),
       thirteenthForYearCents: forYear.toString(),
-      alreadyPaidCents: opening.thirteenthMonthPaidCents.toString(),
+      alreadyPaidCents: alreadyPaid.toString(),
       dueCents: due.toString(),
     },
   };
@@ -834,6 +870,72 @@ async function applyYtdOpenings(
   const snapshot = ytdOpeningSnapshot(year, openings);
   if (snapshot) ci.periodInput = { ...ci.periodInput, ytdOpening: snapshot };
   return openings;
+}
+
+/**
+ * PAY-171: a REGULAR run that includes the 13th month: compute the sheet once
+ * for this run's basic, then pay 1/12 of the year's basic (earned so far plus
+ * this run's basic for this and each later period) less what was already
+ * paid, and compute again with it.
+ */
+async function withThirteenthMonthInRun(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employeeId: string,
+  period: { start: Date; end: Date; cycle: string },
+  ci: ComputeInput,
+): Promise<{ result: ReturnType<typeof computeSheet>; breakdown: ThirteenthMonthBreakdown }> {
+  const first = computeSheet(ci);
+  const year = period.end.getUTCFullYear();
+  const openings = await loadYtdOpenings(tx, tenantId, employeeId, year);
+  const after = periodsPerYear(period.cycle) - periodsElapsedBefore(period.cycle, period.start) - 1n;
+  const t = await computeThirteenthMonth(tx, tenantId, employeeId, period.end, openings, {
+    thisRunBasicCents: first.basePayCents,
+    periodsAfter: after > 0n ? after : 0n,
+  });
+  ci.thirteenthMonthInRunCents = t.dueCents;
+  await applyBenefitsContext(tx, tenantId, employeeId, period.end, ci);
+  return { result: computeSheet(ci), breakdown: t.breakdown };
+}
+
+/**
+ * PAY-171: a REGULAR run needs the year's taxable pay and tax so far (the
+ * cumulative average method, and the rate for the year on a bonus excess)
+ * and, when it pays a bonus or a 13th month, what is left of the 90,000.
+ */
+async function applyBenefitsContext(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  employeeId: string,
+  periodEnd: Date,
+  ci: ComputeInput,
+): Promise<void> {
+  if ((ci.runType ?? "REGULAR") !== "REGULAR") return;
+  const year = periodEnd.getUTCFullYear();
+  const openings = await loadYtdOpenings(tx, tenantId, employeeId, year);
+  const opening = ytdOpeningTotals(openings);
+  const sums = await priorYearTaxSums(tx, tenantId, employeeId, periodEnd);
+  ci.ytdTaxableCents = sums.taxable + opening.taxableCompensationCents;
+  // PAY-171: cumulative average method (kept for the rest of the year once used).
+  const used = await tx.payrollSheet.count({
+    where: {
+      tenantId,
+      employeeId,
+      statutoryBreakdown: { path: ["bir", "method"], equals: "CUMULATIVE_AVERAGE" },
+      payrollBook: {
+        status: "FINALIZED",
+        runType: "REGULAR",
+        periodEnd: { gte: new Date(`${year}-01-01T00:00:00.000Z`), lte: new Date(`${year}-12-31T23:59:59.999Z`) },
+      },
+    },
+  });
+  ci.cumulativeAverage = {
+    priorTaxableCents: ci.ytdTaxableCents,
+    priorWithheldCents: sums.withholding + opening.withholdingTaxCents,
+    usedThisYear: used > 0,
+  };
+  const paysBenefits = ci.payComponents.some((c) => c.isBonus || c.isOneOff) || (ci.thirteenthMonthInRunCents ?? 0n) > 0n;
+  if (paysBenefits) ci.benefitsExemptUsedCents = await benefitsExemptUsedCents(tx, tenantId, employeeId, year, openings);
 }
 
 // ---------------------------------------------------------------------------
@@ -1047,6 +1149,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
           notes: input.notes ?? null,
           createdByUserId: input.createdByUserId ?? null,
           skipStatutory: input.skipStatutory ?? false,
+          includeThirteenthMonth: (input.runType ?? "REGULAR") === "REGULAR" && (input.includeThirteenthMonth ?? false),
           separationReason: input.separationReason ?? null,
           targetEmployeeIds: targetIdsFor(input),
           payDate: input.payDate ?? null,
@@ -1105,6 +1208,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = input.runType ?? "REGULAR"; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, input.tenantId, e.id, input.periodEnd, ci); // PAY-171
 
       // YEAR_END: inject thirteenthMonthCents computed from prior REGULAR runs.
       if ((input.runType ?? "REGULAR") === "YEAR_END") {
@@ -1165,7 +1269,13 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         taxTreatment: c.taxTreatment!,
       }));
 
-      const result = computeSheet(ci);
+      let result = computeSheet(ci);
+      // PAY-171: the 13th month on this regular run's payslip.
+      if ((input.runType ?? "REGULAR") === "REGULAR" && input.includeThirteenthMonth) {
+        const r13 = await withThirteenthMonthInRun(tx, input.tenantId, e.id, { start: input.periodStart, end: input.periodEnd, cycle: input.cycle }, ci);
+        result = r13.result;
+        thirteenthBreakdown = r13.breakdown;
+      }
       sheets.push({
         ...resultToSheetCreate(input.tenantId, book.id, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
@@ -1174,6 +1284,10 @@ export async function createDraftRun(input: CreateDraftRunInput) {
 
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
+    }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear({ runType: input.runType ?? "REGULAR", periodEnd: input.periodEnd })) {
+      await annualizeInTx(tx, input.tenantId, { id: book.id, periodEnd: input.periodEnd });
     }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({
@@ -1270,6 +1384,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, tenantId, e.id, book.periodEnd, ci); // PAY-171
 
       // YEAR_END: re-inject thirteenthMonthCents from prior REGULAR runs.
       if (book.runType === "YEAR_END") {
@@ -1330,7 +1445,13 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         taxTreatment: c.taxTreatment!,
       }));
 
-      const result = computeSheet(ci);
+      let result = computeSheet(ci);
+      // PAY-171: the 13th month on this regular run's payslip.
+      if ((book.runType) === "REGULAR" && book.includeThirteenthMonth) {
+        const r13 = await withThirteenthMonthInRun(tx, tenantId, e.id, { start: book.periodStart, end: book.periodEnd, cycle: book.cycle }, ci);
+        result = r13.result;
+        thirteenthBreakdown = r13.breakdown;
+      }
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
@@ -1338,6 +1459,10 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     }
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
+    }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear(book)) {
+      await annualizeInTx(tx, tenantId, { id: bookId, periodEnd: book.periodEnd });
     }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({
@@ -1400,6 +1525,16 @@ export async function finalizeRun(
           `The year's figures changed since this 13th month run was annualized ` +
             `(${stale.length} employee${stale.length === 1 ? "" : "s"}). ` +
             `Annualize again, then finalize.`,
+        );
+      }
+    }
+    // PAY-171: the year's last regular run carries the year-end adjustment.
+    if (isLastRegularOfYear(book)) {
+      const stale = await staleAnnualizations(tx, tenantId, book);
+      if (stale.length > 0) {
+        throw new PayrollRunConflictError(
+          `The year's figures changed since this run's year-end tax adjustment was worked out ` +
+            `(${stale.length} employee${stale.length === 1 ? "" : "s"}). Recompute the run, then finalize.`,
         );
       }
     }
@@ -1568,6 +1703,7 @@ export async function queueRun(input: CreateDraftRunInput) {
           notes: input.notes ?? null,
           createdByUserId: input.createdByUserId ?? null,
           skipStatutory: input.skipStatutory ?? false,
+          includeThirteenthMonth: (input.runType ?? "REGULAR") === "REGULAR" && (input.includeThirteenthMonth ?? false),
           separationReason: input.separationReason ?? null,
           targetEmployeeIds: targetIdsFor(input),
           payDate: input.payDate ?? null,
@@ -1664,6 +1800,7 @@ export async function processRun(tenantId: string, bookId: string) {
       let thirteenthBreakdown: ThirteenthMonthBreakdown | null = null; // PAY-168
       ci.runType = book.runType; // unit 1.8 (G1)
       ci.sssBasis = sssBases?.get(e.id); // PAY-133
+      await applyBenefitsContext(tx, tenantId, e.id, book.periodEnd, ci); // PAY-171
 
       if (book.runType === "YEAR_END") {
         const ytdOpenings = await applyYtdOpenings(tx, tenantId, e.id, book.periodEnd, ci); // PAY-144
@@ -1724,7 +1861,13 @@ export async function processRun(tenantId: string, bookId: string) {
         taxTreatment: c.taxTreatment!,
       }));
 
-      const result = computeSheet(ci);
+      let result = computeSheet(ci);
+      // PAY-171: the 13th month on this regular run's payslip.
+      if ((book.runType) === "REGULAR" && book.includeThirteenthMonth) {
+        const r13 = await withThirteenthMonthInRun(tx, tenantId, e.id, { start: book.periodStart, end: book.periodEnd, cycle: book.cycle }, ci);
+        result = r13.result;
+        thirteenthBreakdown = r13.breakdown;
+      }
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
@@ -1733,6 +1876,10 @@ export async function processRun(tenantId: string, bookId: string) {
 
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
+    }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear(book)) {
+      await annualizeInTx(tx, tenantId, { id: bookId, periodEnd: book.periodEnd });
     }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({

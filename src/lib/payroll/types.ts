@@ -175,6 +175,10 @@ export interface ComputePayComponent {
   /// Required when taxability = DE_MINIMIS. Matched against the active
   /// `DE_MINIMIS_CEILING` payload by code.
   deMinimisCode: string | null;
+  /// PAY-171: a bonus ("13th month and other benefits"); see PayComponent.isBonus.
+  isBonus?: boolean;
+  /// PAY-171: taxable one-off pay, taxed at the year's rate; see PayComponent.isOneOff.
+  isOneOff?: boolean;
 }
 
 export interface ComputeLoan {
@@ -246,6 +250,21 @@ export interface ComputeInput {
    * any excess via MONTHLY BIR table; no statutory contributions.
    */
   thirteenthMonthCents?: bigint;
+  /**
+   * PAY-171: a 13th month paid on this REGULAR run's payslip (HR ticked it on
+   * the run). Counts first against the year's 90,000; any excess is taxed
+   * with the bonuses at the employee's rate for the year.
+   */
+  thirteenthMonthInRunCents?: bigint;
+  /**
+   * PAY-171 (RR 11-2018 cumulative average method; Mark's Smart payslips,
+   * finding 5): REGULAR runs. When the period's basic is below the table's
+   * taxable level but other pay lifts the period above it, or the method was
+   * already used this year, the period's tax is the table on the year's
+   * average taxable pay per period, times the periods so far, less tax
+   * already withheld this year.
+   */
+  cumulativeAverage?: { priorTaxableCents: bigint; priorWithheldCents: bigint; usedThisYear: boolean };
   /**
    * PAY-144: how much of the 90,000 exemption for 13th month and other
    * benefits is already used this year (year-to-date openings plus earlier
@@ -344,6 +363,9 @@ export interface AppliedPayComponent {
   nonTaxablePortionCents: string;
   /// For DE_MINIMIS: any excess pushed to taxable.
   taxablePortionCents: string;
+  /// PAY-171: a bonus (13th month and other benefits) or one-off pay line.
+  isBonus?: boolean;
+  isOneOff?: boolean;
 }
 
 export interface AppliedLoanPayment {
@@ -405,7 +427,24 @@ export interface StatutoryBreakdown {
     bracketFloorCents: string;
     bracketFixedTaxCents: string;
     bracketPlusRate: number;
+    /// PAY-171: "CUMULATIVE_AVERAGE" when that method set the period's tax.
+    method?: "CUMULATIVE_AVERAGE";
+    averageTaxableCents?: string;
+    periodsSoFar?: number;
   } | null;
+  /// PAY-171: bonuses (and a 13th month paid in this regular run): what was
+  /// tax-free within what is left of the year's 90,000, and the tax on the
+  /// excess at the employee's projected rate for the year.
+  benefits?: {
+    /** Taxable one-off pay (PayComponent.isOneOff), taxed with the excess. */
+    oneOffCents?: string;
+    totalCents: string;
+    exemptCents: string;
+    excessCents: string;
+    capLeftBeforeCents: string;
+    excessTaxCents: string;
+    projectedAnnualTaxableCents: string;
+  };
   /// PAY-133: the month and actual basic the SSS contribution was based on.
   /// Absent on runs without a basis (older sheets, non-REGULAR runs).
   sssBasis?: {

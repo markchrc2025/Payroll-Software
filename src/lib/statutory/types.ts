@@ -101,6 +101,12 @@ export const BirWithholdingPayload = z.object({
     WEEKLY: z.array(BirBracket).min(1).optional(),
     SEMI_MONTHLY: z.array(BirBracket).min(1),
     MONTHLY: z.array(BirBracket).min(1),
+    /**
+     * PAY-171: the annual table (RA 10963 section 24(A)(2)), when loaded. The
+     * year's tax is then exact (Smart: ₱370,451.14 gives ₱24,090.23); without
+     * it, it is the MONTHLY table on one twelfth, times 12, as before.
+     */
+    ANNUAL: z.array(BirBracket).min(1).optional(),
   }),
 });
 export type BirWithholdingPayload = z.infer<typeof BirWithholdingPayload>;

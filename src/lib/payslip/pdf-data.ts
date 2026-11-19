@@ -169,6 +169,11 @@ export interface PayslipPdfSource {
     loanPaymentsApplied: unknown;
     adjustmentsApplied: unknown;
     expenseClaimsApplied: unknown;
+    /** PAY-171: bonus and one-off lines; the 13th month paid in a regular run. */
+    payComponentsApplied?: unknown;
+    thirteenthMonthBreakdown?: unknown;
+    /** PAY-171: the year-end true-up on the year's last regular run. */
+    annualizationData?: unknown;
   };
   employee: {
     employeeNumber: string;
@@ -221,8 +226,22 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   add("Holiday pay", sheet.holidayPayCents);
   add("Rest day pay", sheet.restDayPayCents);
   add("Hazard pay", sheet.hazardPayCents);
-  add("Taxable allowances and additions", sheet.taxableAllowancesCents);
-  add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
+  // PAY-171: on a regular payslip, the 13th month and each bonus and one-off
+  // pay get their own line (as on Mark's Smart payslips).
+  const applied = (Array.isArray(sheet.payComponentsApplied) ? sheet.payComponentsApplied : []) as {
+    name: string; amountCents: string; isBonus?: boolean; isOneOff?: boolean;
+  }[];
+  const bonusLines = applied.filter((a) => a.isBonus || a.isOneOff);
+  const oneOffCents = applied.filter((a) => a.isOneOff).reduce((t, a) => t + BigInt(a.amountCents), 0n);
+  const t13 = (sheet.thirteenthMonthBreakdown ?? null) as { dueCents?: string } | null;
+  const regular13th = book.runType === "REGULAR" && t13?.dueCents ? BigInt(t13.dueCents) : 0n;
+  add("Taxable allowances and additions", sheet.taxableAllowancesCents - oneOffCents);
+  if (regular13th > 0n || bonusLines.length > 0) {
+    add("13th month pay", regular13th);
+    for (const l of bonusLines) add(l.name, BigInt(l.amountCents));
+  } else {
+    add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
+  }
   const listed = earnings.reduce((s, l) => s + l.amount, 0n);
   // Whatever else gross holds (non-taxable allowances from pay components, or
   // the 13th-month excess on a final pay) gets its own line so the column adds up.
@@ -248,15 +267,26 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
         : sssBasis
           ? (basis("MSC", bases?.sssMscCents) ?? "MSC none") + ` (${basisMonth} basic)`
           : basis("MSC", bases?.sssMscCents);
+  const ann = (sheet.annualizationData ?? null) as { trueUpCents?: string } | null;
+  const trueUp = ann?.trueUpCents !== undefined ? BigInt(ann.trueUpCents) : null;
   const statutory: PdfLine[] = [
     { label: "SSS", rate: sssRate, amount: sheet.sssEeCents },
     { label: "PhilHealth", rate: basis("MBS", bases?.philHealthMscCents), amount: sheet.philhealthEeCents },
     { label: "Pag-IBIG", rate: basis("MFS", bases?.pagibigMfsCents), amount: sheet.pagibigEeCents },
-    // PAY-156: a negative withholding is the year-end adjustment refunding tax
-    // withheld above the year's tax due (final pay); it lowers the deductions.
-    sheet.withholdingTaxCents < 0n
-      ? { label: "Tax refund (year-end adjustment)", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents }
-      : { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
+    // PAY-171: the year's last regular run shows the year-end adjustment as
+    // its own line (as on Mark's Smart payslip: "Withholding Tax Adjustments").
+    ...(trueUp !== null && book.runType === "REGULAR"
+      ? [
+          { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents - trueUp },
+          { label: trueUp < 0n ? "Tax refund (year-end adjustment)" : "Withholding tax adjustment (year-end)", amount: trueUp },
+        ]
+      : [
+          // PAY-156: a negative withholding is the year-end adjustment refunding tax
+          // withheld above the year's tax due (final pay); it lowers the deductions.
+          sheet.withholdingTaxCents < 0n
+            ? { label: "Tax refund (year-end adjustment)", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents }
+            : { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents },
+        ]),
   ];
   const statutoryTotal = statutory.reduce((s, l) => s + l.amount, 0n);
   const contributions = sheet.sssEeCents + sheet.philhealthEeCents + sheet.pagibigEeCents;

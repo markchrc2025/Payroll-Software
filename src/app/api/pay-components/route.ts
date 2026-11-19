@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
         includeInSssBase: d.includeInSssBase,
         includeInPhilHealthBase: d.includeInPhilHealthBase,
         includeInPagibigBase: d.includeInPagibigBase,
+        isBonus: d.isBonus, // PAY-171
+        isOneOff: d.isOneOff, // PAY-171
         isActive: d.isActive,
       },
     }),
