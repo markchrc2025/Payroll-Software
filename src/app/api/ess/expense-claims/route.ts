@@ -18,6 +18,7 @@
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { isTenantReceiptKey } from "@/lib/expense-receipts";
 import { getEssContext } from "@/lib/ess-auth";
 import {
   err,
@@ -107,6 +108,10 @@ export async function POST(req: NextRequest) {
 
   const { category, description, amountCents, claimDate, receiptKey } =
     parsed.data;
+  // PAY-190: only a receipt uploaded for this company.
+  if (receiptKey && !isTenantReceiptKey(ctx.tenantId, receiptKey)) {
+    return err("Upload the receipt again, then file the claim.", 422);
+  }
 
   try {
     const claim = await withTenant(ctx.tenantId, (tx) =>
