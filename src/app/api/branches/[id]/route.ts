@@ -40,7 +40,7 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("Branch not found");
+  if (!row) return notFound("Branch");
   return ok(row);
 }
 
@@ -84,7 +84,7 @@ export async function PATCH(
     };
   });
 
-  if (result.notFound) return notFound("Branch not found");
+  if (result.notFound) return notFound("Branch");
   if (result.conflict) return err("Branch name already taken", 409);
   return ok(result.row);
 }
@@ -117,7 +117,7 @@ export async function DELETE(
     };
   });
 
-  if (result.notFound) return notFound("Branch not found");
+  if (result.notFound) return notFound("Branch");
   if (result.inUse)
     return err("Cannot delete: employees are assigned to this branch", 409);
   void writeAuditLog({

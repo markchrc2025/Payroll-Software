@@ -37,7 +37,7 @@ export async function GET(
   const employee = await withTenant(auth.tenantId, (tx) =>
     tx.employee.findFirst({ where: { id: employeeId, tenantId: auth.tenantId, deletedAt: null } })
   );
-  if (!employee) return notFound("Employee not found");
+  if (!employee) return notFound("Employee");
 
   const rows = await withTenant(auth.tenantId, (tx) =>
     tx.oTApplication.findMany({
@@ -89,6 +89,6 @@ export async function POST(
   });
 
   if ("forbidden" in result) return forbidden("You can only file your own OT. Employees file theirs in ESS.");
-  if (result.notFound) return notFound("Employee not found");
+  if (result.notFound) return notFound("Employee");
   return ok(result.row, "OT application filed", 201);
 }

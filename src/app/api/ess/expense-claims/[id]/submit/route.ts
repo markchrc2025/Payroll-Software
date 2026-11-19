@@ -35,7 +35,7 @@ export async function POST(
       return { notFound: false as const, notDraft: false as const, row: updated };
     });
 
-    if (result.notFound) return notFound("Expense claim not found");
+    if (result.notFound) return notFound("Expense claim");
     if (result.notDraft)
       return err(`Only DRAFT claims can be submitted (current: ${result.status})`, 409);
 

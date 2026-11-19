@@ -35,9 +35,9 @@ export async function POST(
       return { notFound: false as const, notPending: false as const, row: updated };
     });
 
-    if (result.notFound) return notFound("OT application not found");
+    if (result.notFound) return notFound("OT application");
     if (result.notPending)
-      return err(`Cannot cancel a ${result.status} application`, 409);
+      return err(`This application is ${result.status.toLowerCase()} and can no longer be cancelled.`, 409);
 
     return ok(result.row, "OT application cancelled");
   } catch (e) {

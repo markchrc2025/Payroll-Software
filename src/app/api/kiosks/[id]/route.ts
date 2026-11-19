@@ -31,7 +31,7 @@ export async function GET(
       include: { branch: { select: { id: true, name: true } } },
     }),
   );
-  if (!kiosk) return notFound("Kiosk not found");
+  if (!kiosk) return notFound("Kiosk");
   return ok(kiosk);
 }
 
@@ -75,7 +75,7 @@ export async function PATCH(
     });
   });
 
-  if (result === "NOT_FOUND")        return notFound("Kiosk not found");
+  if (result === "NOT_FOUND")        return notFound("Kiosk");
   if (result === "BRANCH_NOT_FOUND") return err("Branch not found", 404);
   return ok(result);
 }
@@ -98,6 +98,6 @@ export async function DELETE(
     return tx.kiosk.update({ where: { id }, data: { deletedAt: new Date() } });
   });
 
-  if (result === "NOT_FOUND") return notFound("Kiosk not found");
+  if (result === "NOT_FOUND") return notFound("Kiosk");
   return ok({ id: result.id }, "Kiosk deleted");
 }

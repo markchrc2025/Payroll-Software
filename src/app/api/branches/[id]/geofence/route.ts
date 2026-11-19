@@ -30,7 +30,7 @@ export async function GET(
       where: { id, tenantId: auth.tenantId, deletedAt: null },
     })
   );
-  if (!branch) return notFound("Branch not found");
+  if (!branch) return notFound("Branch");
 
   const geofence = await withTenant(auth.tenantId, (tx) =>
     tx.geofence.findFirst({
@@ -92,6 +92,6 @@ export async function PUT(
     };
   });
 
-  if (result.notFound) return notFound("Branch not found");
+  if (result.notFound) return notFound("Branch");
   return ok(result.row, result.created ? "Geofence created" : "Geofence updated", result.created ? 201 : 200);
 }

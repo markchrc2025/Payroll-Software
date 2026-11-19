@@ -22,6 +22,6 @@ export async function GET(
     })
   );
 
-  if (!row) return notFound("OT application not found");
+  if (!row) return notFound("OT application");
   return ok(row);
 }
