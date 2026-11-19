@@ -330,7 +330,22 @@ function refuseIncoherentPairing(
 
 export const createEmployeeSchema = employeeFieldsSchema.superRefine((v, ctx) => refuseIncoherentPairing(v, ctx));
 
-export const updateEmployeeSchema = employeeFieldsSchema
+// PAY-167: an update changes only the fields it sends. `.partial()` keeps each
+// field's `.default()`, so a save that sent one field used to write the
+// defaults of 23 others (tax classification REGULAR, non-taxable basic ₱0,
+// standard work days 22, Attendance Exempt off, ...). The update schema is
+// therefore built from the create fields with every default removed.
+type WithoutDefaults<S> = { [K in keyof S]: S[K] extends z.ZodDefault<infer Inner> ? Inner : S[K] };
+const employeeFieldsWithoutDefaults = z.object(
+  Object.fromEntries(
+    Object.entries(employeeFieldsSchema.shape).map(([key, field]) => [
+      key,
+      field instanceof z.ZodDefault ? field.unwrap() : field,
+    ]),
+  ) as WithoutDefaults<typeof employeeFieldsSchema.shape>,
+);
+
+export const updateEmployeeSchema = employeeFieldsWithoutDefaults
   // Salary amount AND type are effective-dated on EmploymentTerm and change only
   // through movements — never via a plain profile edit (which would silently
   // desync the value the payroll engine reads).
