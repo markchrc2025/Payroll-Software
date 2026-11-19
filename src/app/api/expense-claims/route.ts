@@ -15,6 +15,7 @@ import {
   listExpenseClaimsSchema,
 } from "@/lib/validations/expense-claim";
 import { toCentavos } from "@/lib/money";
+import { isTenantReceiptKey } from "@/lib/expense-receipts";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function GET(req: NextRequest) {
@@ -89,6 +90,10 @@ export async function POST(req: NextRequest) {
     return err("Validation error", 400, parsed.error.flatten());
 
   const d = parsed.data;
+  // PAY-190: only a receipt uploaded for this company.
+  if (d.receiptKey && !isTenantReceiptKey(auth.tenantId, d.receiptKey)) {
+    return err("Upload the receipt again, then file the claim.", 422);
+  }
 
   try {
     return await withTenant(auth.tenantId, async (tx) => {

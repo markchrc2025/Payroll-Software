@@ -43,6 +43,7 @@ type ExpenseClaim = {
   claimDate: string;
   status: string;
   taxTreatment: string | null;
+  receiptKey?: string | null;
   employee?: { id: string; firstName: string; lastName: string } | null;
 };
 
@@ -164,6 +165,17 @@ export default function ExpenseClaimsPage() {
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
+
+  // PAY-190: open the receipt the employee attached.
+  async function viewReceipt(id: string) {
+    const res = await fetch(`/api/expense-claims/${id}/receipt`);
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.data?.url) {
+      toast.error(json?.error ?? "The receipt could not be opened.");
+      return;
+    }
+    window.open(json.data.url, "_blank", "noopener");
+  }
 
   async function handleApprove() {
     if (!approveTarget) return;
@@ -329,6 +341,13 @@ export default function ExpenseClaimsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
+                      {claim.receiptKey ? (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => viewReceipt(claim.id)}>
+                          Receipt
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground self-center mr-1">No receipt</span>
+                      )}
                       {claim.status === "DRAFT" && (
                         <span className="text-xs text-muted-foreground">Draft, not yet submitted by the employee</span>
                       )}

@@ -12,21 +12,11 @@
 import type { NextRequest } from "next/server";
 
 import { getAuthContext } from "@/lib/auth";
-import { ok, err, unauthorized } from "@/lib/api-response";
-import { readUploadedFile } from "@/lib/server-upload";
-import { putObject, isR2Configured } from "@/lib/r2";
+import { ok, unauthorized } from "@/lib/api-response";
+import { storeReceipt } from "@/lib/expense-receipts";
 import { withTenant } from "@/lib/with-tenant";
 import { callerEmployeeId } from "@/lib/approvals/second-party";
 import { forbidUnless } from "@/lib/authz/route-permission";
-
-const MAX_RECEIPT_SIZE = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_RECEIPT_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "application/pdf",
-];
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -39,32 +29,9 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
   }
 
-  if (!isR2Configured()) {
-    return err(
-      "File storage is not configured on the server. Contact your administrator.",
-      503,
-    );
-  }
-
-  const read = await readUploadedFile(req, {
-    allowedTypes: ALLOWED_RECEIPT_TYPES,
-    maxBytes: MAX_RECEIPT_SIZE,
-    label: "Receipt",
-  });
-  if (read.error) return read.error;
-  const { file } = read;
-
-  // Build a tenant-scoped receipt key
-  const ext = file.name.includes(".")
-    ? file.name.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")
-    : "bin";
-  const storageKey = `tenants/${auth.tenantId}/receipts/${crypto.randomUUID()}.${ext}`;
-
-  try {
-    await putObject(storageKey, Buffer.from(await file.arrayBuffer()), file.type);
-  } catch (e) {
-    return err(`Upload failed: ${e instanceof Error ? e.message : String(e)}`, 502);
-  }
+  const stored = await storeReceipt(req, auth.tenantId);
+  if ("error" in stored) return stored.error;
+  const storageKey = stored.key;
 
   return ok({ storageKey });
 }
