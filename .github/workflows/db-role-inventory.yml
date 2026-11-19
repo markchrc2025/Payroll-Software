@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   inventory:
-    runs-on: [self-hosted, sentire]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
