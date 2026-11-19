@@ -57,7 +57,7 @@ import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
-import { staleAnnualizations } from "./annualize";
+import { annualizeInTx, isLastRegularOfYear, staleAnnualizations } from "./annualize";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -899,9 +899,9 @@ async function withThirteenthMonthInRun(
 }
 
 /**
- * PAY-171: a REGULAR run that pays a bonus (or a 13th month) needs what is
- * left of the year's 90,000 and the year's taxable pay so far, to tax the
- * excess at the employee's rate for the year.
+ * PAY-171: a REGULAR run needs the year's taxable pay and tax so far (the
+ * cumulative average method, and the rate for the year on a bonus excess)
+ * and, when it pays a bonus or a 13th month, what is left of the 90,000.
  */
 async function applyBenefitsContext(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
@@ -910,13 +910,32 @@ async function applyBenefitsContext(
   periodEnd: Date,
   ci: ComputeInput,
 ): Promise<void> {
-  const paysBenefits = ci.payComponents.some((c) => c.isBonus || c.isOneOff) || (ci.thirteenthMonthInRunCents ?? 0n) > 0n;
-  if (!paysBenefits || (ci.runType ?? "REGULAR") !== "REGULAR") return;
+  if ((ci.runType ?? "REGULAR") !== "REGULAR") return;
   const year = periodEnd.getUTCFullYear();
   const openings = await loadYtdOpenings(tx, tenantId, employeeId, year);
-  ci.benefitsExemptUsedCents = await benefitsExemptUsedCents(tx, tenantId, employeeId, year, openings);
-  ci.ytdTaxableCents =
-    (await priorYearTaxSums(tx, tenantId, employeeId, periodEnd)).taxable + ytdOpeningTotals(openings).taxableCompensationCents;
+  const opening = ytdOpeningTotals(openings);
+  const sums = await priorYearTaxSums(tx, tenantId, employeeId, periodEnd);
+  ci.ytdTaxableCents = sums.taxable + opening.taxableCompensationCents;
+  // PAY-171: cumulative average method (kept for the rest of the year once used).
+  const used = await tx.payrollSheet.count({
+    where: {
+      tenantId,
+      employeeId,
+      statutoryBreakdown: { path: ["bir", "method"], equals: "CUMULATIVE_AVERAGE" },
+      payrollBook: {
+        status: "FINALIZED",
+        runType: "REGULAR",
+        periodEnd: { gte: new Date(`${year}-01-01T00:00:00.000Z`), lte: new Date(`${year}-12-31T23:59:59.999Z`) },
+      },
+    },
+  });
+  ci.cumulativeAverage = {
+    priorTaxableCents: ci.ytdTaxableCents,
+    priorWithheldCents: sums.withholding + opening.withholdingTaxCents,
+    usedThisYear: used > 0,
+  };
+  const paysBenefits = ci.payComponents.some((c) => c.isBonus || c.isOneOff) || (ci.thirteenthMonthInRunCents ?? 0n) > 0n;
+  if (paysBenefits) ci.benefitsExemptUsedCents = await benefitsExemptUsedCents(tx, tenantId, employeeId, year, openings);
 }
 
 // ---------------------------------------------------------------------------
@@ -1266,6 +1285,10 @@ export async function createDraftRun(input: CreateDraftRunInput) {
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
     }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear({ runType: input.runType ?? "REGULAR", periodEnd: input.periodEnd })) {
+      await annualizeInTx(tx, input.tenantId, { id: book.id, periodEnd: input.periodEnd });
+    }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({
       where: { id: book.id },
@@ -1437,6 +1460,10 @@ export async function recomputeRun(tenantId: string, bookId: string) {
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
     }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear(book)) {
+      await annualizeInTx(tx, tenantId, { id: bookId, periodEnd: book.periodEnd });
+    }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({
       where: { id: bookId },
@@ -1498,6 +1525,16 @@ export async function finalizeRun(
           `The year's figures changed since this 13th month run was annualized ` +
             `(${stale.length} employee${stale.length === 1 ? "" : "s"}). ` +
             `Annualize again, then finalize.`,
+        );
+      }
+    }
+    // PAY-171: the year's last regular run carries the year-end adjustment.
+    if (isLastRegularOfYear(book)) {
+      const stale = await staleAnnualizations(tx, tenantId, book);
+      if (stale.length > 0) {
+        throw new PayrollRunConflictError(
+          `The year's figures changed since this run's year-end tax adjustment was worked out ` +
+            `(${stale.length} employee${stale.length === 1 ? "" : "s"}). Recompute the run, then finalize.`,
         );
       }
     }
@@ -1839,6 +1876,10 @@ export async function processRun(tenantId: string, bookId: string) {
 
     if (sheets.length > 0) {
       await tx.payrollSheet.createMany({ data: sheets });
+    }
+    // PAY-171: the year's last regular run carries the year-end tax adjustment.
+    if (isLastRegularOfYear(book)) {
+      await annualizeInTx(tx, tenantId, { id: bookId, periodEnd: book.periodEnd });
     }
     // PAY-172: who lacked an approved DTR for days of this cutoff.
     await tx.payrollBook.update({
