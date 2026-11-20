@@ -137,7 +137,9 @@ describe("PAY-153 final pay pays the prorated 13th month", () => {
     };
     const data = buildPayslipPdfData(src);
     const labels = data.earnings.map((l) => l.label);
-    expect(labels).toContain("13th month pay (non-taxable)");
+    // PAY-157 (Mark, 16 Nov): the final pay payslip lists the prorated 13th
+    // month as its own item; its non-taxable part is in the FINAL PAY summary.
+    expect(labels).toContain("Prorated 13th month pay");
     const sum = data.earnings.reduce((s, l) => s + l.amount, 0n);
     expect(sum).toBe(r.grossCompensationCents);
   });
