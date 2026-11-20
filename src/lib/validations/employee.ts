@@ -11,7 +11,7 @@ import { pairingRefusal } from "@/lib/payroll/rates";
 // Enum mirrors — defined here instead of importing from @prisma/client so that
 // this file is safe to use in Client Components. Next.js restricts
 // @prisma/client to server-only bundles; importing it in a shared validation
-// file pulled into EmployeeForm.tsx (a "use client" component) causes a
+// file pulled into a "use client" component causes a
 // build-time "module-not-found" error on the browser bundle.
 //
 // These values MUST stay in sync with prisma/schema.prisma.

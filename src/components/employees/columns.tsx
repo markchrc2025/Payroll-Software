@@ -166,7 +166,7 @@ export function buildColumns(
       id: "salaryType",
       header: "Salary type",
       cell: ({ row }) => {
-        const map: Record<string, string> = { MONTHLY: "Monthly", DAILY: "Daily", HOURLY: "Hourly" };
+        const map: Record<string, string> = { MONTHLY: "Monthly", WEEKLY: "Weekly", DAILY: "Daily" };
         return (
           <span className="text-[13.5px] text-[#171717]">
             {map[row.original.salaryType] ?? row.original.salaryType}

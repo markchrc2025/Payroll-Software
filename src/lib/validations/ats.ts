@@ -92,21 +92,6 @@ export const rejectApplicantSchema = z.object({
   rejectionReason: z.string().min(1).max(2000).optional(),
 });
 
-export const hireApplicantSchema = z.object({
-  hireDate: z.coerce.date(),
-  departmentId: cuid.optional(),
-  branchId: cuid.optional(),
-  positionId: cuid.optional(),
-  jobTitle: z.string().max(200).optional(),
-  payFrequency: z
-    .enum(["MONTHLY", "SEMI_MONTHLY", "WEEKLY", "DAILY"])
-    .default("SEMI_MONTHLY"),
-  salaryType: z.enum(["MONTHLY", "DAILY", "HOURLY"]).default("MONTHLY"),
-  employmentType: z
-    .enum(["FULL_TIME", "PART_TIME", "CONTRACTUAL", "PROJECT_BASED", "PROBATIONARY"])
-    .default("FULL_TIME"),
-});
-
 // ---------------------------------------------------------------------------
 // ApplicantNote
 // ---------------------------------------------------------------------------
