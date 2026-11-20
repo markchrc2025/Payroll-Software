@@ -12,20 +12,14 @@
 import { requireApprover } from "@/lib/approvals/second-party";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { withTenant, type TenantTx } from "@/lib/with-tenant";
+import { withTenant } from "@/lib/with-tenant";
 import { checkPermission } from "@/lib/require-permission";
 import { ok, err, notFound, forbidden } from "@/lib/api-response";
 import { enqueueOtApproved } from "@/lib/jobs/workers";
-import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
+import { writeOtMinutes } from "@/lib/attendance/ot-minutes";
 
 const bodySchema = z.object({ note: z.string().optional() }).optional();
 
-const OT_POLICY_SELECT = {
-  otBreakMode:         true,
-  otBreakTriggerHours: true,
-  otBreakBlockHours:   true,
-  otBreakMinutes:      true,
-} as const;
 
 export async function POST(
   req: NextRequest,
@@ -133,42 +127,4 @@ export async function POST(
   );
 
   return ok(result.row, "OT application approved");
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function writeOtMinutes(
-  tx: TenantTx,
-  tenantId: string,
-  ota: { employeeId: string; date: Date; hours: { toString(): string } },
-) {
-  const otAssignment = await tx.employeeShiftAssignment.findFirst({
-    where: {
-      tenantId,
-      employeeId:    ota.employeeId,
-      effectiveFrom: { lte: ota.date },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: ota.date } }],
-    },
-    orderBy: { effectiveFrom: "desc" },
-    select: { shiftSchedule: { select: OT_POLICY_SELECT } },
-  });
-  let otShift = otAssignment?.shiftSchedule ?? null;
-  if (!otShift) {
-    const emp = await tx.employee.findFirst({
-      where: { id: ota.employeeId, tenantId },
-      select: { shiftSchedule: { select: OT_POLICY_SELECT } },
-    });
-    otShift = emp?.shiftSchedule ?? null;
-  }
-
-  const rawOtMinutes = Math.round(Number(ota.hours) * 60);
-  const otMinutes = otShift ? applyOtBreakRule(rawOtMinutes, otShift) : rawOtMinutes;
-
-  await tx.dTRRecord.upsert({
-    where: { tenantId_employeeId_date: { tenantId, employeeId: ota.employeeId, date: ota.date } },
-    update: { otMinutes },
-    create: { tenantId, employeeId: ota.employeeId, date: ota.date, dayStatus: "REST_DAY", otMinutes },
-  });
 }
