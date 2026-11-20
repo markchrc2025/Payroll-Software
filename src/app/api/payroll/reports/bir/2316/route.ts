@@ -20,6 +20,11 @@ import {
   type Bir2316EmployeeInput,
   type Bir2316SheetInput,
 } from "@/lib/payroll/reports/bir-2316";
+import { BIR_SHEET_SELECT, factsFromSheet, splitSheet } from "@/lib/payroll/reports/bir-comp";
+import {
+  BIR_EMPLOYEE_SELECT, loadAnnualTaxDue, loadEmployeeTins, loadMinimumWages,
+  loadWithholdingAgent, personOf,
+} from "@/lib/payroll/reports/bir-data";
 import { forbidUnless } from "@/lib/authz/route-permission";
 import {
   loadYtdOpeningsByEmployee,
@@ -68,20 +73,10 @@ export async function GET(req: NextRequest) {
             periodEnd: { gte: yearStart, lte: yearEnd },
           },
         },
-        select: {
-          employeeId: true,
-          grossCompensationCents: true,
-          mweExemptCompensationCents: true,
-          nontaxableBasicCents: true,
-          nontaxableCompensationCents: true,
-          nontaxable13MonthAndBenefitsCents: true,
-          grossTaxableIncomeCents: true,
-          sssEeCents: true,
-          philhealthEeCents: true,
-          pagibigEeCents: true,
-          withholdingTaxCents: true,
-        },
+        select: { ...BIR_SHEET_SELECT, workingDaysDenominatorSnapshot: true },
       });
+      const daysPerYear = new Map<string, number>();
+      for (const s of sheets) daysPerYear.set(s.employeeId, s.workingDaysDenominatorSnapshot);
 
       // 2. Group by employeeId.
       const byEmployee = new Map<string, Bir2316SheetInput[]>();
@@ -98,6 +93,7 @@ export async function GET(req: NextRequest) {
           philhealthEeCents: s.philhealthEeCents,
           pagibigEeCents: s.pagibigEeCents,
           withholdingTaxCents: s.withholdingTaxCents,
+          comp: splitSheet(factsFromSheet(s)),
         });
         byEmployee.set(s.employeeId, bucket);
       }
@@ -114,12 +110,16 @@ export async function GET(req: NextRequest) {
         where: { id: auth.tenantId },
         select: { name: true },
       });
+      const employer = await loadWithholdingAgent(tx, auth.tenantId);
+      const taxDue = await loadAnnualTaxDue(tx, auth.tenantId, year);
 
       if (employeeIds.length === 0) {
         return buildBir2316Report({
           year,
           tenantId: auth.tenantId,
           tenantName: tenant.name,
+          employer,
+          taxDue,
           employees: [],
         });
       }
@@ -127,16 +127,10 @@ export async function GET(req: NextRequest) {
       // 3. Load employee details.
       const employees = await tx.employee.findMany({
         where: { id: { in: employeeIds } },
-        select: {
-          id: true,
-          employeeNumber: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-          suffix: true,
-          taxClassification: true,
-        },
+        select: BIR_EMPLOYEE_SELECT,
       });
+      const tins = await loadEmployeeTins(tx, auth.tenantId, employeeIds);
+      const minimumWages = await loadMinimumWages(tx, auth.tenantId, year);
 
       // 4. Fetch year-end annualization data for each employee (if run).
       const yearEndAnnSheets = await tx.payrollSheet.findMany({
@@ -168,6 +162,7 @@ export async function GET(req: NextRequest) {
         suffix: e.suffix,
         taxClassification: e.taxClassification,
         sheets: byEmployee.get(e.id) ?? [],
+        person: personOf(e, year, tins.get(e.id) ?? null, minimumWages, daysPerYear.get(e.id) ?? null),
         ...ytdOpeningInputs(openings.get(e.id) ?? []),
       }));
 
@@ -175,6 +170,8 @@ export async function GET(req: NextRequest) {
         year,
         tenantId: auth.tenantId,
         tenantName: tenant.name,
+        employer,
+        taxDue,
         employees: employeeInputs,
       });
 
