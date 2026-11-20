@@ -52,6 +52,7 @@ import type {
   ComputePeriodInputSnapshot,
   ComputeResult,
   ComputeStatutoryRules,
+  StatutoryRuleVersions,
   FinalPayInputs,
 } from "./types";
 import { getActiveRule } from "@/lib/statutory/resolver";
@@ -299,7 +300,8 @@ export async function resolveAllRules(
 ): Promise<ComputeStatutoryRules> {
   const asOfKey = asOf.toISOString().split("T")[0]; // date-only string for stable cache key
   return getOrSet(
-    CacheKeys.statutory(tenantId, asOfKey),
+    // ":v2" since PAY-59: entries cached before it carry no rule versions.
+    CacheKeys.statutory(tenantId, `${asOfKey}:v2`),
     TTL.STATUTORY,
     async () => {
       // ALL SIX categories are required (unit 1.2). MINIMUM_WAGE_RATE and
@@ -317,9 +319,18 @@ export async function resolveAllRules(
         "MINIMUM_WAGE_RATE",
         "DE_MINIMIS_CEILING",
       ];
-      const [sss, phic, hdmf, bir, minWageRule, deMinimisRule] = await Promise.all(
-        cats.map((c) => getActiveRule(tx, tenantId, c, asOf)),
-      );
+      const resolved = await Promise.all(cats.map((c) => getActiveRule(tx, tenantId, c, asOf)));
+      const [sss, phic, hdmf, bir, minWageRule, deMinimisRule] = resolved;
+      // PAY-59 (R59): the version of each table, to be stored on the payslips.
+      const ruleVersions: StatutoryRuleVersions = {};
+      resolved.forEach((r, i) => {
+        ruleVersions[cats[i]!] = {
+          id: r!.id,
+          version: r!.version,
+          effectiveFrom: r!.effectiveFrom instanceof Date ? r!.effectiveFrom.toISOString().slice(0, 10) : String(r!.effectiveFrom ?? "").slice(0, 10),
+          legalBasis: r!.legalBasis,
+        };
+      });
 
       const minWage = minWageRule!.payload as ComputeStatutoryRules["minWage"];
       const deMinimis = deMinimisRule!.payload as ComputeStatutoryRules["deMinimis"];
@@ -331,6 +342,7 @@ export async function resolveAllRules(
         bir: bir!.payload as ComputeStatutoryRules["bir"],
         minWage,
         deMinimis,
+        ruleVersions,
       };
     },
   );
@@ -1540,6 +1552,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
       result = held.result;
       sheets.push({
         ...resultToSheetCreate(input.tenantId, book.id, e.id, result),
+        statutoryRuleVersions: rules.ruleVersions,
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
         ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });
@@ -1720,6 +1733,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
       result = held.result;
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
+        statutoryRuleVersions: rules.ruleVersions,
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
         ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });
@@ -2164,6 +2178,7 @@ export async function processRun(tenantId: string, bookId: string) {
       result = held.result;
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
+        statutoryRuleVersions: rules.ruleVersions,
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
         ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });

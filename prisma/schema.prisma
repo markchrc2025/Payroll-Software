@@ -2769,6 +2769,10 @@ model PayrollSheet {
   periodInputSnapshot  Json  @default("{}")
   /// Per-fund SSS/PhilHealth/Pag-IBIG raw breakdown (msc, regular, mpf, ec).
   statutoryBreakdown   Json  @default("{}")
+  /// PAY-59 (R59): the version of each statutory table that priced this
+  /// payslip: category to { id, version, effectiveFrom, legalBasis }. Null on
+  /// payslips computed before PAY-59.
+  statutoryRuleVersions Json?
   /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
   /// annualization inputs/outputs.  Null for REGULAR / OFF_CYCLE / YEAR_END.
   finalPayBreakdown    Json?
