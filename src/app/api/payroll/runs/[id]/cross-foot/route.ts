@@ -20,7 +20,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const result = await crossFootRun(auth.tenantId, id);
     if (!result) return err("Payroll run not found", 404);
     const register = Object.fromEntries(Object.entries(result.register).map(([k, v]) => [k, v.toString()]));
-    return ok({ status: result.status, tiesOut: allTieOut(result.checks), register, checks: result.checks });
+    // PAY-203 (ruling 3): a run with no payslips has nothing to tie out.
+    const empty = result.register.payslips === 0;
+    return ok({ status: result.status, empty, tiesOut: !empty && allTieOut(result.checks), register, checks: empty ? [] : result.checks });
   } catch (e) {
     console.error("[runs/cross-foot]", e);
     return err("Internal server error", 500);
