@@ -10,7 +10,10 @@
  *   T3  the report only prints: report mode always exits 0, and the start
  *       script runs it after the migrations and cannot be stopped by it.
  *   T4  the committed reference is a sorted, de-duplicated list that covers
- *       tables, columns, indexes, constraints, policies and enum types.
+ *       tables, columns, indexes, constraints, policies and enum types; a
+ *       policy for the table's owner names no role (the first production
+ *       report listed all 71 owner policies only because the owner's name
+ *       differs per server).
  *   D1  (real Postgres) a database built from the migrations matches the
  *       committed reference, so the reference is current.
  *   D2  (real Postgres) a policy added outside the migrations is reported.
@@ -42,6 +45,7 @@ describe("PAY-58 schema drift report", () => {
     expect(lines[0]).toBe("[schema-drift] DRIFT: 2 missing, 2 unexpected (reference has 3 objects). Report only; nothing was changed.");
     expect(lines).toContain('[schema-drift] unexpected: policy "Employee" admin_bypass PERMISSIVE ALL to postgres using (true)');
     expect(lines).toContain('[schema-drift] missing: table "Employee" rls=true force=true');
+    expect(lines.at(-1)).toBe("[schema-drift] END: 2 missing, 2 unexpected.");
   });
 
   it("T2 a matching schema reports OK", () => {
@@ -69,6 +73,12 @@ describe("PAY-58 schema drift report", () => {
       expect(ref.some((l) => l.startsWith(kind)), kind).toBe(true);
     }
     expect(ref.some((l) => l.includes("_prisma_migrations"))).toBe(false);
+    // T5: a policy for the role that owns the table names no role, so the
+    // owner being called something else on a server is not drift.
+    const bypass = ref.filter((l) => l.includes(" admin_bypass "));
+    expect(bypass.length).toBeGreaterThan(50);
+    expect(bypass.every((l) => l.includes(" to <owner> "))).toBe(true);
+    expect(ref.some((l) => /^policy .* to postgres\b/.test(l))).toBe(false);
   });
 });
 
@@ -99,6 +109,10 @@ describeDb("PAY-58 schema drift report (real Postgres)", () => {
       expect(diff.missing).toEqual([]);
       expect(diff.unexpected).toHaveLength(1);
       expect(diff.unexpected[0]).toContain(`policy "Tenant" ${name} PERMISSIVE SELECT to public using true`);
+      // The same policy for another role is still drift.
+      await client.query(`CREATE POLICY ${name}_app ON "Tenant" FOR SELECT TO payroll_app USING (true)`);
+      const again = diffFingerprints(loadReference(), await readFingerprint(client));
+      expect(again.unexpected.some((l: string) => l.includes(`${name}_app PERMISSIVE SELECT to payroll_app`))).toBe(true);
     } finally {
       await client.query("ROLLBACK");
       await client.end();

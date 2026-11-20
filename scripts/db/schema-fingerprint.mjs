@@ -41,10 +41,15 @@ const QUERIES = [
     WHERE n.nspname = 'public' AND c.relname <> '_prisma_migrations'
       -- Postgres 18 lists NOT NULL as a constraint; the column line already says it.
       AND k.contype <> 'n'`,
-  `SELECT 'policy ' || quote_ident(tablename) || ' ' || quote_ident(policyname) || ' ' || permissive || ' ' || cmd ||
-          ' to ' || array_to_string(roles, ',') ||
-          COALESCE(' using ' || qual, '') || COALESCE(' check ' || with_check, '') AS line
-     FROM pg_policies WHERE schemaname = 'public'`,
+  // A policy granted to the role that owns the table is written "<owner>": the
+  // owner is called postgres on a developer machine and something else on each
+  // server, and that is not drift.
+  `SELECT 'policy ' || quote_ident(p.tablename) || ' ' || quote_ident(p.policyname) || ' ' || p.permissive || ' ' || p.cmd ||
+          ' to ' || (SELECT string_agg(CASE WHEN r = t.tableowner THEN '<owner>' ELSE r END, ',' ORDER BY 1)
+                       FROM unnest(p.roles::text[]) AS r) ||
+          COALESCE(' using ' || p.qual, '') || COALESCE(' check ' || p.with_check, '') AS line
+     FROM pg_policies p JOIN pg_tables t ON t.schemaname = p.schemaname AND t.tablename = p.tablename
+    WHERE p.schemaname = 'public'`,
   `SELECT 'trigger ' || pg_get_triggerdef(t.oid) AS line
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND NOT t.tgisinternal`,
@@ -88,6 +93,8 @@ export function driftReport(reference, live) {
   out.push(`[schema-drift] DRIFT: ${missing.length} missing, ${unexpected.length} unexpected (reference has ${reference.length} objects). Report only; nothing was changed.`);
   for (const l of missing) out.push(`[schema-drift] missing: ${l}`);
   for (const l of unexpected) out.push(`[schema-drift] unexpected: ${l}`);
+  // Said again at the end, where the tail of a log is read.
+  out.push(`[schema-drift] END: ${missing.length} missing, ${unexpected.length} unexpected.`);
   return out;
 }
 
