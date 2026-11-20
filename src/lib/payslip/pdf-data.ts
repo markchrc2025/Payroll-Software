@@ -22,6 +22,7 @@ import type {
   AppliedExpenseClaim,
   AppliedLoanPayment,
   ComputePeriodInputSnapshot,
+  FinalPayBreakdown,
   StatutoryBreakdown,
 } from "@/lib/payroll/types";
 import { loadPayslipExtras, type PayslipExtras } from "@/lib/payslip/extras";
@@ -79,6 +80,8 @@ export interface PayslipPdfData {
   ytd: { label: string; amount: bigint }[];
   attendance: { label: string; value: string }[];
   leave: { label: string; value: string }[];
+  /** PAY-157: a final pay payslip's summary (null on other runs). */
+  finalPay: { rows: { label: string; value: string }[] } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ const plural = (n: number, one: string, many: string) => `${num(n)} ${n === 1 ? 
 
 export interface PayslipPdfSource {
   company: { name: string; tradeName?: string | null; address?: string | null; city?: string | null; province?: string | null; zipCode?: string | null };
-  book: { periodStart: Date; periodEnd: Date; cycle: string; runType: string; finalizedAt: Date | null };
+  book: { periodStart: Date; periodEnd: Date; cycle: string; runType: string; finalizedAt: Date | null; separationReason?: string | null };
   sheet: {
     id: string;
     salaryTypeSnapshot: string;
@@ -176,6 +179,8 @@ export interface PayslipPdfSource {
     annualizationData?: unknown;
     /** PAY-194: held cutoffs released on this payslip, with their figures. */
     heldRelease?: unknown;
+    /** PAY-157: the final pay items (FINAL_PAY runs). */
+    finalPayBreakdown?: unknown;
   };
   employee: {
     employeeNumber: string;
@@ -189,6 +194,8 @@ export interface PayslipPdfSource {
     bankName?: string | null;
     bankAccountNumber?: string | null;
     statutoryIds: { type: string; number: string | null }[];
+    /** PAY-157: shown on a final pay payslip. */
+    lastWorkingDate?: Date | null;
   };
   extras: PayslipExtras;
 }
@@ -219,8 +226,11 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const earnings: PdfLine[] = [];
   const daysWorked = n("daysWorked");
   const unpaid = n("unpaidLeaveDays");
+  // PAY-157: a final pay's items, one line each.
+  const fp = book.runType === "FINAL_PAY" ? ((sheet.finalPayBreakdown ?? null) as FinalPayBreakdown | null) : null;
+  const basicLabel = fp ? "Salary for the last cutoff" : "Basic pay";
   earnings.push({
-    label: unpaid > 0 ? `Basic pay (less ${plural(unpaid, "unpaid day", "unpaid days")})` : "Basic pay",
+    label: unpaid > 0 ? `${basicLabel} (less ${plural(unpaid, "unpaid day", "unpaid days")})` : basicLabel,
     units: daysWorked > 0 ? plural(daysWorked, "day", "days") : undefined,
     rate: `${peso(sheet.basicSalaryCentsSnapshot)}/${per}`,
     amount: own("basePayCents"),
@@ -253,12 +263,28 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const oneOffCents = applied.filter((a) => a.isOneOff).reduce((t, a) => t + BigInt(a.amountCents), 0n);
   const t13 = (sheet.thirteenthMonthBreakdown ?? null) as { dueCents?: string } | null;
   const regular13th = book.runType === "REGULAR" && t13?.dueCents ? BigInt(t13.dueCents) : 0n;
-  add("Taxable allowances and additions", own("taxableAllowancesCents") - oneOffCents);
-  if (regular13th > 0n || bonusLines.length > 0) {
-    add("13th month pay", regular13th);
+  const fpLeave = fp ? BigInt(fp.leaveCashOutCents) : 0n;
+  const fpSep = fp ? BigInt(fp.separationPayCents) : 0n;
+  const fpSepTaxable = fp?.isSeparationPayTaxable ? fpSep : 0n;
+  const fp13 = fp ? BigInt(fp.proratedThirteenthMonthCents) : 0n;
+  if (fp) {
+    // The engine folds the leave cash-out, taxable separation pay and the
+    // taxable part of the 13th month and bonuses into taxable allowances.
+    const bonusCents = applied.filter((a) => a.isBonus && !a.isOneOff).reduce((t, a) => t + BigInt(a.amountCents), 0n);
+    const excess = fp13 + bonusCents - (sheet.nontaxable13MonthAndBenefitsCents ?? 0n);
+    add("Taxable allowances and additions", own("taxableAllowancesCents") - oneOffCents - fpLeave - fpSepTaxable - excess);
+    add("Prorated 13th month pay", fp13);
     for (const l of bonusLines) add(l.name, BigInt(l.amountCents));
+    add("Leave converted to cash", fpLeave);
+    add("Separation pay (taxable)", fpSepTaxable);
   } else {
-    add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
+    add("Taxable allowances and additions", own("taxableAllowancesCents") - oneOffCents);
+    if (regular13th > 0n || bonusLines.length > 0) {
+      add("13th month pay", regular13th);
+      for (const l of bonusLines) add(l.name, BigInt(l.amountCents));
+    } else {
+      add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
+    }
   }
   for (const r of releases) {
     add(`Held salary released (${fmtRange(r.periodStart, r.periodEnd)})`, BigInt(r.amounts.grossCompensationCents ?? "0"));
@@ -322,7 +348,9 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   for (const l of loans) {
     const amt = BigInt(l.amountCents ?? "0");
     if (amt === 0n) continue;
-    other.push({ label: LOAN[l.loanType] ?? "Loan", rate: `Balance ${peso(BigInt(l.balanceAfterCents ?? "0"))}`, amount: amt });
+    const after = BigInt(l.balanceAfterCents ?? "0");
+    const name = LOAN[l.loanType] ?? "Loan";
+    other.push({ label: fp && after === 0n ? `${name} (settled)` : name, rate: `Balance ${peso(after)}`, amount: amt });
   }
   const loansListed = other.reduce((s, l) => s + l.amount, 0n);
   if (sheet.loanDeductionsCents !== loansListed) {
@@ -343,6 +371,7 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
 
   // -- Additions after tax (reimbursements, non-taxable adjustments) ----------
   const additions: PdfLine[] = [];
+  if (fp && !fp.isSeparationPayTaxable && fpSep > 0n) additions.push({ label: "Separation pay (not taxable)", amount: fpSep });
   for (const a of adjustments) {
     if (a.kind === "ADDITION" && !a.isTaxable) additions.push({ label: a.reason?.trim() || "Non-taxable addition", amount: BigInt(a.amountCents ?? "0") });
   }
@@ -441,7 +470,41 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
       { label: "Overtime", value: `${num(otHours)} hrs` },
     ],
     leave: extras.leaveBalances.map((b) => ({ label: b.name, value: `${b.available} days` })),
+    finalPay: fp ? { rows: finalPayRows(fp, book.separationReason ?? null, emp.lastWorkingDate ?? null, sheet.nontaxable13MonthAndBenefitsCents ?? 0n, sheet.withholdingTaxCents) } : null,
   };
+}
+
+const REASON: Record<string, string> = {
+  RESIGNATION: "Resignation",
+  MUTUAL_AGREEMENT: "Mutual agreement",
+  END_OF_CONTRACT: "End of contract",
+  REDUNDANCY: "Redundancy",
+  RETRENCHMENT: "Retrenchment",
+  CLOSURE_OF_BUSINESS: "Closure of business",
+  DISEASE: "Disease",
+  JUST_CAUSE: "Dismissal for just cause",
+};
+
+/** PAY-157: the final pay summary: separation, the 13th month, and the year's tax. */
+function finalPayRows(
+  fp: FinalPayBreakdown,
+  reason: string | null,
+  lastDay: Date | null,
+  exempt13th: bigint,
+  withheldNow: bigint,
+): { label: string; value: string }[] {
+  const day = (x: Date) => `${x.getUTCDate()} ${MON[x.getUTCMonth()]} ${x.getUTCFullYear()}`;
+  const p13 = BigInt(fp.proratedThirteenthMonthCents);
+  return [
+    { label: "Last working day", value: lastDay ? day(lastDay) : "Not on file" },
+    { label: "Reason", value: reason ? REASON[reason] ?? reason : "Not on file" },
+    { label: "Prorated 13th month", value: p13 > 0n ? `${peso(p13)} (${peso(exempt13th < p13 ? exempt13th : p13)} not taxable)` : peso(0n) },
+    { label: "Separation pay", value: BigInt(fp.separationPayCents) > 0n ? `${peso(BigInt(fp.separationPayCents))} (${fp.isSeparationPayTaxable ? "taxable" : "not taxable"})` : "None" },
+    { label: "Taxable pay earlier this year", value: peso(BigInt(fp.cyPriorTaxableIncomeCents)) },
+    { label: "Tax withheld earlier this year", value: peso(BigInt(fp.cyPriorWithholdingTaxCents)) },
+    { label: "Tax due for the year", value: peso(BigInt(fp.annualizedWhtCents)) },
+    { label: withheldNow < 0n ? "Tax refunded in this pay" : "Tax withheld in this pay", value: peso(withheldNow < 0n ? -withheldNow : withheldNow) },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +538,7 @@ export async function loadPayslipPdfData(
         branch: { select: { name: true } },
         position: { select: { title: true } },
         statutoryIds: { select: { type: true, number: true } },
+        lastWorkingDate: true,
       },
     }),
     tx.tenant.findUniqueOrThrow({
