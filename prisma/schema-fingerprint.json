@@ -964,6 +964,7 @@
   "column \"PayrollSheet\".\"sssErCents\" int8 not null default 0",
   "column \"PayrollSheet\".\"statutoryBreakdown\" jsonb not null default '{}'::jsonb",
   "column \"PayrollSheet\".\"statutoryDeductedSnapshot\" bool not null",
+  "column \"PayrollSheet\".\"statutoryRuleVersions\" jsonb null",
   "column \"PayrollSheet\".\"taxClassificationSnapshot\" TaxClassification not null",
   "column \"PayrollSheet\".\"taxableAllowancesCents\" int8 not null default 0",
   "column \"PayrollSheet\".\"tenantId\" text not null",
