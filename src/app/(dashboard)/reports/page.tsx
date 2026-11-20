@@ -4,7 +4,9 @@
  * /reports — Statutory Compliance Reports
  *
  * 8 report cards grouped by agency:
- *   BIR : 1601-C (monthly WHT remittance), 2316 (annual certificate), Alphalist
+ *   BIR : 1601-C (monthly remittance return), 2316 (annual certificate),
+ *         1604-C (annual return with the alphalist). PAY-71: these three are
+ *         shown in the form's own structure ("View form").
  *   SSS : R-1A (monthly contributions), R-3 (monthly collection list)
  *   PhilHealth : RF-1 (remittance report), ER-2 (premium contribution return)
  *   Pag-IBIG : MCRF (monthly contribution remittance form)
@@ -15,12 +17,14 @@
  *  - "Generate" button → fetches the JSON report from the API
  *  - "Download JSON" always available after generation
  *  - "Download File" for reports that include a machine-readable text attachment
- *    (Alphalist → .dat, SSS R-3 → .ecs, PhilHealth ER-2 → .txt)
+ *    (SSS R-3 → .ecs, PhilHealth ER-2 → .txt)
  */
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Download, Eye, FileText, Loader2 } from "lucide-react";
+import { BirFormViewer, type BirFormEntry } from "@/components/reports/BirFormViewer";
+import type { BirFormView } from "@/lib/payroll/reports/bir-form";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -94,11 +98,27 @@ const AGENCY_COLORS: Record<string, { bg: string; color: string }> = {
   "Pag-IBIG":{ bg: "#FBF0DD", color: "#DB8A28" },
 };
 
+/** PAY-71: the BIR forms inside a generated report, in their mandated structure. */
+function formEntries(report: ReportDef, result: Record<string, unknown> | null): BirFormEntry[] {
+  if (!result) return [];
+  const isView = (v: unknown): v is BirFormView =>
+    !!v && typeof v === "object" && "formNo" in v && "sections" in v;
+  if (isView(result.form)) return [{ label: report.title, view: result.form }];
+  if (Array.isArray(result.certificates)) {
+    return (result.certificates as Record<string, unknown>[])
+      .filter((c) => isView(c.form))
+      .map((c) => ({ label: `${c.lastName}, ${c.firstName}`, view: c.form as BirFormView }));
+  }
+  return [];
+}
+
 function ReportCard({ report }: { report: ReportDef }) {
   const [year, setYear] = useState(String(CURRENT_YEAR));
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const forms = formEntries(report, result);
 
   async function handleGenerate() {
     setLoading(true);
@@ -189,7 +209,7 @@ function ReportCard({ report }: { report: ReportDef }) {
         <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-[12.5px] font-semibold" style={{ background: "#E5F6EE", color: "#0FA36B" }}>
           <span>✓ Report ready</span>
           {typeof result === "object" && "employees" in result
-            ? <span className="font-normal text-[#0FA36B]/80">— {(result.employees as unknown[]).length} employee(s)</span>
+            ? <span className="font-normal text-[#0FA36B]/80">{(result.employees as unknown[]).length} employee(s)</span>
             : null}
         </div>
       )}
@@ -211,6 +231,14 @@ function ReportCard({ report }: { report: ReportDef }) {
 
         {result && (
           <>
+            {forms.length > 0 && (
+              <button
+                onClick={() => setViewing(true)}
+                className="h-7 flex items-center gap-1.5 px-2.5 text-[13.5px] font-medium rounded-[8px] bg-[var(--fill)] text-[var(--ink)] hover:bg-[var(--fill-2)] transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5" /> View form
+              </button>
+            )}
             <button
               onClick={handleDownloadJson}
               className="h-7 flex items-center gap-1.5 px-2.5 text-[13.5px] font-medium rounded-[8px] bg-[var(--fill)] text-[var(--ink)] hover:bg-[var(--fill-2)] transition-colors"
@@ -229,6 +257,12 @@ function ReportCard({ report }: { report: ReportDef }) {
           </>
         )}
       </div>
+      <BirFormViewer
+        open={viewing}
+        onClose={() => setViewing(false)}
+        entries={forms}
+        fileName={`${report.id}_${report.monthly ? `${year}-${month.padStart(2, "0")}` : year}`}
+      />
     </div>
   );
 }
@@ -241,30 +275,27 @@ const REPORTS: ReportDef[] = [
   // BIR
   {
     id: "bir_1601c",
-    title: "BIR 1601-C — Monthly WHT Remittance",
-    description: "Monthly Remittance Return of Creditable Income Taxes Withheld on Compensation. Summarises withheld tax by bracket for all finalized payroll runs in the selected month.",
+    title: "BIR 1601-C: Monthly Remittance Return",
+    description: "Monthly Remittance Return of Income Taxes Withheld on Compensation (January 2018 ENCS). Part II Items 14 to 25 from the finalized payroll runs of the selected month, in the form's own structure.",
     agency: "BIR",
     monthly: true,
     apiPath: "/api/payroll/reports/bir/1601c",
   },
   {
     id: "bir_2316",
-    title: "BIR 2316 — Annual Tax Certificates",
-    description: "Certificate of Compensation Payment/Tax Withheld for all employees for the selected year. One certificate per employee across all finalized payroll runs.",
+    title: "BIR 2316: Annual Tax Certificates",
+    description: "Certificate of Compensation Payment/Tax Withheld (September 2021 ENCS), one per employee for the selected year, Items 1 to 52 in the form's own structure.",
     agency: "BIR",
     monthly: false,
     apiPath: "/api/payroll/reports/bir/2316",
   },
   {
-    id: "bir_alphalist",
-    title: "BIR Alphalist — Annual Employee List",
-    description: "Annual Alphalist of Employees (Annex B-1 / B-2) for eBIRForms / SRS submission. Includes .DAT file for electronic filing.",
+    id: "bir_1604c",
+    title: "BIR 1604-C: Annual Return and Alphalist",
+    description: "Annual Information Return of Income Taxes Withheld on Compensation (January 2018) with the alphalist in the RMC 160-2022 format: Schedule 1 for employees and Schedule 2 for minimum wage earners.",
     agency: "BIR",
     monthly: false,
-    apiPath: "/api/payroll/reports/bir/alphalist",
-    fileField: "datFileContent",
-    fileExt: "dat",
-    fileLabel: ".DAT",
+    apiPath: "/api/payroll/reports/bir/1604c",
   },
   // SSS
   {

@@ -19,6 +19,8 @@ import {
   type Bir1601cEmployeeInput,
   type Bir1601cSheetInput,
 } from "@/lib/payroll/reports/bir-1601c";
+import { BIR_SHEET_SELECT, factsFromSheet, splitSheet } from "@/lib/payroll/reports/bir-comp";
+import { loadEmployeeTins, loadWithholdingAgent } from "@/lib/payroll/reports/bir-data";
 import { forbidUnless } from "@/lib/authz/route-permission";
 
 const querySchema = z.object({
@@ -66,17 +68,9 @@ export async function GET(req: NextRequest) {
             periodEnd: { gte: rangeStart, lte: rangeEnd },
           },
         },
-        select: {
-          employeeId: true,
-          grossCompensationCents: true,
-          mweExemptCompensationCents: true,
-          nontaxableBasicCents: true,
-          nontaxableCompensationCents: true,
-          nontaxable13MonthAndBenefitsCents: true,
-          grossTaxableIncomeCents: true,
-          withholdingTaxCents: true,
-        },
+        select: BIR_SHEET_SELECT,
       });
+      const agent = await loadWithholdingAgent(tx, auth.tenantId);
 
       if (sheets.length === 0) {
         // No finalized data for the period — return empty report.
@@ -89,6 +83,7 @@ export async function GET(req: NextRequest) {
           month,
           tenantId: auth.tenantId,
           tenantName: tenant.name,
+          agent,
           employees: [],
         });
       }
@@ -105,6 +100,7 @@ export async function GET(req: NextRequest) {
           nontaxable13MonthAndBenefitsCents: s.nontaxable13MonthAndBenefitsCents,
           grossTaxableIncomeCents: s.grossTaxableIncomeCents,
           withholdingTaxCents: s.withholdingTaxCents,
+          comp: splitSheet(factsFromSheet(s)),
         });
         byEmployee.set(s.employeeId, bucket);
       }
@@ -131,6 +127,8 @@ export async function GET(req: NextRequest) {
         }),
       ]);
 
+      const tins = await loadEmployeeTins(tx, auth.tenantId, employeeIds);
+
       // 4. Assemble input for pure report builder.
       const employeeInputs: Bir1601cEmployeeInput[] = employees.map((e) => ({
         employeeId: e.id,
@@ -140,6 +138,7 @@ export async function GET(req: NextRequest) {
         lastName: e.lastName,
         suffix: e.suffix,
         taxClassification: e.taxClassification,
+        tin: tins.get(e.id) ?? null,
         sheets: byEmployee.get(e.id) ?? [],
       }));
 
@@ -148,6 +147,7 @@ export async function GET(req: NextRequest) {
         month,
         tenantId: auth.tenantId,
         tenantName: tenant.name,
+        agent,
         employees: employeeInputs,
       });
     });
