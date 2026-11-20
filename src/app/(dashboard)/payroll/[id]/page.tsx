@@ -83,6 +83,8 @@ import {
 // ---------------------------------------------------------------------------
 
 type PayrollSheet = {
+  /** PAY-59: the statutory table versions that priced this payslip. */
+  statutoryRuleVersions?: Record<string, { version: string; effectiveFrom: string }> | null;
   id: string;
   employeeId: string;
   employeeNumber?: string | null;
@@ -773,6 +775,9 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
         <RunCrossFoot runId={run.id} version={`${run.status}:${run.sheets.map((s) => s.netPayCents).join(",")}`} />
       )}
 
+      {/* PAY-59: which statutory table versions priced this run */}
+      <RuleVersionsLine sheets={run.sheets} />
+
       {/* PAY-150: Other Deductions the run refused or carried over */}
       {(() => {
         const notes = run.sheets.flatMap((s) =>
@@ -966,5 +971,34 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
         onSaved={() => { fetchAdjustments(); fetchRun(); }}
       />
     </div>
+  );
+}
+
+/** PAY-59 (R59): the statutory table versions the run's payslips were priced with. */
+const RULE_LABELS: [string, string][] = [
+  ["SSS_SCHEDULE", "SSS"],
+  ["PHILHEALTH_SCHEDULE", "PhilHealth"],
+  ["PAGIBIG_SCHEDULE", "Pag-IBIG"],
+  ["BIR_WITHHOLDING_TABLE", "BIR"],
+  ["MINIMUM_WAGE_RATE", "Minimum wage"],
+  ["DE_MINIMIS_CEILING", "De minimis"],
+];
+
+function RuleVersionsLine({ sheets }: { sheets: PayrollSheet[] }) {
+  const seen = new Map<string, Set<string>>();
+  for (const s of sheets) {
+    for (const [cat, v] of Object.entries(s.statutoryRuleVersions ?? {})) {
+      if (!seen.has(cat)) seen.set(cat, new Set());
+      seen.get(cat)!.add(v.version);
+    }
+  }
+  if (seen.size === 0) return null;
+  const parts = RULE_LABELS.filter(([cat]) => seen.has(cat)).map(
+    ([cat, label]) => `${label} ${[...seen.get(cat)!].join(" and ")}`,
+  );
+  return (
+    <p data-testid="rule-versions" className="text-[12.5px] text-[#6B6B6B]">
+      Statutory tables used: {parts.join(" · ")}
+    </p>
   );
 }

@@ -214,7 +214,18 @@ export interface ComputeStatutoryRules {
   /// Required when at least one employee has `taxClassification = MWE`.
   minWage: MinimumWagePayload | null;
   deMinimis: DeMinimisCeilingPayload | null;
+  /**
+   * PAY-59 (R59): which version of each statutory table these payloads came
+   * from. Stored on every payslip the rules price; never read by the engine.
+   */
+  ruleVersions?: StatutoryRuleVersions;
 }
+
+/** PAY-59: category to the rule version that priced a payslip. */
+export type StatutoryRuleVersions = Record<
+  string,
+  { id: string; version: string; effectiveFrom: string; legalBasis: string }
+>;
 
 /**
  * Tenant-overridable premium multipliers.  All keys are optional — the engine
