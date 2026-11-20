@@ -17,6 +17,11 @@
  *   D1  (real Postgres) a database built from the migrations matches the
  *       committed reference, so the reference is current.
  *   D2  (real Postgres) a policy added outside the migrations is reported.
+ *   D3  (PAY-204, ruling 2) an event trigger added outside the migrations is
+ *       reported with the function it calls (fails before PAY-204: event
+ *       triggers were not read).
+ *   D4  (PAY-204, ruling 1) the drift migration is guarded: run again on a
+ *       database that already has the right shape, it changes nothing.
  */
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -113,6 +118,39 @@ describeDb("PAY-58 schema drift report (real Postgres)", () => {
       await client.query(`CREATE POLICY ${name}_app ON "Tenant" FOR SELECT TO payroll_app USING (true)`);
       const again = diffFingerprints(loadReference(), await readFingerprint(client));
       expect(again.unexpected.some((l: string) => l.includes(`${name}_app PERMISSIVE SELECT to payroll_app`))).toBe(true);
+    } finally {
+      await client.query("ROLLBACK");
+      await client.end();
+    }
+  });
+
+  it("D3 an event trigger added outside the migrations is reported", async () => {
+    const name = `p58_evt_${randomBytes(3).toString("hex")}`;
+    const client = new pg.Client({ connectionString: DB });
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`CREATE FUNCTION ${name}_fn() RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN END $$`);
+      await client.query(`CREATE EVENT TRIGGER ${name} ON ddl_command_end WHEN TAG IN ('CREATE TABLE') EXECUTE FUNCTION ${name}_fn()`);
+      const diff = diffFingerprints(loadReference(), await readFingerprint(client));
+      expect(diff.missing).toEqual([]);
+      expect(diff.unexpected).toContain(`event trigger ${name} on ddl_command_end enabled=O calls public.${name}_fn when CREATE TABLE`);
+      expect(diff.unexpected).toContain(`function ${name}_fn()`);
+    } finally {
+      await client.query("ROLLBACK");
+      await client.end();
+    }
+  });
+
+  it("D4 the drift migration changes nothing when run again", async () => {
+    const sql = readFileSync("prisma/migrations/20261120000700_pay204_drift_fixes/migration.sql", "utf8");
+    const client = new pg.Client({ connectionString: DB });
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(sql);
+      const diff = diffFingerprints(loadReference(), await readFingerprint(client));
+      expect(diff).toEqual({ missing: [], unexpected: [] });
     } finally {
       await client.query("ROLLBACK");
       await client.end();
