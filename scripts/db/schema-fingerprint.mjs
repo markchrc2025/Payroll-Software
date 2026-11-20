@@ -53,6 +53,12 @@ const QUERIES = [
   `SELECT 'trigger ' || pg_get_triggerdef(t.oid) AS line
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND NOT t.tgisinternal`,
+  // PAY-204 (ruling 2): event triggers live outside any table, so they are
+  // listed here; one that calls a function the migrations never create is drift.
+  `SELECT 'event trigger ' || quote_ident(e.evtname) || ' on ' || e.evtevent || ' enabled=' || e.evtenabled::text ||
+          ' calls ' || quote_ident(n.nspname) || '.' || quote_ident(p.proname) ||
+          COALESCE(' when ' || array_to_string(e.evttags, ','), '') AS line
+     FROM pg_event_trigger e JOIN pg_proc p ON p.oid = e.evtfoid JOIN pg_namespace n ON n.oid = p.pronamespace`,
   `SELECT 'enum ' || quote_ident(t.typname) || ' ' || string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) AS line
      FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid JOIN pg_namespace n ON n.oid = t.typnamespace
     WHERE n.nspname = 'public' GROUP BY t.typname`,
