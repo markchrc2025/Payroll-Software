@@ -12,6 +12,8 @@
  *       period, address and Items 19 to 52 are filled; tax due is worked
  *       from the BIR table in force.
  *   D3  the stored TIN ciphertext never leaves the server.
+ *   D4  1604-C (part 2): the finalized payslip is one row of Schedule 1 and
+ *       November's tax in Part II; the draft run is not counted.
  */
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -36,6 +38,7 @@ import { encrypt } from "@/lib/crypto";
 import { formatCentavos, type BirFormView } from "@/lib/payroll/reports/bir-form";
 import { GET as bir1601c } from "@/app/api/payroll/reports/bir/1601c/route";
 import { GET as bir2316 } from "@/app/api/payroll/reports/bir/2316/route";
+import { GET as bir1604c } from "@/app/api/payroll/reports/bir/1604c/route";
 
 const get = (url: string) => new NextRequest(`http://localhost${url}`);
 const line = (view: BirFormView, no: string) => {
@@ -172,9 +175,40 @@ describeDb("PAY-71 BIR 1601-C and 2316 (real Postgres)", () => {
     const a = await (await bir1601c(get("/api/payroll/reports/bir/1601c?year=2026&month=11"))).text();
     const b = await (await bir2316(get("/api/payroll/reports/bir/2316?year=2026"))).text();
     expect(tinCipher.startsWith("v1:")).toBe(true);
-    for (const body of [a, b]) {
+    const c = await (await bir1604c(get("/api/payroll/reports/bir/1604c?year=2026"))).text();
+    for (const body of [a, b, c]) {
       expect(body).not.toContain(tinCipher);
       expect(body).not.toContain("v1:");
     }
+  });
+
+  it("D4 1604-C: one Schedule 1 row and November in Part II", async () => {
+    const res = await bir1604c(get("/api/payroll/reports/bir/1604c?year=2026"));
+    expect(res.status).toBe(200);
+    const report = (await res.json()).data;
+    const form = report.form as BirFormView;
+    expect(report.employeeCount).toBe(1);
+    expect(report.mweCount).toBe(0);
+    expect(line(form, "4").value).toMatch(/^\d{3}-\d{3}-\d{3}-00000$/);
+    expect(line(form, "6").value).toBe("Tala Trading Inc.");
+    const [part2, s1, s2] = form.schedules;
+    const at = (no: string) => s1!.columns.findIndex((col) => col.no === no);
+    const ana = s1!.rows[0]!;
+    expect(s1!.rows).toHaveLength(1);
+    expect(s2!.rows).toHaveLength(0);
+    expect([ana[at("2a")], ana[at("2b")], ana[at("2c")]]).toEqual(["Santos", "Ana", "Reyes"]);
+    expect(ana[at("4")]).toBe("P");
+    expect([ana[at("5a")], ana[at("5b")]]).toEqual(["06/15", "12/31"]);
+    expect(formatCentavos(ana[at("7a")]!)).toBe("33,300.00");
+    expect(formatCentavos(ana[at("7f")]!)).toBe("3,825.00");
+    expect(formatCentavos(ana[at("7g")]!)).toBe("22,675.00");
+    expect(formatCentavos(ana[at("7i")]!)).toBe("6,800.00");
+    expect(formatCentavos(ana[at("7j")]!)).toBe("29,475.00");
+    expect(formatCentavos(ana[at("15b")]!)).toBe("2,864.50");
+    expect(formatCentavos(ana[at("18")]!)).toBe("2,864.50");
+    expect(ana[at("19")]).toBe("No");
+    expect(formatCentavos(part2!.rows[10]![4]!)).toBe("2,864.50");
+    expect(formatCentavos(part2!.totals![4]!)).toBe("2,864.50");
+    expect(report.monthlyWithholdingCents[11]).toBe("0");
   });
 });

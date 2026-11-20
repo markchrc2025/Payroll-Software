@@ -39,6 +39,8 @@ export interface Bir2316SheetInput {
   withholdingTaxCents: bigint;
   /** PAY-71: the payslip split into the form's items (the route supplies it). */
   comp?: BirComp;
+  /** PAY-71: the month (1 to 12) the payslip's pay period ends in. */
+  month?: number;
 }
 
 /** PAY-71: what Part I of the certificate says about the employee. */
@@ -82,6 +84,8 @@ export interface Bir2316PreviousEmployerInput {
   tin: string | null;
   taxableCompensationCents: bigint;
   withholdingTaxCents: bigint;
+  /** PAY-71: the exempt 13th month and other benefits on its 2316. */
+  nontaxable13MonthAndBenefitsCents?: bigint;
 }
 
 export interface Bir2316Input {
