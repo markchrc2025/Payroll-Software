@@ -557,6 +557,8 @@ model Tenant {
 
   // Encrypted at app layer
   tinNumber        String? @unique
+  /// PAY-201: BIR Revenue District Office code of the withholding agent (e.g. "043", "17A").
+  rdoCode          String?
   sssNumber        String?
   philhealthNumber String?
   pagibigNumber    String?
@@ -604,57 +606,57 @@ model Tenant {
   featureFlags Json @default("{}")
 
   // Payroll defaults (§9 of blueprint)
-  payrollCycle            PayFrequency            @default(SEMI_MONTHLY)
+  payrollCycle               PayFrequency            @default(SEMI_MONTHLY)
   /// For Semi-Monthly/Monthly: day of month (1–28). For Weekly/Bi-Weekly: ISO weekday (1=Mon … 7=Sun).
-  payDay1                 Int?
+  payDay1                    Int?
   /// Second pay day — only used for Semi-Monthly (e.g. 1 & 15 → payDay1=1, payDay2=15).
-  payDay2                 Int?
-  workingDaysDenominator  Int                     @default(261)
+  payDay2                    Int?
+  workingDaysDenominator     Int                     @default(261)
   /// PAY-133: new companies deduct SSS/PhilHealth/Pag-IBIG on the FIRST payday
   /// of the month (Mark, 16 Nov 2026). Existing companies keep their setting.
-  statutoryCutoffRule     StatutoryCutoffRule     @default(FIRST_CUTOFF)
+  statutoryCutoffRule        StatutoryCutoffRule     @default(FIRST_CUTOFF)
   /// PAY-198: lates and undertime reduce the 13th month base (default). Off:
   /// the company does not deduct them from the 13th month.
-  thirteenthMonthDeductLates Boolean @default(true)
+  thirteenthMonthDeductLates Boolean                 @default(true)
   /// PAY-143: per contribution, whether its base adds other earnings to basic
   /// pay. "Earnings": pay components ticked for that base. "Premiums":
   /// overtime, night differential, holiday and rest day pay. Off by default.
-  sssIncludeEarnings        Boolean @default(false)
-  sssIncludePremiums        Boolean @default(false)
-  philhealthIncludeEarnings Boolean @default(false)
-  philhealthIncludePremiums Boolean @default(false)
-  pagibigIncludeEarnings    Boolean @default(false)
-  pagibigIncludePremiums    Boolean @default(false)
-  thirteenthMonthBasis    ThirteenthMonthBasis    @default(STRICT_DOLE)
+  sssIncludeEarnings         Boolean                 @default(false)
+  sssIncludePremiums         Boolean                 @default(false)
+  philhealthIncludeEarnings  Boolean                 @default(false)
+  philhealthIncludePremiums  Boolean                 @default(false)
+  pagibigIncludeEarnings     Boolean                 @default(false)
+  pagibigIncludePremiums     Boolean                 @default(false)
+  thirteenthMonthBasis       ThirteenthMonthBasis    @default(STRICT_DOLE)
   /// Payroll safeguard: max % of monthly gross that statutory + loan/recurring
   /// deductions may consume. New loans that would breach this are blocked
   /// ("no negative pay" policy). Default 50.
-  maxDeductionPctOfGross  Int                     @default(50)
+  maxDeductionPctOfGross     Int                     @default(50)
   /// PAY-146: an unpaid meal break is deducted only on days whose span (first in to last out) is longer than this. Default 300 (5 hours).
-  breakDeductAfterMinutes Int                     @default(300)
+  breakDeductAfterMinutes    Int                     @default(300)
   /// "No negative pay" run-time floor: in REGULAR/YEAR_END runs, loan
   /// installments are deferred (carried in the loan balance) so net pay never
   /// drops below zero. FINAL_PAY is exempt by default — terminal charges
   /// against a separating employee's last pay may legitimately make it
   /// negative. Set false to also floor FINAL_PAY. Default true.
-  allowNegativeFinalPay   Boolean                 @default(true)
+  allowNegativeFinalPay      Boolean                 @default(true)
   /// PAY-172 (Mark, 19 Nov 2026): strict DTR policy. On: an employee who needs a
   /// time clock and whose DTR for the run's cutoff is not fully approved is held
   /// out of the run (no pay until it is approved; DTR approval is one cutoff,
   /// not per day). Off (default): days without an approved DTR count as absent.
-  strictDtrPolicy         Boolean                 @default(false)
-  defaultDtrApproverId    String?
+  strictDtrPolicy            Boolean                 @default(false)
+  defaultDtrApproverId       String?
   /// Night-shift differential window ("HH:MM"). NSD is always computed (cannot
   /// be turned off); only the window is configurable. The premium multiplier
   /// lives in PremiumRateConfig (key NSD, DOLE default 0.10).
-  nsdWindowStart          String                  @default("22:00")
-  nsdWindowEnd            String                  @default("06:00")
+  nsdWindowStart             String                  @default("22:00")
+  nsdWindowEnd               String                  @default("06:00")
   /// IANA timezone for company-wide timekeeping (default derived from country
   /// at creation). Anchors business-day boundaries, the NSD window and the
   /// statutory month-end for this tenant.
-  timezone                String                  @default("Asia/Manila")
+  timezone                   String                  @default("Asia/Manila")
   /// Whether DTR/attendance follows the company timezone or each employee's own.
-  timekeepingTimezoneMode TimekeepingTimezoneMode @default(COMPANY)
+  timekeepingTimezoneMode    TimekeepingTimezoneMode @default(COMPANY)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1164,6 +1166,8 @@ model Employee {
   city         String?
   province     String?
   zipCode      String?
+  /// PAY-201: BIR Revenue District Office code where the employee is registered (2316 Item 5).
+  rdoCode      String?
   region       String?
 
   // Employment
@@ -1186,10 +1190,10 @@ model Employee {
   managerId             String?
 
   // Payroll
-  payFrequency      PayFrequency @default(SEMI_MONTHLY)
-  salaryType        SalaryType   @default(MONTHLY)
-  standardWorkHours Decimal      @default(8) @db.Decimal(4, 2)
-  standardWorkDays  Decimal      @default(22) @db.Decimal(4, 2)
+  payFrequency           PayFrequency @default(SEMI_MONTHLY)
+  salaryType             SalaryType   @default(MONTHLY)
+  standardWorkHours      Decimal      @default(8) @db.Decimal(4, 2)
+  standardWorkDays       Decimal      @default(22) @db.Decimal(4, 2)
   /// Unit 1.8 (D-S4): working days a year used to turn a monthly or weekly
   /// salary into a daily equivalent (unpaid-leave deductions, OT, holiday and
   /// undertime rates). 261 for a five-day week, 313 for a six-day week. Set
@@ -1199,7 +1203,7 @@ model Employee {
   workingDaysDenominator Int?
   /// Optional IANA timezone override; used only when the tenant's
   /// timekeepingTimezoneMode is EMPLOYEE (otherwise inherits company tz).
-  timezone          String?
+  timezone               String?
 
   // Tax
   taxClassification          TaxClassification @default(REGULAR)
@@ -2343,7 +2347,7 @@ model PayComponent {
   /// year's 90,000 exemption for "13th month and other benefits"; the excess
   /// is taxed at the employee's rate for the year, not through the period's
   /// table. Nothing is seeded: each company ticks its own components.
-  isBonus Boolean @default(false)
+  isBonus  Boolean @default(false)
   /// PAY-171: one-off taxable pay (leave conversion, a one-time incentive that
   /// is not a bonus): taxed at the employee's rate for the year instead of
   /// through the period's table, as on Mark's Smart payslips (finding 2).
@@ -2351,7 +2355,7 @@ model PayComponent {
 
   /// PAY-149: seeded by Sentire (Inventory Deduction); cannot be deleted and
   /// keeps its kind.
-  isSystem Boolean @default(false)
+  isSystem       Boolean @default(false)
   /// PAY-149: a loss or damage deduction (Labor Code Art. 114, 115), DEDUCTION
   /// kind only. Its guardrails are PAY-150.
   isLossOrDamage Boolean @default(false)
@@ -2399,8 +2403,8 @@ model EmployeePayComponent {
   authorizationFileKey String?
   /// PAY-150, loss or damage deductions: the incident record showing the
   /// employee was heard, and the actual loss (the most that may be recovered).
-  incidentReportId String?
-  actualLossCents  BigInt?
+  incidentReportId     String?
+  actualLossCents      BigInt?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2760,22 +2764,22 @@ model PayrollSheet {
 
   // -- Polymorphic breakdowns for payslip / audit ---------------------------
   /// Array of { id, code, name, kind, taxability, amountCents }.
-  payComponentsApplied Json  @default("[]")
+  payComponentsApplied     Json  @default("[]")
   /// Array of { loanId, type, amountCents, balanceBeforeCents, balanceAfterCents }.
   /// Populated at compute; `balanceAfterCents` only authoritative once the run
   /// is FINALIZED (engine debits the loan during finalize tx).
-  loanPaymentsApplied  Json  @default("[]")
+  loanPaymentsApplied      Json  @default("[]")
   /// Snapshot of the PeriodInput row used (days/hours/minutes).
-  periodInputSnapshot  Json  @default("{}")
+  periodInputSnapshot      Json  @default("{}")
   /// Per-fund SSS/PhilHealth/Pag-IBIG raw breakdown (msc, regular, mpf, ec).
-  statutoryBreakdown   Json  @default("{}")
+  statutoryBreakdown       Json  @default("{}")
   /// PAY-59 (R59): the version of each statutory table that priced this
   /// payslip: category to { id, version, effectiveFrom, legalBasis }. Null on
   /// payslips computed before PAY-59.
-  statutoryRuleVersions Json?
+  statutoryRuleVersions    Json?
   /// FINAL_PAY-only: back pay, prorated 13th, leave cash-out, separation pay,
   /// annualization inputs/outputs.  Null for REGULAR / OFF_CYCLE / YEAR_END.
-  finalPayBreakdown    Json?
+  finalPayBreakdown        Json?
   /// PAY-168: how a YEAR_END sheet's 13th month was worked out (basic pay
   /// earned this year, divided by 12, less 13th month already paid). Null on
   /// other run types and on sheets computed before PAY-168.
@@ -2783,11 +2787,11 @@ model PayrollSheet {
   /// YEAR_END-only: year-end annualization true-up result.  Written by the
   /// POST /api/payroll/runs/[id]/annualize endpoint while the run is a DRAFT
   /// (PAY-155: a finalized run is never changed).
-  annualizationData    Json?
+  annualizationData        Json?
   /// Array of { id, kind, amountCents, isTaxable, reason } applied in this run.
-  adjustmentsApplied   Json?
+  adjustmentsApplied       Json?
   /// Array of { id, category, amountCents, taxTreatment, taxablePortionCents, nontaxablePortionCents }.
-  expenseClaimsApplied Json?
+  expenseClaimsApplied     Json?
 
   /// R2 object key for the published payslip PDF.  Null until payslip.publish job completes.
   payslipKey String?
@@ -2799,7 +2803,7 @@ model PayrollSheet {
   payrollBook PayrollBook @relation(fields: [payrollBookId], references: [id], onDelete: Cascade)
   employee    Employee    @relation(fields: [employeeId], references: [id])
 
-    /// PAY-194: the held cutoffs this sheet releases (strict DTR policy), with
+  /// PAY-194: the held cutoffs this sheet releases (strict DTR policy), with
   /// each cutoff's figures, which are included in this sheet's amounts.
   heldRelease Json?
 

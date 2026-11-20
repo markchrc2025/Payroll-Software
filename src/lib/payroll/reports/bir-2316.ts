@@ -46,6 +46,8 @@ export interface Bir2316SheetInput {
 /** PAY-71: what Part I of the certificate says about the employee. */
 export interface Bir2316Person {
   tin: string | null;
+  /** PAY-201: the employee's BIR RDO Code (Item 5). */
+  rdoCode?: string | null;
   address: string | null;
   zipCode: string | null;
   birthDate: Date | null;
@@ -340,7 +342,7 @@ function form2316(a: {
   if (!p) footnotes.push("Part I details (TIN, address, date of birth) were not supplied.");
   else {
     if (!p.tin) footnotes.push("Item 3: the employee has no TIN on file.");
-    footnotes.push("Item 5: the RDO Code is not kept in Sentire Payroll. Fill it in.");
+    if (!p.rdoCode) footnotes.push("Item 5: the employee has no RDO Code on file. Add it on the employee's profile.");
   }
   if (item24 !== null && item24 !== item26) {
     const diff = item24 - item26;
@@ -364,7 +366,7 @@ function form2316(a: {
           textLine("2", "For the Period From (MM/DD) To (MM/DD)", period),
           textLine("3", "TIN", formatTin(p?.tin)),
           textLine("4", "Employee's Name (Last Name, First Name, Middle Name)", name),
-          textLine("5", "RDO Code", null),
+          textLine("5", "RDO Code", p?.rdoCode ?? null),
           textLine("6", "Registered Address", p?.address),
           textLine("6A", "ZIP Code", p?.zipCode),
           textLine("6B", "Local Home Address", null),

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { uploadImage, ACCEPT_ATTR } from "@/lib/upload-image";
+import { RdoCodeSelect } from "@/components/bir/RdoCodeSelect";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ type TenantInfo = {
   city: string;
   province: string;
   zipCode: string;
+  rdoCode: string;
   logoUrl: string;
   logoKey: string;
 };
@@ -69,6 +71,7 @@ const EMPTY: TenantInfo = {
   city: "",
   province: "",
   zipCode: "",
+  rdoCode: "",
   logoUrl: "",
   logoKey: "",
 };
@@ -102,6 +105,7 @@ export default function CompanyBrandingPage() {
         city:         d.city ?? "",
         province:     d.province ?? "",
         zipCode:      d.zipCode ?? "",
+        rdoCode:      d.rdoCode ?? "",
         logoUrl:      d.logoUrl ?? "",
         logoKey:      d.logoKey ?? "",
       };
@@ -160,6 +164,7 @@ export default function CompanyBrandingPage() {
       city:         form.city     || null,
       province:     form.province || null,
       zipCode:      form.zipCode  || null,
+      rdoCode:      form.rdoCode  || null,
       logoUrl:      form.logoUrl  || null,
       logoKey:      form.logoKey  || null,
     };
@@ -384,6 +389,11 @@ export default function CompanyBrandingPage() {
                 value={form.province}
                 onChange={(e) => set("province", e.target.value)}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="company-rdo">BIR RDO Code</Label>
+              <RdoCodeSelect id="company-rdo" value={form.rdoCode} onChange={(v) => set("rdoCode", v)} />
+              <p className="text-[12px] text-[var(--muted-2)]">The Revenue District Office on your BIR registration. It prints on BIR 1601-C and 1604-C.</p>
             </div>
           </Section>
         </div>

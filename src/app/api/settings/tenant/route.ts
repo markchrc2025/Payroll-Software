@@ -9,6 +9,7 @@ import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { err, ok, unauthorized } from "@/lib/api-response";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { rdoCodeField } from "@/lib/bir/rdo-codes";
 
 const INDUSTRY_LIST = [
   "Agriculture",
@@ -45,6 +46,8 @@ const patchSchema = z.object({
   city:            z.string().max(120).nullish(),
   province:        z.string().max(120).nullish(),
   zipCode:         z.string().max(20).nullish(),
+  // PAY-201: BIR RDO Code (1601-C Item 7, 1604-C Item 5).
+  rdoCode:         rdoCodeField,
   logoUrl:         z.string().url().max(1000).nullish(),
   logoKey:         z.string().max(500).nullish(),
   // Payroll defaults
@@ -118,6 +121,7 @@ export async function GET(req: NextRequest) {
         city: true,
         province: true,
         zipCode: true,
+        rdoCode: true,
         country: true,
         logoUrl: true,
         logoKey: true,
@@ -195,6 +199,7 @@ export async function PATCH(req: NextRequest) {
         city: true,
         province: true,
         zipCode: true,
+        rdoCode: true,
         country: true,
         logoUrl: true,
         logoKey: true,
