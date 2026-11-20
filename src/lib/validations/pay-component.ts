@@ -30,9 +30,13 @@ export const createPayComponentSchema = z
     includeInPagibigBase: z.boolean().default(false),
     isBonus: z.boolean().default(false), // PAY-171
     isOneOff: z.boolean().default(false), // PAY-171
+    isLossOrDamage: z.boolean().default(false), // PAY-149
     isActive: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
+    if (v.isLossOrDamage && v.kind !== "DEDUCTION") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["isLossOrDamage"], message: "Only a deduction can be a loss or damage deduction" });
+    }
     if (v.taxability === "DE_MINIMIS" && !v.deMinimisCode) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -56,6 +60,7 @@ export const updatePayComponentSchema = z
     includeInPagibigBase: z.boolean().optional(),
     isBonus: z.boolean().optional(), // PAY-171
     isOneOff: z.boolean().optional(), // PAY-171
+    isLossOrDamage: z.boolean().optional(), // PAY-149
     isActive: z.boolean().optional(),
   });
 
@@ -81,6 +86,12 @@ export const assignPayComponentSchema = z
     effectiveFrom: z.coerce.date(),
     endDate: z.coerce.date().optional().nullable(),
     notes: z.string().max(500).optional().nullable(),
+    // PAY-150: Other Deductions.
+    authorizationDate: z.coerce.date().optional().nullable(),
+    authorizationFileKey: z.string().max(300).optional().nullable(),
+    incidentReportId: z.string().min(1).optional().nullable(),
+    /// Pesos string: the actual loss of a loss or damage deduction.
+    actualLoss: pesoString.optional().nullable(),
   })
   .superRefine((v, ctx) => {
     if (v.endDate && v.endDate < v.effectiveFrom) {
@@ -93,6 +104,15 @@ export const assignPayComponentSchema = z
   });
 
 export type AssignPayComponentInput = z.infer<typeof assignPayComponentSchema>;
+
+/** PAY-150: add or correct a deduction's authorization and loss details. */
+export const updateAssignmentGuardSchema = z.object({
+  authorizationDate: z.coerce.date().nullable().optional(),
+  authorizationFileKey: z.string().max(300).nullable().optional(),
+  incidentReportId: z.string().min(1).nullable().optional(),
+  actualLoss: pesoString.nullable().optional(),
+  endDate: z.coerce.date().nullable().optional(),
+});
 
 export const listAssignmentsSchema = z.object({
   /** Filter to assignments active on this date (effectiveFrom..endDate covers it). */

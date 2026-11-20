@@ -29,7 +29,9 @@
  *     with day-type). True hour-by-hour stacking is deferred.
  *   • 13th-month-and-benefits residual is 0 in D3 (annualization lives in a
  *     later phase).
- *   • DEDUCTION-kind PayComponents are IGNORED in D3 (loan-only deductions).
+ *   • DEDUCTION-kind PayComponents (PAY-149: Other Deductions such as uniform,
+ *     canteen, inventory) are deducted after tax with the adjustment
+ *     deductions. They were ignored before PAY-149.
  *   • Compensation basis for statutory MSC/MFS = `basicSalaryCents` (treated
  *     as monthly when `salaryType = MONTHLY`). Daily/weekly approximated by
  *     monthlyEquivalent = daily × workingDaysDenominator / 12 or weekly × 52/12.
@@ -358,18 +360,27 @@ interface ComponentBuckets {
   benefitsCents: bigint;
   /// PAY-171: taxable one-off pay, inside taxableAllowancesCents, taxed at the year's rate.
   oneOffCents: bigint;
+  /// PAY-149: DEDUCTION-kind components (Other Deductions), taken after tax.
+  deductionsCents: bigint;
   applied: AppliedPayComponent[];
 }
+
+/** PAY-150: a loss or damage deduction takes at most 20% of the period's wages (IRR Book III Rule VIII Sec. 14). */
+export const LOSS_DEDUCTION_CAP_PCT = 20n;
 
 function classifyComponents(
   components: ComputePayComponent[],
   deMinimisCeilingByCode: Map<string, bigint>,
+  /** PAY-150: the period's wages (basic pay after lates and absences). */
+  wagesCents: bigint = 0n,
 ): ComponentBuckets {
+  let lossCapLeft = (clampNonNegative(wagesCents) * LOSS_DEDUCTION_CAP_PCT) / 100n;
   let taxableAllowancesCents = 0n;
   let nontaxableCompensationCents = 0n;
   let nontaxableAdditionsCents = 0n;
   let benefitsCents = 0n;
   let oneOffCents = 0n;
+  let deductionsCents = 0n;
   const applied: AppliedPayComponent[] = [];
 
   for (const c of components) {
@@ -381,8 +392,28 @@ function classifyComponents(
       nontaxableAdditionsCents += c.amountCents;
       nonTaxablePortion = c.amountCents;
     } else if (c.kind === "DEDUCTION") {
-      // D3 SCOPE: deductions other than statutory + loans are deferred.
-      // Skip silently but record on payslip so caller can audit.
+      // PAY-149: an Other Deduction. Not part of gross or taxable pay; taken
+      // from net pay with the adjustment deductions.
+      // PAY-150: refused without a written authorization (or, for loss or
+      // damage, an incident record); loss or damage is capped at 20% of the
+      // period's wages and the rest carries to the next payday.
+      let take = c.amountCents;
+      let deferred = 0n;
+      if (c.refusedReason) take = 0n;
+      else if (c.lossOrDamage) {
+        take = c.amountCents > lossCapLeft ? lossCapLeft : c.amountCents;
+        lossCapLeft -= take;
+        deferred = c.amountCents - take;
+      }
+      deductionsCents += take;
+      applied.push({
+        id: c.id, code: c.code, name: c.name, kind: c.kind, taxability: c.taxability,
+        amountCents: take.toString(), nonTaxablePortionCents: "0", taxablePortionCents: "0",
+        ...(c.assignmentId ? { assignmentId: c.assignmentId } : {}),
+        ...(c.refusedReason ? { refusedReason: c.refusedReason } : {}),
+        ...(deferred > 0n ? { deferredCents: deferred.toString() } : {}),
+      });
+      continue;
     } else if (c.isBonus) {
       // PAY-171: portions are set once the year's 90,000 is applied.
       benefitsCents += c.amountCents;
@@ -447,7 +478,7 @@ function classifyComponents(
     nontaxableAdditionsCents,
     benefitsCents,
     oneOffCents,
-    applied,
+    deductionsCents, applied,
   };
 }
 
@@ -812,7 +843,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
       }
     }
   }
-  const buckets = classifyComponents(input.payComponents, deMinimisCeilingByCode);
+  const buckets = classifyComponents(input.payComponents, deMinimisCeilingByCode, basePayCents - lateUndertimeDeductionCents);
 
   // Leave cash-out: taxable compensation (included in gross).
   const leaveCashOutCents = fp.leaveCashOutCents;
@@ -937,7 +968,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   const nontaxableAdditionsCents =
     buckets.nontaxableAdditionsCents + separationPayNonTaxable + adjs.nontaxableAdditionsCents;
 
-  const adjustmentDeductionsCents = adjs.deductionsCents;
+  const adjustmentDeductionsCents = adjs.deductionsCents + buckets.deductionsCents; // PAY-149
 
   // -- Step 11: loans -------------------------------------------------------
   // Net available before loans. FINAL_PAY is EXEMPT from the floor by default
@@ -1150,6 +1181,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const buckets = classifyComponents(
     input.payComponents,
     deMinimisCeilingByCode,
+    basePayCents - lateUndertimeDeductionCents, // PAY-150
   );
 
   // PAY-171: bonuses (and a 13th month paid in this regular run) against what
@@ -1332,7 +1364,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     adjs.nontaxableAdditionsCents +
     claims.nontaxableAdditionsCents;
 
-  const adjustmentDeductionsCents = adjs.deductionsCents;
+  const adjustmentDeductionsCents = adjs.deductionsCents + buckets.deductionsCents; // PAY-149
 
   // -- Step 11: loans --------------------------------------------------------
   // "No negative pay" floor: cap total loan deductions at the net available

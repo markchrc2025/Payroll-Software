@@ -179,6 +179,14 @@ export interface ComputePayComponent {
   isBonus?: boolean;
   /// PAY-171: taxable one-off pay, taxed at the year's rate; see PayComponent.isOneOff.
   isOneOff?: boolean;
+  /// PAY-150: the employee's assignment this amount comes from.
+  assignmentId?: string;
+  /// PAY-150: set when the run refuses this deduction (no written
+  /// authorization, or no incident record); nothing is deducted.
+  refusedReason?: string;
+  /// PAY-150: a loss or damage deduction, capped at 20% of the period's wages;
+  /// amountCents is what is still to be recovered (already capped at the loss).
+  lossOrDamage?: boolean;
 }
 
 export interface ComputeLoan {
@@ -366,6 +374,11 @@ export interface AppliedPayComponent {
   /// PAY-171: a bonus (13th month and other benefits) or one-off pay line.
   isBonus?: boolean;
   isOneOff?: boolean;
+  /// PAY-150 (deductions): the assignment; why the run refused it (amount 0);
+  /// and what a loss or damage deduction carried to the next payday.
+  assignmentId?: string;
+  refusedReason?: string;
+  deferredCents?: string;
 }
 
 export interface AppliedLoanPayment {
