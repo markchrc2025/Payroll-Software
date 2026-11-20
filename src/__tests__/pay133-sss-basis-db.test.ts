@@ -180,7 +180,9 @@ describeDb("PAY-133 SSS on actual basic, end to end (real Postgres)", () => {
     expect(a.statutoryBreakdown.sssBasis).toEqual({ kind: "PREVIOUS_MONTH_ACTUAL", month: "2026-10", compensationCents: "2385057" });
     expect(BigInt(a.sssEeCents)).toBe(computeSSS(SSS, 2_385_057n).employee);
     expect(BigInt(a.sssEeCents)).toBeLessThan(computeSSS(SSS, 2_500_000n).employee);
-    expect(BigInt(a.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_500_000n).employee);
+    // PAY-202 (ruling 4, 20 Nov): PhilHealth on October's basic less lates too: 23,850.57 x 5%, half is 596.27.
+    expect(BigInt(a.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_385_057n).employee);
+    expect(BigInt(a.philhealthEeCents)).toBe(59_627n);
     expect(BigInt(a.pagibigEeCents)).toBe(computePagibig(PAGIBIG, 2_500_000n).employee);
 
     // D: late comes off, overtime does not go in.
@@ -199,9 +201,11 @@ describeDb("PAY-133 SSS on actual basic, end to end (real Postgres)", () => {
     expect(cOct).toBeLessThan(1_000_000n);
     expect(s.get(C)!.statutoryBreakdown.sssBasis?.compensationCents).toBe(cOct.toString());
     expect(BigInt(s.get(C)!.sssEeCents)).toBe(computeSSS(SSS, cOct).employee);
-    expect(BigInt(s.get(C)!.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_000_000n).employee);
+    // PAY-202 (ruling 4, 20 Nov): PhilHealth on the same 9 days of October, below the 10,000.00 floor: the minimum premium, 250.00 each.
+    expect(BigInt(s.get(C)!.philhealthEeCents)).toBe(computePhilHealth(PHIC, cOct).employee);
+    expect(BigInt(s.get(C)!.philhealthEeCents)).toBe(25_000n);
 
-    // B: hired 9 Nov, no SSS; PhilHealth and Pag-IBIG on the contract.
+    // B: hired 9 Nov, no SSS; PhilHealth and Pag-IBIG on the contract (PAY-202: a new hire's first month keeps PhilHealth on the contract).
     const b = s.get(B)!;
     expect(b.statutoryDeductedSnapshot).toBe(true);
     expect([b.sssEeCents, b.sssErCents, b.sssEcCents]).toEqual(["0", "0", "0"]);
@@ -246,7 +250,9 @@ describeDb("PAY-133 SSS on actual basic, end to end (real Postgres)", () => {
     expect(basic(a)).toBe(1_250_000n - 114_943n); // this run's unpaid day ...
     expect(a.statutoryBreakdown.sssBasis).toEqual({ kind: "PREVIOUS_MONTH_ACTUAL", month: "2026-10", compensationCents: "2385057" });
     expect(BigInt(a.sssEeCents)).toBe(computeSSS(SSS, 2_385_057n).employee); // ... does not move SSS
-    expect(BigInt(a.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_500_000n).employee);
+    // PAY-202 (ruling 4, 20 Nov): PhilHealth on October's basic less lates too: 23,850.57 x 5%, half is 596.27.
+    expect(BigInt(a.philhealthEeCents)).toBe(computePhilHealth(PHIC, 2_385_057n).employee);
+    expect(BigInt(a.philhealthEeCents)).toBe(59_627n);
 
     // B, hired 9 Nov: the 30 Nov deduction is based on October, when B was
     // not employed. No SSS; PhilHealth and Pag-IBIG still deducted.
