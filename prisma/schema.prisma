@@ -613,6 +613,18 @@ model Tenant {
   /// PAY-133: new companies deduct SSS/PhilHealth/Pag-IBIG on the FIRST payday
   /// of the month (Mark, 16 Nov 2026). Existing companies keep their setting.
   statutoryCutoffRule     StatutoryCutoffRule     @default(FIRST_CUTOFF)
+  /// PAY-198: lates and undertime reduce the 13th month base (default). Off:
+  /// the company does not deduct them from the 13th month.
+  thirteenthMonthDeductLates Boolean @default(true)
+  /// PAY-143: per contribution, whether its base adds other earnings to basic
+  /// pay. "Earnings": pay components ticked for that base. "Premiums":
+  /// overtime, night differential, holiday and rest day pay. Off by default.
+  sssIncludeEarnings        Boolean @default(false)
+  sssIncludePremiums        Boolean @default(false)
+  philhealthIncludeEarnings Boolean @default(false)
+  philhealthIncludePremiums Boolean @default(false)
+  pagibigIncludeEarnings    Boolean @default(false)
+  pagibigIncludePremiums    Boolean @default(false)
   thirteenthMonthBasis    ThirteenthMonthBasis    @default(STRICT_DOLE)
   /// Payroll safeguard: max % of monthly gross that statutory + loan/recurring
   /// deductions may consume. New loans that would breach this are blocked

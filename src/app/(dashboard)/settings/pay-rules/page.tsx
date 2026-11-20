@@ -19,10 +19,17 @@ type TenantSettings = {
   workingDaysDenominator: number;
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
+  thirteenthMonthDeductLates: boolean;
   maxDeductionPctOfGross: number;
   breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
   strictDtrPolicy: boolean;
+  sssIncludeEarnings: boolean;
+  sssIncludePremiums: boolean;
+  philhealthIncludeEarnings: boolean;
+  philhealthIncludePremiums: boolean;
+  pagibigIncludeEarnings: boolean;
+  pagibigIncludePremiums: boolean;
   nsdWindowStart: string;
   nsdWindowEnd: string;
 };
@@ -60,10 +67,13 @@ export default function PayRulesPage() {
     workingDaysDenominator: 261,
     statutoryCutoffRule: "FIRST_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
+    thirteenthMonthDeductLates: true,
     maxDeductionPctOfGross: 50,
     breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
     strictDtrPolicy: false,
+    sssIncludeEarnings: false, sssIncludePremiums: false, philhealthIncludeEarnings: false,
+    philhealthIncludePremiums: false, pagibigIncludeEarnings: false, pagibigIncludePremiums: false,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
   });
@@ -82,10 +92,14 @@ export default function PayRulesPage() {
         workingDaysDenominator: d.workingDaysDenominator,
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
+        thirteenthMonthDeductLates: d.thirteenthMonthDeductLates ?? true,
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
         breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
         strictDtrPolicy: d.strictDtrPolicy ?? false,
+        sssIncludeEarnings: d.sssIncludeEarnings ?? false, sssIncludePremiums: d.sssIncludePremiums ?? false,
+        philhealthIncludeEarnings: d.philhealthIncludeEarnings ?? false, philhealthIncludePremiums: d.philhealthIncludePremiums ?? false,
+        pagibigIncludeEarnings: d.pagibigIncludeEarnings ?? false, pagibigIncludePremiums: d.pagibigIncludePremiums ?? false,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
@@ -213,6 +227,19 @@ export default function PayRulesPage() {
               value={form.thirteenthMonthBasis}
               onChange={(v) => update("thirteenthMonthBasis", v)}
             />
+            <div className="mt-3 flex items-center justify-between gap-4 rounded-lg border border-[#E8E8E8] bg-white px-4 py-3">
+              <div>
+                <p className="text-[13.5px] font-medium text-[#171717]">Deduct lates and undertime from the 13th-month base</p>
+                <p className="text-[12px] text-[#6B6B6B] mt-0.5">
+                  On: the 13th month is 1/12 of basic pay actually earned, after lates and undertime. Off: lates and undertime do not reduce it. Absences reduce it either way.
+                </p>
+              </div>
+              <Switch
+                checked={form.thirteenthMonthDeductLates}
+                onCheckedChange={(v) => update("thirteenthMonthDeductLates", v)}
+                aria-label="Deduct lates and undertime from the 13th-month base"
+              />
+            </div>
           </RuleSection>
 
           {/* Deduction Cap — "no negative pay" safeguard */}
@@ -321,6 +348,32 @@ export default function PayRulesPage() {
                 onCheckedChange={(v) => update("strictDtrPolicy", v)}
                 aria-label="Hold pay until the cutoff's DTR is approved"
               />
+            </div>
+          </RuleSection>
+
+          {/* PAY-143: contribution bases */}
+          <RuleSection
+            title="Contribution Bases"
+            description="SSS, PhilHealth and Pag-IBIG are worked out on basic pay. As company policy, each can also count other earnings of the same month the contribution is based on: the earnings ticked for that base in Pay Components, and attendance premiums (overtime, night differential, holiday and rest day pay). All off by default. Pag-IBIG's fund salary is capped at 10,000, so its options only matter below that."
+          >
+            <div className="rounded-lg border border-[#E8E8E8] bg-white divide-y divide-[#F1F1F1]">
+              {([
+                ["SSS", "sssIncludeEarnings", "sssIncludePremiums"],
+                ["PhilHealth", "philhealthIncludeEarnings", "philhealthIncludePremiums"],
+                ["Pag-IBIG", "pagibigIncludeEarnings", "pagibigIncludePremiums"],
+              ] as const).map(([name, earnings, premiums]) => (
+                <div key={name} className="flex flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
+                  <p className="text-[13.5px] font-medium text-[#171717] w-28">{name}</p>
+                  <label className="flex items-center gap-2 text-[13px] text-[#171717]">
+                    <Switch checked={form[earnings]} onCheckedChange={(v) => update(earnings, v)} aria-label={`${name}: include ticked earnings`} />
+                    Ticked earnings
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px] text-[#171717]">
+                    <Switch checked={form[premiums]} onCheckedChange={(v) => update(premiums, v)} aria-label={`${name}: include attendance premiums`} />
+                    Attendance premiums
+                  </label>
+                </div>
+              ))}
             </div>
           </RuleSection>
 

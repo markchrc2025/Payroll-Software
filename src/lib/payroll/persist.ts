@@ -39,6 +39,7 @@ import {
   assessSssBasis,
   sssBaseMonth,
   type SssBasis,
+  type ContributionExtras,
   type SssHistorySheet,
 } from "./sss-basis";
 import { deriveSalaryRates, effectiveDivisor } from "./rates";
@@ -676,9 +677,50 @@ async function loadSssBases(
       employeeId: true,
       basePayCents: true,
       lateUndertimeDeductionCents: true,
+      otPayCents: true, nsdPayCents: true, holidayPayCents: true, restDayPayCents: true,
+      payComponentsApplied: true,
       payrollBook: { select: { periodStart: true, periodEnd: true, runType: true } },
     },
   });
+  // PAY-143: other earnings of the base month a company chose to add to each
+  // contribution's base: earnings whose pay component is ticked for that base
+  // (never deductions or reimbursements), and attendance premiums.
+  // The run's company, from the transaction's own tenant setting (withTenant).
+  const [{ tid }] = await tx.$queryRaw<{ tid: string }[]>`SELECT current_setting('app.current_tenant_id', true) AS tid`;
+  const opt = !tid ? null : await tx.tenant.findUnique({
+    where: { id: tid },
+    select: {
+      sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
+      philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,
+    },
+  });
+  const anyEarnings = !!opt && (opt.sssIncludeEarnings || opt.philhealthIncludeEarnings || opt.pagibigIncludeEarnings);
+  const flagged = anyEarnings
+    ? await tx.payComponent.findMany({
+        where: { tenantId: tid, kind: { notIn: ["DEDUCTION", "REIMBURSEMENT"] }, OR: [{ includeInSssBase: true }, { includeInPhilHealthBase: true }, { includeInPagibigBase: true }] },
+        select: { id: true, includeInSssBase: true, includeInPhilHealthBase: true, includeInPagibigBase: true },
+      })
+    : [];
+  const flagOf = new Map(flagged.map((c) => [c.id, c]));
+  const extrasBy = new Map<string, ContributionExtras>();
+  if (opt) {
+    for (const r of rows) {
+      const x = extrasBy.get(r.employeeId) ?? { sssCents: 0n, philHealthCents: 0n, pagibigCents: 0n };
+      const premiums = r.otPayCents + r.nsdPayCents + r.holidayPayCents + r.restDayPayCents;
+      if (opt.sssIncludePremiums) x.sssCents += premiums;
+      if (opt.philhealthIncludePremiums) x.philHealthCents += premiums;
+      if (opt.pagibigIncludePremiums) x.pagibigCents += premiums;
+      for (const a of (Array.isArray(r.payComponentsApplied) ? r.payComponentsApplied : []) as { id?: string; amountCents?: string }[]) {
+        const f = a?.id ? flagOf.get(a.id) : undefined;
+        if (!f) continue;
+        const amt = BigInt(a.amountCents ?? "0");
+        if (opt.sssIncludeEarnings && f.includeInSssBase) x.sssCents += amt;
+        if (opt.philhealthIncludeEarnings && f.includeInPhilHealthBase) x.philHealthCents += amt;
+        if (opt.pagibigIncludeEarnings && f.includeInPagibigBase) x.pagibigCents += amt;
+      }
+      extrasBy.set(r.employeeId, x);
+    }
+  }
   const byEmployee = new Map<string, SssHistorySheet[]>();
   for (const r of rows) {
     const list = byEmployee.get(r.employeeId) ?? [];
@@ -691,15 +733,14 @@ async function loadSssBases(
     byEmployee.set(r.employeeId, list);
   }
   for (const e of args.employees) {
-    out.set(
-      e.id,
-      assessSssBasis({
-        base,
-        hireDate: e.hireDate,
-        separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
-        sheets: byEmployee.get(e.id) ?? [],
-      }),
-    );
+    const basis = assessSssBasis({
+      base,
+      hireDate: e.hireDate,
+      separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
+      sheets: byEmployee.get(e.id) ?? [],
+    });
+    const x = extrasBy.get(e.id);
+    out.set(e.id, x && x.sssCents + x.philHealthCents + x.pagibigCents > 0n ? { ...basis, otherEarnings: x } : basis);
   }
   return out;
 }
@@ -912,6 +953,12 @@ export interface ThirteenthMonthBreakdown {
    * paid in a regular run, on this run and its projection). Inside totalBasic.
    */
   allowancesCents?: string;
+  /**
+   * PAY-198: lates and undertime taken out of the base (already out of
+   * basicFromRuns and basicProjected). Absent when none, or when the company
+   * opted not to deduct them.
+   */
+  latesDeductedCents?: string;
   /** Basic pay on this year's finalized regular runs. */
   basicFromRunsCents: string;
   runSheetCount: number;
@@ -944,14 +991,18 @@ async function computeThirteenthMonth(
    * A later run (or the Year-End run) trues it up, since what was paid is
    * subtracted.
    */
-  inRun?: { thisRunBasicCents: bigint; periodsAfter: bigint; thisRunApplied?: { id: string; amountCents: string }[] },
+  inRun?: { thisRunBasicCents: bigint; periodsAfter: bigint; thisRunApplied?: { id: string; amountCents: string }[]; thisRunLateCents?: bigint },
 ): Promise<{ dueCents: bigint; breakdown: ThirteenthMonthBreakdown }> {
   const year = periodEnd.getUTCFullYear();
   // PAY-60: the company's basis setting was read by no computation. STRICT_DOLE
   // is basic pay only. INCLUDE_ALLOWANCES adds the earnings whose pay
   // component is marked "13th-Month Pay basis" (never bonuses, reimbursements
   // or deductions).
-  const basis = (await tx.tenant.findUnique({ where: { id: tenantId }, select: { thirteenthMonthBasis: true } }))?.thirteenthMonthBasis ?? "STRICT_DOLE";
+  const policy = await tx.tenant.findUnique({ where: { id: tenantId }, select: { thirteenthMonthBasis: true, thirteenthMonthDeductLates: true } });
+  const basis = policy?.thirteenthMonthBasis ?? "STRICT_DOLE";
+  // PAY-198 (Mark, 20 Nov 2026): lates and undertime reduce the 13th month
+  // base ("basic pay actually earned"); a company may opt not to deduct them.
+  const deductLates = policy?.thirteenthMonthDeductLates ?? true;
   const counted = basis === "INCLUDE_ALLOWANCES"
     ? new Set((await tx.payComponent.findMany({
         where: { tenantId, includeIn13thMonth: true, isBonus: false, kind: { notIn: ["DEDUCTION", "REIMBURSEMENT"] } },
@@ -974,7 +1025,7 @@ async function computeThirteenthMonth(
         periodEnd: { gte: yearStart, lte: yearEnd },
       },
     },
-    select: { basePayCents: true, payComponentsApplied: true },
+    select: { basePayCents: true, lateUndertimeDeductionCents: true, payComponentsApplied: true },
   });
   // PAY-171: 13th month already paid this year by Sentire, on regular runs
   // that included it and on Year-End runs.
@@ -993,8 +1044,11 @@ async function computeThirteenthMonth(
   );
 
   const opening = ytdOpeningTotals(openings);
-  const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n);
-  const projected = inRun ? inRun.thisRunBasicCents * (1n + inRun.periodsAfter) : 0n;
+  const latesFromRuns = deductLates ? priorSheets.reduce((acc, s) => acc + s.lateUndertimeDeductionCents, 0n) : 0n;
+  const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n) - latesFromRuns;
+  // This run's lates come off once; the projected later periods assume none.
+  const lateThisRun = deductLates && inRun ? inRun.thisRunLateCents ?? 0n : 0n;
+  const projected = inRun ? inRun.thisRunBasicCents * (1n + inRun.periodsAfter) - lateThisRun : 0n;
   const allowances =
     priorSheets.reduce((acc, s) => acc + countedIn(s.payComponentsApplied), 0n) +
     (inRun ? countedIn(inRun.thisRunApplied) * (1n + inRun.periodsAfter) : 0n);
@@ -1009,6 +1063,7 @@ async function computeThirteenthMonth(
       year,
       basis,
       ...(basis === "INCLUDE_ALLOWANCES" ? { allowancesCents: allowances.toString() } : {}),
+      ...(deductLates && latesFromRuns + lateThisRun > 0n ? { latesDeductedCents: (latesFromRuns + lateThisRun).toString() } : {}),
       basicFromRunsCents: fromRuns.toString(),
       runSheetCount: priorSheets.length,
       basicFromOpeningsCents: opening.basicPayEarnedCents.toString(),
@@ -1095,6 +1150,7 @@ async function withThirteenthMonthInRun(
     thisRunBasicCents: first.basePayCents,
     periodsAfter: after > 0n ? after : 0n,
     thisRunApplied: first.payComponentsApplied, // PAY-60
+    thisRunLateCents: first.lateUndertimeDeductionCents, // PAY-198
   });
   ci.thirteenthMonthInRunCents = t.dueCents;
   await applyBenefitsContext(tx, tenantId, employeeId, period.end, ci);
