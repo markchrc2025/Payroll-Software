@@ -20,6 +20,9 @@ import { buildBir1604cReport } from "@/lib/payroll/reports/bir-1604c";
 import {
   loadAnnualTaxDue, loadBirYearEmployees, loadWithholdingAgent,
 } from "@/lib/payroll/reports/bir-data";
+import { buildBir2316Report } from "@/lib/payroll/reports/bir-2316";
+import { bir2316Checks } from "@/lib/payroll/reports/cross-foot";
+import { certificateFigures, crossFootAlphalist, yearPayslipFigures } from "@/lib/payroll/reports/cross-foot-data";
 
 const querySchema = z.object({
   year: z.coerce.number().int().min(2000, "year must be 2000 or later").max(2099, "year must be 2099 or earlier"),
@@ -42,7 +45,14 @@ export async function GET(req: NextRequest) {
         await loadAnnualTaxDue(tx, auth.tenantId, year),
         await loadBirYearEmployees(tx, auth.tenantId, year),
       ];
-      return buildBir1604cReport({ year, tenantId: auth.tenantId, tenantName: agent.name, agent, taxDue, employees });
+      const built = buildBir1604cReport({ year, tenantId: auth.tenantId, tenantName: agent.name, agent, taxDue, employees });
+      // PAY-70: the alphalist against all the 2316s, and the 2316s against the payslips.
+      const certs = buildBir2316Report({ year, tenantId: auth.tenantId, tenantName: agent.name, employer: agent, taxDue, employees }).certificates;
+      const crossFoot = [
+        ...crossFootAlphalist(built.form, certs),
+        ...bir2316Checks(certificateFigures(certs), await yearPayslipFigures(tx, auth.tenantId, year)),
+      ];
+      return { ...built, crossFoot };
     });
     return ok(report);
   } catch (e) {

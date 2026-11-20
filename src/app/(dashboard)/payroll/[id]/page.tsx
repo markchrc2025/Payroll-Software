@@ -69,6 +69,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { RunCrossFoot } from "@/components/reports/CrossFootPanel";
 import {
   Select,
   SelectContent,
@@ -765,6 +766,11 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
             HR and each employee&apos;s immediate supervisor were emailed. Approve the DTR, then recompute this run.
           </p>
         </div>
+      )}
+
+      {/* PAY-70: the run's cross-foot checks (payslips, register, bank file) */}
+      {(run.status === "DRAFT" || run.status === "FINALIZED") && run.sheets.length > 0 && (
+        <RunCrossFoot runId={run.id} version={`${run.status}:${run.sheets.map((s) => s.netPayCents).join(",")}`} />
       )}
 
       {/* PAY-150: Other Deductions the run refused or carried over */}

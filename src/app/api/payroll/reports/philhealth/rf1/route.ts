@@ -18,6 +18,8 @@ import {
   type PhilhealthRf1SheetInput,
 } from "@/lib/payroll/reports/philhealth-rf1";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { philhealthRf1Check } from "@/lib/payroll/reports/cross-foot";
+import { monthPayslipTotals } from "@/lib/payroll/reports/cross-foot-data";
 
 const querySchema = z.object({
   year: z.coerce
@@ -123,7 +125,9 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    return ok({ data: report });
+    // PAY-70: the report's total against the month's payslips.
+    const crossFoot = [philhealthRf1Check(BigInt(report.totalPremiumCents), await monthPayslipTotals(auth.tenantId, year, month))];
+    return ok({ data: { ...report, crossFoot } });
   } catch (e) {
     console.error("[philhealth/rf1]", e);
     return err("Internal server error", 500);

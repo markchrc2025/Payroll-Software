@@ -31,6 +31,7 @@ import {
   openingAsReportSheet,
   type YtdOpening,
 } from "@/lib/payroll/ytd-openings";
+import { crossFoot2316 } from "@/lib/payroll/reports/cross-foot-data";
 
 const querySchema = z.object({
   year: z.coerce
@@ -190,10 +191,11 @@ export async function GET(req: NextRequest) {
         (c) => c.employeeId === employeeId,
       );
       if (!cert) return notFound("No payroll data found for this employee in the requested year");
-      return ok(cert);
+      return ok({ ...cert, crossFoot: await crossFoot2316(auth.tenantId, year, [cert], employeeId) });
     }
 
-    return ok(report);
+    // PAY-70: each certificate against that employee's payslips for the year.
+    return ok({ ...report, crossFoot: await crossFoot2316(auth.tenantId, year, report.certificates) });
   } catch (e) {
     console.error("[bir/2316]", e);
     return err("Internal server error", 500);
