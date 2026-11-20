@@ -264,7 +264,7 @@ function form1601c(a: {
     "Item 23 is the taxable pay of employees who are not minimum wage earners and had no tax withheld in the month.",
     "Items 2, 4, 13 and 26 to 36 (amendment, attachments, tax relief, adjustments, earlier remittances and penalties) are not payroll figures. Fill them in when filing.",
   ];
-  if (!a.agent?.rdoCode) footnotes.push("Item 7: the RDO Code is not kept in Sentire Payroll. Fill it in when filing.");
+  if (!a.agent?.rdoCode) footnotes.push("Item 7: the company has no RDO Code on file. Add it in Settings, Company.");
   if (c.withholding < 0n) footnotes.push("Item 25 is negative: tax refunded to employees in the month was more than tax withheld.");
   return {
     formNo: "1601-C",

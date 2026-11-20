@@ -35,13 +35,13 @@ export async function loadWithholdingAgent(tx: Tx, tenantId: string): Promise<Bi
   const t = await tx.tenant.findUniqueOrThrow({
     where: { id: tenantId },
     select: {
-      name: true, tinNumber: true, address: true, city: true, province: true,
+      name: true, tinNumber: true, rdoCode: true, address: true, city: true, province: true,
       zipCode: true, contactPhone: true, contactEmail: true,
     },
   });
   return {
     tin: safeDecrypt(t.tinNumber),
-    rdoCode: null,
+    rdoCode: t.rdoCode,
     name: t.name,
     address: joined(t.address, t.city, t.province),
     zipCode: t.zipCode,
@@ -91,11 +91,12 @@ export const BIR_EMPLOYEE_SELECT = {
   taxClassification: true, birthDate: true, mobileNumber: true, phoneNumber: true,
   addressLine1: true, addressLine2: true, city: true, province: true, zipCode: true, region: true,
   hireDate: true, resignationDate: true, lastWorkingDate: true, endOfContractDate: true,
-  regularizationDate: true, employmentStatus: true, nationality: true,
+  regularizationDate: true, employmentStatus: true, nationality: true, rdoCode: true,
 } as const;
 
 export interface BirEmployeeRow {
   id: string;
+  rdoCode?: string | null;
   birthDate: Date | null;
   mobileNumber: string | null;
   phoneNumber: string | null;
@@ -139,6 +140,7 @@ export function personOf(
   const period = employmentWithinYear(e, year);
   return {
     tin,
+    rdoCode: e.rdoCode ?? null,
     address: joined(e.addressLine1, e.addressLine2, e.city, e.province),
     zipCode: e.zipCode,
     birthDate: e.birthDate,

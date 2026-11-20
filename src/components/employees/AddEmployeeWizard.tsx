@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { RDO_CODES } from "@/lib/bir/rdo-codes";
 import {
   EducationSection,
   WorkExperienceSection,
@@ -774,6 +775,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <TF control={c} name="statutoryIds.philhealthNumber"  label="PhilHealth" placeholder="00-000000000-0"  span2 errors={e} />
             <TF control={c} name="statutoryIds.pagibigNumber"     label="Pag-IBIG"   placeholder="0000-0000-0000"  span2 errors={e} />
             <TF control={c} name="statutoryIds.tinNumber"         label="TIN"        placeholder="000-000-000-000" span2 errors={e} />
+            <SF control={c} name="rdoCode"                        label="BIR RDO Code" options={[...RDO_CODES]} placeholder="Select RDO Code" span2 errors={e} />
           </FGrid>
         );
 
