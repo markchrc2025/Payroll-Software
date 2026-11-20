@@ -68,6 +68,8 @@ const patchSchema = z.object({
   allowNegativeFinalPay: z.boolean().optional(),
   // PAY-172: hold the pay of an employee whose cutoff DTR is not fully approved.
   strictDtrPolicy: z.boolean().optional(),
+  // PAY-198: lates and undertime reduce the 13th month base.
+  thirteenthMonthDeductLates: z.boolean().optional(),
   // PAY-143: other earnings in each contribution's base.
   sssIncludeEarnings: z.boolean().optional(),
   sssIncludePremiums: z.boolean().optional(),
@@ -123,6 +125,7 @@ export async function GET(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        thirteenthMonthDeductLates: true,
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
@@ -199,6 +202,7 @@ export async function PATCH(req: NextRequest) {
         workingDaysDenominator: true,
         statutoryCutoffRule: true,
         thirteenthMonthBasis: true,
+        thirteenthMonthDeductLates: true,
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
