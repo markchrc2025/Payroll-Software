@@ -47,6 +47,10 @@ echo "[start] Applying database migrations (prisma migrate deploy)…"
 "$BIN/prisma" migrate deploy
 echo "[start] Migrations up to date"
 
+# PAY-58: compare the live schema with what the migrations produce. Report
+# only: it prints [schema-drift] lines and can never stop the server.
+node scripts/db/schema-fingerprint.mjs --report || true
+
 # Unit 0.7, fail-closed: the runtime client must connect as a role RLS
 # constrains (not superuser, not BYPASSRLS, not a table owner, no USING (true)
 # policy, full grants). Otherwise refuse to start: with Dokploy's health check
