@@ -22,6 +22,7 @@ import type {
   SalaryType,
   StatutoryCategory,
   SeparationReason,
+  PayrollSheet,
 } from "@prisma/client";
 import { Prisma as PrismaValues } from "@prisma/client";
 import { computeSheet, isStatutoryDeducted } from "./engine";
@@ -60,6 +61,7 @@ import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
 import { annualizeInTx, isLastRegularOfYear, staleAnnualizations } from "./annualize";
+import { runCrossFoot, type CrossFootCheck, type RegisterTotals } from "./reports/cross-foot";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -1844,6 +1846,12 @@ export async function finalizeRun(
       }
     }
 
+    // PAY-203 (Mark, 20 Nov 2026, ruling 3): a run whose payslips do not add
+    // up (cross-foot check 1) or whose register does not equal its payslips
+    // (check 2) cannot be finalized. The register's totals are added by the
+    // database, apart from the payslips loaded above.
+    await assertRunTiesOut(tx, tenantId, book.id, book.sheets);
+
     // 1. Aggregate loan payments from all sheets.
     const loanPayments = new Map<string, bigint>(); // loanId → totalAmount
     for (const sheet of book.sheets) {
@@ -2202,4 +2210,48 @@ export async function processRun(tenantId: string, bookId: string) {
       data: { status: "DRAFT", updatedAt: new Date() },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// PAY-203: cross-foot checks 1 and 2 at finalize
+// ---------------------------------------------------------------------------
+
+type CrossFootSheet = Pick<
+  PayrollSheet,
+  | "employeeId" | "grossCompensationCents" | "sssEeCents" | "philhealthEeCents" | "pagibigEeCents"
+  | "withholdingTaxCents" | "loanDeductionsCents" | "adjustmentDeductionsCents" | "nontaxableAdditionsCents" | "netPayCents"
+>;
+
+export class PayrollRunDoesNotTieOutError extends PayrollRunConflictError {
+  constructor(public readonly checks: CrossFootCheck[]) {
+    super(
+      `This run does not tie out, so it cannot be finalized: ` +
+        checks.map((c) => `${c.label}${c.detail ? ` (${c.detail})` : ""}`).join("; ") +
+        `. Recompute the run, then finalize.`,
+    );
+  }
+}
+
+async function assertRunTiesOut(tx: TenantTx, tenantId: string, bookId: string, sheets: CrossFootSheet[]): Promise<void> {
+  const z = (n: bigint | null | undefined) => n ?? 0n;
+  const sums = await tx.payrollSheet.aggregate({
+    where: { tenantId, payrollBookId: bookId },
+    _count: true,
+    _sum: {
+      grossCompensationCents: true, sssEeCents: true, philhealthEeCents: true, pagibigEeCents: true,
+      withholdingTaxCents: true, loanDeductionsCents: true, adjustmentDeductionsCents: true,
+      nontaxableAdditionsCents: true, netPayCents: true,
+    },
+  });
+  const s = sums._sum;
+  const register: RegisterTotals = {
+    payslips: sums._count,
+    grossCents: z(s.grossCompensationCents), sssEeCents: z(s.sssEeCents), philhealthEeCents: z(s.philhealthEeCents),
+    pagibigEeCents: z(s.pagibigEeCents), withholdingTaxCents: z(s.withholdingTaxCents),
+    loanDeductionsCents: z(s.loanDeductionsCents), otherDeductionsCents: z(s.adjustmentDeductionsCents),
+    additionsCents: z(s.nontaxableAdditionsCents), netPayCents: z(s.netPayCents),
+  };
+  const failed = runCrossFoot({ sheets: sheets.map((x) => ({ ...x, employeeLabel: x.employeeId })), register, bankFileTotalCents: null })
+    .filter((c) => !c.ok);
+  if (failed.length > 0) throw new PayrollRunDoesNotTieOutError(failed);
 }
