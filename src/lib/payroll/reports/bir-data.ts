@@ -11,7 +11,10 @@ import { decrypt } from "@/lib/crypto";
 import { getActiveRule } from "@/lib/statutory/resolver";
 import { annualTaxDueCents } from "@/lib/payroll/annual-tax";
 import type { BirWithholdingAgent } from "./bir-1601c";
-import type { Bir2316Person } from "./bir-2316";
+import type { Bir2316Person, Bir2316SheetInput } from "./bir-2316";
+import type { Bir1604cEmployeeInput } from "./bir-1604c";
+import { BIR_SHEET_SELECT, factsFromSheet, splitSheet } from "./bir-comp";
+import { loadYtdOpeningsByEmployee, openingAsReportSheet } from "@/lib/payroll/ytd-openings";
 
 type Tx = Prisma.TransactionClient;
 
@@ -88,7 +91,7 @@ export const BIR_EMPLOYEE_SELECT = {
   taxClassification: true, birthDate: true, mobileNumber: true, phoneNumber: true,
   addressLine1: true, addressLine2: true, city: true, province: true, zipCode: true, region: true,
   hireDate: true, resignationDate: true, lastWorkingDate: true, endOfContractDate: true,
-  employmentStatus: true, nationality: true,
+  regularizationDate: true, employmentStatus: true, nationality: true,
 } as const;
 
 export interface BirEmployeeRow {
@@ -145,4 +148,96 @@ export function personOf(
     smwDailyCents: smwDaily,
     smwMonthlyCents: smwDaily !== null && daysPerYear ? (smwDaily * BigInt(daysPerYear)) / 12n : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 1604-C: the year's employees with everything the alphalist asks for
+// ---------------------------------------------------------------------------
+
+/** R, C, CP, S, P or AL: the alphalist's code for the employee's status. */
+export function employmentStatusCode(status: string, regularizationDate: Date | null): string {
+  if (status === "REGULAR") return "R";
+  if (status === "PROBATIONARY") return "P";
+  if (status === "CONTRACTUAL" || status === "PROJECT_BASED") return "CP";
+  // Left the company: the status held before leaving.
+  return regularizationDate ? "R" : "P";
+}
+
+export async function loadBirYearEmployees(tx: Tx, tenantId: string, year: number): Promise<Bir1604cEmployeeInput[]> {
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+  const sheets = await tx.payrollSheet.findMany({
+    where: { tenantId, payrollBook: { status: "FINALIZED", periodEnd: { gte: yearStart, lte: yearEnd } } },
+    select: {
+      ...BIR_SHEET_SELECT,
+      workingDaysDenominatorSnapshot: true,
+      payrollBook: { select: { periodEnd: true } },
+    },
+  });
+  const byEmployee = new Map<string, Bir2316SheetInput[]>();
+  const daysPerYear = new Map<string, number>();
+  for (const s of sheets) {
+    const list = byEmployee.get(s.employeeId) ?? [];
+    list.push({
+      grossCompensationCents: s.grossCompensationCents,
+      mweExemptCompensationCents: s.mweExemptCompensationCents,
+      nontaxableBasicCents: s.nontaxableBasicCents,
+      nontaxableCompensationCents: s.nontaxableCompensationCents,
+      nontaxable13MonthAndBenefitsCents: s.nontaxable13MonthAndBenefitsCents,
+      grossTaxableIncomeCents: s.grossTaxableIncomeCents,
+      sssEeCents: s.sssEeCents,
+      philhealthEeCents: s.philhealthEeCents,
+      pagibigEeCents: s.pagibigEeCents,
+      withholdingTaxCents: s.withholdingTaxCents,
+      comp: splitSheet(factsFromSheet(s)),
+      month: s.payrollBook.periodEnd.getUTCMonth() + 1,
+    });
+    byEmployee.set(s.employeeId, list);
+    daysPerYear.set(s.employeeId, s.workingDaysDenominatorSnapshot);
+  }
+
+  const openings = await loadYtdOpeningsByEmployee(tx, tenantId, year, undefined);
+  const employeeIds = [...new Set([...byEmployee.keys(), ...openings.keys()])];
+  if (employeeIds.length === 0) return [];
+
+  const [employees, tins, minimumWages] = await Promise.all([
+    tx.employee.findMany({ where: { id: { in: employeeIds } }, select: BIR_EMPLOYEE_SELECT }),
+    loadEmployeeTins(tx, tenantId, employeeIds),
+    loadMinimumWages(tx, tenantId, year),
+  ]);
+
+  return employees.map((e) => {
+    const list = openings.get(e.id) ?? [];
+    const prior = list.find((o) => o.source === "PRIOR_PAYROLL");
+    const prev = list.find((o) => o.source === "PREVIOUS_EMPLOYER");
+    const last = lastDayOf(e);
+    const separatedInYear = !!last && last >= yearStart && last <= yearEnd;
+    return {
+      employeeId: e.id,
+      employeeNumber: e.employeeNumber,
+      firstName: e.firstName,
+      middleName: e.middleName,
+      lastName: e.lastName,
+      suffix: e.suffix,
+      taxClassification: e.taxClassification,
+      sheets: byEmployee.get(e.id) ?? [],
+      person: personOf(e, year, tins.get(e.id) ?? null, minimumWages, daysPerYear.get(e.id) ?? null),
+      priorPayrollOpening: prior ? openingAsReportSheet(prior) : undefined,
+      previousEmployer: prev
+        ? {
+            name: prev.previousEmployerName ?? "",
+            tin: prev.previousEmployerTin,
+            taxableCompensationCents: prev.taxableCompensationCents,
+            withholdingTaxCents: prev.withholdingTaxCents,
+            nontaxable13MonthAndBenefitsCents: prev.nontaxable13MonthAndBenefitsCents,
+          }
+        : null,
+      nationality: e.nationality,
+      employmentStatusCode: employmentStatusCode(e.employmentStatus, e.regularizationDate),
+      separationReasonCode: separatedInYear ? (e.employmentStatus === "RETIRED" ? "R" : "T") : null,
+      region: e.region,
+      daysPerYear: daysPerYear.get(e.id) ?? null,
+      separatedInYear,
+    };
+  });
 }

@@ -4,7 +4,9 @@
  * /reports — Statutory Compliance Reports
  *
  * 8 report cards grouped by agency:
- *   BIR : 1601-C (monthly WHT remittance), 2316 (annual certificate), Alphalist
+ *   BIR : 1601-C (monthly remittance return), 2316 (annual certificate),
+ *         1604-C (annual return with the alphalist). PAY-71: these three are
+ *         shown in the form's own structure ("View form").
  *   SSS : R-1A (monthly contributions), R-3 (monthly collection list)
  *   PhilHealth : RF-1 (remittance report), ER-2 (premium contribution return)
  *   Pag-IBIG : MCRF (monthly contribution remittance form)
@@ -15,7 +17,7 @@
  *  - "Generate" button → fetches the JSON report from the API
  *  - "Download JSON" always available after generation
  *  - "Download File" for reports that include a machine-readable text attachment
- *    (Alphalist → .dat, SSS R-3 → .ecs, PhilHealth ER-2 → .txt)
+ *    (SSS R-3 → .ecs, PhilHealth ER-2 → .txt)
  */
 
 import { useState } from "react";
@@ -288,15 +290,12 @@ const REPORTS: ReportDef[] = [
     apiPath: "/api/payroll/reports/bir/2316",
   },
   {
-    id: "bir_alphalist",
-    title: "BIR Alphalist — Annual Employee List",
-    description: "Annual Alphalist of Employees (Annex B-1 / B-2) for eBIRForms / SRS submission. Includes .DAT file for electronic filing.",
+    id: "bir_1604c",
+    title: "BIR 1604-C: Annual Return and Alphalist",
+    description: "Annual Information Return of Income Taxes Withheld on Compensation (January 2018) with the alphalist in the RMC 160-2022 format: Schedule 1 for employees and Schedule 2 for minimum wage earners.",
     agency: "BIR",
     monthly: false,
-    apiPath: "/api/payroll/reports/bir/alphalist",
-    fileField: "datFileContent",
-    fileExt: "dat",
-    fileLabel: ".DAT",
+    apiPath: "/api/payroll/reports/bir/1604c",
   },
   // SSS
   {
