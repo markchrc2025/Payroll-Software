@@ -22,6 +22,8 @@ import {
 import { BIR_SHEET_SELECT, factsFromSheet, splitSheet } from "@/lib/payroll/reports/bir-comp";
 import { loadEmployeeTins, loadWithholdingAgent } from "@/lib/payroll/reports/bir-data";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { bir1601cCheck } from "@/lib/payroll/reports/cross-foot";
+import { monthPayslipTotals } from "@/lib/payroll/reports/cross-foot-data";
 
 const querySchema = z.object({
   year: z.coerce
@@ -152,7 +154,9 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    return ok(report);
+    // PAY-70: Item 25 against the month's payslips.
+    const crossFoot = [bir1601cCheck(BigInt(report.totalWithholdingTaxCents), await monthPayslipTotals(auth.tenantId, year, month))];
+    return ok({ ...report, crossFoot });
   } catch (e) {
     console.error("[bir/1601c]", e);
     return err("Internal server error", 500);

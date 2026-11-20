@@ -17,6 +17,8 @@ import {
   type SssR3EmployeeInput,
   type SssR3SheetInput,
 } from "@/lib/payroll/reports/sss-r3";
+import { sssR3Check } from "@/lib/payroll/reports/cross-foot";
+import { monthPayslipTotals } from "@/lib/payroll/reports/cross-foot-data";
 
 const querySchema = z.object({
   year: z.coerce
@@ -122,7 +124,9 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    return ok({ data: report });
+    // PAY-70: the report's total against the month's payslips.
+    const crossFoot = [sssR3Check(BigInt(report.totalSssContributionCents), await monthPayslipTotals(auth.tenantId, year, month))];
+    return ok({ data: { ...report, crossFoot } });
   } catch (e) {
     console.error("[sss/r3]", e);
     return err("Internal server error", 500);

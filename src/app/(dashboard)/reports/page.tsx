@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { Download, Eye, FileText, Loader2 } from "lucide-react";
 import { BirFormViewer, type BirFormEntry } from "@/components/reports/BirFormViewer";
 import type { BirFormView } from "@/lib/payroll/reports/bir-form";
+import { CrossFootPanel, isCrossFootList } from "@/components/reports/CrossFootPanel";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -203,6 +204,9 @@ function ReportCard({ report }: { report: ReportDef }) {
           </div>
         )}
       </div>
+
+      {/* PAY-70: the report's cross-foot checks */}
+      {result && isCrossFootList(result.crossFoot) && <CrossFootPanel checks={result.crossFoot} />}
 
       {/* Result status badge */}
       {result && (
