@@ -80,7 +80,7 @@ describeDb("PAY-170 attendance import (real Postgres)", () => {
       { employeeNumber: NUM, punchedAt: "2026-11-03 16:30", punchType: "OUT" },
     ];
     const r = await importPunches(T, rows, new Date("2026-11-10T00:00:00Z"));
-    expect(r).toEqual({ ok: true, imported: 4, duplicates: 0, daysRecomputed: 2, employees: 1 });
+    expect(r).toEqual({ ok: true, imported: 4, duplicates: 0, breaksSkipped: 0, daysRecomputed: 2, employees: 1 });
 
     // The column holds UTC without a zone; read it as text so the test does
     // not depend on the machine's time zone.
@@ -143,7 +143,7 @@ describeDb("PAY-170 attendance import (real Postgres)", () => {
       { employeeNumber: NUM, punchedAt: "2026-11-02 08:15", punchType: "IN" },
       { employeeNumber: NUM, punchedAt: "2026-11-02 17:00", punchType: "OUT" },
     ], new Date("2026-11-10T00:00:00Z"));
-    expect(r).toEqual({ ok: true, imported: 0, duplicates: 2, daysRecomputed: 0, employees: 0 });
+    expect(r).toEqual({ ok: true, imported: 0, duplicates: 2, breaksSkipped: 0, daysRecomputed: 0, employees: 0 });
     expect(await logCount()).toBe(before);
   });
 
@@ -172,6 +172,8 @@ describeDb("PAY-170 attendance import (real Postgres)", () => {
     expect(punchTypeOf("C/In")).toBe("IN");
     expect(punchTypeOf("check out")).toBe("OUT");
     expect(punchTypeOf("break")).toBeNull();
+    expect(punchTypeOf("3")).toBe("BREAK");
+    expect(punchTypeOf("4")).toBe("IN");
     expect(punchInstant("2026-11-02 08:05:30", "Asia/Manila")!.toISOString()).toBe("2026-11-02T00:05:30.000Z");
     expect(punchInstant("2026-11-02T08:05:00+08:00", "UTC")!.toISOString()).toBe("2026-11-02T00:05:00.000Z");
     expect(punchInstant("2026-02-30 08:00", "Asia/Manila")).toBeNull();

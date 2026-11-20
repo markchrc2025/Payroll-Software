@@ -168,3 +168,47 @@ export async function seedScenario(api, log = console.log, { restoreAttendance =
   }
   return { branchId: branch.id, departmentId: dept.id, shiftIds, employeeIds, runIds: runs.map((r) => r.id) };
 }
+
+// PAY-170 part 2: a full cutoff of real punches for the five QA employees, as
+// a ZKTeco ATTLOG file (1_attlog.dat: user id, date and time, device, state,
+// verify, work code; state 0 in, 1 out, 2 break out, 3 break in, 5 OT out).
+// Each employee works their shift's days from the later of the cutoff start
+// and their hire date, 08:00 to 17:00, except (counting their workdays from 0):
+//   QA-01  day 1: in 08:15 (15 min late)
+//   QA-02  day 2: no punches (absent); day 3: out 16:30 (30 min undertime)
+//   QA-03  day 1: out 19:00 on the OT state (2 h over); day 4: in only (missing out)
+//   QA-04  day 0: break out 12:00 and back 13:00 (break punches, skipped)
+//   QA-05  plain days from the hire date
+const WEEKDAY = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+export function buildPunchCutoff(employees, from, to) {
+  const lines = [];
+  const plan = [];
+  for (const def of EMPLOYEES) {
+    const emp = employees.find((e) => String(e.lastName ?? "").includes(`(${def.tag})`));
+    if (!emp) continue;
+    const workDays = SHIFTS.find((s) => s.key === def.shift).body.workDays;
+    const start = def.hireDate > from ? def.hireDate : from;
+    const days = [];
+    for (let t = Date.parse(`${start}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86_400_000) {
+      const d = new Date(t);
+      if (workDays.includes(WEEKDAY[d.getUTCDay()])) days.push(d.toISOString().slice(0, 10));
+    }
+    const num = emp.employeeNumber;
+    const at = (day, hm, state) => lines.push(`${num}\t${day} ${hm}:00\t1\t${state}\t1\t0`);
+    days.forEach((day, i) => {
+      const k = `${def.tag}:${i}`;
+      if (k === "QA-02:2") { plan.push({ employee: def.tag, day, case: "absent" }); return; }
+      if (k === "QA-03:4") { at(day, "08:00", 0); plan.push({ employee: def.tag, day, case: "missing out" }); return; }
+      at(day, k === "QA-01:1" ? "08:15" : "08:00", 0);
+      if (k === "QA-04:0") { at(day, "12:00", 2); at(day, "13:00", 3); }
+      if (k === "QA-03:1") at(day, "19:00", 5);
+      else at(day, k === "QA-02:3" ? "16:30" : "17:00", 1);
+      if (k === "QA-01:1") plan.push({ employee: def.tag, day, case: "15 min late" });
+      if (k === "QA-02:3") plan.push({ employee: def.tag, day, case: "30 min undertime" });
+      if (k === "QA-03:1") plan.push({ employee: def.tag, day, case: "2 h overtime (file it in ESS, then approve)" });
+      if (k === "QA-04:0") plan.push({ employee: def.tag, day, case: "break punches (skipped)" });
+    });
+  }
+  return { file: lines.join("\r\n") + "\r\n", plan };
+}
