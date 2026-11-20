@@ -174,6 +174,8 @@ export interface PayslipPdfSource {
     thirteenthMonthBreakdown?: unknown;
     /** PAY-171: the year-end true-up on the year's last regular run. */
     annualizationData?: unknown;
+    /** PAY-194: held cutoffs released on this payslip, with their figures. */
+    heldRelease?: unknown;
   };
   employee: {
     employeeNumber: string;
@@ -191,12 +193,28 @@ export interface PayslipPdfSource {
   extras: PayslipExtras;
 }
 
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** PAY-194: "1 to 15 Nov 2026" from two YYYY-MM-DD dates. */
+export function fmtRange(start: string, end: string): string {
+  const [y1, m1, d1] = start.split("-").map(Number);
+  const [y2, m2, d2] = end.split("-").map(Number);
+  const tail = `${d2} ${MON[m2 - 1]} ${y2}`;
+  if (y1 === y2 && m1 === m2) return `${d1} to ${tail}`;
+  if (y1 === y2) return `${d1} ${MON[m1 - 1]} to ${tail}`;
+  return `${d1} ${MON[m1 - 1]} ${y1} to ${tail}`;
+}
+
 export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const { sheet, book, employee: emp, extras } = src;
   const snap = (sheet.periodInputSnapshot ?? {}) as Partial<ComputePeriodInputSnapshot>;
   const n = (k: keyof ComputePeriodInputSnapshot) => Number(snap[k] ?? 0) || 0;
 
   // -- Earnings (adds up to gross) ------------------------------------------
+  // PAY-194: a held salary released here is one line per held cutoff; the
+  // other earnings lines show this period only.
+  const releases = (((sheet.heldRelease ?? null) as { releases?: { periodStart: string; periodEnd: string; amounts: Record<string, string> }[] } | null)?.releases ?? []);
+  const heldOf = (k: string) => releases.reduce((t, r) => t + BigInt(r.amounts[k] ?? "0"), 0n);
+  const own = (k: keyof PayslipPdfSource["sheet"]) => (sheet[k] as bigint) - heldOf(k as string);
   const per = PER[sheet.salaryTypeSnapshot] ?? "period";
   const earnings: PdfLine[] = [];
   const daysWorked = n("daysWorked");
@@ -205,14 +223,14 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
     label: unpaid > 0 ? `Basic pay (less ${plural(unpaid, "unpaid day", "unpaid days")})` : "Basic pay",
     units: daysWorked > 0 ? plural(daysWorked, "day", "days") : undefined,
     rate: `${peso(sheet.basicSalaryCentsSnapshot)}/${per}`,
-    amount: sheet.basePayCents,
+    amount: own("basePayCents"),
   });
-  if (sheet.lateUndertimeDeductionCents !== 0n) {
+  if (own("lateUndertimeDeductionCents") !== 0n) {
     const mins = n("lateUndertimeMinutes");
     earnings.push({
       label: "Late / undertime",
       units: mins > 0 ? `${num(mins)} min` : undefined,
-      amount: -sheet.lateUndertimeDeductionCents,
+      amount: -own("lateUndertimeDeductionCents"),
     });
   }
   const otHours = Object.entries(snap)
@@ -221,11 +239,11 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const add = (label: string, amount: bigint, units?: string) => {
     if (amount !== 0n) earnings.push({ label, amount, units });
   };
-  add("Overtime pay", sheet.otPayCents, otHours > 0 ? `${num(otHours)} hrs` : undefined);
-  add("Night differential", sheet.nsdPayCents);
-  add("Holiday pay", sheet.holidayPayCents);
-  add("Rest day pay", sheet.restDayPayCents);
-  add("Hazard pay", sheet.hazardPayCents);
+  add("Overtime pay", own("otPayCents"), otHours > 0 ? `${num(otHours)} hrs` : undefined);
+  add("Night differential", own("nsdPayCents"));
+  add("Holiday pay", own("holidayPayCents"));
+  add("Rest day pay", own("restDayPayCents"));
+  add("Hazard pay", own("hazardPayCents"));
   // PAY-171: on a regular payslip, the 13th month and each bonus and one-off
   // pay get their own line (as on Mark's Smart payslips).
   const applied = (Array.isArray(sheet.payComponentsApplied) ? sheet.payComponentsApplied : []) as {
@@ -235,12 +253,15 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   const oneOffCents = applied.filter((a) => a.isOneOff).reduce((t, a) => t + BigInt(a.amountCents), 0n);
   const t13 = (sheet.thirteenthMonthBreakdown ?? null) as { dueCents?: string } | null;
   const regular13th = book.runType === "REGULAR" && t13?.dueCents ? BigInt(t13.dueCents) : 0n;
-  add("Taxable allowances and additions", sheet.taxableAllowancesCents - oneOffCents);
+  add("Taxable allowances and additions", own("taxableAllowancesCents") - oneOffCents);
   if (regular13th > 0n || bonusLines.length > 0) {
     add("13th month pay", regular13th);
     for (const l of bonusLines) add(l.name, BigInt(l.amountCents));
   } else {
     add("13th month pay (non-taxable)", sheet.nontaxable13MonthAndBenefitsCents ?? 0n); // PAY-153
+  }
+  for (const r of releases) {
+    add(`Held salary released (${fmtRange(r.periodStart, r.periodEnd)})`, BigInt(r.amounts.grossCompensationCents ?? "0"));
   }
   const listed = earnings.reduce((s, l) => s + l.amount, 0n);
   // Whatever else gross holds (non-taxable allowances from pay components, or

@@ -2766,6 +2766,10 @@ model PayrollSheet {
   payrollBook PayrollBook @relation(fields: [payrollBookId], references: [id], onDelete: Cascade)
   employee    Employee    @relation(fields: [employeeId], references: [id])
 
+    /// PAY-194: the held cutoffs this sheet releases (strict DTR policy), with
+  /// each cutoff's figures, which are included in this sheet's amounts.
+  heldRelease Json?
+
   @@unique([payrollBookId, employeeId])
   @@index([tenantId])
   @@index([tenantId, employeeId])
