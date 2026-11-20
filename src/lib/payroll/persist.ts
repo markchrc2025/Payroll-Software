@@ -39,6 +39,7 @@ import {
   assessSssBasis,
   sssBaseMonth,
   type SssBasis,
+  type ContributionExtras,
   type SssHistorySheet,
 } from "./sss-basis";
 import { deriveSalaryRates, effectiveDivisor } from "./rates";
@@ -676,9 +677,50 @@ async function loadSssBases(
       employeeId: true,
       basePayCents: true,
       lateUndertimeDeductionCents: true,
+      otPayCents: true, nsdPayCents: true, holidayPayCents: true, restDayPayCents: true,
+      payComponentsApplied: true,
       payrollBook: { select: { periodStart: true, periodEnd: true, runType: true } },
     },
   });
+  // PAY-143: other earnings of the base month a company chose to add to each
+  // contribution's base: earnings whose pay component is ticked for that base
+  // (never deductions or reimbursements), and attendance premiums.
+  // The run's company, from the transaction's own tenant setting (withTenant).
+  const [{ tid }] = await tx.$queryRaw<{ tid: string }[]>`SELECT current_setting('app.current_tenant_id', true) AS tid`;
+  const opt = !tid ? null : await tx.tenant.findUnique({
+    where: { id: tid },
+    select: {
+      sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
+      philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,
+    },
+  });
+  const anyEarnings = !!opt && (opt.sssIncludeEarnings || opt.philhealthIncludeEarnings || opt.pagibigIncludeEarnings);
+  const flagged = anyEarnings
+    ? await tx.payComponent.findMany({
+        where: { tenantId: tid, kind: { notIn: ["DEDUCTION", "REIMBURSEMENT"] }, OR: [{ includeInSssBase: true }, { includeInPhilHealthBase: true }, { includeInPagibigBase: true }] },
+        select: { id: true, includeInSssBase: true, includeInPhilHealthBase: true, includeInPagibigBase: true },
+      })
+    : [];
+  const flagOf = new Map(flagged.map((c) => [c.id, c]));
+  const extrasBy = new Map<string, ContributionExtras>();
+  if (opt) {
+    for (const r of rows) {
+      const x = extrasBy.get(r.employeeId) ?? { sssCents: 0n, philHealthCents: 0n, pagibigCents: 0n };
+      const premiums = r.otPayCents + r.nsdPayCents + r.holidayPayCents + r.restDayPayCents;
+      if (opt.sssIncludePremiums) x.sssCents += premiums;
+      if (opt.philhealthIncludePremiums) x.philHealthCents += premiums;
+      if (opt.pagibigIncludePremiums) x.pagibigCents += premiums;
+      for (const a of (Array.isArray(r.payComponentsApplied) ? r.payComponentsApplied : []) as { id?: string; amountCents?: string }[]) {
+        const f = a?.id ? flagOf.get(a.id) : undefined;
+        if (!f) continue;
+        const amt = BigInt(a.amountCents ?? "0");
+        if (opt.sssIncludeEarnings && f.includeInSssBase) x.sssCents += amt;
+        if (opt.philhealthIncludeEarnings && f.includeInPhilHealthBase) x.philHealthCents += amt;
+        if (opt.pagibigIncludeEarnings && f.includeInPagibigBase) x.pagibigCents += amt;
+      }
+      extrasBy.set(r.employeeId, x);
+    }
+  }
   const byEmployee = new Map<string, SssHistorySheet[]>();
   for (const r of rows) {
     const list = byEmployee.get(r.employeeId) ?? [];
@@ -691,15 +733,14 @@ async function loadSssBases(
     byEmployee.set(r.employeeId, list);
   }
   for (const e of args.employees) {
-    out.set(
-      e.id,
-      assessSssBasis({
-        base,
-        hireDate: e.hireDate,
-        separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
-        sheets: byEmployee.get(e.id) ?? [],
-      }),
-    );
+    const basis = assessSssBasis({
+      base,
+      hireDate: e.hireDate,
+      separationDate: e.lastWorkingDate ?? e.resignationDate ?? null,
+      sheets: byEmployee.get(e.id) ?? [],
+    });
+    const x = extrasBy.get(e.id);
+    out.set(e.id, x && x.sssCents + x.philHealthCents + x.pagibigCents > 0n ? { ...basis, otherEarnings: x } : basis);
   }
   return out;
 }

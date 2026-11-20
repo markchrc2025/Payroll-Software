@@ -33,7 +33,19 @@ export type SssBasisKind =
   /** Base month not fully in Sentire: contracted monthly basic used. */
   | "CONTRACTED_FALLBACK";
 
-export type SssBasis =
+/**
+ * PAY-143: other earnings of the base month that the company chose to add to
+ * each contribution's base (pay components ticked for that base, and
+ * attendance premiums), from the same finalized runs. Zero when the company
+ * option is off or the base month has no finalized run.
+ */
+export interface ContributionExtras {
+  sssCents: bigint;
+  philHealthCents: bigint;
+  pagibigCents: bigint;
+}
+
+export type SssBasis = (
   | {
       kind: "PREVIOUS_MONTH_ACTUAL";
       /** YYYY-MM of the base month. */
@@ -42,7 +54,8 @@ export type SssBasis =
       priorBasicCents: bigint;
     }
   | { kind: "NEW_HIRE_NO_SSS"; month: string }
-  | { kind: "CONTRACTED_FALLBACK"; month: string };
+  | { kind: "CONTRACTED_FALLBACK"; month: string }
+) & { otherEarnings?: ContributionExtras };
 
 /** A finalized sheet of the same employee, as persist.ts loads it. */
 export interface SssHistorySheet {

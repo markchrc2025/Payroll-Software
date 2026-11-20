@@ -467,6 +467,9 @@ export interface StatutoryBreakdown {
     /// Compensation looked up in the SSS table ("0" when no SSS).
     compensationCents: string;
   };
+  /// PAY-143: other earnings of the base month added to each contribution's
+  /// base by company option. Absent when none were added.
+  otherEarningsInBases?: { sssCents: string; philHealthCents: string; pagibigCents: string };
 }
 
 export interface ComputeResult {

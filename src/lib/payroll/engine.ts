@@ -1248,13 +1248,17 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // this run (a new hire's first month). Without a basis (unit tests,
   // non-REGULAR runs) it stays on the contracted monthly basic. PhilHealth
   // and Pag-IBIG stay on the contracted monthly basic (Mark, 15 Nov 2026).
-  const sssCompCents = sssCompensationCents(input.sssBasis, rates.monthlyEquivalentCents);
+  // PAY-143: a company may add other earnings of the base month to each
+  // contribution's base (off by default; persist.ts supplies the amounts).
+  const extras = input.sssBasis?.otherEarnings;
+  const sssBasicCents = sssCompensationCents(input.sssBasis, rates.monthlyEquivalentCents);
+  const sssCompCents = sssBasicCents === null ? null : sssBasicCents + (extras?.sssCents ?? 0n);
   const sss = sssCompCents === null ? NO_SSS : computeSSS(rules.sss, sssCompCents);
   const phic = computePhilHealth(
     rules.philHealth,
-    rates.monthlyEquivalentCents,
+    rates.monthlyEquivalentCents + (extras?.philHealthCents ?? 0n),
   );
-  const hdmf = computePagibig(rules.pagibig, rates.monthlyEquivalentCents);
+  const hdmf = computePagibig(rules.pagibig, rates.monthlyEquivalentCents + (extras?.pagibigCents ?? 0n));
 
   const sssEeCents = deducted ? sss.employee : 0n;
   const sssErCents = deducted ? sss.employer : 0n;
@@ -1412,6 +1416,15 @@ export function computeSheet(input: ComputeInput): ComputeResult {
             kind: input.sssBasis.kind,
             month: input.sssBasis.month,
             compensationCents: (sssCompCents ?? 0n).toString(),
+          },
+        }
+      : {}),
+    ...(deducted && extras && extras.sssCents + extras.philHealthCents + extras.pagibigCents > 0n
+      ? {
+          otherEarningsInBases: {
+            sssCents: (sssBasicCents === null ? 0n : extras.sssCents).toString(),
+            philHealthCents: extras.philHealthCents.toString(),
+            pagibigCents: extras.pagibigCents.toString(),
           },
         }
       : {}),

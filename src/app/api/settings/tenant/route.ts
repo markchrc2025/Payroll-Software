@@ -68,6 +68,13 @@ const patchSchema = z.object({
   allowNegativeFinalPay: z.boolean().optional(),
   // PAY-172: hold the pay of an employee whose cutoff DTR is not fully approved.
   strictDtrPolicy: z.boolean().optional(),
+  // PAY-143: other earnings in each contribution's base.
+  sssIncludeEarnings: z.boolean().optional(),
+  sssIncludePremiums: z.boolean().optional(),
+  philhealthIncludeEarnings: z.boolean().optional(),
+  philhealthIncludePremiums: z.boolean().optional(),
+  pagibigIncludeEarnings: z.boolean().optional(),
+  pagibigIncludePremiums: z.boolean().optional(),
   // Night-shift differential window (NSD is always computed; only the window
   // is configurable). HH:MM, 24-hour.
   nsdWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
@@ -120,6 +127,8 @@ export async function GET(req: NextRequest) {
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
         strictDtrPolicy: true,
+        sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
+        philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
@@ -194,6 +203,8 @@ export async function PATCH(req: NextRequest) {
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
         strictDtrPolicy: true,
+        sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
+        philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,
         nsdWindowStart: true,
         nsdWindowEnd: true,
         timezone: true,
