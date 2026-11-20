@@ -49,8 +49,8 @@ const CUTOFF_OPTIONS = [
 ];
 
 const THIRTEENTH_MONTH_OPTIONS = [
-  { value: "STRICT_DOLE",         label: "Strict DOLE (Basic Salary only)",  sublabel: "Only basic pay counts — allowances and OT excluded (RA 9174 default)" },
-  { value: "INCLUDE_ALLOWANCES",  label: "Include Regular Allowances",       sublabel: "Company policy allowing fixed allowances in the 13th-month base" },
+  { value: "STRICT_DOLE",         label: "Strict DOLE (Basic Salary only)",  sublabel: "Only basic pay counts. Allowances and overtime are excluded (P.D. 851 default)" },
+  { value: "INCLUDE_ALLOWANCES",  label: "Include Regular Allowances",       sublabel: "Basic pay plus the earnings ticked \"13th-Month Pay basis\" in Pay Components. Bonuses, reimbursements and overtime never count" },
 ];
 
 export default function PayRulesPage() {
