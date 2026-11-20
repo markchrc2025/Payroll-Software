@@ -186,10 +186,11 @@ function periodInputSnapshot(
 }
 
 function toComputeComponent(
-  assn: { amountCents: bigint; payComponent: PayComponent },
+  assn: { id?: string; amountCents: bigint; payComponent: PayComponent },
 ): ComputePayComponent {
   const c = assn.payComponent;
   return {
+    assignmentId: assn.id, // PAY-150
     id: c.id,
     code: c.code,
     name: c.name,
@@ -200,6 +201,63 @@ function toComputeComponent(
     isBonus: c.isBonus, // PAY-171
     isOneOff: c.isOneOff, // PAY-171
   };
+}
+
+// ---------------------------------------------------------------------------
+// PAY-150 (Mark, 16 Nov 2026): guardrails on Other Deductions.
+//  - Every Other Deduction needs the employee's written authorization on file
+//    (date and uploaded copy); without it the run refuses the deduction
+//    (Labor Code Art. 113; IRR Book III Rule VIII).
+//  - A loss or damage deduction (Art. 114, 115) also needs an incident record
+//    of the same employee showing they were heard (their response) and that
+//    responsibility was shown (a resolution), and the actual loss. What has
+//    been recovered on finalized runs never exceeds the actual loss; the 20%
+//    cap is applied by the engine and the rest carries to the next payday.
+// ---------------------------------------------------------------------------
+export const NO_AUTHORIZATION = "No written authorization on file";
+export const NO_INCIDENT = "No incident record showing the employee was heard and found responsible";
+export const NO_ACTUAL_LOSS = "The actual loss is not recorded";
+
+type AssignmentRow = Prisma.EmployeePayComponentGetPayload<{ include: { payComponent: true } }>;
+
+async function guardedComponents(tx: TenantTx, employeeId: string, rows: AssignmentRow[]): Promise<ComputePayComponent[]> {
+  const out: ComputePayComponent[] = [];
+  const loss = rows.filter((r) => r.payComponent.kind === "DEDUCTION" && r.payComponent.isLossOrDamage);
+  const incidents = loss.some((r) => r.incidentReportId)
+    ? await tx.incidentReport.findMany({
+        where: { id: { in: loss.map((r) => r.incidentReportId).filter((x): x is string => !!x) }, employeeId, deletedAt: null },
+        select: { id: true, employeeResponse: true, resolution: true },
+      })
+    : [];
+  const heard = new Set(incidents.filter((i) => i.employeeResponse?.trim() && i.resolution?.trim()).map((i) => i.id));
+  const recovered = new Map<string, bigint>();
+  if (loss.length > 0) {
+    const sheets = await tx.payrollSheet.findMany({
+      where: { employeeId, payrollBook: { status: "FINALIZED" } },
+      select: { payComponentsApplied: true },
+    });
+    for (const sh of sheets) {
+      for (const a of (Array.isArray(sh.payComponentsApplied) ? sh.payComponentsApplied : []) as { assignmentId?: string; amountCents?: string }[]) {
+        if (a?.assignmentId) recovered.set(a.assignmentId, (recovered.get(a.assignmentId) ?? 0n) + BigInt(a.amountCents ?? "0"));
+      }
+    }
+  }
+  for (const r of rows) {
+    const c = toComputeComponent(r);
+    if (r.payComponent.kind !== "DEDUCTION") { out.push(c); continue; }
+    if (!r.authorizationDate || !r.authorizationFileKey) { out.push({ ...c, refusedReason: NO_AUTHORIZATION }); continue; }
+    if (!r.payComponent.isLossOrDamage) { out.push(c); continue; }
+    if (!r.incidentReportId || !heard.has(r.incidentReportId)) { out.push({ ...c, refusedReason: NO_INCIDENT }); continue; }
+    if (r.actualLossCents == null || r.actualLossCents <= 0n) { out.push({ ...c, refusedReason: NO_ACTUAL_LOSS }); continue; }
+    const left = r.actualLossCents - (recovered.get(r.id) ?? 0n);
+    if (left <= 0n) continue; // fully recovered: nothing more is taken
+    // Due this payday: the installment HR set, or all that is left when none
+    // is set or less is left. The engine takes at most 20% of the period's
+    // wages and carries the rest.
+    const due = r.amountCents > 0n && r.amountCents < left ? r.amountCents : left;
+    out.push({ ...c, lossOrDamage: true, amountCents: due });
+  }
+  return out;
 }
 
 function toComputeLoan(l: Loan): ComputeLoan {
@@ -559,7 +617,7 @@ async function buildComputeInputForEmployee(
       { start: windowStart, end: windowEnd },
       tenantSettings.workingDaysDenominator,
     ),
-    payComponents: payCompAssignments.map(toComputeComponent),
+    payComponents: await guardedComponents(tx, employee.id, payCompAssignments), // PAY-150
     loans: activeLoans.map(toComputeLoan),
     adjustments: [], // Injected by caller after bookId is known
     expenseClaims: [], // Injected by caller after bookId is known

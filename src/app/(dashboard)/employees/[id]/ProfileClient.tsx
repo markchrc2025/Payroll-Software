@@ -1,5 +1,6 @@
 "use client";
 
+import { EmployeePayComponents } from "@/components/employees/EmployeePayComponents";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Fingerprint, Link2, Link2Off, UserCheck, AlertTriangle, Pencil, Check } from "lucide-react";
@@ -638,6 +639,7 @@ export function EmployeeProfileClient({
         {activeTab === "Personal & Gov't IDs" && <PersonalTab emp={employee} />}
         {activeTab === "Employment" && <EmploymentTab emp={employee} />}
         {activeTab === "Compensation" && <CompensationTab emp={employee} />}
+        {activeTab === "Compensation" && <div className="mt-6"><EmployeePayComponents employeeId={employee.id} /></div>}
         {activeTab === "Documents" && <PlaceholderTab label="Documents" />}
         {activeTab === "Leave Ledger" && <PlaceholderTab label="Leave Ledger" />}
         {activeTab === "Payslips" && <PlaceholderTab label="Payslips" />}
