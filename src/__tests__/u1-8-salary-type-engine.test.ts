@@ -40,33 +40,13 @@ import type {
   PhilHealthSchedulePayload,
   SssSchedulePayload,
 } from "@/lib/statutory/types";
+import { buildSSS2026 } from "@/lib/statutory/baseline-2026";
 
 // Statutory fixtures: the same shapes engine.test.ts builds (copied, not
 // imported, so that file keeps its two R103-authorised changes only).
+// PAY-65: the real 2026 table, from the one place it is written down.
 function buildSSSTable(): SssSchedulePayload {
-  const rows = [];
-  for (let msc = 500_000; msc <= 3_500_000; msc += 50_000) {
-    const n = (msc - 500_000) / 50_000;
-    const isLast = msc === 3_500_000;
-    const regularBase = Math.min(msc, 2_000_000);
-    const mpfBase = Math.max(0, msc - 2_000_000);
-    const regularSSEmployer = Math.round(regularBase * 0.1);
-    const regularSSEmployee = Math.round(regularBase * 0.05);
-    const ecEmployer = msc > 1_475_000 ? 3_000 : 1_000;
-    const mpfEmployer = Math.round(mpfBase * 0.1);
-    const mpfEmployee = Math.round(mpfBase * 0.05);
-    rows.push({
-      compensationFrom: n === 0 ? 0 : 475_000 + n * 50_000,
-      compensationTo: isLast ? 99_999_999 : 500_000 + n * 50_000 + 25_000 - 1,
-      msc,
-      regularSSEmployer, regularSSEmployee, regularSSTotal: regularSSEmployer + regularSSEmployee,
-      ecEmployer, mpfEmployer, mpfEmployee, mpfTotal: mpfEmployer + mpfEmployee,
-      totalEmployer: regularSSEmployer + ecEmployer + mpfEmployer,
-      totalEmployee: regularSSEmployee + mpfEmployee,
-      totalTotal: regularSSEmployer + ecEmployer + mpfEmployer + regularSSEmployee + mpfEmployee,
-    });
-  }
-  return { rows };
+  return buildSSS2026();
 }
 const SSS: SssSchedulePayload = buildSSSTable();
 const PHIC: PhilHealthSchedulePayload = {
