@@ -51,8 +51,11 @@ describeDb("PAY-174 loans are deducted only from their start date (real Postgres
       );
     }
     await q(
-      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt")
-       VALUES ($1, $2, $1, 'P174', $1, '2025-01-06', now())`,
+      // Time Clock Needed off: this test is about loans; since PAY-172 a
+      // time-clock employee with no DTR is absent on past workdays, which made
+      // the 16-30 Nov run too small for the installment once 20 Nov came.
+      `INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "needsTimeClock", "updatedAt")
+       VALUES ($1, $2, $1, 'P174', $1, '2025-01-06', false, now())`,
       [A, T],
     );
     await q(

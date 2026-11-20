@@ -19,7 +19,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { StagingApi } from "./api-client.mjs";
 import { QA_COMPANY } from "./qa-company.mjs";
-import { seedScenario, waitForRun } from "./seed-data.mjs";
+import { buildPunchCutoff, seedScenario, waitForRun } from "./seed-data.mjs";
 import { createEssClient, createEssLogin } from "./ess-login.mjs";
 
 export const SERVER_INFO = { name: "sentire-payroll-qa", version: "1.0.0" };
@@ -144,6 +144,22 @@ export const TOOLS = [
       additionalProperties: false,
     },
     run: (api, a) => api.must("POST", "/api/attendance-logs/import", { rows: a.rows }),
+  },
+  {
+    name: "seed_punch_cutoff",
+    description: "PAY-170 full-chain scenario: builds a ZKTeco ATTLOG file (1_attlog.dat, as it comes off the device) with a whole cutoff of punches for the five QA employees, including a late, an undertime, an overtime day, an absence, a missing OUT and break punches, and imports it through the app's import (the same path as HR's Import punches). Returns the import counts and the list of special days. The dates must be in the past. Next: approve the DTR (POST /api/dtr/bulk-approve; the missing-OUT day is skipped until a manual time-out is entered), then create_payroll_run.",
+    inputSchema: {
+      type: "object",
+      required: ["periodStart", "periodEnd"],
+      properties: { periodStart: date("First day of the cutoff"), periodEnd: date("Last day of the cutoff") },
+      additionalProperties: false,
+    },
+    run: async (api, a) => {
+      const list = await api.must("GET", "/api/employees?limit=500");
+      const { file, plan } = buildPunchCutoff(Array.isArray(list) ? list : list?.items ?? [], a.periodStart, a.periodEnd);
+      const imported = await api.must("POST", "/api/attendance-logs/import", { csv: file });
+      return { imported, specialDays: plan };
+    },
   },
   {
     name: "create_payroll_run",

@@ -3,7 +3,8 @@
 /**
  * PAY-170: import punches from a biometric device export. Accepts a CSV file
  * (or pasted text) with a header naming the employee number, the date and
- * time, and IN or OUT. Nothing is imported unless every row is right.
+ * time, and IN or OUT, or a ZKTeco ATTLOG file (1_attlog.dat) as it comes off
+ * the device. Nothing is imported unless every row is right.
  */
 import { useState } from "react";
 import { Upload } from "lucide-react";
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 
 type Problem = { row: number; message: string };
-type Result = { imported: number; duplicates: number; daysRecomputed: number; employees: number };
+type Result = { imported: number; duplicates: number; breaksSkipped: number; daysRecomputed: number; employees: number };
 
 const SAMPLE = "employee_number,date_time,type\nEMP-0001,2027-01-18 07:55,IN\nEMP-0001,2027-01-18 17:02,OUT";
 
@@ -74,16 +75,18 @@ export function ImportPunchesDialog({ onImported }: { onImported: () => void }) 
             <DialogTitle>Import punches</DialogTitle>
             <DialogDescription>
               A CSV export from the biometric device, with a header naming the employee number, the date and
-              time (YYYY-MM-DD HH:mm, company time) and the punch type (IN or OUT; C/In and C/Out also work).
-              Each day&apos;s DTR is worked out from the punches. Nothing is imported unless every row is right,
-              and punches already in Sentire are skipped.
+              time (YYYY-MM-DD HH:mm, company time) and the punch type (IN or OUT; C/In and C/Out also work),
+              or the attendance file a ZKTeco device saves to a USB stick (1_attlog.dat). Each day&apos;s DTR
+              is worked out from the punches. Break punches are skipped, because the shift&apos;s break is
+              already deducted. Nothing is imported unless every row is right, and punches already in Sentire
+              are skipped.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <input
               type="file"
-              accept=".csv,.txt,text/csv"
+              accept=".csv,.txt,.dat,text/csv"
               aria-label="Punch file"
               onChange={(e) => onFile(e.target.files?.[0])}
               className="block w-full text-sm"
@@ -115,6 +118,7 @@ export function ImportPunchesDialog({ onImported }: { onImported: () => void }) 
               Imported {result.imported} punch{result.imported === 1 ? "" : "es"} for {result.employees} employee
               {result.employees === 1 ? "" : "s"}; {result.daysRecomputed} DTR day{result.daysRecomputed === 1 ? "" : "s"} worked out.
               {result.duplicates > 0 && ` ${result.duplicates} already in Sentire, skipped.`}
+              {result.breaksSkipped > 0 && ` ${result.breaksSkipped} break punch${result.breaksSkipped === 1 ? "" : "es"} skipped.`}
             </p>
           )}
 

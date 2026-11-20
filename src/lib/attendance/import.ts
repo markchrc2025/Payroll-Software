@@ -14,6 +14,11 @@
  *    is refused: approved attendance is never changed underneath the approver.
  *  - Times without a UTC offset are read in the employee's timekeeping zone
  *    (company or employee, as Pay Rules says).
+ *  - PAY-170 part 2: a ZKTeco ATTLOG file (1_attlog.dat, no header, tab
+ *    separated) is read as it comes off the device. Its state codes: 0 in,
+ *    1 out, 4 overtime in, 5 overtime out; 2 and 3 (break out, break in) are
+ *    skipped and counted, because the shift's break is already deducted
+ *    (reading taken without a ruling, flagged to Mark).
  */
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { recomputeDayDtr } from "@/lib/attendance/punch";
@@ -34,16 +39,22 @@ export interface PunchImportProblem {
 }
 
 export type PunchImportResult =
-  | { ok: true; imported: number; duplicates: number; daysRecomputed: number; employees: number }
+  | { ok: true; imported: number; duplicates: number; breaksSkipped: number; daysRecomputed: number; employees: number }
   | { ok: false; problems: PunchImportProblem[] };
 
-const TYPE_WORDS: Record<string, "IN" | "OUT"> = {
+const TYPE_WORDS: Record<string, "IN" | "OUT" | "BREAK"> = {
   in: "IN", "c/in": "IN", "check in": "IN", "check-in": "IN", "checkin": "IN", "time in": "IN", "0": "IN",
   out: "OUT", "c/out": "OUT", "check out": "OUT", "check-out": "OUT", "checkout": "OUT", "time out": "OUT", "1": "OUT",
+  "ot in": "IN", "ot-in": "IN", "overtime in": "IN", "4": "IN",
+  "ot out": "OUT", "ot-out": "OUT", "overtime out": "OUT", "5": "OUT",
+  "break out": "BREAK", "break-out": "BREAK", "break in": "BREAK", "break-in": "BREAK", "2": "BREAK", "3": "BREAK",
 };
 
-/** IN or OUT from the words devices use (ZKTeco: C/In, C/Out, Check In, 0/1). */
-export function punchTypeOf(raw: string): "IN" | "OUT" | null {
+/**
+ * IN or OUT from the words devices use (ZKTeco: C/In, C/Out, Check In, state
+ * codes 0 to 5). BREAK marks a break punch, which the import skips.
+ */
+export function punchTypeOf(raw: string): "IN" | "OUT" | "BREAK" | null {
   return TYPE_WORDS[raw.trim().toLowerCase()] ?? null;
 }
 
@@ -94,13 +105,25 @@ function splitCsvLine(line: string): string[] {
   return out.map((v) => v.trim());
 }
 
+/** A ZKTeco ATTLOG line: user id, tab, date and time, then the other columns. */
+const ATTLOG_RE = /^\s*[^\t]+\t\s*\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}(:\d{2})?\s*\t/;
+
 /**
  * Rows from CSV text with a header line naming the employee number, the date
- * and time, and the punch type (see HEADER_ALIASES for the names accepted).
+ * and time, and the punch type (see HEADER_ALIASES for the names accepted),
+ * or from a ZKTeco ATTLOG file as it comes off the device (no header; user
+ * id, date and time, device, state, ...).
  */
 export function parsePunchCsv(text: string): { rows: PunchImportRow[]; problems: PunchImportProblem[] } {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return { rows: [], problems: [{ row: 0, message: "The file is empty." }] };
+  if (ATTLOG_RE.test(lines[0])) {
+    const rows = lines.map((line) => {
+      const cells = line.split("\t").map((c) => c.trim());
+      return { employeeNumber: cells[0] ?? "", punchedAt: cells[1] ?? "", punchType: cells[3] ?? "" };
+    });
+    return { rows, problems: [] };
+  }
   const header = splitCsvLine(lines[0]).map((h) => HEADER_ALIASES[h.toLowerCase()] ?? null);
   const need: (keyof PunchImportRow)[] = ["employeeNumber", "punchedAt", "punchType"];
   const missing = need.filter((k) => !header.includes(k));
@@ -149,12 +172,14 @@ export async function importPunches(
     const problems: PunchImportProblem[] = [];
     type Good = { employeeId: string; punchType: "IN" | "OUT"; at: Date; day: Date; tz: string; shiftScheduleId: string | null };
     const good: Good[] = [];
+    let breaksSkipped = 0;
     rows.forEach((r, i) => {
       const row = i + 1;
       const emp = byNumber.get(r.employeeNumber.trim());
       if (!emp) { problems.push({ row, message: `No employee numbered "${r.employeeNumber}".` }); return; }
       const type = punchTypeOf(r.punchType);
       if (!type) { problems.push({ row, message: `"${r.punchType}" is not IN or OUT.` }); return; }
+      if (type === "BREAK") { breaksSkipped++; return; }
       const tz = resolveTimezone(
         { timezone: tenant?.timezone ?? "Asia/Manila", timekeepingTimezoneMode: tenant?.timekeepingTimezoneMode ?? "COMPANY" },
         { timezone: emp.timezone },
@@ -165,6 +190,9 @@ export async function importPunches(
       good.push({ employeeId: emp.id, punchType: type, at, day: localDay(at, tz), tz, shiftScheduleId: emp.shiftScheduleId });
     });
     if (problems.length > 0) return { ok: false as const, problems };
+    if (good.length === 0) {
+      return { ok: true as const, imported: 0, duplicates: 0, breaksSkipped, daysRecomputed: 0, employees: 0 };
+    }
 
     // Approved or locked days are never changed by an import.
     const dayKeys = new Map<string, Good>();
@@ -232,6 +260,7 @@ export async function importPunches(
       ok: true as const,
       imported: fresh.length,
       duplicates,
+      breaksSkipped,
       daysRecomputed: days.size,
       employees: new Set(fresh.map((g) => g.employeeId)).size,
     };
