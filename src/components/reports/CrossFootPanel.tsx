@@ -12,8 +12,16 @@ export function isCrossFootList(v: unknown): v is CrossFootCheck[] {
   return Array.isArray(v) && v.every((c) => c && typeof c === "object" && "expectedCents" in c && "ok" in c);
 }
 
-export function CrossFootPanel({ checks }: { checks: CrossFootCheck[] }) {
+export function CrossFootPanel({ checks, empty = false }: { checks: CrossFootCheck[]; empty?: boolean }) {
   const [open, setOpen] = useState(false);
+  // PAY-203 (ruling 3): nothing to check is not "ties out".
+  if (empty) {
+    return (
+      <div data-testid="cross-foot" data-ties-out="empty" className="rounded-lg px-3 py-2 text-[12.5px] font-semibold" style={{ background: "#F2F2F2", color: "#525252" }}>
+        No payslips: nothing to cross-foot.
+      </div>
+    );
+  }
   if (checks.length === 0) return null;
   const failed = checks.filter((c) => !c.ok);
   const ok = failed.length === 0;
@@ -55,18 +63,21 @@ export function CrossFootPanel({ checks }: { checks: CrossFootCheck[] }) {
 /** The run page: loads the run's checks (1) to (3). */
 export function RunCrossFoot({ runId, version }: { runId: string; version: string }) {
   const [checks, setChecks] = useState<CrossFootCheck[]>([]);
+  const [empty, setEmpty] = useState(false);
   useEffect(() => {
     let live = true;
     fetch(`/api/payroll/runs/${runId}/cross-foot`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         const list = j?.data?.checks;
-        if (live && isCrossFootList(list)) setChecks(list);
+        if (!live) return;
+        setEmpty(j?.data?.empty === true);
+        if (isCrossFootList(list)) setChecks(list);
       })
       .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [runId, version]);
-  return <CrossFootPanel checks={checks} />;
+  return <CrossFootPanel checks={checks} empty={empty} />;
 }

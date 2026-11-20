@@ -220,7 +220,7 @@ describe("PAY-133 E1 to E4: the engine", () => {
   const phic = computePhilHealth(PHIC, CONTRACT);
   const hdmf = computePagibig(PAGIBIG, CONTRACT);
 
-  it("E1 SSS on October's actual basic; PhilHealth and Pag-IBIG on the contract", () => {
+  it("E1 SSS and PhilHealth on October's actual basic; Pag-IBIG on the contract", () => {
     const r = computeSheet(input({
       start: "2026-11-01", end: "2026-11-15",
       basis: { kind: "PREVIOUS_MONTH_ACTUAL", month: "2026-10", priorBasicCents: 2_385_057n },
@@ -232,7 +232,9 @@ describe("PAY-133 E1 to E4: the engine", () => {
     expect(r.sssEeCents).not.toBe(computeSSS(SSS, CONTRACT).employee); // ₱1,200, not ₱1,250
     expect(r.statutoryBreakdown.bases.sssMscCents).toBe(sss.msc.toString());
     expect(r.statutoryBreakdown.sssBasis).toEqual({ kind: "PREVIOUS_MONTH_ACTUAL", month: "2026-10", compensationCents: "2385057" });
-    expect(r.philhealthEeCents).toBe(phic.employee);
+    // PAY-202 (ruling 4, 20 Nov): PhilHealth on the same basic less lates: 23,850.57 x 5%, half is 596.27.
+    expect(r.philhealthEeCents).toBe(computePhilHealth(PHIC, 2_385_057n).employee);
+    expect(r.philhealthEeCents).toBe(59_627n);
     expect(r.pagibigEeCents).toBe(hdmf.employee);
   });
 

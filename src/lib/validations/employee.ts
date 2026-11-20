@@ -6,6 +6,7 @@
 import { z } from "zod";
 // Type-only Prisma imports are erased at build time, so rates.ts stays client-safe.
 import { pairingRefusal } from "@/lib/payroll/rates";
+import { rdoCodeField } from "@/lib/bir/rdo-codes";
 
 // ---------------------------------------------------------------------------
 // Enum mirrors — defined here instead of importing from @prisma/client so that
@@ -154,6 +155,8 @@ const employeeFieldsSchema = z.object({
   gender: z.nativeEnum(Gender).optional().nullable(),
   civilStatus: z.nativeEnum(CivilStatus).optional().nullable(),
   nationality: z.string().max(100).optional().nullable(),
+  // PAY-201: BIR RDO Code (2316 Item 5).
+  rdoCode: rdoCodeField,
   // IANA timezone override for timekeeping; applies only when the tenant's
   // timekeepingTimezoneMode is EMPLOYEE (otherwise the company timezone is used).
   timezone: z.string().max(64).optional().nullable(),

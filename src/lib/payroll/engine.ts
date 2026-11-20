@@ -51,7 +51,7 @@ import {
   getMinimumWage,
   lookupBIR,
 } from "@/lib/statutory/compute";
-import { sssCompensationCents } from "./sss-basis";
+import { sssCompensationCents, philHealthCompensationCents } from "./sss-basis";
 import { annualTaxDueCents, marginalAnnualTaxCents, periodWithholdingTax, periodsElapsedBefore, projectedAnnualTaxableCents } from "./annual-tax";
 import type {
   AppliedAdjustment,
@@ -888,8 +888,9 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
 
   // -- Step 6: non-taxable buckets ------------------------------------------
   const isMwe = checkMwe(input, dailyRateCents);
+  // PAY-202 (ruling 4): the exempt wage is basic pay less lates.
   const mweExemptCompensationCents = isMwe
-    ? basePayCents + holidayPayCents + otPayCents + nsdPayCents + hazardPayCents
+    ? clampNonNegative(basePayCents - lateUndertimeDeductionCents) + holidayPayCents + otPayCents + nsdPayCents + hazardPayCents
     : 0n;
   const nontaxableBasicCents = employee.nontaxableBasicAmountCents;
 
@@ -1212,8 +1213,9 @@ export function computeSheet(input: ComputeInput): ComputeResult {
 
   // -- Step 6: non-taxable buckets ------------------------------------------
   const isMwe = checkMwe(input, dailyRateCents);
+  // PAY-202 (ruling 4): the exempt wage is basic pay less lates.
   const mweExemptCompensationCents = isMwe
-    ? basePayCents +
+    ? clampNonNegative(basePayCents - lateUndertimeDeductionCents) +
       holidayPayCents +
       otPayCents +
       nsdPayCents +
@@ -1246,17 +1248,20 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // PAY-133: SSS is on the PREVIOUS month's actual basic (after unpaid days
   // and lates), loaded by persist.ts (see sss-basis.ts); null means no SSS
   // this run (a new hire's first month). Without a basis (unit tests,
-  // non-REGULAR runs) it stays on the contracted monthly basic. PhilHealth
-  // and Pag-IBIG stay on the contracted monthly basic (Mark, 15 Nov 2026).
+  // non-REGULAR runs) it stays on the contracted monthly basic. Pag-IBIG
+  // stays on the contracted monthly basic (Mark, 15 Nov 2026); PhilHealth
+  // follows SSS since PAY-202 (Mark, 20 Nov 2026).
   // PAY-143: a company may add other earnings of the base month to each
   // contribution's base (off by default; persist.ts supplies the amounts).
   const extras = input.sssBasis?.otherEarnings;
   const sssBasicCents = sssCompensationCents(input.sssBasis, rates.monthlyEquivalentCents);
   const sssCompCents = sssBasicCents === null ? null : sssBasicCents + (extras?.sssCents ?? 0n);
   const sss = sssCompCents === null ? NO_SSS : computeSSS(rules.sss, sssCompCents);
+  // PAY-202 (ruling 4): PhilHealth on basic pay less lates, the same base
+  // month as SSS (see philHealthCompensationCents).
   const phic = computePhilHealth(
     rules.philHealth,
-    rates.monthlyEquivalentCents + (extras?.philHealthCents ?? 0n),
+    philHealthCompensationCents(input.sssBasis, rates.monthlyEquivalentCents) + (extras?.philHealthCents ?? 0n),
   );
   const hdmf = computePagibig(rules.pagibig, rates.monthlyEquivalentCents + (extras?.pagibigCents ?? 0n));
 
