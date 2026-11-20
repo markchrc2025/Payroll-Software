@@ -2337,6 +2337,13 @@ model PayComponent {
   /// through the period's table, as on Mark's Smart payslips (finding 2).
   isOneOff Boolean @default(false)
 
+  /// PAY-149: seeded by Sentire (Inventory Deduction); cannot be deleted and
+  /// keeps its kind.
+  isSystem Boolean @default(false)
+  /// PAY-149: a loss or damage deduction (Labor Code Art. 114, 115), DEDUCTION
+  /// kind only. Its guardrails are PAY-150.
+  isLossOrDamage Boolean @default(false)
+
   isActive Boolean @default(true)
 
   createdAt DateTime  @default(now())

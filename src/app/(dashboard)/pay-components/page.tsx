@@ -2,12 +2,17 @@
 
 /**
  * /pay-components — Pay Component Catalog
- * Full CRUD for earnings and deductions (moved from /settings).
+ * PAY-149: two tabs. Earning Components (allowances, bonuses, commissions,
+ * reimbursements) and Deduction Components (Mandatory Deductions, shown
+ * locked; Other Deductions: loans, the seeded Inventory Deduction, and the
+ * deductions a company adds).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Lock } from "lucide-react";
+import Link from "next/link";
+import { MANDATORY_DEDUCTIONS, LOAN_DEDUCTIONS, groupPayComponents } from "@/lib/payroll/deduction-components";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +87,7 @@ const EMPTY_FORM = {
   includeInPagibigBase: false,
   isBonus: false,
   isOneOff: false,
+  isLossOrDamage: false,
   isActive: true,
 };
 
@@ -98,6 +104,8 @@ type PayComponent = {
   includeInPagibigBase: boolean;
   isBonus: boolean;
   isOneOff: boolean;
+  isLossOrDamage: boolean;
+  isSystem: boolean;
   isActive: boolean;
 };
 
@@ -108,6 +116,7 @@ export default function PayComponentsPage() {
   const [editing, setEditing] = useState<PayComponent | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<"earnings" | "deductions">("earnings");
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -122,7 +131,7 @@ export default function PayComponentsPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm(tab === "deductions" ? { ...EMPTY_FORM, kind: "DEDUCTION", taxability: "NON_TAXABLE" } : EMPTY_FORM);
     setSheetOpen(true);
     setTimeout(() => firstInputRef.current?.focus(), 100);
   }
@@ -141,6 +150,7 @@ export default function PayComponentsPage() {
       includeInPagibigBase: row.includeInPagibigBase,
       isBonus: row.isBonus,
       isOneOff: row.isOneOff,
+      isLossOrDamage: row.isLossOrDamage,
       isActive: row.isActive,
     });
     setSheetOpen(true);
@@ -175,13 +185,16 @@ export default function PayComponentsPage() {
   async function handleDelete(row: PayComponent) {
     if (!confirm(`Archive "${row.name}"? It will no longer appear in employee assignments.`)) return;
     const res = await fetch(`/api/pay-components/${row.id}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("Failed to archive"); return; }
+    if (!res.ok) { toast.error((await res.json().catch(() => null))?.error ?? "Failed to archive"); return; }
     toast.success(`"${row.name}" archived`);
     load();
   }
 
   const kindLabel = (k: string) => PAY_COMPONENT_KINDS.find(x => x.value === k)?.label ?? k;
   const taxLabel = (t: string) => TAXABILITY_OPTIONS.find(x => x.value === t)?.label ?? t;
+  const grouped = groupPayComponents(rows);
+  const shown = tab === "earnings" ? grouped.earnings : grouped.deductions;
+  const isDeductionForm = form.kind === "DEDUCTION";
 
   return (
     <div className="space-y-5">
@@ -192,7 +205,7 @@ export default function PayComponentsPage() {
             Pay Components
           </h1>
           <p className="text-[13px] text-[#6B6B6B] mt-0.5">
-            Define earnings and deductions that can be assigned to employees.
+            Earnings and deductions that can be assigned to employees.
           </p>
         </div>
         <div className="flex gap-2">
@@ -210,10 +223,68 @@ export default function PayComponentsPage() {
             onClick={openCreate}
             className="h-9 text-[13px] bg-[#E8693A] hover:brightness-[1.07] text-[var(--on-acc)]"
           >
-            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Component
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> {tab === "earnings" ? "Add Earning" : "Add Deduction"}
           </Button>
         </div>
       </div>
+
+      {/* PAY-149: Earning Components and Deduction Components */}
+      <div role="tablist" aria-label="Pay components" className="inline-flex rounded-lg bg-[#F1F1F1] p-1">
+        {([["earnings", "Earning Components"], ["deductions", "Deduction Components"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={`px-3.5 py-1.5 text-[13px] rounded-md ${tab === k ? "bg-white font-medium text-[#171717] shadow-sm" : "text-[#525252]"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "deductions" && (
+        <>
+          <section aria-label="Mandatory Deductions" className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E8E8E8]">
+              <h2 className="text-[14px] font-semibold text-[#171717]">Mandatory Deductions</h2>
+              <p className="text-[12.5px] text-[#6B6B6B]">
+                Required by law and worked out from the official tables, which Sentire keeps up to date. They cannot be edited or removed.
+              </p>
+            </div>
+            <ul>
+              {MANDATORY_DEDUCTIONS.map((m) => (
+                <li key={m.code} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-[#F1F1F1]">
+                  <Lock className="h-3.5 w-3.5 text-[#8A8A8A]" aria-label="Locked" />
+                  <span className="text-[13.5px] font-medium text-[#171717] w-56">{m.name}</span>
+                  <span className="text-[12.5px] text-[#6B6B6B]">{m.basis}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-label="Loan Deduction" className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E8E8E8] flex items-center justify-between">
+              <div>
+                <h2 className="text-[14px] font-semibold text-[#171717]">Other Deductions: Loan Deduction</h2>
+                <p className="text-[12.5px] text-[#6B6B6B]">Each loan is deducted by its installment until it is paid. Loans are recorded per employee.</p>
+              </div>
+              <Link href="/loans" className="text-[13px] font-medium text-[#E8693A] hover:underline">Open Loans</Link>
+            </div>
+            <ul>
+              {LOAN_DEDUCTIONS.map((l) => (
+                <li key={l.loanType} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-[#F1F1F1]">
+                  {l.locked ? <Lock className="h-3.5 w-3.5 text-[#8A8A8A]" aria-label="Locked" /> : <span className="w-3.5" />}
+                  <span className="text-[13.5px] font-medium text-[#171717] w-56">{l.name}</span>
+                  <span className="text-[12.5px] text-[#6B6B6B]">{l.locked ? "Government loan: the installment is set by the agency" : "Set by the company"}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <h2 className="text-[14px] font-semibold text-[#171717] pt-1">Other Deductions: company deductions</h2>
+        </>
+      )}
 
       {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-hidden">
@@ -237,19 +308,19 @@ export default function PayComponentsPage() {
                   ))}
                 </TableRow>
               ))
-            ) : rows.length === 0 ? (
+            ) : shown.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-[#6B6B6B] py-10">
-                  No pay components yet. Add your first one.
+                  {tab === "earnings" ? "No earning components yet. Add your first one." : "No company deductions yet."}
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => (
+              shown.map((row) => (
                 <TableRow key={row.id} className={`hover:bg-[#FAFAFA] ${!row.isActive ? "opacity-50" : ""}`}>
                   <TableCell className="font-mono text-xs text-[#525252]">{row.code}</TableCell>
                   <TableCell className="font-medium text-[13.5px] text-[#171717]">{row.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[12px]">{kindLabel(row.kind)}</Badge>
+                    <Badge variant="outline" className="text-[12px]">{row.isLossOrDamage ? "Loss or damage" : kindLabel(row.kind)}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -278,14 +349,20 @@ export default function PayComponentsPage() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(row)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {row.isSystem ? (
+                        <span className="inline-flex h-8 w-8 items-center justify-center" title="Built in: cannot be deleted">
+                          <Lock className="h-3.5 w-3.5 text-[#8A8A8A]" aria-label="Built in: cannot be deleted" />
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(row)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -299,7 +376,7 @@ export default function PayComponentsPage() {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>{editing ? "Edit Pay Component" : "Add Pay Component"}</SheetTitle>
+            <SheetTitle>{editing ? (isDeductionForm ? "Edit Deduction" : "Edit Earning") : isDeductionForm ? "Add Deduction" : "Add Earning"}</SheetTitle>
           </SheetHeader>
           <div className="mt-6 space-y-5">
             <div className="grid grid-cols-2 gap-4">
@@ -324,13 +401,31 @@ export default function PayComponentsPage() {
               </div>
             </div>
 
+            {isDeductionForm && (
+              <div className="space-y-1 rounded-md border p-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="pc-isLossOrDamage"
+                    checked={form.isLossOrDamage}
+                    onCheckedChange={(v) => setForm({ ...form, isLossOrDamage: !!v })}
+                  />
+                  <Label htmlFor="pc-isLossOrDamage" className="font-normal cursor-pointer">Loss or damage deduction</Label>
+                </div>
+                <p className="text-[12px] text-muted-foreground">
+                  For lost or damaged tools, materials or stock (Labor Code Articles 114 and 115). A deduction is taken
+                  from net pay after tax.
+                </p>
+              </div>
+            )}
+
+            {!isDeductionForm && (<>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Kind</Label>
                 <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v ?? form.kind })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PAY_COMPONENT_KINDS.map((k) => (
+                    {PAY_COMPONENT_KINDS.filter((k) => k.value !== "DEDUCTION").map((k) => (
                       <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -416,6 +511,8 @@ export default function PayComponentsPage() {
                 rate for the year instead of through the payroll period&apos;s tax table.
               </p>
             </div>
+
+            </>)}
 
             <div className="flex items-center gap-2">
               <Checkbox

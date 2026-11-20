@@ -14,6 +14,7 @@ import {
 } from "@/lib/validations/pay-component";
 import { serializePayComponent } from "@/lib/payroll/serialize";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { ensureSeededDeductions } from "@/lib/payroll/seed-deductions";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req);
@@ -34,8 +35,9 @@ export async function GET(req: NextRequest) {
     ...(includeDeleted ? {} : { deletedAt: null }),
   };
 
-  const [rows, total] = await withTenant(auth.tenantId, (tx) =>
-    Promise.all([
+  const [rows, total] = await withTenant(auth.tenantId, async (tx) => {
+    await ensureSeededDeductions(tx, auth.tenantId); // PAY-149
+    return Promise.all([
       tx.payComponent.findMany({
         where,
         orderBy: [{ code: "asc" }],
@@ -43,8 +45,8 @@ export async function GET(req: NextRequest) {
         take: limit,
       }),
       tx.payComponent.count({ where }),
-    ]),
-  );
+    ]);
+  });
 
   return paginated(rows.map(serializePayComponent), total, page, limit);
 }
@@ -84,6 +86,7 @@ export async function POST(req: NextRequest) {
         includeInPagibigBase: d.includeInPagibigBase,
         isBonus: d.isBonus, // PAY-171
         isOneOff: d.isOneOff, // PAY-171
+        isLossOrDamage: d.isLossOrDamage, // PAY-149
         isActive: d.isActive,
       },
     }),
