@@ -19,6 +19,7 @@ type TenantSettings = {
   workingDaysDenominator: number;
   statutoryCutoffRule: string;
   thirteenthMonthBasis: string;
+  thirteenthMonthDeductLates: boolean;
   maxDeductionPctOfGross: number;
   breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
@@ -66,6 +67,7 @@ export default function PayRulesPage() {
     workingDaysDenominator: 261,
     statutoryCutoffRule: "FIRST_CUTOFF",
     thirteenthMonthBasis: "STRICT_DOLE",
+    thirteenthMonthDeductLates: true,
     maxDeductionPctOfGross: 50,
     breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
@@ -90,6 +92,7 @@ export default function PayRulesPage() {
         workingDaysDenominator: d.workingDaysDenominator,
         statutoryCutoffRule: d.statutoryCutoffRule,
         thirteenthMonthBasis: d.thirteenthMonthBasis,
+        thirteenthMonthDeductLates: d.thirteenthMonthDeductLates ?? true,
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
         breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
@@ -224,6 +227,19 @@ export default function PayRulesPage() {
               value={form.thirteenthMonthBasis}
               onChange={(v) => update("thirteenthMonthBasis", v)}
             />
+            <div className="mt-3 flex items-center justify-between gap-4 rounded-lg border border-[#E8E8E8] bg-white px-4 py-3">
+              <div>
+                <p className="text-[13.5px] font-medium text-[#171717]">Deduct lates and undertime from the 13th-month base</p>
+                <p className="text-[12px] text-[#6B6B6B] mt-0.5">
+                  On: the 13th month is 1/12 of basic pay actually earned, after lates and undertime. Off: lates and undertime do not reduce it. Absences reduce it either way.
+                </p>
+              </div>
+              <Switch
+                checked={form.thirteenthMonthDeductLates}
+                onCheckedChange={(v) => update("thirteenthMonthDeductLates", v)}
+                aria-label="Deduct lates and undertime from the 13th-month base"
+              />
+            </div>
           </RuleSection>
 
           {/* Deduction Cap — "no negative pay" safeguard */}

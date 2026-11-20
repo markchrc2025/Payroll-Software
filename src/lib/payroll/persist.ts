@@ -953,6 +953,12 @@ export interface ThirteenthMonthBreakdown {
    * paid in a regular run, on this run and its projection). Inside totalBasic.
    */
   allowancesCents?: string;
+  /**
+   * PAY-198: lates and undertime taken out of the base (already out of
+   * basicFromRuns and basicProjected). Absent when none, or when the company
+   * opted not to deduct them.
+   */
+  latesDeductedCents?: string;
   /** Basic pay on this year's finalized regular runs. */
   basicFromRunsCents: string;
   runSheetCount: number;
@@ -985,14 +991,18 @@ async function computeThirteenthMonth(
    * A later run (or the Year-End run) trues it up, since what was paid is
    * subtracted.
    */
-  inRun?: { thisRunBasicCents: bigint; periodsAfter: bigint; thisRunApplied?: { id: string; amountCents: string }[] },
+  inRun?: { thisRunBasicCents: bigint; periodsAfter: bigint; thisRunApplied?: { id: string; amountCents: string }[]; thisRunLateCents?: bigint },
 ): Promise<{ dueCents: bigint; breakdown: ThirteenthMonthBreakdown }> {
   const year = periodEnd.getUTCFullYear();
   // PAY-60: the company's basis setting was read by no computation. STRICT_DOLE
   // is basic pay only. INCLUDE_ALLOWANCES adds the earnings whose pay
   // component is marked "13th-Month Pay basis" (never bonuses, reimbursements
   // or deductions).
-  const basis = (await tx.tenant.findUnique({ where: { id: tenantId }, select: { thirteenthMonthBasis: true } }))?.thirteenthMonthBasis ?? "STRICT_DOLE";
+  const policy = await tx.tenant.findUnique({ where: { id: tenantId }, select: { thirteenthMonthBasis: true, thirteenthMonthDeductLates: true } });
+  const basis = policy?.thirteenthMonthBasis ?? "STRICT_DOLE";
+  // PAY-198 (Mark, 20 Nov 2026): lates and undertime reduce the 13th month
+  // base ("basic pay actually earned"); a company may opt not to deduct them.
+  const deductLates = policy?.thirteenthMonthDeductLates ?? true;
   const counted = basis === "INCLUDE_ALLOWANCES"
     ? new Set((await tx.payComponent.findMany({
         where: { tenantId, includeIn13thMonth: true, isBonus: false, kind: { notIn: ["DEDUCTION", "REIMBURSEMENT"] } },
@@ -1015,7 +1025,7 @@ async function computeThirteenthMonth(
         periodEnd: { gte: yearStart, lte: yearEnd },
       },
     },
-    select: { basePayCents: true, payComponentsApplied: true },
+    select: { basePayCents: true, lateUndertimeDeductionCents: true, payComponentsApplied: true },
   });
   // PAY-171: 13th month already paid this year by Sentire, on regular runs
   // that included it and on Year-End runs.
@@ -1034,8 +1044,11 @@ async function computeThirteenthMonth(
   );
 
   const opening = ytdOpeningTotals(openings);
-  const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n);
-  const projected = inRun ? inRun.thisRunBasicCents * (1n + inRun.periodsAfter) : 0n;
+  const latesFromRuns = deductLates ? priorSheets.reduce((acc, s) => acc + s.lateUndertimeDeductionCents, 0n) : 0n;
+  const fromRuns = priorSheets.reduce((acc, s) => acc + s.basePayCents, 0n) - latesFromRuns;
+  // This run's lates come off once; the projected later periods assume none.
+  const lateThisRun = deductLates && inRun ? inRun.thisRunLateCents ?? 0n : 0n;
+  const projected = inRun ? inRun.thisRunBasicCents * (1n + inRun.periodsAfter) - lateThisRun : 0n;
   const allowances =
     priorSheets.reduce((acc, s) => acc + countedIn(s.payComponentsApplied), 0n) +
     (inRun ? countedIn(inRun.thisRunApplied) * (1n + inRun.periodsAfter) : 0n);
@@ -1050,6 +1063,7 @@ async function computeThirteenthMonth(
       year,
       basis,
       ...(basis === "INCLUDE_ALLOWANCES" ? { allowancesCents: allowances.toString() } : {}),
+      ...(deductLates && latesFromRuns + lateThisRun > 0n ? { latesDeductedCents: (latesFromRuns + lateThisRun).toString() } : {}),
       basicFromRunsCents: fromRuns.toString(),
       runSheetCount: priorSheets.length,
       basicFromOpeningsCents: opening.basicPayEarnedCents.toString(),
@@ -1136,6 +1150,7 @@ async function withThirteenthMonthInRun(
     thisRunBasicCents: first.basePayCents,
     periodsAfter: after > 0n ? after : 0n,
     thisRunApplied: first.payComponentsApplied, // PAY-60
+    thisRunLateCents: first.lateUndertimeDeductionCents, // PAY-198
   });
   ci.thirteenthMonthInRunCents = t.dueCents;
   await applyBenefitsContext(tx, tenantId, employeeId, period.end, ci);
