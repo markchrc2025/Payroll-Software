@@ -28,6 +28,8 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { keyMatches, assertStagingOnly, createServer, TOOLS } from "../../scripts/staging/qa-mcp.mjs";
 import { StagingApi } from "../../scripts/staging/api-client.mjs";
+import { buildPunchCutoff } from "../../scripts/staging/seed-data.mjs";
+import { parsePunchCsv, punchTypeOf } from "@/lib/attendance/import";
 
 const KEY = "k".repeat(40);
 
@@ -119,12 +121,12 @@ describe("staging QA connector", () => {
 
     const list = await (await rpc(base, { jsonrpc: "2.0", id: 1, method: "tools/list" })).json();
     expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
-      "staging_status", "list_employees", "set_attendance", "import_punches", "create_payroll_run",
+      "staging_status", "list_employees", "set_attendance", "import_punches", "seed_punch_cutoff", "create_payroll_run",
       "recompute_payroll_run", "get_payroll_run", "seed_scenario", "reset_staging", "create_ess_login", "ess_request",
       "api_request",
     ]);
     expect(list.result.tools.every((t: { inputSchema: { type: string } }) => t.inputSchema.type === "object")).toBe(true);
-    expect(TOOLS.length).toBe(12); // PAY-140 added reset_staging; PAY-170 added import_punches; PAY-180 added the two ESS tools
+    expect(TOOLS.length).toBe(13); // PAY-140 added reset_staging; PAY-170 added import_punches and seed_punch_cutoff; PAY-180 added the two ESS tools
 
     const call = await (await rpc(base, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "api_request", arguments: { method: "GET", path: "/api/employees" } } })).json();
     expect(call.result.isError).toBe(true);
@@ -182,5 +184,25 @@ describe("staging QA connector", () => {
     ].map(at);
     expect(order.every((n) => n >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("Q9 seed_punch_cutoff (PAY-170): a device file for the QA employees with every special day, readable by the import", () => {
+    const emps = ["QA-01", "QA-02", "QA-03", "QA-04", "QA-05"].map((t, i) => ({ employeeNumber: `EMP-000${i + 1}`, lastName: `X (${t})` }));
+    const { file, plan } = buildPunchCutoff(emps, "2026-11-01", "2026-11-15");
+    expect(plan).toEqual([
+      { employee: "QA-01", day: "2026-11-03", case: "15 min late" },
+      { employee: "QA-02", day: "2026-11-04", case: "absent" },
+      { employee: "QA-02", day: "2026-11-05", case: "30 min undertime" },
+      { employee: "QA-03", day: "2026-11-03", case: "2 h overtime (file it in ESS, then approve)" },
+      { employee: "QA-03", day: "2026-11-06", case: "missing out" },
+      { employee: "QA-04", day: "2026-11-02", case: "break punches (skipped)" },
+    ]);
+    const { rows, problems } = parsePunchCsv(file);
+    expect(problems).toEqual([]);
+    // QA-01 10 days x 2; QA-02 12 days, one absent, x 2; QA-03 12 days x 2 less the missing out;
+    // QA-04 12 days x 2 plus 2 break punches; QA-05 hired 9 Nov, 5 days x 2.
+    expect(rows).toHaveLength(20 + 22 + 23 + 26 + 10);
+    expect(rows.filter((r) => punchTypeOf(r.punchType) === "BREAK")).toHaveLength(2);
+    expect(rows.filter((r) => r.employeeNumber === "EMP-0005").map((r) => r.punchedAt.slice(0, 10))[0]).toBe("2026-11-09");
   });
 });

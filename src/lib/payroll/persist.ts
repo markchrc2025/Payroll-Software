@@ -710,6 +710,125 @@ function resultToSheetCreate(
 }
 
 // ---------------------------------------------------------------------------
+// PAY-194 (Mark, 20 Nov 2026, ruling A): a salary held under the strict DTR
+// policy is released in the next regular run. When a regular run computes an
+// employee who was held out of an earlier FINALIZED regular run of the same
+// cycle, and every workday of that held cutoff now has an approved DTR, the
+// held cutoff is computed as it would have been (its own salary, attendance,
+// contributions and tax table) and its amounts are added to this run's sheet.
+// The sheet's heldRelease records each released cutoff and its figures. Loans
+// and adjustments are not recomputed for the held cutoff: loan installments
+// continue on their own schedule in each run.
+// ---------------------------------------------------------------------------
+
+/** Money amounts of a compute result that a held release adds to. */
+const HELD_MONEY_KEYS = [
+  "basePayCents", "lateUndertimeDeductionCents", "otPayCents", "nsdPayCents", "holidayPayCents",
+  "restDayPayCents", "hazardPayCents", "taxableAllowancesCents", "grossCompensationCents",
+  "mweExemptCompensationCents", "nontaxableBasicCents", "nontaxableCompensationCents",
+  "nontaxable13MonthAndBenefitsCents", "grossTaxableIncomeCents", "sssEeCents", "sssErCents",
+  "sssEcCents", "philhealthEeCents", "philhealthErCents", "pagibigEeCents", "pagibigErCents",
+  "withholdingTaxCents", "nontaxableAdditionsCents", "netPayCents",
+] as const satisfies readonly (keyof ComputeResult)[];
+
+export interface HeldReleaseEntry {
+  fromBookId: string;
+  periodStart: string;
+  periodEnd: string;
+  /** The held cutoff's own figures, in centavos, as strings. */
+  amounts: Record<(typeof HELD_MONEY_KEYS)[number], string>;
+  unpaidLeaveDays: number;
+  lateUndertimeMinutes: number;
+}
+
+/** Each held entry's amounts added to `current` (a new result; inputs untouched). */
+export function mergeHeldRelease(current: ComputeResult, held: ComputeResult[]): ComputeResult {
+  const out: ComputeResult = { ...current };
+  for (const h of held) {
+    for (const k of HELD_MONEY_KEYS) (out[k] as bigint) = (out[k] as bigint) + (h[k] as bigint);
+  }
+  return out;
+}
+
+const ymdOf = (d: Date) => d.toISOString().slice(0, 10);
+
+async function releaseHeldPay(
+  tx: TenantTx,
+  tenantId: string,
+  employeeId: string,
+  run: { bookId: string; periodStart: Date; cycle: ComputeInput["period"]["cycle"]; runType: string },
+  tenant: ComputeInput["tenant"] & { statutoryCutoffRule: "FIRST_CUTOFF" | "SECOND_CUTOFF" },
+  multiplierConfig: ComputeMultiplierConfig,
+  result: ComputeResult,
+): Promise<{ result: ComputeResult; heldRelease?: Prisma.InputJsonValue }> {
+  if (run.runType !== "REGULAR") return { result };
+  const books = await tx.payrollBook.findMany({
+    where: {
+      tenantId, runType: "REGULAR", status: "FINALIZED", cycle: run.cycle,
+      periodEnd: { lt: run.periodStart }, id: { not: run.bookId },
+    },
+    select: { id: true, periodStart: true, periodEnd: true, cycle: true, cutoffStart: true, cutoffEnd: true, dtrGaps: true },
+    orderBy: { periodStart: "asc" },
+  });
+  const heldIn = books.filter((b) =>
+    Array.isArray(b.dtrGaps) &&
+    (b.dtrGaps as { employeeId?: string; held?: boolean }[]).some((g) => g?.employeeId === employeeId && g?.held === true),
+  );
+  if (heldIn.length === 0) return { result };
+
+  const releasedElsewhere = await tx.payrollSheet.findMany({
+    where: {
+      tenantId, employeeId, heldRelease: { not: PrismaValues.DbNull },
+      payrollBook: { status: "FINALIZED", id: { not: run.bookId } },
+    },
+    select: { heldRelease: true },
+  });
+  const done = new Set(
+    releasedElsewhere.flatMap((r) => ((r.heldRelease as { releases?: HeldReleaseEntry[] } | null)?.releases ?? []).map((x) => x.fromBookId)),
+  );
+
+  const results: ComputeResult[] = [];
+  const entries: HeldReleaseEntry[] = [];
+  for (const b of heldIn) {
+    if (done.has(b.id)) continue;
+    const emp = (await loadActiveEmployees(tx, b.periodStart, b.periodEnd)).find((x) => x.id === employeeId);
+    if (!emp) continue;
+    const rules = await resolveAllRules(tx, tenantId, b.periodEnd);
+    let gaps = 0;
+    const ci = await buildComputeInputForEmployee(
+      tx, tenantId, emp, b.periodStart, b.periodEnd, b.cycle, tenant, rules, multiplierConfig,
+      { start: b.cutoffStart, end: b.cutoffEnd }, { onGap: (d) => { gaps += d; } },
+    );
+    if (!ci || gaps > 0) continue; // the held cutoff's DTR is still not fully approved
+    ci.runType = "REGULAR";
+    const bases = await loadSssBases(tx, {
+      employees: [emp], runType: "REGULAR", cycle: b.cycle, rule: tenant.statutoryCutoffRule,
+      periodStart: b.periodStart, periodEnd: b.periodEnd, skipStatutory: false,
+    });
+    ci.sssBasis = bases?.get(employeeId);
+    await applyBenefitsContext(tx, tenantId, employeeId, b.periodEnd, ci);
+    ci.loans = [];
+    ci.adjustments = [];
+    ci.expenseClaims = [];
+    const r = computeSheet(ci);
+    results.push(r);
+    entries.push({
+      fromBookId: b.id,
+      periodStart: ymdOf(b.periodStart),
+      periodEnd: ymdOf(b.periodEnd),
+      amounts: Object.fromEntries(HELD_MONEY_KEYS.map((k) => [k, (r[k] as bigint).toString()])) as HeldReleaseEntry["amounts"],
+      unpaidLeaveDays: Number(r.periodInputSnapshot.unpaidLeaveDays ?? 0),
+      lateUndertimeMinutes: Number(r.periodInputSnapshot.lateUndertimeMinutes ?? 0),
+    });
+  }
+  if (entries.length === 0) return { result };
+  return {
+    result: mergeHeldRelease(result, results),
+    heldRelease: { releases: entries } as unknown as Prisma.InputJsonValue,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Private: 13th month helper (YEAR_END runs)
 // ---------------------------------------------------------------------------
 
@@ -1276,9 +1395,13 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         result = r13.result;
         thirteenthBreakdown = r13.breakdown;
       }
+      // PAY-194: release a salary held in an earlier regular run.
+      const held = await releaseHeldPay(tx, input.tenantId, e.id, { bookId: book.id, periodStart: input.periodStart, cycle: input.cycle, runType: input.runType ?? "REGULAR" }, tenant, multiplierConfig, result);
+      result = held.result;
       sheets.push({
         ...resultToSheetCreate(input.tenantId, book.id, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+        ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });
     }
 
@@ -1452,9 +1575,13 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         result = r13.result;
         thirteenthBreakdown = r13.breakdown;
       }
+      // PAY-194: release a salary held in an earlier regular run.
+      const held = await releaseHeldPay(tx, tenantId, e.id, { bookId, periodStart: book.periodStart, cycle: book.cycle, runType: book.runType }, tenant, multiplierConfigR, result);
+      result = held.result;
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+        ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });
     }
     if (sheets.length > 0) {
@@ -1535,6 +1662,30 @@ export async function finalizeRun(
         throw new PayrollRunConflictError(
           `The year's figures changed since this run's year-end tax adjustment was worked out ` +
             `(${stale.length} employee${stale.length === 1 ? "" : "s"}). Recompute the run, then finalize.`,
+        );
+      }
+    }
+
+    // PAY-194: a held salary is released once. If another run released the
+    // same held cutoff and was finalized first, this draft would pay it again.
+    const releasing = book.sheets.flatMap((sh) =>
+      ((sh.heldRelease as { releases?: HeldReleaseEntry[] } | null)?.releases ?? []).map((r) => ({ employeeId: sh.employeeId, fromBookId: r.fromBookId })),
+    );
+    if (releasing.length > 0) {
+      const others = await tx.payrollSheet.findMany({
+        where: {
+          tenantId, employeeId: { in: releasing.map((r) => r.employeeId) }, heldRelease: { not: PrismaValues.DbNull },
+          payrollBook: { status: "FINALIZED", id: { not: book.id } },
+        },
+        select: { employeeId: true, heldRelease: true },
+      });
+      const paid = new Set(others.flatMap((o) =>
+        ((o.heldRelease as { releases?: HeldReleaseEntry[] } | null)?.releases ?? []).map((r) => `${o.employeeId}|${r.fromBookId}`)));
+      const twice = releasing.filter((r) => paid.has(`${r.employeeId}|${r.fromBookId}`));
+      if (twice.length > 0) {
+        throw new PayrollRunConflictError(
+          `A held salary in this run was already released by another finalized run ` +
+            `(${twice.length} employee${twice.length === 1 ? "" : "s"}). Recompute the run, then finalize.`,
         );
       }
     }
@@ -1868,9 +2019,13 @@ export async function processRun(tenantId: string, bookId: string) {
         result = r13.result;
         thirteenthBreakdown = r13.breakdown;
       }
+      // PAY-194: release a salary held in an earlier regular run.
+      const held = await releaseHeldPay(tx, tenantId, e.id, { bookId, periodStart: book.periodStart, cycle: book.cycle, runType: book.runType }, tenant, multiplierConfig, result);
+      result = held.result;
       sheets.push({
         ...resultToSheetCreate(tenantId, bookId, e.id, result),
         ...(thirteenthBreakdown ? { thirteenthMonthBreakdown: thirteenthBreakdown as unknown as Prisma.InputJsonValue } : {}),
+        ...(held.heldRelease ? { heldRelease: held.heldRelease } : {}),
       });
     }
 

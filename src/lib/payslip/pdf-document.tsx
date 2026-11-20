@@ -146,7 +146,7 @@ export function PayslipPdf({ data }: { data: PayslipPdfData }) {
             <View style={s.metaRow}><Text style={s.metaLabel}>Reference</Text><Text style={s.metaValue}>{m.reference}</Text></View>
           </View>
         </View>
-        <Text style={s.title}>PAYSLIP</Text>
+        <Text style={s.title}>{data.finalPay ? "FINAL PAY PAYSLIP" : "PAYSLIP"}</Text>
         <View style={[s.rule, { marginTop: 4 }]} />
 
         {/* Employee strip */}
@@ -166,6 +166,22 @@ export function PayslipPdf({ data }: { data: PayslipPdfData }) {
             {data.employee.ids.map((x) => <KV key={x.label} label={x.label} value={x.value} />)}
           </View>
         </View>
+
+        {/* PAY-157: the final pay summary */}
+        {data.finalPay && (
+          <View style={[s.box, { marginTop: 8, marginBottom: 8, flexGrow: 0, flexShrink: 0, flexBasis: "auto" }]} wrap={false}>
+            <Section title="FINAL PAY" />
+            <View style={{ flexDirection: "row" }}>
+              {[data.finalPay.rows.slice(0, 4), data.finalPay.rows.slice(4)].map((col, i) => (
+                <View key={i} style={{ flex: 1, paddingRight: i === 0 ? 12 : 0, paddingLeft: i === 1 ? 12 : 0 }}>
+                  {col.map((r) => (
+                    <View key={r.label} style={s.boxRow}><Text style={s.muted}>{r.label}</Text><Text>{r.value}</Text></View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Two columns */}
         <View style={s.cols}>
@@ -282,8 +298,8 @@ export async function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
   return renderToBuffer(<PayslipPdf data={data} />);
 }
 
-/** "Payslip_EMP-0001_2026-11-16_2026-11-30.pdf" */
+/** "Payslip_EMP-0001_2026-11-16_2026-11-30.pdf" ("FinalPay_..." for a final pay). */
 export function payslipFileName(data: PayslipPdfData): string {
   const iso = (x: Date) => x.toISOString().slice(0, 10);
-  return `Payslip_${data.employee.number}_${iso(data.meta.periodStart)}_${iso(data.meta.periodEnd)}.pdf`.replace(/[^A-Za-z0-9_.-]/g, "_");
+  return `${data.finalPay ? "FinalPay" : "Payslip"}_${data.employee.number}_${iso(data.meta.periodStart)}_${iso(data.meta.periodEnd)}.pdf`.replace(/[^A-Za-z0-9_.-]/g, "_");
 }

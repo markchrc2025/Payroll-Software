@@ -2357,6 +2357,21 @@
   font: inherit;
   font-weight: 600;
 }
+/* PAY-191 part 2: approve and reject in a team request's sheet */
+.e-sheet-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.e-sheet-btns { display: flex; gap: 10px; }
+.e-sheet-btns .e-btn { flex: 1; }
+.e-btn-danger { background: #b42318; color: #fff; }
+.e-btn-danger:active { background: #912018; }
+.e-sheet-reason {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--e-line);
+  border-radius: 12px;
+  font: inherit;
+  resize: vertical;
+}
+.e-sheet-err { margin: 0; color: #b42318; font-size: 13.5px; }
 @keyframes e-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
 @keyframes e-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .e-sheet, .e-sheet-ov { animation: none; } }

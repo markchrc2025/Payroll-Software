@@ -14,8 +14,9 @@
  *   • The employee must have an active LeaveBalance for the leave type in the
  *     current year.
  *   • `amount` cannot exceed (balance.earned - balance.used - balance.forfeited).
- *   • Transaction is created with status PENDING — approval is done by HR in the
- *     admin portal.
+ *   • Transaction is created with status PENDING. Its approval chain is
+ *     snapshotted (PAY-191 part 2): the approvers act in ESS Team requests;
+ *     with no chain, HR approves in the admin portal.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -30,6 +31,7 @@ import {
 import { withTenant } from "@/lib/with-tenant";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { splitLeaveUnits, resolveOrCreateBalance } from "@/lib/leave/filing";
+import { snapshotApprovalChain } from "@/lib/approvals/snapshot";
 
 // ---------------------------------------------------------------------------
 // GET
@@ -151,6 +153,18 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // PAY-191 part 2: the approval chain is snapshotted at filing, as for
+      // overtime and undertime, so the approver sees it in ESS Team requests.
+      // With no chain, it waits for HR as before (ruling B5).
+      const snap = await snapshotApprovalChain(tx, {
+        module: "LEAVE",
+        entityId: txn.id,
+        requesterId: ctx.employeeId,
+        tenantId: ctx.tenantId,
+      });
+      if (snap.activeSteps > 0 && snap.firstStepIndex !== 0) {
+        return tx.leaveTransaction.update({ where: { id: txn.id }, data: { currentStepIndex: snap.firstStepIndex } });
+      }
       return txn;
     });
 
