@@ -16,6 +16,7 @@ import {
 } from "@/lib/validations/pay-component";
 import { serializeEmployeePayComponent } from "@/lib/payroll/serialize";
 import { forbidUnless } from "@/lib/authz/route-permission";
+import { guardFieldsProblem } from "@/lib/payroll/deduction-authorizations";
 
 export async function GET(
   req: NextRequest,
@@ -86,11 +87,18 @@ export async function POST(
           tenantId: auth.tenantId,
           deletedAt: null,
         },
-        select: { id: true },
+        select: { id: true, kind: true, isLossOrDamage: true },
       }),
     ]);
     if (!employee) return { error: "employee" as const };
     if (!component) return { error: "component" as const };
+    // PAY-150: authorization and loss details of an Other Deduction.
+    const actualLossCents = d.actualLoss != null ? toCentavos(d.actualLoss) : null;
+    const problem = await guardFieldsProblem(tx, {
+      tenantId: auth.tenantId, employeeId, component,
+      authorizationFileKey: d.authorizationFileKey, incidentReportId: d.incidentReportId, actualLossCents,
+    });
+    if (problem) return { error: "guard" as const, problem };
 
     const created = await tx.employeePayComponent.create({
       data: {
@@ -101,12 +109,17 @@ export async function POST(
         effectiveFrom: d.effectiveFrom,
         endDate: d.endDate ?? null,
         notes: d.notes ?? null,
+        authorizationDate: d.authorizationDate ?? null,
+        authorizationFileKey: d.authorizationFileKey ?? null,
+        incidentReportId: d.incidentReportId ?? null,
+        actualLossCents,
       },
     });
     return { ok: created };
   });
 
   if ("error" in result) {
+    if (result.error === "guard") return err(result.problem, 422);
     return result.error === "employee"
       ? notFound("Employee")
       : notFound("PayComponent");

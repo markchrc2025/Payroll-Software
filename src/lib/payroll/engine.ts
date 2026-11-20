@@ -365,10 +365,16 @@ interface ComponentBuckets {
   applied: AppliedPayComponent[];
 }
 
+/** PAY-150: a loss or damage deduction takes at most 20% of the period's wages (IRR Book III Rule VIII Sec. 14). */
+export const LOSS_DEDUCTION_CAP_PCT = 20n;
+
 function classifyComponents(
   components: ComputePayComponent[],
   deMinimisCeilingByCode: Map<string, bigint>,
+  /** PAY-150: the period's wages (basic pay after lates and absences). */
+  wagesCents: bigint = 0n,
 ): ComponentBuckets {
+  let lossCapLeft = (clampNonNegative(wagesCents) * LOSS_DEDUCTION_CAP_PCT) / 100n;
   let taxableAllowancesCents = 0n;
   let nontaxableCompensationCents = 0n;
   let nontaxableAdditionsCents = 0n;
@@ -388,7 +394,26 @@ function classifyComponents(
     } else if (c.kind === "DEDUCTION") {
       // PAY-149: an Other Deduction. Not part of gross or taxable pay; taken
       // from net pay with the adjustment deductions.
-      deductionsCents += c.amountCents;
+      // PAY-150: refused without a written authorization (or, for loss or
+      // damage, an incident record); loss or damage is capped at 20% of the
+      // period's wages and the rest carries to the next payday.
+      let take = c.amountCents;
+      let deferred = 0n;
+      if (c.refusedReason) take = 0n;
+      else if (c.lossOrDamage) {
+        take = c.amountCents > lossCapLeft ? lossCapLeft : c.amountCents;
+        lossCapLeft -= take;
+        deferred = c.amountCents - take;
+      }
+      deductionsCents += take;
+      applied.push({
+        id: c.id, code: c.code, name: c.name, kind: c.kind, taxability: c.taxability,
+        amountCents: take.toString(), nonTaxablePortionCents: "0", taxablePortionCents: "0",
+        ...(c.assignmentId ? { assignmentId: c.assignmentId } : {}),
+        ...(c.refusedReason ? { refusedReason: c.refusedReason } : {}),
+        ...(deferred > 0n ? { deferredCents: deferred.toString() } : {}),
+      });
+      continue;
     } else if (c.isBonus) {
       // PAY-171: portions are set once the year's 90,000 is applied.
       benefitsCents += c.amountCents;
@@ -818,7 +843,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
       }
     }
   }
-  const buckets = classifyComponents(input.payComponents, deMinimisCeilingByCode);
+  const buckets = classifyComponents(input.payComponents, deMinimisCeilingByCode, basePayCents - lateUndertimeDeductionCents);
 
   // Leave cash-out: taxable compensation (included in gross).
   const leaveCashOutCents = fp.leaveCashOutCents;
@@ -1156,6 +1181,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   const buckets = classifyComponents(
     input.payComponents,
     deMinimisCeilingByCode,
+    basePayCents - lateUndertimeDeductionCents, // PAY-150
   );
 
   // PAY-171: bonuses (and a 13th month paid in this regular run) against what

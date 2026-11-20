@@ -86,6 +86,8 @@ type PayrollSheet = {
   employeeId: string;
   employeeNumber?: string | null;
   employeeName?: string | null;
+  /** PAY-150: applied components, with refused and carried deductions. */
+  payComponentsApplied?: unknown;
   // monetary fields serialised as strings (centavos)
   basicSalaryCentsSnapshot: string;
   basePayCents: string;
@@ -764,6 +766,32 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
           </p>
         </div>
       )}
+
+      {/* PAY-150: Other Deductions the run refused or carried over */}
+      {(() => {
+        const notes = run.sheets.flatMap((s) =>
+          ((Array.isArray(s.payComponentsApplied) ? s.payComponentsApplied : []) as { name: string; refusedReason?: string; deferredCents?: string }[])
+            .filter((a) => a.refusedReason || a.deferredCents)
+            .map((a) => ({ key: `${s.id}-${a.name}`, who: s.employeeName ?? s.employeeId, a })),
+        );
+        if (notes.length === 0) return null;
+        return (
+          <div data-testid="deduction-notes" className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
+            <p className="font-medium">Deductions not taken in full</p>
+            <ul className="list-disc pl-5 space-y-1">
+              {notes.map((n) => (
+                <li key={n.key}>
+                  {n.who}: {n.a.name}:{" "}
+                  {n.a.refusedReason
+                    ? `not deducted. ${n.a.refusedReason}.`
+                    : `${formatPeso(n.a.deferredCents!)} carried to the next payday (a loss or damage deduction takes at most 20% of the period's wages).`}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs">Add the missing record on the employee&apos;s Compensation tab, then recompute this run.</p>
+          </div>
+        );
+      })()}
 
       {run.status === "PROCESSING" && (
         <ProcessingRunPanel runId={run.id} createdAt={run.createdAt} onRefresh={refreshRunQuietly} />

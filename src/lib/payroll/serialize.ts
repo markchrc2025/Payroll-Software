@@ -27,6 +27,7 @@ export function serializeEmployeePayComponent<T extends EmployeePayComponent>(
   return {
     ...a,
     amountCents: centavosToJson(a.amountCents)!,
+    actualLossCents: centavosToJson((a as { actualLossCents?: bigint | null }).actualLossCents ?? null),
   };
 }
 

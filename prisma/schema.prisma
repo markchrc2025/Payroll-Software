@@ -2380,6 +2380,16 @@ model EmployeePayComponent {
 
   notes String?
 
+  /// PAY-150: the employee's written authorization for an Other Deduction
+  /// (date signed and the uploaded copy). The run refuses the deduction
+  /// without both.
+  authorizationDate    DateTime?
+  authorizationFileKey String?
+  /// PAY-150, loss or damage deductions: the incident record showing the
+  /// employee was heard, and the actual loss (the most that may be recovered).
+  incidentReportId String?
+  actualLossCents  BigInt?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
