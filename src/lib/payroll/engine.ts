@@ -29,7 +29,9 @@
  *     with day-type). True hour-by-hour stacking is deferred.
  *   • 13th-month-and-benefits residual is 0 in D3 (annualization lives in a
  *     later phase).
- *   • DEDUCTION-kind PayComponents are IGNORED in D3 (loan-only deductions).
+ *   • DEDUCTION-kind PayComponents (PAY-149: Other Deductions such as uniform,
+ *     canteen, inventory) are deducted after tax with the adjustment
+ *     deductions. They were ignored before PAY-149.
  *   • Compensation basis for statutory MSC/MFS = `basicSalaryCents` (treated
  *     as monthly when `salaryType = MONTHLY`). Daily/weekly approximated by
  *     monthlyEquivalent = daily × workingDaysDenominator / 12 or weekly × 52/12.
@@ -358,6 +360,8 @@ interface ComponentBuckets {
   benefitsCents: bigint;
   /// PAY-171: taxable one-off pay, inside taxableAllowancesCents, taxed at the year's rate.
   oneOffCents: bigint;
+  /// PAY-149: DEDUCTION-kind components (Other Deductions), taken after tax.
+  deductionsCents: bigint;
   applied: AppliedPayComponent[];
 }
 
@@ -370,6 +374,7 @@ function classifyComponents(
   let nontaxableAdditionsCents = 0n;
   let benefitsCents = 0n;
   let oneOffCents = 0n;
+  let deductionsCents = 0n;
   const applied: AppliedPayComponent[] = [];
 
   for (const c of components) {
@@ -381,8 +386,9 @@ function classifyComponents(
       nontaxableAdditionsCents += c.amountCents;
       nonTaxablePortion = c.amountCents;
     } else if (c.kind === "DEDUCTION") {
-      // D3 SCOPE: deductions other than statutory + loans are deferred.
-      // Skip silently but record on payslip so caller can audit.
+      // PAY-149: an Other Deduction. Not part of gross or taxable pay; taken
+      // from net pay with the adjustment deductions.
+      deductionsCents += c.amountCents;
     } else if (c.isBonus) {
       // PAY-171: portions are set once the year's 90,000 is applied.
       benefitsCents += c.amountCents;
@@ -447,7 +453,7 @@ function classifyComponents(
     nontaxableAdditionsCents,
     benefitsCents,
     oneOffCents,
-    applied,
+    deductionsCents, applied,
   };
 }
 
@@ -937,7 +943,7 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
   const nontaxableAdditionsCents =
     buckets.nontaxableAdditionsCents + separationPayNonTaxable + adjs.nontaxableAdditionsCents;
 
-  const adjustmentDeductionsCents = adjs.deductionsCents;
+  const adjustmentDeductionsCents = adjs.deductionsCents + buckets.deductionsCents; // PAY-149
 
   // -- Step 11: loans -------------------------------------------------------
   // Net available before loans. FINAL_PAY is EXEMPT from the floor by default
@@ -1332,7 +1338,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     adjs.nontaxableAdditionsCents +
     claims.nontaxableAdditionsCents;
 
-  const adjustmentDeductionsCents = adjs.deductionsCents;
+  const adjustmentDeductionsCents = adjs.deductionsCents + buckets.deductionsCents; // PAY-149
 
   // -- Step 11: loans --------------------------------------------------------
   // "No negative pay" floor: cap total loan deductions at the net available

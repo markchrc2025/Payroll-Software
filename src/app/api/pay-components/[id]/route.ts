@@ -50,12 +50,19 @@ export async function PATCH(
       where: { id, tenantId: auth.tenantId },
     });
     if (!existing) return null;
+    // PAY-149: a seeded component keeps its kind; only a deduction can be a
+    // loss or damage deduction.
+    const kind = parsed.data.kind ?? existing.kind;
+    if (existing.isSystem && parsed.data.kind && parsed.data.kind !== existing.kind) return "SYSTEM_KIND" as const;
+    if ((parsed.data.isLossOrDamage ?? existing.isLossOrDamage) && kind !== "DEDUCTION") return "LOSS_KIND" as const;
     return tx.payComponent.update({
       where: { id },
       data: parsed.data,
     });
   });
 
+  if (updated === "SYSTEM_KIND") return err("This component is built in. Its kind cannot be changed.", 409);
+  if (updated === "LOSS_KIND") return err("Only a deduction can be a loss or damage deduction.", 422);
   if (!updated) return notFound("PayComponent");
   return ok(serializePayComponent(updated), "PayComponent updated");
 }
@@ -76,12 +83,14 @@ export async function DELETE(
       where: { id, tenantId: auth.tenantId },
     });
     if (!existing) return null;
+    if (existing.isSystem) return "SYSTEM" as const; // PAY-149
     return tx.payComponent.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
     });
   });
 
+  if (deleted === "SYSTEM") return err("This component is built in and cannot be deleted. Make it inactive instead.", 409);
   if (!deleted) return notFound("PayComponent");
   return ok(serializePayComponent(deleted), "PayComponent deleted");
 }

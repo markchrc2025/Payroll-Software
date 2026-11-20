@@ -358,6 +358,14 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
   }
   const adjustments = (Array.isArray(sheet.adjustmentsApplied) ? sheet.adjustmentsApplied : []) as AppliedAdjustment[];
   let adjListed = 0n;
+  // PAY-149: each Other Deduction component by its name.
+  for (const c of applied as { name: string; amountCents: string; kind?: string }[]) {
+    if (c.kind !== "DEDUCTION") continue;
+    const amt = BigInt(c.amountCents ?? "0");
+    if (amt === 0n) continue;
+    adjListed += amt;
+    other.push({ label: c.name, amount: amt });
+  }
   for (const a of adjustments) {
     if (a.kind !== "DEDUCTION") continue;
     const amt = BigInt(a.amountCents ?? "0");

@@ -30,9 +30,13 @@ export const createPayComponentSchema = z
     includeInPagibigBase: z.boolean().default(false),
     isBonus: z.boolean().default(false), // PAY-171
     isOneOff: z.boolean().default(false), // PAY-171
+    isLossOrDamage: z.boolean().default(false), // PAY-149
     isActive: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
+    if (v.isLossOrDamage && v.kind !== "DEDUCTION") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["isLossOrDamage"], message: "Only a deduction can be a loss or damage deduction" });
+    }
     if (v.taxability === "DE_MINIMIS" && !v.deMinimisCode) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -56,6 +60,7 @@ export const updatePayComponentSchema = z
     includeInPagibigBase: z.boolean().optional(),
     isBonus: z.boolean().optional(), // PAY-171
     isOneOff: z.boolean().optional(), // PAY-171
+    isLossOrDamage: z.boolean().optional(), // PAY-149
     isActive: z.boolean().optional(),
   });
 
