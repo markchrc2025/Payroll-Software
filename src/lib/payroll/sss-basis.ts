@@ -167,6 +167,21 @@ export function assessSssBasis(args: {
  * The compensation the SSS table is looked up with, or null for no SSS.
  * This run's own pay never enters it: the base is always last month's.
  */
+/**
+ * PAY-202 (Mark, 20 Nov 2026, ruling 4): "the basic pay less lates is the
+ * basic pay for the cutoff. Meaning it will be the base computation for tax,
+ * sss, philhealth, and 13th month." PhilHealth uses the same base month as
+ * SSS: the previous month's basic after unpaid days and lates. Where SSS has
+ * none (a new hire's first month, or no basic earned in the base month) and
+ * where the base month is not in Sentire, PhilHealth stays on the contracted
+ * monthly basic, so no month of employment is left without a premium.
+ * Reading taken without a ruling for those cases, flagged to Mark.
+ */
+export function philHealthCompensationCents(basis: SssBasis | undefined, contractedMonthlyCents: bigint): bigint {
+  if (basis?.kind === "PREVIOUS_MONTH_ACTUAL" && basis.priorBasicCents > 0n) return basis.priorBasicCents;
+  return contractedMonthlyCents;
+}
+
 export function sssCompensationCents(
   basis: SssBasis | undefined,
   contractedMonthlyCents: bigint,
