@@ -23,6 +23,12 @@ type TenantSettings = {
   breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
   strictDtrPolicy: boolean;
+  sssIncludeEarnings: boolean;
+  sssIncludePremiums: boolean;
+  philhealthIncludeEarnings: boolean;
+  philhealthIncludePremiums: boolean;
+  pagibigIncludeEarnings: boolean;
+  pagibigIncludePremiums: boolean;
   nsdWindowStart: string;
   nsdWindowEnd: string;
 };
@@ -64,6 +70,8 @@ export default function PayRulesPage() {
     breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
     strictDtrPolicy: false,
+    sssIncludeEarnings: false, sssIncludePremiums: false, philhealthIncludeEarnings: false,
+    philhealthIncludePremiums: false, pagibigIncludeEarnings: false, pagibigIncludePremiums: false,
     nsdWindowStart: "22:00",
     nsdWindowEnd: "06:00",
   });
@@ -86,6 +94,9 @@ export default function PayRulesPage() {
         breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
         strictDtrPolicy: d.strictDtrPolicy ?? false,
+        sssIncludeEarnings: d.sssIncludeEarnings ?? false, sssIncludePremiums: d.sssIncludePremiums ?? false,
+        philhealthIncludeEarnings: d.philhealthIncludeEarnings ?? false, philhealthIncludePremiums: d.philhealthIncludePremiums ?? false,
+        pagibigIncludeEarnings: d.pagibigIncludeEarnings ?? false, pagibigIncludePremiums: d.pagibigIncludePremiums ?? false,
         nsdWindowStart: d.nsdWindowStart ?? "22:00",
         nsdWindowEnd: d.nsdWindowEnd ?? "06:00",
       };
@@ -321,6 +332,32 @@ export default function PayRulesPage() {
                 onCheckedChange={(v) => update("strictDtrPolicy", v)}
                 aria-label="Hold pay until the cutoff's DTR is approved"
               />
+            </div>
+          </RuleSection>
+
+          {/* PAY-143: contribution bases */}
+          <RuleSection
+            title="Contribution Bases"
+            description="SSS, PhilHealth and Pag-IBIG are worked out on basic pay. As company policy, each can also count other earnings of the same month the contribution is based on: the earnings ticked for that base in Pay Components, and attendance premiums (overtime, night differential, holiday and rest day pay). All off by default. Pag-IBIG's fund salary is capped at 10,000, so its options only matter below that."
+          >
+            <div className="rounded-lg border border-[#E8E8E8] bg-white divide-y divide-[#F1F1F1]">
+              {([
+                ["SSS", "sssIncludeEarnings", "sssIncludePremiums"],
+                ["PhilHealth", "philhealthIncludeEarnings", "philhealthIncludePremiums"],
+                ["Pag-IBIG", "pagibigIncludeEarnings", "pagibigIncludePremiums"],
+              ] as const).map(([name, earnings, premiums]) => (
+                <div key={name} className="flex flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
+                  <p className="text-[13.5px] font-medium text-[#171717] w-28">{name}</p>
+                  <label className="flex items-center gap-2 text-[13px] text-[#171717]">
+                    <Switch checked={form[earnings]} onCheckedChange={(v) => update(earnings, v)} aria-label={`${name}: include ticked earnings`} />
+                    Ticked earnings
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px] text-[#171717]">
+                    <Switch checked={form[premiums]} onCheckedChange={(v) => update(premiums, v)} aria-label={`${name}: include attendance premiums`} />
+                    Attendance premiums
+                  </label>
+                </div>
+              ))}
             </div>
           </RuleSection>
 
