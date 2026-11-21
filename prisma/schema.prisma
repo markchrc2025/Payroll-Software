@@ -758,6 +758,7 @@ model Tenant {
   salaryAdjustmentBatches SalaryAdjustmentBatch[]
   causelessNotes          CauselessNote[]
   documentRequests        DocumentRequest[]
+  employeeSignatures      EmployeeSignature[]
 
   @@index([deletedAt])
 }
@@ -1434,6 +1435,7 @@ model Employee {
   documentRequests      DocumentRequest[]
   salaryAdjustmentLines SalaryAdjustmentLine[]
   causelessNotes        CauselessNote[]
+  signature             EmployeeSignature?
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
@@ -4593,4 +4595,21 @@ model CauselessNote {
 enum FinalPayTaxMethod {
   REFUND_AND_WITHHOLD_FINAL
   ANNUALIZE
+}
+
+/// PAY-199 (ruling 5, Mark 20 Nov 2026): the employee's e-signature (PNG or
+/// JPEG, at most 1 MB), uploaded in ESS and written on their BIR 2316 PDF.
+model EmployeeSignature {
+  id         String   @id @default(cuid())
+  tenantId   String
+  employeeId String   @unique
+  mimeType   String
+  data       Bytes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

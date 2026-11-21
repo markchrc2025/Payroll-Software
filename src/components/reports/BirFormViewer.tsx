@@ -20,6 +20,8 @@ export interface BirFormEntry {
   /** What to call this form in the picker, for example an employee's name. */
   label: string;
   view: BirFormView;
+  /** PAY-199: the form on the official BIR layout, as a PDF, when there is one. */
+  pdfUrl?: string;
 }
 
 const shown = (kind: BirValueKind, v: string | null) =>
@@ -204,6 +206,14 @@ export function BirFormViewer({
                 </select>
               )}
               <div className="ml-auto flex gap-2">
+                {current.pdfUrl && (
+                  <a
+                    href={current.pdfUrl}
+                    className="flex h-8 items-center gap-1.5 rounded-[8px] bg-[var(--fill)] px-2.5 text-[13px] font-medium hover:bg-[var(--fill-2)]"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Official PDF
+                  </a>
+                )}
                 <button
                   onClick={() => downloadFormsAsExcel(entries, `${fileName}.xlsx`)}
                   className="flex h-8 items-center gap-1.5 rounded-[8px] bg-[var(--fill)] px-2.5 text-[13px] font-medium hover:bg-[var(--fill-2)]"

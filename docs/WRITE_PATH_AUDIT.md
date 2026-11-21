@@ -9,13 +9,13 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 | Principal | Write handlers |
 |---|---|
 | USER_SESSION | 218 |
-| ESS_SESSION | 30 |
+| ESS_SESSION | 32 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 303 |
+| Total | 305 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -209,6 +209,8 @@ None.
 | POST | /api/ess/pin | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/profile/update-requests | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/reset-password | PUBLIC_BY_DESIGN | the single-use reset token is the principal | n/a |
+| PUT | /api/ess/signature | ESS_SESSION | getEssContext | yes |
+| DELETE | /api/ess/signature | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/documents/[id]/ack | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/threads/[id]/comments | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/threads | ESS_SESSION | getEssContext | yes |

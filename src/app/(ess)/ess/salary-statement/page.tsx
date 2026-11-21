@@ -32,7 +32,7 @@ export default function EssSalaryStatementPage() {
           <Button size="sm" variant="outline" onClick={pdf} disabled={!st?.runs}><Download className="h-3.5 w-3.5 mr-1.5" /> PDF</Button>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">Your pay for the year by month, from finalized payroll. For a bank or visa application; your BIR Form 2316 comes from HR.</p>
+      <p className="text-sm text-muted-foreground">Your pay for the year by month, from finalized payroll. For a bank or visa application; your BIR Form 2316 is under Pay, BIR Form 2316.</p>
       {st && (st.runs ? <StatementTable st={st} /> : <p className="text-sm text-muted-foreground">No finalized payroll in {year} yet.</p>)}
     </div>
   );
