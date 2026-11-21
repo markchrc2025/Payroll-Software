@@ -180,8 +180,8 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Team",
     items: [
       { href: "/announcements", label: "Announcements", icon: "announcements" },
-      { href: "#soon-team-discussion", label: "Discussion", icon: "requests", comingSoon: true },
-      { href: "#soon-team-doc-sharing", label: "Document & Form Sharing", icon: "claims", comingSoon: true },
+      { href: "/team/discussion", label: "Discussion", icon: "requests" },
+      { href: "/team/documents", label: "Document & Form Sharing", icon: "claims" },
     ],
   },
   {
@@ -198,7 +198,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "#soon-salary-adjustment", label: "Salary Adjustment", icon: "components", comingSoon: true },
-      { href: "#soon-annual-salary-statement", label: "Annual Salary Statement", icon: "govreports", comingSoon: true },
+      { href: "/payroll/annual-salary-statement", label: "Annual Salary Statement", icon: "govreports" },
     ],
   },
   {

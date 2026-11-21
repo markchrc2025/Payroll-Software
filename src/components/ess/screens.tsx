@@ -188,8 +188,11 @@ export function HomeScreen() {
           { icon: "wallet", label: "Claim an expense", onClick: () => router.push("/ess/expense-claims") },
           { icon: "doc", label: "Request a document", onClick: () => router.push("/ess/documents") },
           { icon: "cal", label: "Team calendar", onClick: () => router.push("/ess/team-calendar") },
+          { icon: "doc", label: "Company documents", onClick: () => router.push("/ess/shared-documents") },
+          { icon: "doc", label: "Discussion", onClick: () => router.push("/ess/discussion") },
           { icon: "cal", label: "My DTR", onClick: () => router.push("/ess/dtr") },
           { icon: "doc", label: "View payslips", onClick: () => nav.tab("pay") },
+          { icon: "doc", label: "Annual salary statement", onClick: () => router.push("/ess/salary-statement") },
         ]}
       />
 
