@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 189 |
+| USER_SESSION | 192 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 269 |
+| Total | 272 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -253,6 +253,9 @@ None.
 | POST | /api/loans/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | PATCH | /api/loans/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/loans | USER_SESSION | getAuthContext | yes |
+| PATCH | /api/lookups/[list]/[id] | USER_SESSION | getAuthContext | yes |
+| DELETE | /api/lookups/[list]/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/lookups/[list] | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/reject | USER_SESSION | getAuthContext | yes |
