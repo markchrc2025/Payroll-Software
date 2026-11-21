@@ -10,7 +10,7 @@
  *                      (API: /api/employees + /api/employees/[id]/leave-balances)
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -24,6 +24,8 @@ import {
   BookOpen,
   Wallet,
   Inbox,
+  Download,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -783,6 +785,36 @@ function LeaveBalancesTab() {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
+  // PAY-145: opening balances for everyone at once, by CSV.
+  const importRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  async function downloadBalanceTemplate() {
+    const res = await fetch(`/api/leave-balances/import?year=${year}`);
+    if (!res.ok) { toast.error("Could not download the template"); return; }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `leave_opening_balances_${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  async function importBalances(file: File) {
+    setImporting(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/leave-balances/import", { method: "POST", body: fd });
+    const json = await res.json().catch(() => ({}));
+    setImporting(false);
+    if (importRef.current) importRef.current.value = "";
+    if (!res.ok) {
+      const problems = (json.details?.problems ?? []) as { row: number; errors: string[] }[];
+      toast.error(`${json.error ?? "Import failed"}${problems.length ? ` ${problems.slice(0, 3).map((p) => `Row ${p.row}: ${p.errors.join("; ")}`).join(" ")}` : ""}`);
+      return;
+    }
+    toast.success(`Opening balances imported: ${json.data.created} new, ${json.data.replaced} replaced.`);
+    loadBalances();
+  }
+
   function available(bal: LeaveBalance) {
     const v =
       parseFloat(bal.openingBalance) +
@@ -818,6 +850,19 @@ function LeaveBalancesTab() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={downloadBalanceTemplate} data-testid="leave-balance-template">
+          <Download className="h-4 w-4 mr-1.5" /> Template
+        </Button>
+        <Button size="sm" onClick={() => importRef.current?.click()} disabled={importing} data-testid="leave-balance-import">
+          <Upload className="h-4 w-4 mr-1.5" /> Import opening balances
+        </Button>
+        <input
+          ref={importRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void importBalances(f); }}
+        />
       </div>
 
       {/* Employee search results */}

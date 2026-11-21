@@ -257,6 +257,32 @@ export async function sendEssInviteEmail({
 }
 
 // ---------------------------------------------------------------------------
+// PAY-197: offboarding portal sign-in link
+// ---------------------------------------------------------------------------
+
+export async function sendOffboardingPortalEmail({
+  to, name, companyName, portalUrl, expiresInDays = 7,
+}: { to: string; name: string; companyName: string; portalUrl: string; expiresInDays?: number }): Promise<void> {
+  const html = baseTemplate(`
+    <p style="margin:0 0 8px;font-size:15px;color:#374151;font-weight:600;">Your offboarding with ${escapeHtml(companyName)}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#6B7A8D;line-height:1.6;">
+      Hi ${escapeHtml(name)}, please sign in to complete your exit questionnaire and personal information,
+      request your certificate of employment, and download your final payslip when it is ready.
+      This link works once and expires in <strong>${expiresInDays} day${expiresInDays === 1 ? "" : "s"}</strong>.
+    </p>
+    <a href="${escapeHtml(portalUrl)}"
+       style="display:inline-block;padding:12px 28px;background:#1E3A5F;color:#FFFFFF;font-size:14px;font-weight:600;border-radius:8px;text-decoration:none;">
+      Open the offboarding portal
+    </a>
+    <p style="margin:20px 0 0;font-size:12px;color:#9AA5B4;">
+      Or copy this link into your browser:<br/>
+      <span style="color:#2D6BE4;word-break:break-all;">${escapeHtml(portalUrl)}</span>
+    </p>
+  `);
+  await dispatch({ to, subject: `Your offboarding with ${companyName}`, html });
+}
+
+// ---------------------------------------------------------------------------
 // Payslip notification
 // ---------------------------------------------------------------------------
 

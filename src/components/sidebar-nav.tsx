@@ -115,6 +115,14 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    // PAY-197 (Mark, 20 Nov 2026): the Offboarding module, a main menu with submenus.
+    label: "Offboarding",
+    items: [
+      { href: "/offboarding", label: "Cases", icon: "movements" },
+      { href: "/offboarding/checklist", label: "Clearance Checklist", icon: "policies" },
+    ],
+  },
+  {
     label: "Expense Claim",
     items: [
       { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
@@ -183,6 +191,8 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/pay-components", label: "Pay Components", icon: "components" },
       { href: "/loans", label: "Loans", icon: "loans" },
       { href: "/payroll/ytd-openings", label: "Year-to-date Openings", icon: "bankfiles" },
+      { href: "/payroll/thirteenth-accrual", label: "13th Month Accrual", icon: "premium" },
+      { href: "/payroll/corrections", label: "Corrections", icon: "components" },
       { href: "/payroll/statutory-contributions", label: "Statutory Contribution", icon: "premium" },
       { href: "/payroll/statutory-tables", label: "Statutory Table", icon: "payrules" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },

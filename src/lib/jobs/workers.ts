@@ -166,7 +166,7 @@ async function sweepStuckRuns(): Promise<void> {
 // Enqueue helpers — used by API routes
 // ---------------------------------------------------------------------------
 
-export async function enqueuePayrollRun(data: { tenantId: string; bookId: string }) {
+export async function enqueuePayrollRun(data: { tenantId: string; bookId: string; enqueuedByUserId?: string | null }) {
   const boss = await startJobQueue();
   return boss.send(JOB_NAMES.PAYROLL_RUN, data, { retryLimit: RETRY_LIMIT, retryDelay: RETRY_DELAY });
 }
@@ -181,7 +181,7 @@ export async function enqueueDtrSubmitted(data: { tenantId: string; submissionId
   return boss.send(JOB_NAMES.DTR_SUBMITTED, data, { retryLimit: RETRY_LIMIT, retryDelay: RETRY_DELAY });
 }
 
-export async function enqueuePayslipPublish(data: { tenantId: string; bookId: string; sheetId: string }) {
+export async function enqueuePayslipPublish(data: { tenantId: string; bookId: string; sheetId: string; enqueuedByUserId?: string | null }) {
   const boss = await startJobQueue();
   return boss.send(JOB_NAMES.PAYSLIP_PUBLISH, data, { retryLimit: RETRY_LIMIT, retryDelay: RETRY_DELAY });
 }

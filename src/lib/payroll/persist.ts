@@ -14,6 +14,10 @@
  *                               `AuditLog` entry. Re-finalize on a FINALIZED
  *                               book is a no-op (returns existing row).
  */
+import { issueRunControlNumbers } from "./control-numbers";
+import { recordThirteenthAccrual } from "./thirteenth-accrual";
+import { unclearedEmployees } from "@/lib/offboarding/clearance";
+import { buildPayslipFromRecords, encodeSealSnapshot } from "@/lib/payslip/pdf-data";
 import type {
   Loan,
   PayComponent,
@@ -1852,6 +1856,16 @@ export async function finalizeRun(
     // database, apart from the payslips loaded above.
     await assertRunTiesOut(tx, tenantId, book.id, book.sheets);
 
+    // PAY-197, ruling 3: a final pay run waits for clearance (block, not warn).
+    if (book.runType === "FINAL_PAY") {
+      const held = await unclearedEmployees(tx, tenantId, book.sheets.map((s) => s.employeeId));
+      if (held.length) {
+        throw new PayrollRunConflictError(
+          `Clearance is not complete, so this final pay run cannot be finalized: ${held.map((h) => `${h.name}: ${h.pending.join(", ")}`).join("; ")}.`,
+        );
+      }
+    }
+
     // 1. Aggregate loan payments from all sheets.
     const loanPayments = new Map<string, bigint>(); // loanId → totalAmount
     for (const sheet of book.sheets) {
@@ -1901,12 +1915,25 @@ export async function finalizeRun(
       });
     }
 
-    // 5. Transition the book + audit log.
+    // PAY-152: the 13th month accrued by a regular run, recorded on each payslip.
+    if (book.runType === "REGULAR") await recordThirteenthAccrual(tx, tenantId, bookId);
+
+    // PAY-69: control numbers, gapless, in this transaction.
+    const control = await issueRunControlNumbers(tx, tenantId, bookId, book.periodEnd);
+
+    // PAY-67: each payslip as it stands at the seal; reprints come from it.
+    const finalizedAt = new Date();
+    for (const s of await tx.payrollSheet.findMany({ where: { payrollBookId: bookId } })) {
+      const data = await buildPayslipFromRecords(tx, { tenantId, bookId, employeeId: s.employeeId }, { ...book, finalizedAt }, s);
+      await tx.payrollSheet.update({ where: { id: s.id }, data: { sealSnapshot: encodeSealSnapshot(data) as Prisma.InputJsonValue } });
+    }
+
+    // 5. Transition the book + audit log. From here the database seals the run (PAY-67).
     const finalized = await tx.payrollBook.update({
       where: { id: bookId },
       data: {
         status: "FINALIZED",
-        finalizedAt: new Date(),
+        finalizedAt,
         finalizedByUserId: userId,
       },
       include: { sheets: true },
@@ -1921,7 +1948,7 @@ export async function finalizeRun(
         entityId: bookId,
         changes: {
           before: { status: "DRAFT" },
-          after: { status: "FINALIZED" },
+          after: { status: "FINALIZED", controlNumber: control.run },
           loanPaymentsApplied: Array.from(loanPayments.entries()).map(
             ([loanId, amount]) => ({
               loanId,

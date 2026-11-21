@@ -9,6 +9,7 @@
 
 import prismaAdmin from "@/lib/prisma-admin";
 import { sendUnpaidInvoiceEmail } from "@/lib/billing-email";
+import { recordJobWrite, systemPrincipal } from "@/lib/jobs/principal";
 
 export async function handleBillingOverdueSweep(): Promise<void> {
   const now = new Date();
@@ -18,16 +19,18 @@ export async function handleBillingOverdueSweep(): Promise<void> {
       status: "OPEN",
       dueAt: { not: null, lt: now },
     },
-    select: { id: true },
+    select: { id: true, tenantId: true },
   });
 
   if (due.length === 0) return;
 
+  const principal = systemPrincipal("billing.overdue");
   for (const inv of due) {
     await prismaAdmin.invoice.update({
       where: { id: inv.id },
       data: { status: "OVERDUE" },
     });
+    await recordJobWrite(principal, { tenantId: inv.tenantId, entity: "Invoice", entityId: inv.id, summary: { after: { status: "OVERDUE" } } });
     // Best-effort notice — internal try/catch, never throws.
     await sendUnpaidInvoiceEmail(inv.id);
   }

@@ -22,6 +22,7 @@
 
 import prismaAdmin from "@/lib/prisma-admin";
 import Decimal from "decimal.js";
+import { recordJobWrite, systemPrincipal } from "@/lib/jobs/principal";
 
 import {
   computeAccrual,
@@ -58,7 +59,9 @@ export async function handleLeaveAccrual(): Promise<void> {
     where: { deletedAt: null },
   })) as unknown as Array<{ id: string; timezone?: string | null }>;
 
+  const principal = systemPrincipal("leave.accrual");
   for (const tenant of tenants) {
+    const grantedBefore = granted;
     // D-G: period boundaries follow the tenant's timezone, not a hardcoded offset.
     const today = todayInTimezone(now, tenant.timezone || "UTC");
 
@@ -162,6 +165,9 @@ export async function handleLeaveAccrual(): Promise<void> {
 
       if (applied) granted += 1;
       else skipped += 1;
+    }
+    if (granted > grantedBefore) {
+      await recordJobWrite(principal, { tenantId: tenant.id, entity: "LeaveTransaction", action: "CREATE", summary: { accrualsGranted: granted - grantedBefore } });
     }
   }
 

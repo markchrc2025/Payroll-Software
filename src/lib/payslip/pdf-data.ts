@@ -138,6 +138,8 @@ export interface PayslipPdfSource {
   book: { periodStart: Date; periodEnd: Date; cycle: string; runType: string; finalizedAt: Date | null; separationReason?: string | null };
   sheet: {
     id: string;
+    /** PAY-69: the payslip's control number (PS-YYYY-NNNNNN). */
+    controlNumber?: string | null;
     salaryTypeSnapshot: string;
     basicSalaryCentsSnapshot: bigint;
     workingDaysDenominatorSnapshot: number;
@@ -438,7 +440,7 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
       cycle: CYCLE[book.cycle] ?? book.cycle,
       runType: RUN[book.runType] ?? book.runType,
       issuedAt: book.finalizedAt,
-      reference: sheet.id.slice(-8).toUpperCase(),
+      reference: sheet.controlNumber ?? sheet.id.slice(-8).toUpperCase(),
     },
     employee: {
       name: `${emp.firstName}${mi} ${emp.lastName}${sfx}`,
@@ -521,6 +523,28 @@ function finalPayRows(
 
 export class PayslipNotAvailableError extends Error {}
 
+// PAY-67: the payslip as it stood when the run was sealed, kept on the sheet
+// so a reprint never picks up a later change (a new name, position, bank
+// account or company address). Bigints and dates are tagged to survive JSON.
+export function encodeSealSnapshot(data: PayslipPdfData): unknown {
+  return JSON.parse(JSON.stringify(data, function (this: Record<string, unknown>, key, value) {
+    const raw = this[key];
+    if (typeof raw === "bigint") return { $bigint: raw.toString() };
+    if (raw instanceof Date) return { $date: raw.toISOString() };
+    return value;
+  }));
+}
+
+export function decodeSealSnapshot(json: unknown): PayslipPdfData {
+  return JSON.parse(JSON.stringify(json), (_key, value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if (typeof value.$bigint === "string" && Object.keys(value).length === 1) return BigInt(value.$bigint);
+      if (typeof value.$date === "string" && Object.keys(value).length === 1) return new Date(value.$date);
+    }
+    return value;
+  }) as PayslipPdfData;
+}
+
 export async function loadPayslipPdfData(
   tx: TenantTx,
   args: { tenantId: string; bookId: string; employeeId: string },
@@ -530,6 +554,21 @@ export async function loadPayslipPdfData(
   if (book.status !== "FINALIZED") throw new PayslipNotAvailableError("Payslips are only available for finalized runs");
   const sheet = await tx.payrollSheet.findFirst({ where: { payrollBookId: book.id, employeeId: args.employeeId } });
   if (!sheet) throw new PayslipNotAvailableError("No payslip for this employee in this run");
+  // PAY-67: a sealed payslip reprints from its seal-time snapshot.
+  if (sheet.sealSnapshot != null) return decodeSealSnapshot(sheet.sealSnapshot);
+  return buildPayslipFromRecords(tx, args, book, sheet);
+}
+
+/**
+ * PAY-67: the payslip data from the current records, for the snapshot taken
+ * while the run is being sealed (and for payslips sealed before PAY-67).
+ */
+export async function buildPayslipFromRecords(
+  tx: TenantTx,
+  args: { tenantId: string; bookId: string; employeeId: string },
+  book: PayslipPdfSource["book"] & { periodEnd: Date },
+  sheet: PayslipPdfSource["sheet"] & { periodInputSnapshot: unknown },
+): Promise<PayslipPdfData> {
 
   const [emp, tenant, extras] = await Promise.all([
     tx.employee.findFirst({

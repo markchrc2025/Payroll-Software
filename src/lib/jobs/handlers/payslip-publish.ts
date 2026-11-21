@@ -22,11 +22,14 @@ import { r2, R2_BUCKET, isR2Configured } from "@/lib/r2";
 import { sendPayslipReadyEmail } from "@/lib/email";
 import { invalidate } from "@/lib/cache/cache";
 import { CacheKeys } from "@/lib/cache/keys";
+import { recordJobWrite, systemPrincipal } from "@/lib/jobs/principal";
 
 export interface PayslipPublishJobData {
   tenantId: string;
   bookId: string;
   sheetId: string;
+  /** PAY-205: the user whose request queued it (the one who finalized). */
+  enqueuedByUserId?: string | null;
 }
 
 export async function handlePayslipPublish(job: { data: PayslipPublishJobData }): Promise<void> {
@@ -90,6 +93,7 @@ export async function handlePayslipPublish(job: { data: PayslipPublishJobData })
       where: { id: sheetId },
       data: { payslipKey: key },
     });
+    await recordJobWrite(systemPrincipal("payslip.publish", job.data.enqueuedByUserId), { tenantId, entity: "PayrollSheet", entityId: sheetId, summary: { after: { payslipKey: key } } });
 
     // Invalidate finalized-sheet cache
     await invalidate(CacheKeys.payrollSheet(tenantId, bookId, sheet.employeeId));
