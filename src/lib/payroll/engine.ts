@@ -331,6 +331,22 @@ function computeBasePay(input: ComputeInput, rates: SalaryRates): bigint {
   return clampNonNegative(contracted - unpaid);
 }
 
+/**
+ * PAY-206 (Mark, 21 Nov 2026 22:25): a monthly-paid employee's contracted base
+ * already pays the regular holiday (100%). Working it pays 200% in all, so the
+ * hours worked on it add the multiplier less that 100%; hours past 8 (the
+ * holiday OT row) are not in the base and keep their full rate. True when the
+ * base for this run is the contract (or the days employed under PAY-141), the
+ * same test computeBasePay uses.
+ */
+function regularHolidayInBase(input: ComputeInput): boolean {
+  if ((input.runType ?? "REGULAR") !== "REGULAR") return false;
+  const { salary, employee, period } = input;
+  if (contractedPeriodCents({ basicSalaryCents: salary.basicSalaryCents, salaryType: salary.salaryType, cycle: period.cycle, periodEnd: period.end }) === null) return false;
+  return employedWholePeriod({ hireDate: employee.hireDate, separationDate: employee.separationDate, periodStart: period.start, periodEnd: period.end })
+    || input.employedPeriodDays != null;
+}
+
 // ---------------------------------------------------------------------------
 // MWE check
 // ---------------------------------------------------------------------------
@@ -1150,8 +1166,13 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayHours                ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY) +
     timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayOtHours              ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY_OT);
 
+  // PAY-206: worked regular-holiday hours of a monthly-paid employee add 100%
+  // on top of the base that already pays the day (200% in all).
+  const regularHolidayWorkedRate = regularHolidayInBase(input)
+    ? Math.max(0, m.REGULAR_HOLIDAY - m.NO_WORK_REGULAR_HOLIDAY)
+    : m.REGULAR_HOLIDAY;
   const regularHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * m.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * regularHolidayWorkedRate) +
     timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours                     ?? 0) * m.REGULAR_HOLIDAY_OT) +
     timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayHours                ?? 0) * m.REGULAR_HOLIDAY_REST_DAY) +
     timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayOtHours              ?? 0) * m.REGULAR_HOLIDAY_REST_DAY_OT) +
