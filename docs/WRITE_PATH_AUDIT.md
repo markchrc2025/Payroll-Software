@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 217 |
+| USER_SESSION | 219 |
 | ESS_SESSION | 30 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 302 |
+| Total | 304 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -235,6 +235,8 @@ None.
 | POST | /api/holidays | USER_SESSION | requirePermission | yes |
 | POST | /api/incidents/[id]/resolve | USER_SESSION | requirePermission | yes |
 | PATCH | /api/incidents/[id] | USER_SESSION | requirePermission | yes |
+| DELETE | /api/incidents/causeless/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/incidents/causeless | USER_SESSION | getAuthContext | yes |
 | POST | /api/incidents | USER_SESSION | requirePermission | yes |
 | PATCH | /api/job-levels/[id] | USER_SESSION | requirePermission | yes |
 | DELETE | /api/job-levels/[id] | USER_SESSION | requirePermission | yes |

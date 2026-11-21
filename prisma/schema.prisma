@@ -754,6 +754,7 @@ model Tenant {
   discussionComments      DiscussionComment[]
   sharedDocuments         SharedDocument[]
   salaryAdjustmentBatches SalaryAdjustmentBatch[]
+  causelessNotes          CauselessNote[]
   documentRequests        DocumentRequest[]
 
   @@index([deletedAt])
@@ -1430,6 +1431,7 @@ model Employee {
 
   documentRequests      DocumentRequest[]
   salaryAdjustmentLines SalaryAdjustmentLine[]
+  causelessNotes        CauselessNote[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
@@ -4555,5 +4557,30 @@ model SalaryAdjustmentLine {
   employee Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([batchId, employeeId])
+  @@index([employeeId])
+}
+
+/// PAY-217 Causeless (Mark, 21 Nov 2026 22:25): a note on an employee with an
+/// optional attachment; no cause, no decision, no sanction, nothing for payroll.
+model CauselessNote {
+  id              String    @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  noteDate        DateTime
+  note            String
+  fileName        String?
+  mimeType        String?
+  fileSize        Int?
+  /// Object storage key when storage is configured, else the bytes in `data` (at most 10 MB).
+  storageKey      String?
+  data            Bytes?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, noteDate])
   @@index([employeeId])
 }
