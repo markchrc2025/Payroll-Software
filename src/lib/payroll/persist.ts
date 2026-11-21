@@ -64,6 +64,7 @@ import { getActiveRule } from "@/lib/statutory/resolver";
 import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { getOrSet } from "@/lib/cache/cache";
 import { CacheKeys, TTL } from "@/lib/cache/keys";
+import { DE_MINIMIS_LEAVE_DAYS } from "@/lib/leave/year-end";
 import { annualizeInTx, isLastRegularOfYear, staleAnnualizations } from "./annualize";
 import { runCrossFoot, type CrossFootCheck, type RegisterTotals } from "./reports/cross-foot";
 
@@ -1307,7 +1308,23 @@ async function computeFinalPayInputsForEmployee(
     },
     include: { leaveType: true },
   });
+  // Decision 8 (Mark, 21 Nov 2026): vacation leave (a leave type whose earning
+  // policy is marked vacation leave this year) converted to cash is de
+  // minimis up to 10 days a year, less days already converted this year.
+  const vacationTypeIds = new Set(
+    (await tx.leaveEntitlement.findMany({
+      where: {
+        tenantId, employeeId: employee.id, deletedAt: null, policy: { vacationLeave: true },
+        startDate: { lte: new Date(Date.UTC(year, 11, 31)) },
+        OR: [{ endDate: null }, { endDate: { gte: new Date(Date.UTC(year, 0, 1)) } }],
+      },
+      select: { leaveTypeId: true },
+    })).map((e) => e.leaveTypeId),
+  );
+  let deMinimisDaysLeft = DE_MINIMIS_LEAVE_DAYS;
+  for (const lb of leaveBalances) if (vacationTypeIds.has(lb.leaveTypeId)) deMinimisDaysLeft -= Number(lb.convertedToCash);
   let leaveCashOutCents = 0n;
+  let leaveCashOutDeMinimisCents = 0n;
   for (const lb of leaveBalances) {
     const available =
       Number(lb.openingBalance) +
@@ -1317,7 +1334,13 @@ async function computeFinalPayInputsForEmployee(
       Number(lb.convertedToCash);
     if (available > 0) {
       // HALF-UP BigInt arithmetic — never multiply money through JS floats.
-      leaveCashOutCents += multiply(dailyRateCents, available);
+      const cash = multiply(dailyRateCents, available);
+      leaveCashOutCents += cash;
+      if (vacationTypeIds.has(lb.leaveTypeId) && deMinimisDaysLeft > 0) {
+        const dmDays = Math.min(available, deMinimisDaysLeft);
+        deMinimisDaysLeft -= dmDays;
+        leaveCashOutDeMinimisCents += dmDays === available ? cash : multiply(dailyRateCents, dmDays);
+      }
     }
   }
 
@@ -1348,6 +1371,7 @@ async function computeFinalPayInputsForEmployee(
   return {
     proratedThirteenthMonthCents,
     leaveCashOutCents,
+    leaveCashOutDeMinimisCents,
     separationPayCents,
     isSeparationPayTaxable,
     cyPriorTaxableIncomeCents,
@@ -1397,6 +1421,7 @@ export async function createDraftRun(input: CreateDraftRunInput) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        finalPayTaxMethod: true, // ruling 21 Nov 2026
         strictDtrPolicy: true, // PAY-172
       },
     });
@@ -1609,6 +1634,7 @@ export async function recomputeRun(tenantId: string, bookId: string) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        finalPayTaxMethod: true, // ruling 21 Nov 2026
         strictDtrPolicy: true, // PAY-172
       },
     });
@@ -2084,6 +2110,7 @@ export async function processRun(tenantId: string, bookId: string) {
         thirteenthMonthBasis: true,
         allowNegativeFinalPay: true,
         maxDeductionPctOfGross: true,
+        finalPayTaxMethod: true, // ruling 21 Nov 2026
         strictDtrPolicy: true, // PAY-172
       },
     });

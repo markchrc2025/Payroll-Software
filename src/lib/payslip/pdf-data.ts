@@ -329,6 +329,14 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
           { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: sheet.withholdingTaxCents - trueUp },
           { label: trueUp < 0n ? "Tax refund (year-end adjustment)" : "Withholding tax adjustment (year-end)", amount: trueUp },
         ]
+      : fp?.taxMethod === "REFUND_AND_WITHHOLD_FINAL" && BigInt(fp.refundedPriorTaxCents ?? "0") > 0n
+      ? [
+          // Mark's ruling (21 Nov 2026): the final pay is taxed by itself and the
+          // tax withheld earlier in the year is returned, as on his reference
+          // payslip ("Withholding Tax Adjustments").
+          { label: "Withholding tax", rate: `Taxable ${peso(sheet.grossTaxableIncomeCents)}`, amount: BigInt(fp.finalPayTaxCents ?? "0") },
+          { label: "Withholding tax adjustment (tax withheld earlier this year, returned)", amount: -BigInt(fp.refundedPriorTaxCents ?? "0") },
+        ]
       : [
           // PAY-156: a negative withholding is the year-end adjustment refunding tax
           // withheld above the year's tax due (final pay); it lowers the deductions.

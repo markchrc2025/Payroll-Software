@@ -642,6 +642,8 @@ model Tenant {
   /// against a separating employee's last pay may legitimately make it
   /// negative. Set false to also floor FINAL_PAY. Default true.
   allowNegativeFinalPay      Boolean                 @default(true)
+  /// How final pay settles the year's withholding tax (Mark, 21 Nov 2026).
+  finalPayTaxMethod          FinalPayTaxMethod       @default(REFUND_AND_WITHHOLD_FINAL)
   /// PAY-172 (Mark, 19 Nov 2026): strict DTR policy. On: an employee who needs a
   /// time clock and whose DTR for the run's cutoff is not fully approved is held
   /// out of the run (no pay until it is approved; DTR approval is one cutoff,
@@ -4583,4 +4585,12 @@ model CauselessNote {
 
   @@index([tenantId, noteDate])
   @@index([employeeId])
+}
+
+/// Final pay withholding (Mark, 21 Nov 2026 22:25). REFUND_AND_WITHHOLD_FINAL:
+/// the year's earlier withholding is returned and the final pay is taxed by
+/// itself on the MONTHLY table. ANNUALIZE: RR 2-98 annualization at separation.
+enum FinalPayTaxMethod {
+  REFUND_AND_WITHHOLD_FINAL
+  ANNUALIZE
 }
