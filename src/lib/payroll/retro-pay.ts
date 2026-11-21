@@ -39,6 +39,12 @@ export const retroPaySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   items: z.array(z.enum(RETRO_ITEMS)).min(1).default(["BASIC", "OVERTIME", "NIGHT_DIFF", "HOLIDAY", "REST_DAY", "LATES"]),
   reason: z.string().trim().min(5).max(2000),
+  /**
+   * PAY-217 G1: a payslip whose period starts before `from` is re-priced only
+   * for its calendar days from `from` on (the rest was due at the old rate).
+   * Off by default, so PAY-166 batches keep re-pricing whole payslips.
+   */
+  prorateFrom: z.boolean().default(false),
 });
 export type RetroPayInput = z.infer<typeof retroPaySchema>;
 
@@ -48,6 +54,15 @@ export function retroDifference(paidCents: bigint, oldRateCents: bigint, newRate
   const num = paidCents * newRateCents;
   const repriced = (num * 2n + oldRateCents) / (2n * oldRateCents);
   return repriced - paidCents;
+}
+
+const DAY = 86_400_000;
+/** diff x part / whole, rounded half-up (sign kept). */
+function scale(diff: bigint, part: bigint, whole: bigint): bigint {
+  if (whole <= 0n || part >= whole) return diff;
+  const neg = diff < 0n; const a = neg ? -diff : diff;
+  const r = (a * part * 2n + whole) / (2n * whole);
+  return neg ? -r : r;
 }
 
 export interface RetroPayslip {
@@ -77,8 +92,11 @@ export async function previewRetroPay(tx: Tx, tenantId: string, input: RetroPayI
       const oldRate = s.basicSalaryCentsSnapshot;
       if (newRate <= oldRate) continue;
       const lines: CorrectionLine[] = [];
+      const ps = s.payrollBook.periodStart.getTime(), pe = s.payrollBook.periodEnd.getTime();
+      const whole = BigInt(Math.round((pe - ps) / DAY) + 1);
+      const part = input.prorateFrom && from.getTime() > ps ? BigInt(Math.round((pe - from.getTime()) / DAY) + 1) : whole;
       for (const item of input.items) {
-        const diff = retroDifference(s[COLUMN[item]], oldRate, newRate);
+        const diff = scale(retroDifference(s[COLUMN[item]], oldRate, newRate), part, whole);
         if (diff === 0n) continue;
         lines.push({
           item: item as CorrectionItem,

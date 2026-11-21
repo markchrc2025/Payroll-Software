@@ -732,28 +732,29 @@ model Tenant {
   invoices     Invoice[]
   payments     Payment[]
 
-  jobPostings            JobPosting[]
-  applicants             Applicant[]
-  applicantNotes         ApplicantNote[]
-  holidays               Holiday[]
-  premiumRateConfigs     PremiumRateConfig[]
-  announcements          Announcement[]
-  supportTickets         SupportTicket[]
-  subscriptionEvents     SubscriptionEvent[]
-  centralAuditEvents     CentralAuditEvent[]
-  documentSeries         DocumentSeries[]
-  payrollCorrections     PayrollCorrection[]
-  clearanceTemplateItems ClearanceTemplateItem[]
-  offboardingCases       OffboardingCase[]
-  clearanceItems         ClearanceItem[]
-  lookupItems            LookupItem[]
-  documentTemplates      DocumentTemplate[]
-  leaveEarningPolicies   LeaveEarningPolicy[]
-  leaveSchedules         LeaveSchedule[]
-  discussionThreads      DiscussionThread[]
-  discussionComments     DiscussionComment[]
-  sharedDocuments        SharedDocument[]
-  documentRequests       DocumentRequest[]
+  jobPostings             JobPosting[]
+  applicants              Applicant[]
+  applicantNotes          ApplicantNote[]
+  holidays                Holiday[]
+  premiumRateConfigs      PremiumRateConfig[]
+  announcements           Announcement[]
+  supportTickets          SupportTicket[]
+  subscriptionEvents      SubscriptionEvent[]
+  centralAuditEvents      CentralAuditEvent[]
+  documentSeries          DocumentSeries[]
+  payrollCorrections      PayrollCorrection[]
+  clearanceTemplateItems  ClearanceTemplateItem[]
+  offboardingCases        OffboardingCase[]
+  clearanceItems          ClearanceItem[]
+  lookupItems             LookupItem[]
+  documentTemplates       DocumentTemplate[]
+  leaveEarningPolicies    LeaveEarningPolicy[]
+  leaveSchedules          LeaveSchedule[]
+  discussionThreads       DiscussionThread[]
+  discussionComments      DiscussionComment[]
+  sharedDocuments         SharedDocument[]
+  salaryAdjustmentBatches SalaryAdjustmentBatch[]
+  documentRequests        DocumentRequest[]
 
   @@index([deletedAt])
 }
@@ -993,7 +994,7 @@ model Department {
   headId      String?
 
   /// Wave E3 (PAY-215): the Leave Planner warns when more are off on a day.
-  maxOnLeave  Int?
+  maxOnLeave Int?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1122,10 +1123,10 @@ model JobType {
   description String?
   deletedAt   DateTime?
   /// Wave F1 (PAY-216): employees of this job type work in the field.
-  fieldWork Boolean @default(false)
+  fieldWork   Boolean   @default(false)
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant          Tenant             @relation(fields: [tenantId], references: [id])
   employees       Employee[]
@@ -1271,26 +1272,26 @@ model Employee {
   bankAccountName   String?
 
   // Extended personal fields
-  nationalId         String?
-  passportNumber     String?
-  ethnicity          String?
-  religion           String?
+  nationalId                   String?
+  passportNumber               String?
+  ethnicity                    String?
+  religion                     String?
   /// Wave A1 (PAY-208): when HR noted the employee's consent to record ethnicity and religion.
   sensitiveDataConsentAt       DateTime?
   sensitiveDataConsentByUserId String?
-  allowProfileUpdate Boolean @default(false)
-  needsTimeClock     Boolean @default(true)
+  allowProfileUpdate           Boolean   @default(false)
+  needsTimeClock               Boolean   @default(true)
   /// Skip geofence enforcement for this employee's punches (e.g. field staff,
   /// or employees whose time clock is off). When true, punches are never
   /// flagged outsideGeofence.
-  geofenceExempt     Boolean @default(false)
+  geofenceExempt               Boolean   @default(false)
   /// Wave F1 (PAY-216): works in the field; punches are checked against every
   /// fence that applies (also set per job type).
-  fieldWork          Boolean @default(false)
+  fieldWork                    Boolean   @default(false)
   /// Employee receives full pay for every scheduled workday without needing
   /// time-clock punches or DTR records (e.g. executives, C-level). Leaves and
   /// public holidays still apply. Only HR/Payroll Admin may enable this.
-  attendanceExempt   Boolean @default(false)
+  attendanceExempt             Boolean   @default(false)
 
   // Extended employment fields
   placementEffectiveDate DateTime?
@@ -1427,7 +1428,9 @@ model Employee {
   payrollCorrections    PayrollCorrection[]
   offboardingCases      OffboardingCase[]
 
-  documentRequests DocumentRequest[]
+  documentRequests      DocumentRequest[]
+  salaryAdjustmentLines SalaryAdjustmentLine[]
+
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
   @@index([tenantId])
@@ -1500,8 +1503,8 @@ model EmployeeDocument {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  employee     Employee    @relation(fields: [employeeId], references: [id])
   categoryItem LookupItem? @relation("DocumentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
@@ -1613,8 +1616,8 @@ model EmployeeTraining {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id])
   courseItem  LookupItem? @relation("TrainingCourseItem", fields: [courseId], references: [id], onDelete: SetNull)
   trainerItem LookupItem? @relation("TrainingTrainerItem", fields: [trainerId], references: [id], onDelete: SetNull)
 
@@ -1818,21 +1821,21 @@ model IncidentReport {
 
   attachmentUrls Json @default("[]")
 
-  resolution       String?
-  resolvedAt       DateTime?
-  resolvedByUserId String?
+  resolution             String?
+  resolvedAt             DateTime?
+  resolvedByUserId       String?
   /// Wave A3: the decision (Incident Decisions item) and its outcome, copied at resolution.
   decisionId             String?
   decisionSuspensionDays Int?
-  decisionIsDismissal    Boolean @default(false)
+  decisionIsDismissal    Boolean   @default(false)
 
   createdByUserId String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  employee     Employee    @relation(fields: [employeeId], references: [id])
   typeItem     LookupItem? @relation("IncidentTypeItem", fields: [typeId], references: [id], onDelete: SetNull)
   categoryItem LookupItem? @relation("IncidentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
   decisionItem LookupItem? @relation("IncidentDecisionItem", fields: [decisionId], references: [id], onDelete: SetNull)
@@ -1984,10 +1987,10 @@ model LeaveType {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant       Tenant             @relation(fields: [tenantId], references: [id])
-  balances     LeaveBalance[]
-  transactions LeaveTransaction[]
-  entitlements LeaveEntitlement[]
+  tenant          Tenant               @relation(fields: [tenantId], references: [id])
+  balances        LeaveBalance[]
+  transactions    LeaveTransaction[]
+  entitlements    LeaveEntitlement[]
   earningPolicies LeaveEarningPolicy[]
 
   @@unique([tenantId, code])
@@ -3288,11 +3291,11 @@ model ExpenseClaim {
   /// The date the expense was incurred (UTC midnight).
   claimDate   DateTime
 
-  status       ExpenseClaimStatus   @default(DRAFT)
+  status             ExpenseClaimStatus   @default(DRAFT)
   /// Set by Finance/HR during APPROVAL. Drives engine treatment.
-  taxTreatment ExpenseTaxTreatment?
+  taxTreatment       ExpenseTaxTreatment?
   /// Wave A2: why the approver chose a treatment other than the type's.
-  taxTreatmentReason String? @db.Text
+  taxTreatmentReason String?              @db.Text
 
   approvedById    String?
   approvedAt      DateTime?
@@ -3306,13 +3309,13 @@ model ExpenseClaim {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  employee    Employee     @relation(fields: [employeeId], references: [id])
-  approvedBy  User?        @relation("ExpenseClaimApprover", fields: [approvedById], references: [id])
-  payrollBook PayrollBook? @relation("BookExpenseClaims", fields: [payrollBookId], references: [id])
-  paidInBook  PayrollBook? @relation("BookPaidExpenseClaims", fields: [paidInBookId], references: [id])
-  categoryItem LookupItem? @relation("ExpenseClaimCategory", fields: [categoryId], references: [id], onDelete: SetNull)
-  typeItem     LookupItem? @relation("ExpenseClaimType", fields: [typeId], references: [id], onDelete: SetNull)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  approvedBy   User?        @relation("ExpenseClaimApprover", fields: [approvedById], references: [id])
+  payrollBook  PayrollBook? @relation("BookExpenseClaims", fields: [payrollBookId], references: [id])
+  paidInBook   PayrollBook? @relation("BookPaidExpenseClaims", fields: [paidInBookId], references: [id])
+  categoryItem LookupItem?  @relation("ExpenseClaimCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  typeItem     LookupItem?  @relation("ExpenseClaimType", fields: [typeId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, employeeId])
@@ -4244,13 +4247,13 @@ model LookupItem {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employeesWithBank Employee[] @relation("EmployeeBank")
-  expenseClaimsByCategory ExpenseClaim[] @relation("ExpenseClaimCategory")
-  expenseClaimsByType     ExpenseClaim[] @relation("ExpenseClaimType")
-  incidentsByType         IncidentReport[] @relation("IncidentTypeItem")
-  incidentsByCategory     IncidentReport[] @relation("IncidentCategoryItem")
-  incidentsByDecision     IncidentReport[] @relation("IncidentDecisionItem")
+  tenant                  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeesWithBank       Employee[]         @relation("EmployeeBank")
+  expenseClaimsByCategory ExpenseClaim[]     @relation("ExpenseClaimCategory")
+  expenseClaimsByType     ExpenseClaim[]     @relation("ExpenseClaimType")
+  incidentsByType         IncidentReport[]   @relation("IncidentTypeItem")
+  incidentsByCategory     IncidentReport[]   @relation("IncidentCategoryItem")
+  incidentsByDecision     IncidentReport[]   @relation("IncidentDecisionItem")
   documentsByCategory     EmployeeDocument[] @relation("DocumentCategoryItem")
   trainingsByCourse       EmployeeTraining[] @relation("TrainingCourseItem")
   trainingsByTrainer      EmployeeTraining[] @relation("TrainingTrainerItem")
@@ -4323,33 +4326,33 @@ model DocumentRequest {
 /// employees; applying it writes their LeaveEntitlement rows
 /// (src/lib/leave/earning-policy.ts).
 model LeaveEarningPolicy {
-  id                 String           @id @default(cuid())
-  tenantId           String
-  name               String
-  leaveTypeId        String
-  accrualFrequency   AccrualFrequency
-  accrualAmount      Decimal          @db.Decimal(6, 4)
+  id                  String           @id @default(cuid())
+  tenantId            String
+  name                String
+  leaveTypeId         String
+  accrualFrequency    AccrualFrequency
+  accrualAmount       Decimal          @db.Decimal(6, 4)
   /// [{ fromYear, accrualAmount }]: the amount from that service anniversary on.
-  tiers              Json             @default("[]")
-  proRate            Boolean          @default(true)
+  tiers               Json             @default("[]")
+  proRate             Boolean          @default(true)
   /// HIRE or REGULARIZATION: when the employee starts earning.
-  earnFrom           String           @default("HIRE")
+  earnFrom            String           @default("HIRE")
   /// Year end (Wave E2): days carried into the next year at most.
-  carryOverCap       Decimal?         @db.Decimal(6, 4)
+  carryOverCap        Decimal?         @db.Decimal(6, 4)
   /// Year end (Wave E2): months after the year end that carried days expire.
-  expiresAfterMonths Int?
+  expiresAfterMonths  Int?
   /// Year end (Wave E2): unused days, after carry-over, paid in cash.
-  convertUnusedToCash Boolean         @default(false)
+  convertUnusedToCash Boolean          @default(false)
   /// Wave E2, decision 8: vacation leave, so up to 10 converted days a year are de minimis.
-  vacationLeave      Boolean          @default(false)
+  vacationLeave       Boolean          @default(false)
   /// { employmentStatuses, levelIds, departmentIds, jobTypeIds }; an empty list means any.
-  assignment         Json             @default("{}")
-  effectiveFrom      DateTime
-  isActive           Boolean          @default(true)
-  lastAppliedAt      DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  deletedAt          DateTime?
+  assignment          Json             @default("{}")
+  effectiveFrom       DateTime
+  isActive            Boolean          @default(true)
+  lastAppliedAt       DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
 
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   leaveType    LeaveType          @relation(fields: [leaveTypeId], references: [id])
@@ -4436,17 +4439,17 @@ model DiscussionComment {
 /// A file HR shares with an audience (handbook, policies, forms), versioned;
 /// each version may need an "I have read and understood" acknowledgement.
 model SharedDocument {
-  id             String    @id @default(cuid())
-  tenantId       String
-  title          String
-  description    String?
-  audience       Json      @default("{}")
-  requiresAck    Boolean   @default(false)
-  currentVersion Int       @default(1)
+  id              String    @id @default(cuid())
+  tenantId        String
+  title           String
+  description     String?
+  audience        Json      @default("{}")
+  requiresAck     Boolean   @default(false)
+  currentVersion  Int       @default(1)
   createdByUserId String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   tenant   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   versions SharedDocumentVersion[]
@@ -4456,19 +4459,19 @@ model SharedDocument {
 }
 
 model SharedDocumentVersion {
-  id          String   @id @default(cuid())
-  tenantId    String
-  documentId  String
-  version     Int
-  fileName    String
-  mimeType    String
-  fileSize    Int
+  id               String   @id @default(cuid())
+  tenantId         String
+  documentId       String
+  version          Int
+  fileName         String
+  mimeType         String
+  fileSize         Int
   /// Object storage key; null when the file is kept in the database (no storage configured).
-  storageKey  String?
-  data        Bytes?
-  note        String?
+  storageKey       String?
+  data             Bytes?
+  note             String?
   uploadedByUserId String?
-  createdAt   DateTime @default(now())
+  createdAt        DateTime @default(now())
 
   document SharedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -4486,4 +4489,62 @@ model SharedDocumentAck {
   document SharedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, version, employeeId])
+}
+
+// =============================================================================
+// SALARY ADJUSTMENT (Wave G1, PAY-217): a bulk change of basic salary
+// (percent, fixed amount, or bring to the regional minimum wage), approved by
+// a second person; each line becomes one SALARY_ADJUSTMENT movement.
+// =============================================================================
+
+enum SalaryAdjustmentRule {
+  PERCENT
+  FIXED
+  MIN_WAGE
+}
+
+model SalaryAdjustmentBatch {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  name               String
+  rule               SalaryAdjustmentRule
+  /// PERCENT: hundredths of a percent (525 = 5.25%).
+  percentBasisPoints Int?
+  /// FIXED: centavos added in the salary's own unit (per month or per day).
+  fixedCents         BigInt?
+  effectiveDate      DateTime
+  reason             String
+  status             ApprovalStatus       @default(PENDING)
+  createdByUserId    String?
+  approvedByUserId   String?
+  approvedAt         DateTime?
+  rejectionReason    String?
+  /// PAY-166 retroactive batch made at approval for finalized payslips on or after the effective date.
+  retroBatchId       String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  tenant Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  SalaryAdjustmentLine[]
+
+  @@index([tenantId, createdAt])
+}
+
+model SalaryAdjustmentLine {
+  id                String     @id @default(cuid())
+  tenantId          String
+  batchId           String
+  employeeId        String
+  salaryType        SalaryType
+  fromCents         BigInt
+  toCents           BigInt
+  movementId        String?
+  /// The adjustment that takes back the days before the effective date in the run that straddles it.
+  splitAdjustmentId String?
+
+  batch    SalaryAdjustmentBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  employee Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, employeeId])
+  @@index([employeeId])
 }
