@@ -749,6 +749,7 @@ model Tenant {
   lookupItems            LookupItem[]
   documentTemplates      DocumentTemplate[]
   leaveEarningPolicies   LeaveEarningPolicy[]
+  leaveSchedules         LeaveSchedule[]
   documentRequests       DocumentRequest[]
 
   @@index([deletedAt])
@@ -987,6 +988,9 @@ model Department {
   name        String
   description String?
   headId      String?
+
+  /// Wave E3 (PAY-215): the Leave Planner warns when more are off on a day.
+  maxOnLeave  Int?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -4341,4 +4345,30 @@ model LeaveEarningPolicy {
   entitlements LeaveEntitlement[]
 
   @@index([tenantId])
+}
+
+/// Wave E3 (PAY-215, decision 9): company shutdowns (leave filed for a group)
+/// and blackout dates (src/lib/leave/schedule.ts).
+model LeaveSchedule {
+  id            String    @id @default(cuid())
+  tenantId      String
+  /// SHUTDOWN or BLACKOUT
+  kind          String
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  /// Departments it covers; empty: everyone.
+  departmentIds Json      @default("[]")
+  /// SHUTDOWN: the leave type charged (an unpaid type for unpaid days).
+  leaveTypeId   String?
+  /// BLACKOUT: BLOCK refuses requests; FLAG lets them through for the approver to see.
+  blackoutMode  String?
+  appliedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, kind])
 }

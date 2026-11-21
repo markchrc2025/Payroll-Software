@@ -14,6 +14,8 @@ const patchSchema = z.object({
   name: z.string().min(1).max(150).optional(),
   description: z.string().max(500).nullable().optional(),
   headId: z.string().nullable().optional(),
+  // Wave E3 (PAY-215): the Leave Planner warns when more than this are off on a day.
+  maxOnLeave: z.number().int().min(0).max(10000).nullable().optional(),
 });
 
 export async function GET(

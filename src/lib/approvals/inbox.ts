@@ -141,6 +141,8 @@ export async function listInbox(tx: TenantTx, auth: AuthContext, module: InboxMo
       })
     : [];
 
+  // Wave E3 (PAY-215): blackout periods set to flag.
+  const blackouts = await tx.leaveSchedule.findMany({ where: { tenantId, kind: "BLACKOUT", deletedAt: null, endDate: { gte: minStart }, startDate: { lte: maxEnd } } });
   return mine.map((p) => {
     const start = p.startDate ?? p.createdAt, end = p.endDate ?? start;
     const year = start.getUTCFullYear();
@@ -155,6 +157,8 @@ export async function listInbox(tx: TenantTx, auth: AuthContext, module: InboxMo
     if (Number(p.paidUnits) > 0 && after < 0) exceptions.push(`Balance would be ${after.toFixed(2)} after the pending requests`);
     if (Number(p.unpaidUnits) > 0) exceptions.push(`${Number(p.unpaidUnits)} unpaid ${p.leaveType.unit === "HOURS" ? "hour(s)" : "day(s)"}`);
     if (coverage.length) exceptions.push(`${coverage.length} other${coverage.length === 1 ? "" : "s"} in the department off on these dates`);
+    const blackout = blackouts.find((b) => b.startDate <= end && b.endDate >= start && (!(b.departmentIds as string[]).length || (!!p.employee.departmentId && (b.departmentIds as string[]).includes(p.employee.departmentId))));
+    if (blackout) exceptions.push(`Falls in the blackout period ${blackout.name}`);
     const step = due.get(p.id);
     return {
       module, id: p.id, stepId: step && me && step.approverEmployeeId === me ? step.id : null,

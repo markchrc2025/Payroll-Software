@@ -137,8 +137,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/leave", label: "Leave", icon: "leave" },
       { href: "/settings/leave-policies", label: "Leave Policies", icon: "policies" },
-      { href: "#soon-leave-planner", label: "Planner", icon: "leave", comingSoon: true },
-      { href: "#soon-leave-schedule", label: "Schedule", icon: "time", comingSoon: true },
+      { href: "/leave/planner", label: "Planner", icon: "leave" },
+      { href: "/leave/schedule", label: "Schedule", icon: "time" },
       { href: "/leave/review", label: "Review", icon: "requests" },
       { href: "/reports/hr/leave-transactions", label: "Transaction Report", icon: "govreports" },
       { href: "/reports/hr/leave-entitlement", label: "Entitlement Report", icon: "govreports" },

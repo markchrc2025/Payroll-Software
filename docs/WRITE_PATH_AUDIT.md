@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 204 |
+| USER_SESSION | 207 |
 | ESS_SESSION | 27 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 286 |
+| Total | 289 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -256,6 +256,9 @@ None.
 | PATCH | /api/leave-earning-policies/[id] | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/leave-earning-policies/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/leave-earning-policies | USER_SESSION | getAuthContext | yes |
+| POST | /api/leave-schedules/[id]/apply | USER_SESSION | getAuthContext | yes |
+| DELETE | /api/leave-schedules/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/leave-schedules | USER_SESSION | getAuthContext | yes |
 | POST | /api/leave-transactions/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/leave-transactions/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | POST | /api/leave-transactions/[id]/reject | USER_SESSION | getAuthContext | yes |
