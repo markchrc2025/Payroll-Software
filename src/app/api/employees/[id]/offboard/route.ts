@@ -19,6 +19,7 @@ import { requirePermission } from "@/lib/require-permission";
 import { err, notFound, ok, serverError } from "@/lib/api-response";
 import { createDraftRun } from "@/lib/payroll/persist";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
+import { openCase } from "@/lib/offboarding/clearance";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -127,13 +128,18 @@ export async function POST(
         },
       });
 
-      return { employee: updated };
+      // PAY-197: every separation opens an offboarding case with the company's clearance checklist.
+      const offboardingCase = await openCase(tx, ctx.tenantId, {
+        employeeId: id, separationReason, lastWorkingDay, createdByUserId: ctx.userId ?? null, notes: notes ?? null,
+      });
+
+      return { employee: updated, offboardingCaseId: offboardingCase.id };
     });
 
     if ("notFound" in result) return notFound("Employee");
     if ("error" in result) return err(result.error as string, 409);
 
-    const { employee } = result;
+    const { employee, offboardingCaseId } = result;
 
     // ── Optional: create FINAL_PAY payroll run ──────────────────────────────
     let payrollBookId: string | undefined;
@@ -171,7 +177,7 @@ export async function POST(
     });
 
     return ok(
-      { employee, payrollBookId: payrollBookId ?? null },
+      { employee, payrollBookId: payrollBookId ?? null, offboardingCaseId },
       "Employee offboarded successfully",
     );
   } catch (e) {
