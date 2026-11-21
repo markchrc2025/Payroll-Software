@@ -151,15 +151,12 @@ const NATIONS = [
   "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe",
   "Other",
 ];
-const ETHNICITIES = ["Tagalog","Cebuano","Ilocano","Bicolano","Waray","Other"];
-const RELIGIONS   = ["Roman Catholic","Iglesia ni Cristo","Islam","Protestant","Born Again","Other"];
 const SENSE       = ["Normal","Mild","Moderate","Severe"];
 const LIMB        = ["Normal","Limited","None"];
 const PRIVACY     = ["Not Accessible","Employee","Manager"];
 const BLOOD_TYPES = ["A+","A-","B+","B-","O+","O-","AB+","AB-"];
 const CURRENCIES  = ["PHP","USD","SGD"];
 const PAY_METHODS = ["Cash","Bank transfer","Check","GCash"];
-const BANKS       = ["BDO","BPI","UnionBank","Metrobank","GCash","Other"];
 const DIR_ROLES   = ["Guest","Employee","Manager","Admin"];
 
 const GENDER_OPT   = [{ value:"FEMALE",label:"Female"},{value:"MALE",label:"Male"},{value:"OTHER",label:"Other"}];
@@ -297,6 +294,22 @@ function TF({
       <FErr msg={msg} />
     </div>
   );
+}
+
+// Wave A1 (PAY-208): a value already on file stays pickable even when it is no
+// longer in the company's list.
+function withCurrent(opts: string[], current: unknown): string[] {
+  return typeof current === "string" && current && !opts.includes(current) ? [current, ...opts] : opts;
+}
+
+type ListItemRef = { id: string; name: string };
+async function fetchListItems(list: string): Promise<ListItemRef[]> {
+  try {
+    const r = await fetch(`/api/lookups/${list}`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j?.data?.items ?? []) as ListItemRef[];
+  } catch { return []; }
 }
 
 // Select field (string[] or {value,label}[] options)
@@ -547,6 +560,65 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
 
   const { control, formState: { errors, isSubmitting }, trigger, handleSubmit, reset, setValue } = form;
 
+  // Wave A1 (PAY-208): the bank from the company's Bank list; ethnicity and
+  // religion from its lists, shown only to roles with the sensitive-data
+  // permission and recorded only once the employee's consent is noted.
+  const [bankOpts, setBankOpts] = useState<{ value: string; label: string }[]>([]);
+  const [ethOpts, setEthOpts] = useState<string[]>([]);
+  const [relOpts, setRelOpts] = useState<string[]>([]);
+  const [access, setAccess] = useState({ read: false, write: false });
+  const [withdrawConsent, setWithdrawConsent] = useState(false);
+  const iv = (initialData ?? {}) as Record<string, unknown>;
+  const consentOnFile = !!iv.sensitiveDataConsentAt && !withdrawConsent;
+  useEffect(() => {
+    let live = true;
+    const accessP = fetch("/api/employees/sensitive-access")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j?.data ?? { read: false, write: false }) as { read: boolean; write: boolean })
+      .catch(() => ({ read: false, write: false }));
+    void Promise.all([fetchListItems("BANK"), fetchListItems("ETHNICITY"), fetchListItems("RELIGION"), accessP]).then(([b, e, r, a]) => {
+      if (!live) return;
+      setBankOpts(b.map((i) => ({ value: i.id, label: i.name })));
+      setEthOpts(e.map((i) => i.name));
+      setRelOpts(r.map((i) => i.name));
+      setAccess(a);
+    });
+    return () => { live = false; };
+  }, []);
+
+  function renderSensitive(eth: "ethnicity" | "spouseEthnicity", rel: "religion" | "spouseReligion", withConsent: boolean) {
+    if (access.write) {
+      return (
+        <>
+          <SF control={control} name={eth} label="Ethnicity" options={withCurrent(ethOpts, iv[eth])} errors={errors} />
+          <SF control={control} name={rel} label="Religion"  options={withCurrent(relOpts, iv[rel])} errors={errors} />
+          {withConsent && !ethOpts.length && !relOpts.length && (
+            <FNote lines={["Optional. Add the choices first in Settings, Lists, Ethnicity and Religion."]} />
+          )}
+          {withConsent && (consentOnFile ? (
+            <div className="col-span-2 flex items-center justify-between rounded-[9px] px-4 py-3 text-[12.5px]" style={{ background: "#F7F7F7", border: "1px solid #E8E8E8" }}>
+              <span style={{ color: "#525252" }}>Consent to record ethnicity and religion noted on {new Date(String(iv.sensitiveDataConsentAt)).toLocaleDateString("en-PH")}.</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => {
+                if (!window.confirm("Withdraw consent? Ethnicity and religion (the employee's and the spouse's) are cleared when you save.")) return;
+                setWithdrawConsent(true);
+                setValue("sensitiveDataConsent", false, { shouldDirty: true });
+                for (const f of ["ethnicity", "religion", "spouseEthnicity", "spouseReligion"] as const) setValue(f, null, { shouldDirty: true });
+              }}>Withdraw consent</Button>
+            </div>
+          ) : withdrawConsent ? (
+            <FNote lines={["Consent withdrawn: ethnicity and religion are cleared when you save."]} />
+          ) : (
+            <ToggleF control={control} name="sensitiveDataConsent" label="The employee gave written consent to record ethnicity and religion" span2 />
+          ))}
+        </>
+      );
+    }
+    if (access.read) {
+      return <FNote lines={[`Ethnicity: ${String(iv[eth] ?? "not recorded")}`, `Religion: ${String(iv[rel] ?? "not recorded")}`, "Only a role with the sensitive-data permission can change these."]} />;
+    }
+    return withConsent ? <FNote lines={["Ethnicity and religion are sensitive personal information: only a role with the sensitive-data permission sees or records them."]} /> : null;
+  }
+
 
   // Profile photo upload (R2, tenant-namespaced) — wired to the "Change photo" control.
   const photoRef = useRef<HTMLInputElement>(null);
@@ -627,6 +699,13 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
   }
 
   async function onSubmit(data: CreateEmployeeInput) {
+    // Wave A1 (PAY-208): send ethnicity and religion only when this role may
+    // record them, and withdraw consent only when HR pressed Withdraw.
+    if (!access.write) {
+      for (const f of ["ethnicity", "religion", "spouseEthnicity", "spouseReligion", "sensitiveDataConsent"] as const) delete (data as Record<string, unknown>)[f];
+    } else if (data.sensitiveDataConsent === false && !withdrawConsent) {
+      delete (data as Record<string, unknown>).sensitiveDataConsent;
+    }
     const res = await fetch(
       isEdit ? `/api/employees/${employeeId}` : "/api/employees",
       {
@@ -762,8 +841,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <SF control={c} name="nationality"   label="Nationality"  options={NATIONS}              span2 errors={e} />
             <TF control={c} name="nationalId"    label="National ID"  placeholder="0000-0000-0000"   errors={e} />
             <TF control={c} name="passportNumber" label="Passport"    placeholder="P0000000A"        errors={e} />
-            <SF control={c} name="ethnicity"     label="Ethnicity"    options={ETHNICITIES}          errors={e} />
-            <SF control={c} name="religion"      label="Religion"     options={RELIGIONS}            errors={e} />
+            {renderSensitive("ethnicity", "religion", true)}
             <ToggleF control={c} name="allowProfileUpdate" label="Allow employee to update profile" span2 />
           </FGrid>
         );
@@ -989,7 +1067,10 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             )}
             <SF control={c} name="currency"             label="Currency"          options={CURRENCIES}   placeholder="PHP"        errors={e} />
             <FSec label="Payment" />
-            <SF control={c} name="bankName"             label="Bank"              options={BANKS}       placeholder="Select…"       errors={e} />
+            <SF control={c} name="bankId"               label="Bank or e-wallet"  options={bankOpts}    placeholder="Select…"       errors={e} />
+            {!!iv.bankName && !iv.bankId && (
+              <FNote lines={[`On file: ${String(iv.bankName)}. Pick it from the list to link it to the company's Bank list.`]} />
+            )}
             <TF control={c} name="bankAccountNumber"    label="Bank Account"                            placeholder="0000 0000 0000" errors={e} />
             <TF control={c} name="bankAccountName"      label="Account Name"                            placeholder="JUAN DELA CRUZ" errors={e} />
             <SF control={c} name="payFrequency"         label="Pay Cycle"         options={PAY_FREQ_OPT} placeholder="Monthly"       errors={e} />
@@ -1012,8 +1093,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <SF control={c} name="spouseNationality" label="Nationality"   options={NATIONS}         span2  errors={e} />
             <TF control={c} name="spouseNationalId" label="National ID"    placeholder="0000-0000-0000"     errors={e} />
             <TF control={c} name="spousePassport"   label="Passport"       placeholder="P0000000A"          errors={e} />
-            <SF control={c} name="spouseEthnicity"  label="Ethnicity"      options={ETHNICITIES}            errors={e} />
-            <SF control={c} name="spouseReligion"   label="Religion"       options={RELIGIONS}              errors={e} />
+            {renderSensitive("spouseEthnicity", "spouseReligion", false)}
             <FSec label="Children" />
             <TF control={c} name="numberOfChildren" label="Number of Children" type="number" placeholder="0" span2 errors={e} />
           </FGrid>

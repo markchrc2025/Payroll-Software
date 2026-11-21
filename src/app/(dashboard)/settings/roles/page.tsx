@@ -66,7 +66,7 @@ const ACTION_LABEL: Record<string, string> = {
 const MODULE_ORDER = [
   "EMPLOYEES", "MOVEMENTS", "DEPARTMENTS", "BRANCHES", "DOCUMENTS",
   "TIMESHEETS", "LEAVES", "PAYROLL", "REPORTS", "COMPLIANCE",
-  "INCIDENTS", "SETTINGS", "ROLES", "AUDIT",
+  "INCIDENTS", "SETTINGS", "ROLES", "AUDIT", "SENSITIVE_DATA",
 ];
 const MODULE_LABEL: Record<string, string> = {
   EMPLOYEES: "Employees",
@@ -83,6 +83,7 @@ const MODULE_LABEL: Record<string, string> = {
   SETTINGS: "Settings",
   ROLES: "Roles & Access",
   AUDIT: "Audit Logs",
+  SENSITIVE_DATA: "Ethnicity & Religion (sensitive)",
 };
 
 export default function RolesPage() {

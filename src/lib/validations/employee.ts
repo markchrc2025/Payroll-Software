@@ -227,6 +227,8 @@ const employeeFieldsSchema = z.object({
   nontaxableBasicAmount: z.coerce.number().min(0).optional().default(0),
 
   // Bank details (stored encrypted)
+  // Wave A1 (PAY-208): the company's Bank list item; the server copies its name to bankName.
+  bankId: optionalId.optional(),
   bankName: z.string().max(100).optional().nullable(),
   bankAccountNumber: z
     .string()
@@ -244,6 +246,9 @@ const employeeFieldsSchema = z.object({
   passportNumber: z.string().max(50).optional().nullable(),
   ethnicity: z.string().max(100).optional().nullable(),
   religion: z.string().max(100).optional().nullable(),
+  // Wave A1 (PAY-208): true notes the employee's consent to record ethnicity
+  // and religion; false withdraws it and clears them (src/lib/employees/sensitive.ts).
+  sensitiveDataConsent: z.boolean().optional(),
   allowProfileUpdate: z.coerce.boolean().optional().default(false),
   needsTimeClock: z.coerce.boolean().optional().default(true),
   geofenceExempt: z.coerce.boolean().optional().default(false),
