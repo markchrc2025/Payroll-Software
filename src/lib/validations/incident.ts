@@ -6,20 +6,29 @@ import { IncidentType, IncidentStatus } from "@prisma/client";
 
 const cuid = z.string().min(1);
 
+// Wave A3 (PAY-210): typeId and categoryId are the company's list items
+// (src/lib/incidents/lists.ts); `type` alone still works for the built-in stages.
+const listPicks = {
+  typeId: cuid.optional(),
+  categoryId: cuid.nullable().optional(),
+};
+
 export const createIncidentSchema = z.object({
   employeeId: cuid,
-  type: z.nativeEnum(IncidentType),
+  type: z.nativeEnum(IncidentType).optional(),
+  ...listPicks,
   subject: z.string().min(1).max(300),
   description: z.string().min(1),
   incidentDate: z.coerce.date(),
   responseDeadline: z.coerce.date().optional().nullable(),
   attachmentUrls: z.array(z.string().url()).optional(),
-});
+}).refine((v) => v.type || v.typeId, { message: "Choose the incident type", path: ["typeId"] });
 
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 
 export const updateIncidentSchema = z.object({
   type: z.nativeEnum(IncidentType).optional(),
+  ...listPicks,
   subject: z.string().min(1).max(300).optional(),
   description: z.string().min(1).optional(),
   incidentDate: z.coerce.date().optional(),
@@ -33,6 +42,8 @@ export type UpdateIncidentInput = z.infer<typeof updateIncidentSchema>;
 
 export const resolveIncidentSchema = z.object({
   resolution: z.string().min(1).max(2000),
+  /** Wave A3: the Incident Decisions item; its outcome is copied onto the incident. */
+  decisionId: cuid.nullable().optional(),
   status: z.enum(["RESOLVED", "CLOSED"]).default("RESOLVED"),
 });
 

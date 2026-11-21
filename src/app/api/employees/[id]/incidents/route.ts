@@ -3,6 +3,7 @@
  * POST /api/employees/[id]/incidents — Create an incident report against this employee.
  */
 import type { NextRequest } from "next/server";
+import { IncidentListRefusal, resolveIncidentLists } from "@/lib/incidents/lists";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, paginated, err, notFound } from "@/lib/api-response";
@@ -60,12 +61,16 @@ export async function POST(
   // Inject employeeId from the URL so the shared schema validates cleanly
   const parsed = createIncidentSchema.safeParse({ ...body, employeeId: id });
   if (!parsed.success) return err("Invalid input", 422, parsed.error.flatten());
-  const { employeeId, attachmentUrls, ...rest } = parsed.data;
-
-  const incident = await withTenant(ctx.tenantId, (tx) =>
+  // employeeId comes from the URL (set again below).
+  const { attachmentUrls, type, typeId, categoryId, ...fields } = parsed.data;
+  let incident;
+  try {
+  incident = await withTenant(ctx.tenantId, async (tx) =>
     tx.incidentReport.create({
       data: {
-        ...rest,
+        ...fields,
+        // Wave A3 (PAY-210): from the company's lists.
+        ...(await resolveIncidentLists(tx, ctx.tenantId, { type, typeId, categoryId })) as { type: NonNullable<typeof type> },
         employeeId: id,
         tenantId: ctx.tenantId,
         attachmentUrls: attachmentUrls ?? [],
@@ -73,6 +78,10 @@ export async function POST(
       },
     }),
   );
+  } catch (e) {
+    if (e instanceof IncidentListRefusal) return err(e.message, 422);
+    throw e;
+  }
 
   return ok(incident, "Incident created", 201);
 }
