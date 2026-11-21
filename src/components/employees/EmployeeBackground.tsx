@@ -38,6 +38,7 @@ type WorkRow = {
 type TrainingRow = {
   id: string; title: string; provider: string | null; trainingDate: string | null;
   hours: number | null; expiresAt: string | null; notes: string | null;
+  courseId?: string | null; trainerId?: string | null;
   certificateKey: string | null; certificateFileName: string | null;
   certificateMimeType: string | null; certificateFileSize: number | null;
   certificateUrl: string | null;
@@ -295,7 +296,27 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
   const [editing, setEditing] = useState<TrainingRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [f, setF] = useState({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "" });
+  const [f, setF] = useState({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "", courseId: "", trainerId: "" });
+  // Wave A4 (PAY-211): the company's Courses and Trainers. A course fills the
+  // title, provider and hours; the server also sets the expiry from its validity.
+  type Item = { id: string; name: string; attributes: Record<string, unknown> };
+  const [courses, setCourses] = useState<Item[]>([]);
+  const [trainers, setTrainers] = useState<Item[]>([]);
+  useEffect(() => {
+    const load = (list: string) => fetch(`/api/lookups/${list}`).then((r) => r.json()).then((j) => (j?.data?.items ?? []) as Item[]).catch(() => [] as Item[]);
+    void Promise.all([load("COURSE"), load("TRAINER")]).then(([c, t]) => { setCourses(c); setTrainers(t); });
+  }, []);
+  function pickCourse(id: string) {
+    const c = courses.find((x) => x.id === id);
+    setF((cur) => ({
+      ...cur, courseId: id,
+      ...(c ? {
+        title: cur.title || c.name,
+        provider: cur.provider || (typeof c.attributes.provider === "string" ? c.attributes.provider : ""),
+        hours: cur.hours || (typeof c.attributes.defaultHours === "number" ? String(c.attributes.defaultHours) : ""),
+      } : {}),
+    }));
+  }
 
   async function reload() { const { ok, json } = await api("GET", base); if (ok) setRows(json?.data ?? []); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,12 +324,12 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
 
   function openAdd() {
     setEditing(null); setFile(null);
-    setF({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "" });
+    setF({ title: "", provider: "", trainingDate: "", hours: "", expiresAt: "", notes: "", courseId: "", trainerId: "" });
     setOpen(true);
   }
   function openEdit(r: TrainingRow) {
     setEditing(r); setFile(null);
-    setF({ title: r.title, provider: r.provider ?? "", trainingDate: toDateInput(r.trainingDate), hours: r.hours?.toString() ?? "", expiresAt: toDateInput(r.expiresAt), notes: r.notes ?? "" });
+    setF({ title: r.title, provider: r.provider ?? "", trainingDate: toDateInput(r.trainingDate), hours: r.hours?.toString() ?? "", expiresAt: toDateInput(r.expiresAt), notes: r.notes ?? "", courseId: r.courseId ?? "", trainerId: r.trainerId ?? "" });
     setOpen(true);
   }
   async function uploadCert() {
@@ -333,7 +354,7 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
         : editing
           ? { certificateKey: editing.certificateKey, certificateFileName: editing.certificateFileName, certificateMimeType: editing.certificateMimeType, certificateFileSize: editing.certificateFileSize }
           : null;
-      const body = { title: f.title.trim(), provider: f.provider, trainingDate: f.trainingDate, hours: f.hours, expiresAt: f.expiresAt, notes: f.notes, ...(cert ?? {}) };
+      const body = { title: f.title.trim(), provider: f.provider, trainingDate: f.trainingDate, hours: f.hours, expiresAt: f.expiresAt, notes: f.notes, courseId: f.courseId, trainerId: f.trainerId, ...(cert ?? {}) };
       const { ok, json } = editing ? await api("PUT", `${base}/${editing.id}`, body) : await api("POST", base, body);
       if (!ok) { toast.error(json?.error ?? "Save failed"); return; }
       toast.success(editing ? "Training updated" : "Training added");
@@ -372,6 +393,22 @@ export function TrainingSection({ employeeId, storageReady = true }: { employeeI
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? "Edit training" : "Add training"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            {(courses.length > 0 || trainers.length > 0) && (
+              <FieldRow>
+                <div className="space-y-1.5"><Label>Course</Label>
+                  <select className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={f.courseId} onChange={(e) => pickCourse(e.target.value)}>
+                    <option value="">None</option>
+                    {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5"><Label>Trainer</Label>
+                  <select className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={f.trainerId} onChange={(e) => setF({ ...f, trainerId: e.target.value })}>
+                    <option value="">None</option>
+                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              </FieldRow>
+            )}
             <div className="space-y-1.5"><Label>Title *</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Occupational Safety & Health" /></div>
             <FieldRow>
               <div className="space-y-1.5"><Label>Provider</Label><Input value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value })} placeholder="DOLE-accredited STO" /></div>

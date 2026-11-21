@@ -11,7 +11,7 @@
  *   2. POST /api/employees/[id]/documents → records the row
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -60,9 +60,14 @@ const CATEGORY_LABELS: Record<(typeof DOCUMENT_CATEGORIES)[number], string> = {
 
 const ACCEPT_ATTR = ALLOWED_MIME_TYPES.join(",");
 
+type CategoryItem = { id: string; code: string; name: string; attributes: { isConfidentialByDefault?: boolean; requiresExpiry?: boolean } };
+
 type EmployeeDocument = {
   id: string;
   category: keyof typeof CATEGORY_LABELS;
+  // Wave A4 (PAY-211): the company's Document Categories item.
+  categoryId?: string | null;
+  expiresAt?: string | Date | null;
   title: string;
   description: string | null;
   fileName: string;
@@ -81,9 +86,24 @@ export function DocumentManager({ employeeId, documents }: Props) {
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
 
-  // Form state
-  const [category, setCategory] =
-    useState<(typeof DOCUMENT_CATEGORIES)[number]>("CONTRACT");
+  // Form state. Wave A4 (PAY-211): the category is the company's list item;
+  // picking one sets its confidential default and asks for an expiry date
+  // where the category needs one.
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [category, setCategory] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  useEffect(() => {
+    fetch("/api/lookups/DOCUMENT_CATEGORY?includeInactive=1")
+      .then((r) => r.json())
+      .then((j) => setCategories((j?.data?.items ?? []) as CategoryItem[]))
+      .catch(() => setCategories([]));
+  }, []);
+  const active = categories.find((c) => c.id === category);
+  const labelOf = (d: EmployeeDocument) => categories.find((c) => c.id === d.categoryId)?.name ?? CATEGORY_LABELS[d.category];
+  function pickCategory(id: string) {
+    setCategory(id);
+    setIsConfidential(categories.find((c) => c.id === id)?.attributes.isConfidentialByDefault === true);
+  }
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isConfidential, setIsConfidential] = useState(false);
@@ -94,7 +114,8 @@ export function DocumentManager({ employeeId, documents }: Props) {
     setDescription("");
     setIsConfidential(false);
     setFile(null);
-    setCategory("CONTRACT");
+    setCategory("");
+    setExpiresAt("");
   }
 
   async function handleUpload(e: React.FormEvent) {
@@ -105,6 +126,14 @@ export function DocumentManager({ employeeId, documents }: Props) {
     }
     if (!title.trim()) {
       toast.error("Title is required");
+      return;
+    }
+    if (!category) {
+      toast.error("Choose the category");
+      return;
+    }
+    if (active?.attributes.requiresExpiry && !expiresAt) {
+      toast.error(`${active.name} documents need an expiry date`);
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
@@ -135,10 +164,11 @@ export function DocumentManager({ employeeId, documents }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            category,
+            categoryId: category,
             title: title.trim(),
             description: description.trim() || null,
             isConfidential,
+            ...(expiresAt ? { expiresAt } : {}),
             fileName: file.name,
             mimeType: file.type,
             fileSize: file.size,
@@ -208,22 +238,26 @@ export function DocumentManager({ employeeId, documents }: Props) {
             <Label>Category *</Label>
             <Select
               value={category}
-              onValueChange={(v: string | null) =>
-                v && setCategory(v as (typeof DOCUMENT_CATEGORIES)[number])
-              }
+              onValueChange={(v: string | null) => v && pickCategory(v)}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Choose a category" />
               </SelectTrigger>
               <SelectContent>
-                {DOCUMENT_CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {CATEGORY_LABELS[c]}
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          {active?.attributes.requiresExpiry && (
+            <div className="space-y-2">
+              <Label htmlFor="doc-expires">Expiry date *</Label>
+              <Input id="doc-expires" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="doc-title">Title *</Label>
             <Input
@@ -317,8 +351,13 @@ export function DocumentManager({ employeeId, documents }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium truncate">{doc.title}</span>
                     <Badge variant="secondary">
-                      {CATEGORY_LABELS[doc.category]}
+                      {labelOf(doc)}
                     </Badge>
+                    {doc.expiresAt && (
+                      <Badge variant="outline">
+                        Expires {new Date(doc.expiresAt).toLocaleDateString("en-PH")}
+                      </Badge>
+                    )}
                     {doc.isConfidential && (
                       <Badge
                         variant="outline"

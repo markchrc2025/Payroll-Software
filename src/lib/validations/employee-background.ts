@@ -77,8 +77,12 @@ export const workExperienceSchema = z
   );
 
 // ── Training ─────────────────────────────────────────────────────────────────
+// Wave A4 (PAY-211): a course from the company's Courses fills the title,
+// provider, hours and expiry the form leaves blank.
 export const trainingSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(200),
+  title: optStr(200),
+  courseId: optStr(100),
+  trainerId: optStr(100),
   provider: optStr(200),
   trainingDate: optDate,
   hours: optInt(100000),
@@ -88,7 +92,7 @@ export const trainingSchema = z.object({
   certificateFileSize: z.number().int().positive().max(MAX_FILE_SIZE).nullable().optional(),
   expiresAt: optDate,
   notes: optStr(2000),
-});
+}).refine((v) => !!v.title || !!v.courseId, { message: "Title is required", path: ["title"] });
 
 export type EducationInput = z.infer<typeof educationSchema>;
 export type WorkExperienceInput = z.infer<typeof workExperienceSchema>;

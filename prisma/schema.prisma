@@ -1464,8 +1464,12 @@ model EmployeeDocument {
   tenantId   String
 
   category    DocumentCategory
+  /// Wave A4 (PAY-211): the company's Document Categories item.
+  categoryId  String?
   title       String
   description String?
+  /// Wave A4: required when the category has an expiry date (IDs, permits, clearances).
+  expiresAt   DateTime?
 
   storageKey String
   fileName   String
@@ -1481,6 +1485,7 @@ model EmployeeDocument {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  categoryItem LookupItem? @relation("DocumentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -1571,6 +1576,9 @@ model EmployeeTraining {
 
   title               String
   provider            String?
+  /// Wave A4 (PAY-211): the company's Courses and Trainers items.
+  courseId            String?
+  trainerId           String?
   trainingDate        DateTime?
   /// Training duration in whole hours.
   hours               Int?
@@ -1590,6 +1598,8 @@ model EmployeeTraining {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  courseItem  LookupItem? @relation("TrainingCourseItem", fields: [courseId], references: [id], onDelete: SetNull)
+  trainerItem LookupItem? @relation("TrainingTrainerItem", fields: [trainerId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -4217,6 +4227,9 @@ model LookupItem {
   incidentsByType         IncidentReport[] @relation("IncidentTypeItem")
   incidentsByCategory     IncidentReport[] @relation("IncidentCategoryItem")
   incidentsByDecision     IncidentReport[] @relation("IncidentDecisionItem")
+  documentsByCategory     EmployeeDocument[] @relation("DocumentCategoryItem")
+  trainingsByCourse       EmployeeTraining[] @relation("TrainingCourseItem")
+  trainingsByTrainer      EmployeeTraining[] @relation("TrainingTrainerItem")
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])
