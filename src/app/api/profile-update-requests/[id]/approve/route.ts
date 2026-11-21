@@ -8,6 +8,7 @@ import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
+import { bankByCodeOrName } from "@/lib/employees/bank";
 
 export async function POST(
   req: NextRequest,
@@ -26,10 +27,18 @@ export async function POST(
     if (pur.status !== "PENDING")
       return { notPending: true as const, status: pur.status };
 
-    // Apply field change to Employee
+    // Apply field change to Employee. Wave A1 (PAY-208): ESS asks for a bank
+    // by its code (there is no bankCode column); it resolves to the company's
+    // Bank list item, whose name the payslip and bank files read.
+    let data: Record<string, unknown> = { [pur.field]: pur.newValue };
+    if (pur.field === "bankCode") {
+      const bank = await bankByCodeOrName(tx, auth.tenantId, pur.newValue);
+      if (!bank) return { unknownBank: true as const, value: pur.newValue };
+      data = { bankId: bank.id, bankName: bank.name };
+    }
     await tx.employee.update({
       where: { id: pur.employeeId },
-      data: { [pur.field]: pur.newValue },
+      data,
     });
 
     const updated = await tx.profileUpdateRequest.update({
@@ -43,6 +52,7 @@ export async function POST(
     return { notFound: false as const, notPending: false as const, row: updated };
   });
 
+  if ("unknownBank" in result) return err(`"${result.value}" is not in the company's Bank list. Add it in Settings, Lists, Banks, or reject the request.`, 422);
   if (result.notFound) return notFound("Profile update request");
   if (result.notPending)
     return err(`Cannot approve a ${result.status} request`, 409);

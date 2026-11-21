@@ -23,6 +23,8 @@ import {
 } from "@/lib/validations/employee";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { claimEmployeeId } from "@/lib/claim-employee-id";
+import { redactSensitive, sensitiveAccess, SensitiveRefusal, shapeSensitiveWrite, withoutSensitive } from "@/lib/employees/sensitive";
+import { BankRefusal, resolveBank } from "@/lib/employees/bank";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees
@@ -163,8 +165,10 @@ export async function POST(req: NextRequest) {
     shiftScheduleId,
     contractStartDate,
     contractEndDate,
+    bankId,
     ...rest
-  } = parsed.data;
+  } = withoutSensitive(parsed.data);
+  const access = await sensitiveAccess(auth);
 
   // Create employee + initial salary + statutory IDs, plus all tenant-scoped
   // pre-checks, in a single tenant-scoped transaction.
@@ -235,6 +239,11 @@ export async function POST(req: NextRequest) {
       if (dup) return { conflict: `Another employee already has this ${r.type} number.` };
     }
 
+    // Wave A1 (PAY-208): ethnicity and religion need consent and the
+    // sensitive-data permission; the bank comes from the company's Bank list.
+    const sensitive = await shapeSensitiveWrite(tx, auth, parsed.data, null, access);
+    const bank = bankId ? await resolveBank(tx, auth.tenantId, bankId) : {};
+
     // Atomically claim the next sequence number (SELECT ... FOR UPDATE on Tenant).
     const employeeNumber = await claimEmployeeId(tx, auth.tenantId);
 
@@ -247,6 +256,8 @@ export async function POST(req: NextRequest) {
     const emp = await tx.employee.create({
       data: {
         ...rest,
+        ...sensitive,
+        ...bank,
         workingDaysDenominator: rest.workingDaysDenominator ?? scheduleDivisor,
         tenantId: auth.tenantId,
         employeeNumber,
@@ -356,18 +367,20 @@ export async function POST(req: NextRequest) {
   });
 
   return ok(
-    {
+    redactSensitive({
       ...result.employee,
       // Employee.nontaxableBasicAmountCents is BigInt — serialize it so the
       // success response doesn't throw "Do not know how to serialize a BigInt".
       nontaxableBasicAmountCents: centavosToJson(
         result.employee.nontaxableBasicAmountCents,
       ),
-    },
+    }, access),
     "Employee created successfully",
     201,
   );
   } catch (e) {
+    if (e instanceof SensitiveRefusal) return err(e.message, e.status);
+    if (e instanceof BankRefusal) return err(e.message, 422);
     // Previously any thrown error here became an opaque 500 with no body, so the
     // UI could only show a generic "Request failed". Log the full error for the
     // server logs and return the real reason so it's diagnosable from the UI.
