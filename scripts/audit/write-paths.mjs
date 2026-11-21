@@ -17,6 +17,7 @@
  *   ESS_SESSION     getEssContext (or the ESS passkey credential)
  *   CENTRAL_ADMIN   requireCentralPermission, getSuperAdminContext
  *   KIOSK_DEVICE    an "Authorization: Kiosk <deviceToken>" lookup
+ *   PORTAL_SESSION  getPortalSession (the offboarding portal, PAY-197)
  *   PUBLIC_BY_DESIGN  a route with no principal on purpose (sign-in, password
  *                   reset, activation), each listed below with its reason
  *   NONE            nothing recognised: to be looked at
@@ -45,6 +46,7 @@ export const PUBLIC_BY_DESIGN = {
   "ess/auth/route.ts": "ESS sign-in: the credentials are the principal",
   "ess/webauthn/authenticate/route.ts": "ESS passkey sign-in, step 1: issues a challenge",
   "ess/webauthn/authenticate/finish/route.ts": "ESS passkey sign-in, step 2: the signed challenge is the principal",
+  "offboard-portal/session/route.ts": "offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie",
 };
 
 const RULES = [
@@ -52,6 +54,8 @@ const RULES = [
   ["ESS_SESSION", /\b(getEssContext|essWebAuthnCredential)\s*\(/],
   ["CENTRAL_ADMIN", /\b(requireCentralPermission|getSuperAdminContext)\s*\(/],
   ["KIOSK_DEVICE", /deviceToken/],
+  // PAY-197: the separated employee's offboarding portal session.
+  ["PORTAL_SESSION", /\b(getPortalSession)\s*\(/],
 ];
 const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
@@ -114,7 +118,7 @@ function sharedText(file, src) {
   return text;
 }
 
-const HELPERS = "getAuthContext|requirePermission|requireApprover|getEssContext|essWebAuthnCredential|requireCentralPermission|getSuperAdminContext";
+const HELPERS = "getAuthContext|requirePermission|requireApprover|getEssContext|essWebAuthnCredential|requireCentralPermission|getSuperAdminContext|getPortalSession";
 
 /**
  * PAY-205: does the handler refuse when the helper finds no principal? True
@@ -149,7 +153,7 @@ export function auditRoutes() {
         if (viaShared.principal !== "NONE") found = { ...viaShared, evidence: `${viaShared.evidence} (in _shared)` };
       }
       if (found.principal === "NONE" && PUBLIC_BY_DESIGN[rel]) found = { principal: "PUBLIC_BY_DESIGN", evidence: PUBLIC_BY_DESIGN[rel] };
-      const checked = ["USER_SESSION", "ESS_SESSION", "CENTRAL_ADMIN"].includes(found.principal);
+      const checked = ["USER_SESSION", "ESS_SESSION", "CENTRAL_ADMIN", "PORTAL_SESSION"].includes(found.principal);
       const text = found.evidence.endsWith("(in _shared)") ? sharedText(file, src) : withLocalHelpers(src, body);
       rows.push({ route: `/api/${rel.replace(/\/?route\.ts$/, "")}`, method, ...found, refuses: checked ? refuses(text) : null });
     }
@@ -174,7 +178,7 @@ export function auditJobs() {
 
 export function renderReport(routes, jobs) {
   const count = (k) => routes.filter((r) => r.principal === k).length;
-  const kinds = ["USER_SESSION", "ESS_SESSION", "CENTRAL_ADMIN", "KIOSK_DEVICE", "PUBLIC_BY_DESIGN", "NONE"];
+  const kinds = ["USER_SESSION", "ESS_SESSION", "CENTRAL_ADMIN", "KIOSK_DEVICE", "PORTAL_SESSION", "PUBLIC_BY_DESIGN", "NONE"];
   const lines = [
     "# Write-path principal audit",
     "",

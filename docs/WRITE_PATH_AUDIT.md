@@ -8,13 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 187 |
+| USER_SESSION | 188 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
-| PUBLIC_BY_DESIGN | 9 |
+| PORTAL_SESSION | 3 |
+| PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 262 |
+| Total | 268 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -35,6 +36,8 @@ None.
 - POST /api/ess/reset-password: the single-use reset token is the principal
 - POST /api/ess/webauthn/authenticate/finish: ESS passkey sign-in, step 2: the signed challenge is the principal
 - POST /api/ess/webauthn/authenticate: ESS passkey sign-in, step 1: issues a challenge
+- POST /api/offboard-portal/session: offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie
+- DELETE /api/offboard-portal/session: offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie
 
 ## Job handlers (pg-boss)
 
@@ -253,6 +256,12 @@ None.
 | POST | /api/movements/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/reject | USER_SESSION | getAuthContext | yes |
+| POST | /api/offboard-portal/coe-request | PORTAL_SESSION | getPortalSession | yes |
+| PUT | /api/offboard-portal/personal-info | PORTAL_SESSION | getPortalSession | yes |
+| PUT | /api/offboard-portal/questionnaire | PORTAL_SESSION | getPortalSession | yes |
+| POST | /api/offboard-portal/session | PUBLIC_BY_DESIGN | offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie | n/a |
+| DELETE | /api/offboard-portal/session | PUBLIC_BY_DESIGN | offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie | n/a |
+| POST | /api/offboarding/cases/[id]/portal-link | USER_SESSION | getAuthContext | yes |
 | PATCH | /api/offboarding/cases/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/offboarding/cases | USER_SESSION | getAuthContext | yes |
 | PATCH | /api/offboarding/clearance-template/[id] | USER_SESSION | getAuthContext | yes |

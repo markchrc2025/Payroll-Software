@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Item = { id: string; name: string; description: string | null; status: string; remarks: string | null; clearedAt: string | null; signatory: { id: string; firstName: string; lastName: string } };
 type Case = {
+  exitQuestionnaireAt?: string | null; personalInfoAt?: string | null; coeRequestedAt?: string | null;
   id: string; status: string; separationReason: string; lastWorkingDay: string; daysSinceSeparation: number; finalPayDueInDays: number; pendingItems: number;
   employee: { employeeNumber: string; firstName: string; lastName: string }; items: Item[];
 };
@@ -39,6 +40,12 @@ export default function OffboardingPage() {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { toast.error(json.error ?? "Could not sign off"); return; }
     toast.success("Signed off"); void load();
+  }
+  async function sendLink(caseId: string) {
+    const res = await fetch(`/api/offboarding/cases/${caseId}/portal-link`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(json.error ?? "Could not send the link"); return; }
+    toast.success(`Portal link sent to ${json.data.sentTo}`);
   }
   async function close(caseId: string) {
     const res = await fetch(`/api/offboarding/cases/${caseId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "CLOSED" }) });
@@ -95,7 +102,13 @@ export default function OffboardingPage() {
                     <span className="text-[#6B6B6B]">signatory {i.signatory.firstName} {i.signatory.lastName}{i.clearedAt ? `, ${day(i.clearedAt)}` : ""}{i.remarks ? `: ${i.remarks}` : ""}</span>
                   </div>
                 ))}
-                {c.status === "CLEARED" && <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => close(c.id)}>Close case</Button>}
+                <p className="text-[#6B6B6B]">
+                  Exit questionnaire: {c.exitQuestionnaireAt ? `sent ${day(c.exitQuestionnaireAt)}` : "not yet"} · Personal information: {c.personalInfoAt ? `sent ${day(c.personalInfoAt)}` : "not yet"} · Certificate of employment: {c.coeRequestedAt ? `requested ${day(c.coeRequestedAt)}` : "not requested"}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => sendLink(c.id)} data-testid="send-portal-link">Send portal link</Button>
+                  {c.status === "CLEARED" && <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => close(c.id)}>Close case</Button>}
+                </div>
               </div>
             )}
           </div>

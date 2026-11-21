@@ -4066,22 +4066,31 @@ enum OffboardingCaseStatus {
 
 /// PAY-197: one offboarding case per separation, with each step, owner and status.
 model OffboardingCase {
-  id               String                @id @default(cuid())
-  tenantId         String
-  employeeId       String
-  separationReason SeparationReason
-  lastWorkingDay   DateTime
-  status           OffboardingCaseStatus @default(OPEN)
-  notes            String?
-  createdByUserId  String?
-  clearedAt        DateTime?
-  closedAt         DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  id                  String                @id @default(cuid())
+  tenantId            String
+  employeeId          String
+  separationReason    SeparationReason
+  lastWorkingDay      DateTime
+  status              OffboardingCaseStatus @default(OPEN)
+  notes               String?
+  createdByUserId     String?
+  clearedAt           DateTime?
+  closedAt            DateTime?
+  /// PAY-197 part 2: what the leaving employee filed in the offboarding portal.
+  exitQuestionnaire   Json?
+  exitQuestionnaireAt DateTime?
+  /// Forwarding address, personal email and phone, bank for the final pay (account number encrypted).
+  personalInfo        Json?
+  personalInfoAt      DateTime?
+  coeRequestedAt      DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
-  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employee Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  items    ClearanceItem[]
+  tenant         Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee       Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  items          ClearanceItem[]
+  portalLinks    OffboardingPortalLink[]
+  portalSessions OffboardingPortalSession[]
 
   @@index([tenantId, status])
   @@index([employeeId])
@@ -4114,4 +4123,37 @@ model ClearanceItem {
   @@index([tenantId])
   @@index([caseId])
   @@index([signatoryUserId, status])
+}
+
+/// PAY-197 part 2 (ruling 4): the sign-in link to the offboarding portal,
+/// sent to the leaving employee's personal email. Only its hash is kept.
+model OffboardingPortalLink {
+  id        String    @id @default(cuid())
+  tenantId  String
+  caseId    String
+  tokenHash String    @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  retiredAt DateTime?
+  createdAt DateTime  @default(now())
+
+  case OffboardingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+}
+
+/// A signed-in offboarding portal visit. Never longer than the portal is open.
+model OffboardingPortalSession {
+  id        String    @id @default(cuid())
+  tenantId  String
+  caseId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  case OffboardingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
 }
