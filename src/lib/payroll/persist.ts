@@ -15,6 +15,7 @@
  *                               book is a no-op (returns existing row).
  */
 import { issueRunControlNumbers } from "./control-numbers";
+import { recordThirteenthAccrual } from "./thirteenth-accrual";
 import type {
   Loan,
   PayComponent,
@@ -1901,6 +1902,9 @@ export async function finalizeRun(
         data: { isLocked: true },
       });
     }
+
+    // PAY-152: the 13th month accrued by a regular run, recorded on each payslip.
+    if (book.runType === "REGULAR") await recordThirteenthAccrual(tx, tenantId, bookId);
 
     // PAY-69: control numbers, gapless, in this transaction.
     const control = await issueRunControlNumbers(tx, tenantId, bookId, book.periodEnd);
