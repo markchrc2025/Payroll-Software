@@ -744,6 +744,7 @@ model Tenant {
   clearanceTemplateItems ClearanceTemplateItem[]
   offboardingCases       OffboardingCase[]
   clearanceItems         ClearanceItem[]
+  lookupItems            LookupItem[]
 
   @@index([deletedAt])
 }
@@ -4158,4 +4159,30 @@ model OffboardingPortalSession {
   case OffboardingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@index([caseId])
+}
+
+/// Wave A (the Soon plan, Mark approved 21 Nov 2026): the lists each company
+/// keeps (banks, courses, trainers, document categories, expense categories
+/// and types, incident categories, types and decisions, ethnicities,
+/// religions), one table keyed by list. Each list's extra fields live in
+/// `attributes`, checked by src/lib/lookups/registry.ts.
+model LookupItem {
+  id         String    @id @default(cuid())
+  tenantId   String
+  list       String
+  code       String
+  name       String
+  sortOrder  Int       @default(0)
+  isActive   Boolean   @default(true)
+  /// Kept by Sentire: cannot be deleted or have its code changed.
+  isSystem   Boolean   @default(false)
+  attributes Json      @default("{}")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, list, code])
+  @@index([tenantId, list])
 }
