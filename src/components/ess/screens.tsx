@@ -193,6 +193,7 @@ export function HomeScreen() {
           { icon: "cal", label: "My DTR", onClick: () => router.push("/ess/dtr") },
           { icon: "doc", label: "View payslips", onClick: () => nav.tab("pay") },
           { icon: "doc", label: "Annual salary statement", onClick: () => router.push("/ess/salary-statement") },
+          { icon: "doc", label: "BIR Form 2316", onClick: () => router.push("/ess/bir-2316") },
         ]}
       />
 

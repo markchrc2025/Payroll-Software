@@ -106,7 +106,7 @@ const AGENCY_COLORS: Record<string, { bg: string; color: string }> = {
 };
 
 /** PAY-71: the BIR forms inside a generated report, in their mandated structure. */
-function formEntries(report: ReportDef, result: Record<string, unknown> | null): BirFormEntry[] {
+function formEntries(report: ReportDef, result: Record<string, unknown> | null, year: string): BirFormEntry[] {
   if (!result) return [];
   const isView = (v: unknown): v is BirFormView =>
     !!v && typeof v === "object" && "formNo" in v && "sections" in v;
@@ -114,7 +114,12 @@ function formEntries(report: ReportDef, result: Record<string, unknown> | null):
   if (Array.isArray(result.certificates)) {
     return (result.certificates as Record<string, unknown>[])
       .filter((c) => isView(c.form))
-      .map((c) => ({ label: `${c.lastName}, ${c.firstName}`, view: c.form as BirFormView }));
+      .map((c) => ({
+        label: `${c.lastName}, ${c.firstName}`,
+        view: c.form as BirFormView,
+        // PAY-199: the 2316 on the official layout, with the employee's e-signature.
+        ...(report.id === "bir_2316" ? { pdfUrl: `${report.apiPath}?year=${year}&employeeId=${String(c.employeeId)}&format=pdf` } : {}),
+      }));
   }
   return [];
 }
@@ -125,7 +130,7 @@ function ReportCard({ report }: { report: ReportDef }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [viewing, setViewing] = useState(false);
-  const forms = formEntries(report, result);
+  const forms = formEntries(report, result, year);
 
   async function handleGenerate() {
     setLoading(true);
