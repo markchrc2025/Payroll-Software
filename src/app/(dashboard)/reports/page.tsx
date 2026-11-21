@@ -90,7 +90,13 @@ type ReportDef = {
   fileField?: string;
   fileExt?: string;
   fileLabel?: string;
+  /** Field holding the file name the server chose (BIR names its files). */
+  fileNameField?: string;
+  /** Field holding validation issues; a file with errors is not downloaded. */
+  fileIssuesField?: string;
 };
+
+type FileIssue = { severity: "error" | "warning"; line: number; column: number; employee?: string; message: string };
 
 const AGENCY_COLORS: Record<string, { bg: string; color: string }> = {
   BIR:       { bg: "#FCE9E7", color: "#E0463B" },
@@ -149,8 +155,18 @@ function ReportCard({ report }: { report: ReportDef }) {
     if (!result || !report.fileField) return;
     const text = result[report.fileField] as string | undefined;
     if (!text) { toast.error("No file content in report"); return; }
+    const issues = (report.fileIssuesField ? (result[report.fileIssuesField] as FileIssue[] | undefined) : undefined) ?? [];
+    const errors = issues.filter((i) => i.severity === "error");
+    if (errors.length) {
+      // PAY-200: BIR's validator would reject this file, so it is not handed out.
+      toast.error(`The file would fail BIR's validation (${errors.length} error${errors.length === 1 ? "" : "s"}). ${errors.slice(0, 3).map((i) => (i.employee ? `${i.employee}: ` : "") + i.message).join(" ")}`);
+      return;
+    }
+    const warnings = issues.filter((i) => i.severity === "warning");
+    if (warnings.length) toast.message(`${warnings.length} note${warnings.length === 1 ? "" : "s"}: ${warnings.slice(0, 2).map((i) => (i.employee ? `${i.employee}: ` : "") + i.message).join(" ")}`);
     const suffix = report.monthly ? `${year}-${month.padStart(2, "0")}` : year;
-    downloadText(text, `${report.id}_${suffix}.${report.fileExt ?? "txt"}`);
+    const named = report.fileNameField ? (result[report.fileNameField] as string | undefined) : undefined;
+    downloadText(text, named ?? `${report.id}_${suffix}.${report.fileExt ?? "txt"}`);
   }
 
   const agencyStyle = AGENCY_COLORS[report.agency] ?? { bg: "#F7F7F7", color: "#525252" };
@@ -300,6 +316,11 @@ const REPORTS: ReportDef[] = [
     agency: "BIR",
     monthly: false,
     apiPath: "/api/payroll/reports/bir/1604c",
+    fileField: "alphalistDatText",
+    fileExt: "DAT",
+    fileLabel: ".DAT",
+    fileNameField: "alphalistDatFileName",
+    fileIssuesField: "alphalistDatIssues",
   },
   // SSS
   {

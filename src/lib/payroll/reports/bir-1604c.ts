@@ -231,11 +231,30 @@ function totalsOf(columns: BirScheduleColumn[], rows: (string | null)[][]): (str
   });
 }
 
-export function buildBir1604cReport(input: Bir1604cInput): Bir1604cReport {
-  const { year, tenantId, tenantName, agent } = input;
-  const people = input.employees
+/** The employees in alphalist order: who is in the 1604-C, sorted by name. */
+function alphalistPeople(input: Bir1604cInput): Bir1604cEmployeeInput[] {
+  return input.employees
     .filter((e) => e.sheets.length > 0 || e.priorPayrollOpening)
     .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+}
+
+const isMweComp = (c: BirComp) => c.mweBasic + c.mweHoliday + c.mweOvertime + c.mweNsd + c.mweHazard > 0n;
+
+/**
+ * PAY-200: the employees behind each schedule row, in row order, so the .DAT
+ * file can add what the printed form does not show (payee TIN, full dates,
+ * region on every row).
+ */
+export function alphalistScheduleEmployees(input: Bir1604cInput): { schedule1: Bir1604cEmployeeInput[]; schedule2: Bir1604cEmployeeInput[] } {
+  const schedule1: Bir1604cEmployeeInput[] = [];
+  const schedule2: Bir1604cEmployeeInput[] = [];
+  for (const emp of alphalistPeople(input)) (isMweComp(yearCompOf(emp)) ? schedule2 : schedule1).push(emp);
+  return { schedule1, schedule2 };
+}
+
+export function buildBir1604cReport(input: Bir1604cInput): Bir1604cReport {
+  const { year, tenantId, tenantName, agent } = input;
+  const people = alphalistPeople(input);
 
   const rows1: (string | null)[][] = [];
   const rows2: (string | null)[][] = [];
@@ -256,7 +275,7 @@ export function buildBir1604cReport(input: Bir1604cInput): Bir1604cReport {
     const tax = taxCells(emp, c, input.taxDue);
     if (tax.taxDue !== null && tax.taxDue !== tax.adjusted) notEqual += 1;
 
-    const isMwe = c.mweBasic + c.mweHoliday + c.mweOvertime + c.mweNsd + c.mweHazard > 0n;
+    const isMwe = isMweComp(c);
     const prevTaxable = prev?.taxableCompensationCents ?? null;
     const prevNt13 = prev ? prev.nontaxable13MonthAndBenefitsCents ?? 0n : null;
     const prevGross = prev ? (prevTaxable ?? 0n) + (prevNt13 ?? 0n) : null;
