@@ -184,6 +184,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/loans", label: "Loans", icon: "loans" },
       { href: "/payroll/ytd-openings", label: "Year-to-date Openings", icon: "bankfiles" },
       { href: "/payroll/thirteenth-accrual", label: "13th Month Accrual", icon: "premium" },
+      { href: "/payroll/corrections", label: "Corrections", icon: "components" },
       { href: "/payroll/statutory-contributions", label: "Statutory Contribution", icon: "premium" },
       { href: "/payroll/statutory-tables", label: "Statutory Table", icon: "payrules" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },

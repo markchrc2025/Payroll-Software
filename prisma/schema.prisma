@@ -740,6 +740,7 @@ model Tenant {
   subscriptionEvents SubscriptionEvent[]
   centralAuditEvents CentralAuditEvent[]
   documentSeries     DocumentSeries[]
+  payrollCorrections PayrollCorrection[]
 
   @@index([deletedAt])
 }
@@ -1391,8 +1392,9 @@ model Employee {
   supervisedSubmissions   DTRSubmission[]           @relation("DTRSubmissionSupervisor")
   managedSubmissions      DTRSubmission[]           @relation("DTRSubmissionManager")
 
-  defaultDtrApproverFor Tenant[]   @relation("TenantDefaultDtrApprover")
+  defaultDtrApproverFor Tenant[]            @relation("TenantDefaultDtrApprover")
   hiredFromApplicant    Applicant?
+  payrollCorrections    PayrollCorrection[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
@@ -2618,6 +2620,7 @@ model PayrollBook {
   adjustments       PayrollAdjustment[]
   expenseClaims     ExpenseClaim[]      @relation("BookExpenseClaims")
   paidExpenseClaims ExpenseClaim[]      @relation("BookPaidExpenseClaims")
+  landedCorrections PayrollCorrection[] @relation("CorrectionTarget")
 
   @@unique([tenantId, periodStart, periodEnd, runType])
   @@unique([tenantId, controlNumber])
@@ -2818,6 +2821,7 @@ model PayrollSheet {
   sealSnapshot                Json?
   /// PAY-69: payslip control number, issued gapless at finalize (PS-YYYY-NNNNNN). Never changes once set.
   controlNumber               String?
+  corrections                 PayrollCorrection[]
 
   @@unique([tenantId, controlNumber])
   @@unique([payrollBookId, employeeId])
@@ -2844,6 +2848,10 @@ model PayrollAdjustment {
   isTaxable   Boolean        @default(true)
   /// Required audit trail (e.g. "Bonus adjustment", "Salary overpayment").
   reason      String         @db.Text
+
+  /// PAY-68: set when the adjustment is a correction landing forward.
+  correctionId String?
+  correction   PayrollCorrection? @relation(fields: [correctionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3964,4 +3972,54 @@ model DocumentSeries {
 
   @@unique([tenantId, docType, seriesYear])
   @@index([tenantId])
+}
+
+/// PAY-68 (1.13, Q1b, Mark 17 Nov 2026): a correction is a new document, never
+/// an edit. It points at a finalized payslip, carries signed lines (effect on
+/// pay), is approved by a second person, gets a control number (PC-YYYY-NNNN)
+/// and lands forward as adjustments in a later draft run. A correction can be
+/// corrected by another one; the cumulative guard keeps all of them together
+/// from reversing more than the payslip paid.
+enum PayrollCorrectionStatus {
+  DRAFT
+  APPROVED
+  CANCELLED
+}
+
+model PayrollCorrection {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  originalSheetId String
+  /// The correction this one corrects, if any.
+  correctsId      String?
+  /// Issued at approval, gapless (DocumentSeries PAYROLL_CORRECTION).
+  controlNumber   String?
+  status          PayrollCorrectionStatus @default(DRAFT)
+  reason          String                  @db.Text
+  /// [{ item, amountCents (signed, effect on pay), taxable, description }]
+  lines           Json
+  netEffectCents  BigInt
+  /// The draft run it landed in; cleared if that draft is discarded.
+  targetBookId    String?
+
+  createdByUserId  String?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee      Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  originalSheet PayrollSheet        @relation(fields: [originalSheetId], references: [id], onDelete: Cascade)
+  corrects      PayrollCorrection?  @relation("CorrectionOfCorrection", fields: [correctsId], references: [id], onDelete: SetNull)
+  correctedBy   PayrollCorrection[] @relation("CorrectionOfCorrection")
+  targetBook    PayrollBook?        @relation("CorrectionTarget", fields: [targetBookId], references: [id], onDelete: SetNull)
+  adjustments   PayrollAdjustment[]
+
+  @@unique([tenantId, controlNumber])
+  @@index([tenantId])
+  @@index([originalSheetId])
+  @@index([targetBookId])
 }
