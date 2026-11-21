@@ -9,6 +9,7 @@ import { getEssContext } from "@/lib/ess-auth";
 import { ok, err, notFound, serverError, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import { centavosToJson } from "@/lib/money";
+import { ClaimListRefusal, checkOnSubmit } from "@/lib/expenses/claim-lists";
 
 export async function POST(
   req: NextRequest,
@@ -30,7 +31,8 @@ export async function POST(
 
       const updated = await tx.expenseClaim.update({
         where: { id },
-        data: { status: "SUBMITTED" },
+        // Wave A2 (PAY-209): receipt rule enforced, limits flagged (decision 6).
+        data: { status: "SUBMITTED", limitFlags: await checkOnSubmit(tx, claim) },
       });
       return { notFound: false as const, notDraft: false as const, row: updated };
     });
@@ -44,6 +46,7 @@ export async function POST(
       "Claim submitted for review",
     );
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     console.error("[ess/expense-claims/submit]", e);
     return serverError(e);
   }

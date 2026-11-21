@@ -27,6 +27,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-response";
+import { ClaimListRefusal, resolveClaimLists } from "@/lib/expenses/claim-lists";
 import { withTenant } from "@/lib/with-tenant";
 import { centavosToJson } from "@/lib/money";
 
@@ -82,7 +83,10 @@ export async function GET(req: NextRequest) {
 // POST
 // ---------------------------------------------------------------------------
 const CreateClaimSchema = z.object({
-  category: z.string().min(1).max(100),
+  // Wave A2 (PAY-209): from the company's lists (an item's id, or its code or name).
+  category: z.string().trim().min(1).max(100).optional(),
+  categoryId: z.string().min(1).optional(),
+  typeId: z.string().min(1).optional(),
   description: z.string().min(1).max(1000),
   /** Amount in centavos (integer). */
   amountCents: z.number().int().positive().max(100_000_000), // max ₱1,000,000
@@ -106,7 +110,7 @@ export async function POST(req: NextRequest) {
     return err("Validation failed", 400, parsed.error.flatten());
   }
 
-  const { category, description, amountCents, claimDate, receiptKey } =
+  const { category, categoryId, typeId, description, amountCents, claimDate, receiptKey } =
     parsed.data;
   // PAY-190: only a receipt uploaded for this company.
   if (receiptKey && !isTenantReceiptKey(ctx.tenantId, receiptKey)) {
@@ -114,12 +118,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const claim = await withTenant(ctx.tenantId, (tx) =>
+    const claim = await withTenant(ctx.tenantId, async (tx) =>
       tx.expenseClaim.create({
         data: {
           tenantId: ctx.tenantId,
           employeeId: ctx.employeeId,
-          category,
+          ...(await resolveClaimLists(tx, ctx.tenantId, { category, categoryId, typeId })),
           description,
           amountCents: BigInt(amountCents),
           claimDate: new Date(`${claimDate}T00:00:00.000Z`),
@@ -135,6 +139,7 @@ export async function POST(req: NextRequest) {
       201,
     );
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     console.error("[ess/expense-claims POST]", e);
     return serverError(e);
   }

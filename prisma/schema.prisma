@@ -3228,8 +3228,14 @@ model ExpenseClaim {
   tenantId   String
   employeeId String
 
-  /// Free-text category (TRANSPORTATION, MEALS, ACCOMMODATION, MEDICAL, etc.).
+  /// The category's code (reports read this). Wave A2: from the company's list.
   category    String
+  /// Wave A2 (PAY-209): the company's Expense Categories and Expense Types items.
+  categoryId  String?
+  typeId      String?
+  /// Wave A2 (decision 6): limits the claim goes over, recorded at submission
+  /// and again at approval. Flagged for the approver, never blocking.
+  limitFlags  Json     @default("[]")
   description String   @db.Text
   /// Claim amount in centavos.
   amountCents BigInt
@@ -3241,6 +3247,8 @@ model ExpenseClaim {
   status       ExpenseClaimStatus   @default(DRAFT)
   /// Set by Finance/HR during APPROVAL. Drives engine treatment.
   taxTreatment ExpenseTaxTreatment?
+  /// Wave A2: why the approver chose a treatment other than the type's.
+  taxTreatmentReason String? @db.Text
 
   approvedById    String?
   approvedAt      DateTime?
@@ -3259,11 +3267,14 @@ model ExpenseClaim {
   approvedBy  User?        @relation("ExpenseClaimApprover", fields: [approvedById], references: [id])
   payrollBook PayrollBook? @relation("BookExpenseClaims", fields: [payrollBookId], references: [id])
   paidInBook  PayrollBook? @relation("BookPaidExpenseClaims", fields: [paidInBookId], references: [id])
+  categoryItem LookupItem? @relation("ExpenseClaimCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  typeItem     LookupItem? @relation("ExpenseClaimType", fields: [typeId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, employeeId])
   @@index([tenantId, status])
   @@index([payrollBookId])
+  @@index([tenantId, employeeId, categoryId, claimDate])
 }
 
 // =============================================================================
@@ -4191,6 +4202,8 @@ model LookupItem {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employeesWithBank Employee[] @relation("EmployeeBank")
+  expenseClaimsByCategory ExpenseClaim[] @relation("ExpenseClaimCategory")
+  expenseClaimsByType     ExpenseClaim[] @relation("ExpenseClaimType")
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])
