@@ -138,6 +138,8 @@ export interface PayslipPdfSource {
   book: { periodStart: Date; periodEnd: Date; cycle: string; runType: string; finalizedAt: Date | null; separationReason?: string | null };
   sheet: {
     id: string;
+    /** PAY-69: the payslip's control number (PS-YYYY-NNNNNN). */
+    controlNumber?: string | null;
     salaryTypeSnapshot: string;
     basicSalaryCentsSnapshot: bigint;
     workingDaysDenominatorSnapshot: number;
@@ -438,7 +440,7 @@ export function buildPayslipPdfData(src: PayslipPdfSource): PayslipPdfData {
       cycle: CYCLE[book.cycle] ?? book.cycle,
       runType: RUN[book.runType] ?? book.runType,
       issuedAt: book.finalizedAt,
-      reference: sheet.id.slice(-8).toUpperCase(),
+      reference: sheet.controlNumber ?? sheet.id.slice(-8).toUpperCase(),
     },
     employee: {
       name: `${emp.firstName}${mi} ${emp.lastName}${sfx}`,

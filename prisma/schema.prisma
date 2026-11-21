@@ -739,6 +739,7 @@ model Tenant {
   supportTickets     SupportTicket[]
   subscriptionEvents SubscriptionEvent[]
   centralAuditEvents CentralAuditEvent[]
+  documentSeries     DocumentSeries[]
 
   @@index([deletedAt])
 }
@@ -2606,6 +2607,8 @@ model PayrollBook {
   createdByUserId   String?
   finalizedAt       DateTime?
   finalizedByUserId String?
+  /// PAY-69: document control number, issued gapless at finalize (PR-YYYY-NNNN). Never changes once set.
+  controlNumber     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2617,6 +2620,7 @@ model PayrollBook {
   paidExpenseClaims ExpenseClaim[]      @relation("BookPaidExpenseClaims")
 
   @@unique([tenantId, periodStart, periodEnd, runType])
+  @@unique([tenantId, controlNumber])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, periodEnd])
@@ -2807,6 +2811,10 @@ model PayrollSheet {
   /// each cutoff's figures, which are included in this sheet's amounts.
   heldRelease Json?
 
+  /// PAY-69: payslip control number, issued gapless at finalize (PS-YYYY-NNNNNN). Never changes once set.
+  controlNumber String?
+
+  @@unique([tenantId, controlNumber])
   @@unique([payrollBookId, employeeId])
   @@index([tenantId])
   @@index([tenantId, employeeId])
@@ -3932,4 +3940,23 @@ model CentralAuditEvent {
   @@index([createdAt])
   @@index([kind])
   @@index([tenantId, createdAt])
+}
+
+/// PAY-69 (Q3b, Mark 17 Nov): the gapless counters behind document control
+/// numbers, one per company, document type and year. A number is claimed in
+/// the same transaction that finalizes the document, so a rolled-back
+/// finalize gives its number back and the series never has a gap.
+model DocumentSeries {
+  id         String   @id @default(cuid())
+  tenantId   String
+  /// PAYROLL_RUN or PAYSLIP.
+  docType    String
+  seriesYear Int
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, docType, seriesYear])
+  @@index([tenantId])
 }
