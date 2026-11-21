@@ -13,6 +13,8 @@ import { forbidUnless } from "@/lib/authz/route-permission";
 const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(150),
   description: z.string().max(500).optional().nullable(),
+  // Wave F1 (PAY-216): employees of this job type work in the field.
+  fieldWork: z.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {

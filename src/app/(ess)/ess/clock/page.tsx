@@ -242,7 +242,7 @@ export default function EssClockPage() {
         outsideGeofence: data?.data?.outsideGeofence ?? false,
         distanceMeters: data?.data?.distanceMeters ?? null,
       });
-      toast.success(`Clocked ${punchType === "IN" ? "in" : "out"} successfully!`);
+      toast.success(`Clocked ${punchType === "IN" ? "in" : "out"}${data?.data?.siteName ? ` at ${data.data.siteName}` : ""}.`);
       loadHistory();
     } catch {
       toast.error("Network error. Please try again.");
@@ -257,6 +257,8 @@ export default function EssClockPage() {
   return (
     <div className="p-4 lg:p-8 space-y-4 max-w-xl mx-auto">
       <h1 className="text-xl lg:text-2xl font-bold text-center lg:text-left">Time Clock</h1>
+      {/* Wave F1 (PAY-216): the location is taken only at the punch. */}
+      <p className="text-xs text-muted-foreground text-center lg:text-left">Your location is captured only at the moment you clock in or out, never in between. A punch away from your work site is still recorded and marked for your supervisor.</p>
 
       {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />

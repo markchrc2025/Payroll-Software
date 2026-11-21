@@ -13,7 +13,7 @@
  *  6. Upsert DTRRecord (create if missing, update if not locked).
  */
 import { withTenant } from "@/lib/with-tenant";
-import { checkGeofence } from "@/lib/attendance/geofence";
+import { checkFieldFences, checkGeofence } from "@/lib/attendance/geofence";
 import { computeDtrFields, parseWindowMinutes } from "@/lib/attendance/compute-dtr";
 import { resolveTimezone, localDay, atLocalWallClock } from "@/lib/time/zone";
 import { applyOtBreakRule } from "@/lib/attendance/ot-policy";
@@ -38,7 +38,7 @@ export interface PunchInput {
 }
 
 export type PunchResult =
-  | { ok: true;  log: { id: string; outsideGeofence: boolean; distanceMeters: number | null }; dtr: { id: string } }
+  | { ok: true;  log: { id: string; outsideGeofence: boolean; distanceMeters: number | null; siteName: string | null }; dtr: { id: string } }
   | { ok: false; code: "NO_CONSENT" | "EMPLOYEE_NOT_FOUND" | "DTR_LOCKED" };
 
 /**
@@ -51,7 +51,7 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     // 1. Verify employee exists
     const employee = await tx.employee.findFirst({
       where: { id: input.employeeId, tenantId: input.tenantId, deletedAt: null },
-      select: { id: true, branchId: true, shiftScheduleId: true, geofenceExempt: true, needsTimeClock: true, timezone: true },
+      select: { id: true, branchId: true, shiftScheduleId: true, geofenceExempt: true, needsTimeClock: true, timezone: true, fieldWork: true, jobType: { select: { fieldWork: true } } },
     });
     if (!employee) return { ok: false, code: "EMPLOYEE_NOT_FOUND" };
 
@@ -106,7 +106,18 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
     //    Skipped for exempt employees (field staff / time-clock off).
     const geofenceExempt = employee.geofenceExempt || employee.needsTimeClock === false;
     let geofenceResult = { outsideGeofence: false, distanceMeters: null as number | null };
-    if (!geofenceExempt && input.latitude != null && input.longitude != null && employee.branchId) {
+    let siteName: string | null = null;
+    const fieldWorker = employee.fieldWork || employee.jobType?.fieldWork === true;
+    if (!geofenceExempt && fieldWorker && input.latitude != null && input.longitude != null) {
+      // Wave F1 (PAY-216, decision 10): every fence that applies; outside all is accepted and flagged.
+      const fences = await tx.geofence.findMany({
+        where: { tenantId: input.tenantId, isActive: true, deletedAt: null, OR: [{ branchId: null }, ...(employee.branchId ? [{ branchId: employee.branchId }] : [])] },
+        select: { name: true, latitude: true, longitude: true, radiusMeters: true },
+      });
+      const r = checkFieldFences(input.latitude, input.longitude, fences);
+      geofenceResult = { outsideGeofence: r.outsideGeofence, distanceMeters: r.distanceMeters };
+      siteName = r.siteName;
+    } else if (!geofenceExempt && input.latitude != null && input.longitude != null && employee.branchId) {
       const geofence = await getOrSet(
         CacheKeys.geofence(input.tenantId, employee.branchId),
         TTL.GEOFENCE,
@@ -139,10 +150,11 @@ export async function executePunch(input: PunchInput): Promise<PunchResult> {
         longitude:       input.longitude != null ? input.longitude : null,
         outsideGeofence: geofenceResult.outsideGeofence,
         distanceMeters:  geofenceResult.distanceMeters,
+        siteName,
         ipAddress:       input.ipAddress ?? null,
         userAgent:       input.userAgent ?? null,
       },
-      select: { id: true, outsideGeofence: true, distanceMeters: true },
+      select: { id: true, outsideGeofence: true, distanceMeters: true, siteName: true },
     });
 
     // 5 to 7. Recompute this day's DTR from all of its punches.
