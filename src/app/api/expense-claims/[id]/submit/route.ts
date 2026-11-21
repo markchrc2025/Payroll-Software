@@ -9,6 +9,7 @@ import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { ok, err, unauthorized, notFound, forbidden, serverError } from "@/lib/api-response";
 import { callerEmployeeId } from "@/lib/approvals/second-party";
+import { ClaimListRefusal, checkOnSubmit } from "@/lib/expenses/claim-lists";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function POST(
@@ -33,12 +34,14 @@ export async function POST(
 
       const updated = await tx.expenseClaim.update({
         where: { id },
-        data: { status: "SUBMITTED" },
+        // Wave A2 (PAY-209): receipt rule enforced, limits flagged (decision 6).
+        data: { status: "SUBMITTED", limitFlags: await checkOnSubmit(tx, claim) },
       });
 
       return ok(serializeExpenseClaim(updated));
     });
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     return serverError(e);
   }
 }

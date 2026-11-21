@@ -16,6 +16,7 @@ import {
 } from "@/lib/validations/expense-claim";
 import { toCentavos } from "@/lib/money";
 import { isTenantReceiptKey } from "@/lib/expense-receipts";
+import { ClaimListRefusal, resolveClaimLists } from "@/lib/expenses/claim-lists";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function GET(req: NextRequest) {
@@ -105,11 +106,12 @@ export async function POST(req: NextRequest) {
       });
       if (!employee) return err("Employee not found", 404);
 
+      const lists = await resolveClaimLists(tx, auth.tenantId, d);
       const claim = await tx.expenseClaim.create({
         data: {
           tenantId: auth.tenantId,
           employeeId: d.employeeId,
-          category: d.category,
+          ...lists,
           description: d.description,
           amountCents: toCentavos(d.amount),
           receiptKey: d.receiptKey,
@@ -121,6 +123,7 @@ export async function POST(req: NextRequest) {
       return ok(serializeExpenseClaim(claim), undefined, 201);
     });
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     return serverError(e);
   }
 }
