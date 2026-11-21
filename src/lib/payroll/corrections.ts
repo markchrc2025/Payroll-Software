@@ -137,6 +137,9 @@ async function land(tx: Tx, tenantId: string, correction: { id: string; employee
   if (book.status !== "DRAFT") throw new CorrectionError("A correction lands in a draft run.", 409);
   if (book.runType === "YEAR_END") throw new CorrectionError("A correction does not land in a Year-End run.", 409);
   if (!original || book.periodStart <= original.payrollBook.periodEnd) throw new CorrectionError("A correction lands forward: pick a run that starts after the corrected payslip's period.", 409);
+  if (!(await tx.payrollSheet.findFirst({ where: { payrollBookId: bookId, employeeId: correction.employeeId }, select: { id: true } }))) {
+    throw new CorrectionError("The employee has no payslip in that draft run.", 409);
+  }
   const lines = correction.lines as unknown as CorrectionLine[];
   for (const l of lines) {
     const a = BigInt(l.amountCents);

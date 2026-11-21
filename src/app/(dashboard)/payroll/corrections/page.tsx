@@ -20,7 +20,7 @@ const ITEMS: [string, string][] = [
 type Run = { id: string; periodStart: string; periodEnd: string; status: string; controlNumber?: string | null; runType: string };
 type Sheet = { id: string; employeeId: string; employeeName?: string | null; employeeNumber?: string | null };
 type Correction = {
-  id: string; status: string; controlNumber: string | null; reason: string; netEffectCents: string; createdAt: string;
+  id: string; status: string; kind?: string; batchId?: string | null; controlNumber: string | null; reason: string; netEffectCents: string; createdAt: string;
   lines: { item: string; amountCents: string; taxable: boolean; description?: string }[];
   employee: { employeeNumber: string; firstName: string; lastName: string };
   originalSheet: { controlNumber: string | null; payrollBook: { periodStart: string; periodEnd: string } };
@@ -53,6 +53,12 @@ export default function CorrectionsPage() {
   const [reason, setReason] = useState("");
   const [lines, setLines] = useState<Line[]>([{ item: "BASIC", pesos: "", taxable: true, description: "" }]);
   const [landIn, setLandIn] = useState<Record<string, string>>({});
+  // PAY-166: retroactive salary increase.
+  const [retroOpen, setRetroOpen] = useState(false);
+  const [people, setPeople] = useState<{ id: string; employeeNumber: string; firstName: string; lastName: string }[]>([]);
+  const [retro, setRetro] = useState({ employeeId: "", pesos: "", from: "", to: "", reason: "" });
+  const [retroItems, setRetroItems] = useState<string[]>(["BASIC", "OVERTIME", "NIGHT_DIFF", "HOLIDAY", "REST_DAY", "LATES"]);
+  const [retroPreview, setRetroPreview] = useState<{ sheetId: string; periodStart: string; periodEnd: string; totalCents: string }[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +87,32 @@ export default function CorrectionsPage() {
     void load();
   }
 
+  useEffect(() => {
+    if (!retroOpen || people.length) return;
+    void fetch("/api/employees?limit=500").then((r) => r.json()).then((j) => setPeople(j.data ?? []));
+  }, [retroOpen, people.length]);
+
+  function retroBody() {
+    return { employees: [{ employeeId: retro.employeeId, newBasicSalaryCents: toCents(retro.pesos) ?? "x" }], from: retro.from, to: retro.to, items: retroItems, reason: retro.reason };
+  }
+  async function retroSend(preview: boolean) {
+    const res = await fetch(`/api/payroll/retro-pay${preview ? "?preview=1" : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(retroBody()) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(json.error ?? "Could not work out the increase"); return; }
+    if (preview) { setRetroPreview(json.data); return; }
+    toast.success(`Saved for ${json.data.payslips} payslip(s): ${peso(json.data.totalCents)}. Someone else approves it.`);
+    setRetroOpen(false); setRetroPreview(null); void load();
+  }
+  async function approveBatch(batchId: string, rowId: string) {
+    const bookId = landIn[rowId];
+    if (!bookId) { toast.error("Pick the draft run it lands in"); return; }
+    const res = await fetch(`/api/payroll/retro-pay/${batchId}/approve`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bookId }) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error([json.error, ...(json.details?.problems ?? [])].filter(Boolean).join(" ")); return; }
+    toast.success(`Approved ${json.data.approved} correction(s): ${json.data.controlNumbers.join(", ")}`);
+    void load();
+  }
+
   async function act(id: string, action: "approve" | "land" | "cancel") {
     const bookId = landIn[id];
     if (action !== "cancel" && !bookId) { toast.error("Pick the draft run it lands in"); return; }
@@ -103,6 +135,7 @@ export default function CorrectionsPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9"><RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></Button>
+          <Button variant="outline" size="sm" onClick={() => setRetroOpen((v) => !v)} className="h-9 text-[13px]" data-testid="new-retro-pay">Retroactive increase</Button>
           <Button size="sm" onClick={() => setCreating((v) => !v)} className="h-9 text-[13px]" data-testid="new-correction"><Plus className="h-3.5 w-3.5 mr-1.5" /> New correction</Button>
         </div>
       </div>
@@ -145,6 +178,38 @@ export default function CorrectionsPage() {
         </div>
       )}
 
+      {retroOpen && (
+        <div className="bg-white rounded-xl border border-[#E8E8E8] p-4 space-y-3 text-[13px]">
+          <p className="text-[#6B6B6B]">Re-prices the finalized regular payslips of the period at the new rate, for the days and hours actually paid, and pays the difference in a later draft run.</p>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="space-y-1 md:col-span-2"><span className="font-medium">Employee</span>
+              <select className="h-9 w-full rounded-md border px-2" value={retro.employeeId} onChange={(e) => setRetro({ ...retro, employeeId: e.target.value })}>
+                <option value="">Pick an employee</option>
+                {people.map((p) => <option key={p.id} value={p.id}>{p.lastName}, {p.firstName} ({p.employeeNumber})</option>)}
+              </select>
+            </label>
+            <label className="space-y-1"><span className="font-medium">New basic salary</span><Input value={retro.pesos} onChange={(e) => setRetro({ ...retro, pesos: e.target.value })} placeholder="35,000.00" /></label>
+            <div />
+            <label className="space-y-1"><span className="font-medium">From</span><Input type="date" value={retro.from} onChange={(e) => setRetro({ ...retro, from: e.target.value })} /></label>
+            <label className="space-y-1"><span className="font-medium">To</span><Input type="date" value={retro.to} onChange={(e) => setRetro({ ...retro, to: e.target.value })} /></label>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {ITEMS.filter(([v]) => ["BASIC", "OVERTIME", "NIGHT_DIFF", "HOLIDAY", "REST_DAY", "LATES"].includes(v)).map(([v, label]) => (
+              <label key={v} className="flex items-center gap-1"><input type="checkbox" checked={retroItems.includes(v)} onChange={(e) => setRetroItems(e.target.checked ? [...retroItems, v] : retroItems.filter((x) => x !== v))} /> {label}</label>
+            ))}
+          </div>
+          <label className="block space-y-1"><span className="font-medium">Reason</span><Input value={retro.reason} onChange={(e) => setRetro({ ...retro, reason: e.target.value })} placeholder="Merit increase approved on ..." /></label>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => retroSend(true)} disabled={!retro.employeeId || !retro.from || !retro.to}>Preview</Button>
+            <Button size="sm" onClick={() => retroSend(false)} disabled={!retroPreview?.length || !retro.reason.trim()}>Save draft</Button>
+          </div>
+          {retroPreview && (retroPreview.length === 0 ? <p className="text-[#6B6B6B]">No finalized payslip in the period is below the new rate.</p> : (
+            <ul className="text-[12.5px]">{retroPreview.map((r) => <li key={r.sheetId}>{r.periodStart} to {r.periodEnd}: {peso(r.totalCents)}</li>)}
+              <li className="font-semibold">Total: {peso(retroPreview.reduce((t, r) => t + BigInt(r.totalCents), 0n).toString())}</li></ul>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-[#E8E8E8] overflow-x-auto">
         <Table>
           <TableHeader>
@@ -177,7 +242,8 @@ export default function CorrectionsPage() {
                   </select>
                 )}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
-                  {c.status === "DRAFT" && <Button size="sm" className="h-8 mr-1" onClick={() => act(c.id, "approve")} data-testid="approve-correction">Approve</Button>}
+                  {c.status === "DRAFT" && c.batchId && <Button size="sm" className="h-8 mr-1" onClick={() => approveBatch(c.batchId!, c.id)}>Approve batch</Button>}
+                  {c.status === "DRAFT" && !c.batchId && <Button size="sm" className="h-8 mr-1" onClick={() => act(c.id, "approve")} data-testid="approve-correction">Approve</Button>}
                   {c.status === "APPROVED" && !c.targetBook && <Button size="sm" className="h-8 mr-1" onClick={() => act(c.id, "land")}>Land</Button>}
                   {c.status !== "CANCELLED" && c.targetBook?.status !== "FINALIZED" && <Button variant="outline" size="sm" className="h-8" onClick={() => act(c.id, "cancel")}>Cancel</Button>}
                 </TableCell>
