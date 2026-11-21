@@ -170,7 +170,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Incident",
     items: [
       { href: "/incidents", label: "Incidents", icon: "incidents" },
-      { href: "#soon-incident-causeless", label: "Causeless", icon: "incidents", comingSoon: true },
+      { href: "/incidents/causeless", label: "Causeless", icon: "incidents" },
       { href: "/settings/lists/INCIDENT_CATEGORY", label: "Category", icon: "components" },
       { href: "/settings/lists/INCIDENT_TYPE", label: "Type", icon: "components" },
       { href: "/settings/lists/INCIDENT_DECISION", label: "Decision", icon: "policies" },
