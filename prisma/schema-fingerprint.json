@@ -839,6 +839,7 @@
   "column \"LeaveEarningPolicy\".\"proRate\" bool not null default true",
   "column \"LeaveEarningPolicy\".\"tenantId\" text not null",
   "column \"LeaveEarningPolicy\".\"updatedAt\" timestamp not null",
+  "column \"LeaveEarningPolicy\".\"vacationLeave\" bool not null default false",
   "column \"LeaveEarningPolicy\".assignment jsonb not null default '{}'::jsonb",
   "column \"LeaveEarningPolicy\".id text not null",
   "column \"LeaveEarningPolicy\".name text not null",
