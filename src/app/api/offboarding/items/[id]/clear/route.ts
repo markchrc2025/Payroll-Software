@@ -1,7 +1,6 @@
 /**
  * PAY-197: POST /api/offboarding/items/[id]/clear { remarks? }. Only the
  * item's signatory, never the leaving employee.
- * @permission-exempt: a signatory signs off only items assigned to them; clearItem refuses anyone else and the leaving employee.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -14,6 +13,7 @@ import { clearItem, OffboardingError } from "@/lib/offboarding/clearance";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAuthContext(req);
   if (!auth) return unauthorized();
+  // @permission-exempt: a signatory signs off only items assigned to them; clearItem refuses anyone else and the leaving employee.
   const { id } = await params;
   const parsed = z.object({ remarks: z.string().max(500).nullish() }).safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return err("Invalid remarks", 422);
