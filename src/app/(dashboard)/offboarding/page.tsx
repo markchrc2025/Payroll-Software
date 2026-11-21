@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Item = { id: string; name: string; description: string | null; status: string; remarks: string | null; clearedAt: string | null; signatory: { id: string; firstName: string; lastName: string } };
 type Case = {
-  exitQuestionnaireAt?: string | null; personalInfoAt?: string | null; coeRequestedAt?: string | null;
+  exitQuestionnaireAt?: string | null; personalInfoAt?: string | null; coeRequestedAt?: string | null; coeIssuedAt?: string | null;
   id: string; status: string; separationReason: string; lastWorkingDay: string; daysSinceSeparation: number; finalPayDueInDays: number; pendingItems: number;
   employee: { employeeNumber: string; firstName: string; lastName: string }; items: Item[];
 };
@@ -46,6 +46,11 @@ export default function OffboardingPage() {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { toast.error(json.error ?? "Could not send the link"); return; }
     toast.success(`Portal link sent to ${json.data.sentTo}`);
+  }
+  async function issueCoe(caseId: string) {
+    const res = await fetch(`/api/offboarding/cases/${caseId}/coe-issue`, { method: "POST" });
+    if (!res.ok) { toast.error("Could not issue the certificate"); return; }
+    toast.success("Certificate issued: the employee can download it from the portal"); void load();
   }
   async function close(caseId: string) {
     const res = await fetch(`/api/offboarding/cases/${caseId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "CLOSED" }) });
@@ -107,6 +112,9 @@ export default function OffboardingPage() {
                 </p>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => sendLink(c.id)} data-testid="send-portal-link">Send portal link</Button>
+                  <a className="h-8 mt-1 inline-flex items-center px-3 rounded-md border text-[13px]" href={`/api/offboarding/cases/${c.id}/documents/coe`}>Certificate of employment</a>
+                  <a className="h-8 mt-1 inline-flex items-center px-3 rounded-md border text-[13px]" href={`/api/offboarding/cases/${c.id}/documents/quitclaim`} data-testid="quitclaim-download">Quitclaim and release</a>
+                  {!c.coeIssuedAt && <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => issueCoe(c.id)}>Issue certificate to portal</Button>}
                   {c.status === "CLEARED" && <Button size="sm" variant="outline" className="h-8 mt-1" onClick={() => close(c.id)}>Close case</Button>}
                 </div>
               </div>

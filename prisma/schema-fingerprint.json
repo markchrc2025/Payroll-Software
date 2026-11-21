@@ -864,6 +864,7 @@
   "column \"OTApplication\".status ApprovalStatus not null default 'PENDING'::\"ApprovalStatus\"",
   "column \"OffboardingCase\".\"clearedAt\" timestamp null",
   "column \"OffboardingCase\".\"closedAt\" timestamp null",
+  "column \"OffboardingCase\".\"coeIssuedAt\" timestamp null",
   "column \"OffboardingCase\".\"coeRequestedAt\" timestamp null",
   "column \"OffboardingCase\".\"createdAt\" timestamp not null default CURRENT_TIMESTAMP",
   "column \"OffboardingCase\".\"createdByUserId\" text null",

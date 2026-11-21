@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 type Summary = {
   company: string; employee: { firstName: string; lastName: string; employeeNumber: string }; lastWorkingDay: string;
   clearance: { status: string; items: { name: string; status: string }[] };
-  exitQuestionnaireAt: string | null; personalInfoAt: string | null; coeRequestedAt: string | null;
+  exitQuestionnaireAt: string | null; personalInfoAt: string | null; coeRequestedAt: string | null; coeIssuedAt?: string | null;
   personalInfo: Record<string, string | null> | null; finalPayslipBookId: string | null; closesAt: string | null;
 };
 const box = "rounded-xl border border-[#E8E8E8] bg-white p-4 space-y-2";
@@ -66,7 +66,7 @@ export default function OffboardPortalPage() {
       <section className={box}>
         <h2 className="font-semibold">Final documents</h2>
         {me.finalPayslipBookId ? <a className="underline" href="/api/offboard-portal/payslip" data-testid="final-payslip">Download your final payslip</a> : <p>Your final payslip will be here once your final pay is released.</p>}
-        <div>{me.coeRequestedAt ? <p>Certificate of employment requested on {me.coeRequestedAt.slice(0, 10)}.</p> : <button type="button" className="underline" onClick={() => send("/api/offboard-portal/coe-request", "POST")}>Request a certificate of employment</button>}</div>
+        <div>{me.coeIssuedAt ? <a className="underline" href="/api/offboard-portal/coe" data-testid="coe-download">Download your certificate of employment</a> : me.coeRequestedAt ? <p>Certificate of employment requested on {me.coeRequestedAt.slice(0, 10)}.</p> : <button type="button" className="underline" onClick={() => send("/api/offboard-portal/coe-request", "POST")}>Request a certificate of employment</button>}</div>
       </section>
 
       <section className={box}>

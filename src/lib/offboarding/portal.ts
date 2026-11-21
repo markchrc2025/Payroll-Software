@@ -144,6 +144,7 @@ export async function portalSummary(tx: Tx, ctx: PortalContext) {
     personalInfo: info ? { ...info, bankAccountNumberEnc: undefined, bankAccount: info.bankAccountLast4 ? `ending ${info.bankAccountLast4}` : null } : null,
     personalInfoAt: c.personalInfoAt,
     coeRequestedAt: c.coeRequestedAt,
+    coeIssuedAt: c.coeIssuedAt,
     finalPayslipBookId: finalPay?.payrollBookId ?? null,
     closesAt: await portalClosesAt(tx, ctx.tenantId, ctx.employeeId),
   };

@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 188 |
+| USER_SESSION | 189 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 268 |
+| Total | 269 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -261,6 +261,7 @@ None.
 | PUT | /api/offboard-portal/questionnaire | PORTAL_SESSION | getPortalSession | yes |
 | POST | /api/offboard-portal/session | PUBLIC_BY_DESIGN | offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie | n/a |
 | DELETE | /api/offboard-portal/session | PUBLIC_BY_DESIGN | offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie | n/a |
+| POST | /api/offboarding/cases/[id]/coe-issue | USER_SESSION | getAuthContext | yes |
 | POST | /api/offboarding/cases/[id]/portal-link | USER_SESSION | getAuthContext | yes |
 | PATCH | /api/offboarding/cases/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/offboarding/cases | USER_SESSION | getAuthContext | yes |
