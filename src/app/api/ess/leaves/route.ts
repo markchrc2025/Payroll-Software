@@ -28,6 +28,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-response";
+import { blackoutFor } from "@/lib/leave/schedule";
 import { withTenant } from "@/lib/with-tenant";
 import { serializeLeaveTransaction } from "@/lib/payroll/serialize";
 import { splitLeaveUnits, resolveOrCreateBalance } from "@/lib/leave/filing";
@@ -127,6 +128,11 @@ export async function POST(req: NextRequest) {
       });
       if (!leaveType) return "leave_type_not_found" as const;
 
+      // Wave E3 (PAY-215, decision 9): a blackout period set to block refuses
+      // the request; one set to flag lets it through for the approver to see.
+      const blackout = await blackoutFor(tx, ctx.tenantId, ctx.employeeId, new Date(`${startDate}T00:00:00.000Z`), new Date(`${endDate}T00:00:00.000Z`));
+      if (blackout?.blackoutMode === "BLOCK") return { blocked: blackout.name };
+
       // Resolve (or create) the balance and split paid vs LWOP. Insufficient
       // entitlement is filed as Leave-Without-Pay rather than rejected.
       const balance = await resolveOrCreateBalance(tx, ctx.tenantId, ctx.employeeId, leaveTypeId, year);
@@ -169,6 +175,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (result === "leave_type_not_found") return err("Leave type not found", 404);
+    if ("blocked" in result) return err(`Leave is not taken during ${result.blocked}. Choose other dates.`, 422);
 
     return ok(serializeLeaveTransaction(result), "Leave request filed", 201);
   } catch (e) {

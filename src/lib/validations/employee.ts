@@ -252,6 +252,8 @@ const employeeFieldsSchema = z.object({
   allowProfileUpdate: z.coerce.boolean().optional().default(false),
   needsTimeClock: z.coerce.boolean().optional().default(true),
   geofenceExempt: z.coerce.boolean().optional().default(false),
+  // Wave F1 (PAY-216): field worker; punches checked against every fence, outside all flagged.
+  fieldWork: z.coerce.boolean().optional().default(false),
   attendanceExempt: z.coerce.boolean().optional().default(false),
 
   // Extended employment

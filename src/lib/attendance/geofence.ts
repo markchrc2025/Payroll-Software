@@ -70,3 +70,27 @@ export function checkGeofence(
     distanceMeters: dist,
   };
 }
+
+/**
+ * Wave F1 (PAY-216, decision 10, Mark 21 Nov 2026): a field worker's punch is
+ * checked against every fence that applies (their branch's and the company's
+ * client or site fences). Inside any: not flagged, and the site is named.
+ * Outside all: accepted and flagged, with the distance to the nearest.
+ * No fence at all: not flagged.
+ */
+export function checkFieldFences(
+  lat: number | null,
+  lon: number | null,
+  fences: { name: string; latitude: { toNumber(): number } | number; longitude: { toNumber(): number } | number; radiusMeters: number }[],
+): GeofenceResult & { siteName: string | null } {
+  if (!fences.length || lat == null || lon == null) return { outsideGeofence: false, distanceMeters: null, siteName: null };
+  let best: { d: number; name: string; inside: boolean } | null = null;
+  for (const f of fences) {
+    const flat = typeof f.latitude === "number" ? f.latitude : f.latitude.toNumber();
+    const flon = typeof f.longitude === "number" ? f.longitude : f.longitude.toNumber();
+    const d = haversineMetres(lat, lon, flat, flon);
+    const inside = d <= f.radiusMeters;
+    if (!best || (inside && !best.inside) || (inside === best.inside && d < best.d)) best = { d, name: f.name, inside };
+  }
+  return { outsideGeofence: !best!.inside, distanceMeters: Math.round(best!.d), siteName: best!.inside ? best!.name : null };
+}

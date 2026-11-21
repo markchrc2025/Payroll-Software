@@ -183,6 +183,7 @@ const DEFAULTS: Partial<CreateEmployeeInput> = {
   country: "Philippines",
   needsTimeClock: true,
   geofenceExempt: false,
+  fieldWork: false,
   attendanceExempt: false,
   allowProfileUpdate: false,
   directoryRole: "Employee",
@@ -864,6 +865,7 @@ export function AddEmployeeWizard({ departments, branches, positions, shiftSched
             <TF control={c} name="regularizationDate"     label="Regularization Date" type="date"              errors={e} />
             <ToggleF control={c} name="needsTimeClock"    label="Time Clock Needed"                span2 exclusiveWith="attendanceExempt" setValue={setValue} />
             <ToggleF control={c} name="geofenceExempt"    label="Geofence Exempt"                  span2 />
+            <ToggleF control={c} name="fieldWork"         label="Field worker (checks in at client or site locations)" span2 />
             <ToggleF control={c} name="attendanceExempt"  label="Attendance Exempt (HR Admin only — executives / C-level receive full pay without time-clock records)" span2 exclusiveWith="needsTimeClock" setValue={setValue} />
             <FSec label="Placement" />
             <TF control={c} name="placementEffectiveDate" label="Effective Date" type="date" span2 errors={e} />

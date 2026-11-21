@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
       logId:           (result as Extract<typeof result, { ok: true }>).log.id,
       outsideGeofence: (result as Extract<typeof result, { ok: true }>).log.outsideGeofence,
       distanceMeters:  (result as Extract<typeof result, { ok: true }>).log.distanceMeters,
+      siteName:        (result as Extract<typeof result, { ok: true }>).log.siteName,
       dtrId:           (result as Extract<typeof result, { ok: true }>).dtr.id,
     },
     d.punchType === "IN" ? "Clocked in" : "Clocked out",
