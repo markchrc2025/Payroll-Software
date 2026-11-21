@@ -45,6 +45,9 @@ export const resolveIncidentSchema = z.object({
   /** Wave A3: the Incident Decisions item; its outcome is copied onto the incident. */
   decisionId: cuid.nullable().optional(),
   status: z.enum(["RESOLVED", "CLOSED"]).default("RESOLVED"),
+  /** Wave G3: a suspension's first day; a dismissal's last working day (YYYY-MM-DD). */
+  suspensionStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lastWorkingDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
