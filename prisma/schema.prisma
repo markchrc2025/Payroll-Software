@@ -4325,6 +4325,8 @@ model LeaveEarningPolicy {
   expiresAfterMonths Int?
   /// Year end (Wave E2): unused days, after carry-over, paid in cash.
   convertUnusedToCash Boolean         @default(false)
+  /// Wave E2, decision 8: vacation leave, so up to 10 converted days a year are de minimis.
+  vacationLeave      Boolean          @default(false)
   /// { employmentStatuses, levelIds, departmentIds, jobTypeIds }; an empty list means any.
   assignment         Json             @default("{}")
   effectiveFrom      DateTime

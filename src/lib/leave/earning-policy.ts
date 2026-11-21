@@ -44,6 +44,7 @@ export const policySchema = z.object({
   carryOverCap: optDecimal,
   expiresAfterMonths: z.number().int().min(1).max(120).nullable().optional(),
   convertUnusedToCash: z.boolean().default(false),
+  vacationLeave: z.boolean().default(false),
   assignment: z.object({
     employmentStatuses: z.array(z.string()).default([]),
     levelIds: z.array(z.string()).default([]),
@@ -72,7 +73,7 @@ export function parsePolicy(input: unknown) {
   return {
     name: d.name, leaveTypeId: d.leaveTypeId, accrualFrequency: d.accrualFrequency as AccrualFrequency, accrualAmount: d.accrualAmount,
     tiers: [...d.tiers].sort((a, b) => a.fromYear - b.fromYear) as Prisma.InputJsonValue, proRate: d.proRate, earnFrom: d.earnFrom,
-    carryOverCap: d.carryOverCap ?? null, expiresAfterMonths: d.expiresAfterMonths ?? null, convertUnusedToCash: d.convertUnusedToCash,
+    carryOverCap: d.carryOverCap ?? null, expiresAfterMonths: d.expiresAfterMonths ?? null, convertUnusedToCash: d.convertUnusedToCash, vacationLeave: d.vacationLeave,
     assignment: d.assignment as unknown as Prisma.InputJsonValue, effectiveFrom: new Date(`${d.effectiveFrom}T00:00:00.000Z`), isActive: d.isActive,
   };
 }

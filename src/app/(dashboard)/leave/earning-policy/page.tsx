@@ -18,7 +18,7 @@ type Ref = { id: string; name: string };
 type Tier = { fromYear: number; accrualAmount: string };
 type Policy = {
   id: string; name: string; leaveTypeId: string; accrualFrequency: string; accrualAmount: string; tiers: Tier[]; proRate: boolean; earnFrom: string;
-  carryOverCap: string | null; expiresAfterMonths: number | null; convertUnusedToCash: boolean; effectiveFrom: string; isActive: boolean; lastAppliedAt: string | null;
+  carryOverCap: string | null; expiresAfterMonths: number | null; convertUnusedToCash: boolean; vacationLeave: boolean; effectiveFrom: string; isActive: boolean; lastAppliedAt: string | null;
   assignment: { employmentStatuses?: string[]; levelIds?: string[]; departmentIds?: string[]; jobTypeIds?: string[] };
   leaveType: { name: string }; _count: { entitlements: number };
 };
@@ -28,7 +28,7 @@ const FREQ = [["MONTHLY", "Monthly"], ["QUARTERLY", "Quarterly"], ["ANNUALLY", "
 const STATUSES = [["PROBATIONARY", "Probationary"], ["REGULAR", "Regular"], ["CONTRACTUAL", "Contractual"], ["PROJECT_BASED", "Project-based"]];
 const today = () => new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
 const EMPTY = { id: "", name: "", leaveTypeId: "", accrualFrequency: "MONTHLY", accrualAmount: "1.25", tiers: [] as Tier[], proRate: true, earnFrom: "HIRE",
-  carryOverCap: "", expiresAfterMonths: "", convertUnusedToCash: false, effectiveFrom: today(), isActive: true,
+  carryOverCap: "", expiresAfterMonths: "", convertUnusedToCash: false, vacationLeave: false, effectiveFrom: today(), isActive: true,
   employmentStatuses: [] as string[], levelIds: [] as string[], departmentIds: [] as string[], jobTypeIds: [] as string[] };
 type Form = typeof EMPTY;
 
@@ -75,7 +75,7 @@ export default function EarningPolicyPage() {
     setEdit({
       id: p.id, name: p.name, leaveTypeId: p.leaveTypeId, accrualFrequency: p.accrualFrequency, accrualAmount: String(Number(p.accrualAmount)), tiers: p.tiers ?? [],
       proRate: p.proRate, earnFrom: p.earnFrom, carryOverCap: p.carryOverCap == null ? "" : String(Number(p.carryOverCap)), expiresAfterMonths: p.expiresAfterMonths == null ? "" : String(p.expiresAfterMonths),
-      convertUnusedToCash: p.convertUnusedToCash, effectiveFrom: p.effectiveFrom.slice(0, 10), isActive: p.isActive,
+      convertUnusedToCash: p.convertUnusedToCash, vacationLeave: p.vacationLeave, effectiveFrom: p.effectiveFrom.slice(0, 10), isActive: p.isActive,
       employmentStatuses: p.assignment.employmentStatuses ?? [], levelIds: p.assignment.levelIds ?? [], departmentIds: p.assignment.departmentIds ?? [], jobTypeIds: p.assignment.jobTypeIds ?? [],
     });
   }
@@ -86,7 +86,7 @@ export default function EarningPolicyPage() {
       name: edit.name, leaveTypeId: edit.leaveTypeId, accrualFrequency: edit.accrualFrequency, accrualAmount: edit.accrualAmount,
       tiers: edit.tiers.map((t) => ({ fromYear: Number(t.fromYear), accrualAmount: t.accrualAmount })), proRate: edit.proRate, earnFrom: edit.earnFrom,
       carryOverCap: edit.carryOverCap === "" ? null : edit.carryOverCap, expiresAfterMonths: edit.expiresAfterMonths === "" ? null : Number(edit.expiresAfterMonths),
-      convertUnusedToCash: edit.convertUnusedToCash, effectiveFrom: edit.effectiveFrom, isActive: edit.isActive,
+      convertUnusedToCash: edit.convertUnusedToCash, vacationLeave: edit.vacationLeave, effectiveFrom: edit.effectiveFrom, isActive: edit.isActive,
       assignment: { employmentStatuses: edit.employmentStatuses, levelIds: edit.levelIds, departmentIds: edit.departmentIds, jobTypeIds: edit.jobTypeIds },
     };
     setBusy(true);
@@ -152,6 +152,8 @@ export default function EarningPolicyPage() {
         </table>
       </div>
 
+      <YearEnd />
+
       <Sheet open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader><SheetTitle>{edit?.id ? "Edit policy" : "New policy"}</SheetTitle></SheetHeader>
@@ -195,6 +197,7 @@ export default function EarningPolicyPage() {
                   <div className="space-y-1.5"><Label>Carried days expire after (months)</Label><Input value={edit.expiresAfterMonths} onChange={(e) => setEdit({ ...edit, expiresAfterMonths: e.target.value })} placeholder="Blank: never" /></div>
                 </div>
                 <div className="flex items-center justify-between"><span>Pay unused days in cash</span><Switch checked={edit.convertUnusedToCash} onCheckedChange={(c: boolean) => setEdit({ ...edit, convertUnusedToCash: c })} /></div>
+                <div className="flex items-center justify-between"><span>This is vacation leave: up to 10 converted days a year are de minimis</span><Switch checked={edit.vacationLeave} onCheckedChange={(c: boolean) => setEdit({ ...edit, vacationLeave: c })} /></div>
               </div>
               <div className="rounded-md border p-3 space-y-3">
                 <p className="font-medium">Who it covers</p>
@@ -237,5 +240,100 @@ export default function EarningPolicyPage() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+type YeRow = { employeeId: string; employeeNumber: string; employeeName: string; leaveType: string; policyName: string; available: string; heldBack: string; carry: string; convert: string; forfeit: string; cashCents: string; deMinimisCents: string; taxableCents: string; done: boolean };
+const peso = (c: string) => `₱${(Number(c) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Wave E2 (PAY-215): the year end, and expiring carried days. */
+function YearEnd() {
+  const [year, setYear] = useState(String(Number(today().slice(0, 4)) - (Number(today().slice(5, 7)) < 12 ? 1 : 0)));
+  const [rows, setRows] = useState<YeRow[] | null>(null);
+  const [runs, setRuns] = useState<{ id: string; label: string }[]>([]);
+  const [runId, setRunId] = useState("");
+  const [asOf, setAsOf] = useState(today());
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const res = await fetch(`/api/leave-year-end?year=${year}`);
+    const j = await res.json().catch(() => null);
+    if (!res.ok) { toast.error(j?.error ?? "Could not load the year end"); return; }
+    setRows(j?.data ?? []);
+    const r = await fetch("/api/payroll/runs?status=DRAFT&limit=20").then((x) => x.json()).catch(() => null);
+    setRuns(((r?.data ?? []) as { id: string; periodStart: string; periodEnd: string; runType?: string }[])
+      .filter((b) => b.runType !== "FINAL_PAY").map((b) => ({ id: b.id, label: `${b.runType ?? "REGULAR"} ${b.periodStart.slice(0, 10)} to ${b.periodEnd.slice(0, 10)}` })));
+  }
+
+  async function apply() {
+    if (!confirm(`Close the leave year ${year}? Carry-over, conversion and forfeiture are written and cannot be undone here.`)) return;
+    setBusy(true);
+    const res = await fetch("/api/leave-year-end", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ year: Number(year), payrollRunId: runId || null }) });
+    const j = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) { toast.error(j?.error ?? "Could not close the year"); return; }
+    toast.success(j?.message ?? "Done"); void load();
+  }
+
+  async function expireNow() {
+    setBusy(true);
+    const res = await fetch("/api/leave-year-end/expire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asOf }) });
+    const j = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) { toast.error(j?.error ?? "Could not expire"); return; }
+    toast.success(j?.message ?? "Done");
+  }
+
+  const head = "px-3 py-2 text-left text-[12px] font-semibold text-[#6B6B6B]";
+  const cell = "px-3 py-2 text-[13px]";
+  const cash = (rows ?? []).some((r) => !r.done && Number(r.cashCents) > 0);
+  return (
+    <section className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold">Year end</h2>
+          <p className="text-[12.5px] text-[#6B6B6B] max-w-[700px]">Days left at year end carry over up to each policy&apos;s cap; the rest is paid in cash where the policy says (vacation leave: up to 10 days de minimis, the rest taxable) or forfeited. Pending requests are held back. Running it twice changes nothing.</p>
+        </div>
+        <div className="flex items-end gap-2">
+          <div className="space-y-1"><Label className="text-[12px]">Year</Label><Input type="number" className="h-9 w-24" value={year} onChange={(e) => setYear(e.target.value)} /></div>
+          <Button variant="outline" size="sm" className="h-9" onClick={load}>Preview</Button>
+        </div>
+      </div>
+      {rows && (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b"><tr>{["Employee", "Leave", "Left", "Held back", "Carry", "Convert", "Forfeit", "Cash", "De minimis", "Taxable", ""].map((h) => <th key={h} className={head}>{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.length === 0 && <tr><td colSpan={11} className="py-6 text-center text-[13px] text-[#6B6B6B]">No balances from a policy in {year}.</td></tr>}
+                {rows.map((r) => (
+                  <tr key={`${r.employeeId}${r.leaveType}`} className="border-b last:border-0">
+                    <td className={cell}>{r.employeeName}</td><td className={cell}>{r.leaveType}</td>
+                    <td className={cell}>{Number(r.available)}</td><td className={cell}>{Number(r.heldBack)}</td><td className={cell}>{Number(r.carry)}</td>
+                    <td className={cell}>{Number(r.convert)}</td><td className={cell}>{Number(r.forfeit)}</td>
+                    <td className={cell}>{peso(r.cashCents)}</td><td className={cell}>{peso(r.deMinimisCents)}</td><td className={cell}>{peso(r.taxableCents)}</td>
+                    <td className={cell}>{r.done ? "Done" : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            {cash && (
+              <div className="space-y-1"><Label className="text-[12px]">Pay converted leave in</Label>
+                <select className="h-9 rounded-md border px-2 text-[13px]" value={runId} onChange={(e) => setRunId(e.target.value)}>
+                  <option value="">Choose a draft run</option>{runs.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </select>
+              </div>
+            )}
+            <Button size="sm" className="h-9" onClick={apply} disabled={busy || !rows.some((r) => !r.done) || (cash && !runId)}>Close the year</Button>
+          </div>
+        </>
+      )}
+      <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+        <div className="space-y-1"><Label className="text-[12px]">Expire carried days as of</Label><Input type="date" className="h-9 w-[160px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></div>
+        <Button variant="outline" size="sm" className="h-9" onClick={expireNow} disabled={busy}>Expire</Button>
+      </div>
+    </section>
   );
 }
