@@ -8,9 +8,9 @@
  *       rows: MSC 5,000.00, 15,000.00, 20,000.00 and 35,000.00.
  *   T3  the loader writes the baseline: it imports every payload from the
  *       module and defines none itself.
- *   T4  no other file builds its own SSS table. One copy is left, in
- *       engine.test.ts, which is protected and needs Mark's OK to change; it
- *       is checked here to be equal to the baseline, row for row.
+ *   T4  no other file builds its own SSS table. The last copy, in the
+ *       protected engine.test.ts, was replaced by the import (Mark, 21 Nov
+ *       2026); engine.test.ts must import the baseline.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -69,13 +69,9 @@ describe("PAY-65 one place for the statutory payloads", () => {
     // The mark of a hand-built SSS table: a loop over the salary credits.
     const loop = new RegExp(["for \\(let msc", " = "].join(""));
     const builders = [...files("src"), ...files("scripts")].filter((p) => loop.test(readFileSync(p, "utf8")));
-    expect(builders.sort()).toEqual(["src/lib/payroll/__tests__/engine.test.ts", "src/lib/statutory/baseline-2026.ts"]);
-    // The protected copy is run as written and compared with the baseline.
+    expect(builders.sort()).toEqual(["src/lib/statutory/baseline-2026.ts"]);
     const engineTest = readFileSync("src/lib/payroll/__tests__/engine.test.ts", "utf8");
-    const start = engineTest.indexOf("function buildSSSTable(): SssSchedulePayload {");
-    const end = engineTest.indexOf("\n}\n", start) + 2;
-    const body = engineTest.slice(start, end).replace("function buildSSSTable(): SssSchedulePayload {", "function buildSSSTable() {").replace(/: SssSchedulePayload\["rows"\]/g, "");
-    const copy = new Function(`${body}; return buildSSSTable();`)() as { rows: unknown[] };
-    expect(copy).toEqual(buildSSS2026());
+    expect(engineTest).toContain('import { SSS_2026 as BASELINE_SSS_2026 } from "@/lib/statutory/baseline-2026";');
+    expect(buildSSS2026()).toEqual(SSS_2026);
   });
 });

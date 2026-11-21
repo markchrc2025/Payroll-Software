@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 217 |
-| ESS_SESSION | 30 |
+| USER_SESSION | 218 |
+| ESS_SESSION | 32 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 302 |
+| Total | 305 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -209,6 +209,8 @@ None.
 | POST | /api/ess/pin | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/profile/update-requests | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/reset-password | PUBLIC_BY_DESIGN | the single-use reset token is the principal | n/a |
+| PUT | /api/ess/signature | ESS_SESSION | getEssContext | yes |
+| DELETE | /api/ess/signature | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/documents/[id]/ack | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/threads/[id]/comments | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team/threads | ESS_SESSION | getEssContext | yes |
@@ -235,6 +237,8 @@ None.
 | POST | /api/holidays | USER_SESSION | requirePermission | yes |
 | POST | /api/incidents/[id]/resolve | USER_SESSION | requirePermission | yes |
 | PATCH | /api/incidents/[id] | USER_SESSION | requirePermission | yes |
+| DELETE | /api/incidents/causeless/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/incidents/causeless | USER_SESSION | getAuthContext | yes |
 | POST | /api/incidents | USER_SESSION | requirePermission | yes |
 | PATCH | /api/job-levels/[id] | USER_SESSION | requirePermission | yes |
 | DELETE | /api/job-levels/[id] | USER_SESSION | requirePermission | yes |
@@ -335,7 +339,6 @@ None.
 | POST | /api/roles | USER_SESSION | requirePermission | yes |
 | POST | /api/salary-adjustments/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/salary-adjustments/[id]/reject | USER_SESSION | getAuthContext | yes |
-| POST | /api/salary-adjustments/[id]/split | USER_SESSION | getAuthContext | yes |
 | POST | /api/salary-adjustments | USER_SESSION | getAuthContext | yes |
 | POST | /api/settings/ownership | USER_SESSION | requirePermission | yes |
 | PUT | /api/settings/pay-schedules | USER_SESSION | getAuthContext | yes |

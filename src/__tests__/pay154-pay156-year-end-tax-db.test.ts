@@ -85,7 +85,7 @@ describeDb("PAY-154 and PAY-156 year-end and final pay tax, end to end (real Pos
   beforeAll(async () => {
     admin = new pg.Client({ connectionString: DB });
     await admin.connect();
-    await q(`INSERT INTO "Tenant" (id, name, "companyCode", "updatedAt") VALUES ($1, $1, $2, now())`, [T, `P154${sfx}`.toUpperCase()]);
+    await q(`INSERT INTO "Tenant" (id, name, "companyCode", "finalPayTaxMethod", "updatedAt") VALUES ($1, $1, $2, 'ANNUALIZE', now())`, [T, `P154${sfx}`.toUpperCase()]);
     const rules: [string, unknown][] = [
       ["SSS_SCHEDULE", SSS], ["PHILHEALTH_SCHEDULE", PHIC], ["PAGIBIG_SCHEDULE", PAGIBIG], ["BIR_WITHHOLDING_TABLE", BIR],
       ["MINIMUM_WAGE_RATE", MIN_WAGE],

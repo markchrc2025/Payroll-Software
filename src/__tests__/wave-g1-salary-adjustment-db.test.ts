@@ -10,15 +10,15 @@
  *   D2  Ana +5% from 8 Jul: 31,500.00; the author cannot approve; a second
  *       person approves: one SALARY_ADJUSTMENT movement, a new term from
  *       8 Jul, and back pay for the days already paid: 750.00 x 8/15 = 400.00.
- *   D3  Mila from 20 Jul, mid-cutoff of the Jul 16-31 draft paid at the new
- *       rate: the 4 days before are taken back at the old rate,
- *       (8,340.00 - 7,200.00) x 4/16 = 285.00.
+ *   (D3, the "Split" of the straddling draft run, was removed with it: the
+ *   engine now blends the two salaries, ruling 1 of 21 Nov 2026, tested in
+ *   pay217-salary-blend.)
  *   D4  a salary changed since the preview refuses the approval.
  */
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import { approveBatch, createBatch, preview, splitRun, wageOrderProposal, type SalaryAdjustmentError } from "@/lib/salary-adjustment/batch";
+import { approveBatch, createBatch, preview, wageOrderProposal, type SalaryAdjustmentError } from "@/lib/salary-adjustment/batch";
 import { withTenant } from "@/lib/with-tenant";
 
 const DB = process.env.TEST_DATABASE_URL;
@@ -97,17 +97,6 @@ describeDb("Wave G1 salary adjustment (real Postgres)", () => {
     expect(term).toEqual({ basicSalaryCents: "3150000", eff: "2026-07-08" });
     const corr = (await q(`SELECT kind, status, "netEffectCents" FROM "PayrollCorrection" WHERE "batchId" = $1`, [r.backPay!.batchId])).rows;
     expect(corr).toEqual([{ kind: "RETRO_PAY", status: "DRAFT", netEffectCents: "40000" }]);
-  });
-
-  it("D3 an effective date mid-cutoff splits the draft run's pay", async () => {
-    const b = await withTenant(T, (tx) => createBatch(tx, T, HANA, { rule: "MIN_WAGE", name: "Wage order", reason: "New NCR minimum", effectiveDate: d("2026-07-20"), employeeIds: [id("mila")] }));
-    await withTenant(T, (tx) => approveBatch(tx, T, RICO, b.id));
-    const s = await withTenant(T, (tx) => splitRun(tx, T, b.id, id("j2")));
-    expect(s.adjustments).toEqual([{ employeeId: id("mila"), amountCents: "-28500" }]);
-    const adj = (await q(`SELECT kind, "amountCents", "isTaxable" FROM "PayrollAdjustment" WHERE "payrollBookId" = $1`, [id("j2")])).rows;
-    expect(adj).toEqual([{ kind: "DEDUCTION", amountCents: "28500", isTaxable: true }]);
-    expect((await withTenant(T, (tx) => splitRun(tx, T, b.id, id("j2")))).adjustments).toEqual([]);
-    expect((await fail(withTenant(T, (tx) => splitRun(tx, T, b.id, id("j1")))))?.status).toBe(409);
   });
 
   it("D4 a salary changed since the preview is refused", async () => {

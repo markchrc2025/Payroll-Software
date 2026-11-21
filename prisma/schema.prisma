@@ -642,6 +642,8 @@ model Tenant {
   /// against a separating employee's last pay may legitimately make it
   /// negative. Set false to also floor FINAL_PAY. Default true.
   allowNegativeFinalPay      Boolean                 @default(true)
+  /// How final pay settles the year's withholding tax (Mark, 21 Nov 2026).
+  finalPayTaxMethod          FinalPayTaxMethod       @default(REFUND_AND_WITHHOLD_FINAL)
   /// PAY-172 (Mark, 19 Nov 2026): strict DTR policy. On: an employee who needs a
   /// time clock and whose DTR for the run's cutoff is not fully approved is held
   /// out of the run (no pay until it is approved; DTR approval is one cutoff,
@@ -754,7 +756,9 @@ model Tenant {
   discussionComments      DiscussionComment[]
   sharedDocuments         SharedDocument[]
   salaryAdjustmentBatches SalaryAdjustmentBatch[]
+  causelessNotes          CauselessNote[]
   documentRequests        DocumentRequest[]
+  employeeSignatures      EmployeeSignature[]
 
   @@index([deletedAt])
 }
@@ -1430,6 +1434,8 @@ model Employee {
 
   documentRequests      DocumentRequest[]
   salaryAdjustmentLines SalaryAdjustmentLine[]
+  causelessNotes        CauselessNote[]
+  signature             EmployeeSignature?
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
@@ -4556,4 +4562,54 @@ model SalaryAdjustmentLine {
 
   @@unique([batchId, employeeId])
   @@index([employeeId])
+}
+
+/// PAY-217 Causeless (Mark, 21 Nov 2026 22:25): a note on an employee with an
+/// optional attachment; no cause, no decision, no sanction, nothing for payroll.
+model CauselessNote {
+  id              String    @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  noteDate        DateTime
+  note            String
+  fileName        String?
+  mimeType        String?
+  fileSize        Int?
+  /// Object storage key when storage is configured, else the bytes in `data` (at most 10 MB).
+  storageKey      String?
+  data            Bytes?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, noteDate])
+  @@index([employeeId])
+}
+
+/// Final pay withholding (Mark, 21 Nov 2026 22:25). REFUND_AND_WITHHOLD_FINAL:
+/// the year's earlier withholding is returned and the final pay is taxed by
+/// itself on the MONTHLY table. ANNUALIZE: RR 2-98 annualization at separation.
+enum FinalPayTaxMethod {
+  REFUND_AND_WITHHOLD_FINAL
+  ANNUALIZE
+}
+
+/// PAY-199 (ruling 5, Mark 20 Nov 2026): the employee's e-signature (PNG or
+/// JPEG, at most 1 MB), uploaded in ESS and written on their BIR 2316 PDF.
+model EmployeeSignature {
+  id         String   @id @default(cuid())
+  tenantId   String
+  employeeId String   @unique
+  mimeType   String
+  data       Bytes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

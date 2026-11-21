@@ -12,10 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 type Emp = { id: string; employeeNumber: string; firstName: string; lastName: string; department?: { name: string } | null };
-type Line = { employeeId: string; name: string; employeeNumber?: string; salaryType: string; fromCents: string; toCents: string; diffCents: string; split?: boolean };
+type Line = { employeeId: string; name: string; employeeNumber?: string; salaryType: string; fromCents: string; toCents: string; diffCents: string };
 type Preview = { lines: Line[]; skipped: { employeeId: string; name: string; reason: string }[] };
 type Batch = { id: string; name: string; rule: string; effectiveDate: string; reason: string; status: string; retroBatchId: string | null; rejectionReason: string | null; lines: Line[] };
-type Run = { id: string; periodStart: string; periodEnd: string; status: string; runType: string };
 
 const peso = (c: string) => `₱${(Number(BigInt(c)) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const unit = (t: string) => (t === "DAILY" ? "/day" : t === "WEEKLY" ? "/week" : "/month");
@@ -27,14 +26,12 @@ export default function SalaryAdjustmentPage() {
   const [form, setForm] = useState({ name: "", rule: "PERCENT", percent: "", fixedAmount: "", effectiveDate: new Date().toISOString().slice(0, 10), reason: "" });
   const [pv, setPv] = useState<Preview | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
 
   const load = useCallback(() => {
     fetch("/api/salary-adjustments").then((r) => r.json()).then((j) => setBatches(j?.data ?? [])).catch(() => setBatches([]));
   }, []);
   useEffect(() => {
     fetch("/api/employees?limit=500").then((r) => r.json()).then((j) => setEmps(j?.data ?? [])).catch(() => setEmps([]));
-    fetch("/api/payroll/runs?limit=50&status=DRAFT&runType=REGULAR").then((r) => r.json()).then((j) => setRuns((j?.data ?? []).filter((r: Run) => r.status === "DRAFT" && r.runType === "REGULAR"))).catch(() => setRuns([]));
     load();
   }, [load]);
 
@@ -64,12 +61,6 @@ export default function SalaryAdjustmentPage() {
     else { const reason = window.prompt("Why is it rejected?"); if (!reason) return; await post(`/api/salary-adjustments/${b.id}/reject`, { reason }); }
     load();
   }
-  async function split(b: Batch, bookId: string) {
-    if (!bookId) return;
-    const d = await post(`/api/salary-adjustments/${b.id}/split`, { bookId });
-    if (d) { toast.success(d.adjustments.length ? `Split done for ${d.adjustments.length} employee(s); the run was recomputed` : "Nothing to split in that run"); load(); }
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -130,12 +121,6 @@ export default function SalaryAdjustmentPage() {
               <p className="text-[13px]"><span className="font-medium">{b.name}</span> · effective {b.effectiveDate} · {b.lines.length} employee(s) · <span className="font-medium">{b.status}</span>{b.rejectionReason ? `: ${b.rejectionReason}` : ""}</p>
               <div className="flex gap-2">
                 {b.status === "PENDING" && (<><Button size="sm" onClick={() => decide(b, true)}>Approve</Button><Button size="sm" variant="outline" onClick={() => decide(b, false)}>Reject</Button></>)}
-                {b.status === "APPROVED" && runs.length > 0 && (
-                  <select className="h-8 rounded-md border px-2 text-[12px]" defaultValue="" onChange={(e) => split(b, e.target.value)}>
-                    <option value="">Split a run that straddles {b.effectiveDate}</option>
-                    {runs.map((r) => <option key={r.id} value={r.id}>{r.periodStart.slice(0, 10)} to {r.periodEnd.slice(0, 10)}</option>)}
-                  </select>
-                )}
               </div>
             </div>
             <p className="text-[12px] text-[#6B6B6B]">{b.reason}{b.retroBatchId ? " · Back pay is waiting for approval on the Corrections page." : ""}</p>
@@ -152,7 +137,7 @@ function LineTable({ lines }: { lines: Line[] }) {
     <table className="w-full text-[13px]">
       <thead><tr className="text-left text-[12px] text-[#6B6B6B]"><th className="py-1">Employee</th><th>Old pay</th><th>New pay</th><th>Difference</th></tr></thead>
       <tbody>{lines.map((l) => (
-        <tr key={l.employeeId} className="border-t"><td className="py-1">{l.name}{l.split ? " · split" : ""}</td><td>{peso(l.fromCents)}{unit(l.salaryType)}</td><td>{peso(l.toCents)}{unit(l.salaryType)}</td><td>{peso(l.diffCents)}</td></tr>
+        <tr key={l.employeeId} className="border-t"><td className="py-1">{l.name}</td><td>{peso(l.fromCents)}{unit(l.salaryType)}</td><td>{peso(l.toCents)}{unit(l.salaryType)}</td><td>{peso(l.diffCents)}</td></tr>
       ))}</tbody>
     </table>
   );

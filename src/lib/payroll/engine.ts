@@ -331,6 +331,44 @@ function computeBasePay(input: ComputeInput, rates: SalaryRates): bigint {
   return clampNonNegative(contracted - unpaid);
 }
 
+/**
+ * Ruling 1 (Mark, 21 Nov 2026 22:25): a salary that changes inside a REGULAR
+ * run's period is paid at the old rate for the calendar days before the
+ * effective date and the new rate after (rulings 2 and 3: calendar days, basic
+ * pay only; overtime and premiums use the new rate). Each side is the base the
+ * engine would pay for the whole period at that salary; the blend is
+ * old x days before / days + new x days after / days, rounded half-up. A
+ * change of salary type inside a period is not blended (paid on the new one).
+ */
+function blendedBasePay(input: ComputeInput, newBase: bigint): bigint {
+  const before = input.salary.before;
+  if (!before || (input.runType ?? "REGULAR") !== "REGULAR" || before.salaryType !== input.salary.salaryType) return newBase;
+  const DAY = 86_400_000;
+  const whole = BigInt(Math.round((input.period.end.getTime() - input.period.start.getTime()) / DAY) + 1);
+  const daysBefore = BigInt(Math.round((before.until.getTime() - input.period.start.getTime()) / DAY));
+  if (daysBefore <= 0n || daysBefore >= whole) return newBase;
+  const oldInput: ComputeInput = { ...input, salary: { basicSalaryCents: before.basicSalaryCents, salaryType: before.salaryType } };
+  const oldBase = computeBasePay(oldInput, deriveRates(oldInput));
+  const num = oldBase * daysBefore + newBase * (whole - daysBefore);
+  return (num * 2n + whole) / (2n * whole);
+}
+
+/**
+ * PAY-206 (Mark, 21 Nov 2026 22:25): a monthly-paid employee's contracted base
+ * already pays the regular holiday (100%). Working it pays 200% in all, so the
+ * hours worked on it add the multiplier less that 100%; hours past 8 (the
+ * holiday OT row) are not in the base and keep their full rate. True when the
+ * base for this run is the contract (or the days employed under PAY-141), the
+ * same test computeBasePay uses.
+ */
+function regularHolidayInBase(input: ComputeInput): boolean {
+  if ((input.runType ?? "REGULAR") !== "REGULAR") return false;
+  const { salary, employee, period } = input;
+  if (contractedPeriodCents({ basicSalaryCents: salary.basicSalaryCents, salaryType: salary.salaryType, cycle: period.cycle, periodEnd: period.end }) === null) return false;
+  return employedWholePeriod({ hireDate: employee.hireDate, separationDate: employee.separationDate, periodStart: period.start, periodEnd: period.end })
+    || input.employedPeriodDays != null;
+}
+
 // ---------------------------------------------------------------------------
 // MWE check
 // ---------------------------------------------------------------------------
@@ -926,8 +964,14 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
 
   const mandatoryEeContribs = sssEeCents + philhealthEeCents + pagibigEeCents;
 
+  // Decision 8 (Mark, 21 Nov 2026): up to 10 days of vacation leave converted
+  // to cash in the year are de minimis; the persist layer works out that part.
+  const leaveCashOutDeMinimisCents = (() => {
+    const v = fp.leaveCashOutDeMinimisCents ?? 0n;
+    return v > leaveCashOutCents ? leaveCashOutCents : v < 0n ? 0n : v;
+  })();
   const nontaxableCompensationCents =
-    buckets.nontaxableCompensationCents + mandatoryEeContribs;
+    buckets.nontaxableCompensationCents + mandatoryEeContribs + leaveCashOutDeMinimisCents;
 
   // -- Step 7: gross taxable income -----------------------------------------
   // PAY-153: gross holds the whole 13th month, so only its exempt part comes
@@ -962,6 +1006,26 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
       bracketPlusRate: bir.bracket.plusRate,
     };
+  }
+  // Mark's ruling (21 Nov 2026 22:25, reference: his final-pay payslip): with
+  // REFUND_AND_WITHHOLD_FINAL the tax withheld earlier in the year is returned
+  // in full and the final pay is taxed by itself on the MONTHLY table (the
+  // payslip's 2,130.78 on 31,487.91). Net withholding = that tax less the
+  // refund (negative = a net refund, as PAY-156). MWE: no tax, refund only.
+  const taxMethod = tenant.finalPayTaxMethod ?? "ANNUALIZE";
+  let finalPayTaxCents = 0n;
+  if (taxMethod === "REFUND_AND_WITHHOLD_FINAL") {
+    birBracket = null;
+    if (!isMwe && grossTaxableIncomeCents > 0n) {
+      const own = lookupBIR(rules.bir, "MONTHLY", grossTaxableIncomeCents);
+      finalPayTaxCents = own.tax;
+      birBracket = {
+        bracketFloorCents: own.bracket.floor.toString(),
+        bracketFixedTaxCents: own.bracket.fixedTax.toString(),
+        bracketPlusRate: own.bracket.plusRate,
+      };
+    }
+    withholdingTaxCents = finalPayTaxCents - fp.cyPriorWithholdingTaxCents;
   }
 
   // -- Step 10: non-taxable additions ---------------------------------------
@@ -1017,6 +1081,10 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     cyPriorTaxableIncomeCents: fp.cyPriorTaxableIncomeCents.toString(),
     cyPriorWithholdingTaxCents: fp.cyPriorWithholdingTaxCents.toString(),
     annualizedWhtCents: annualizedWht.toString(),
+    taxMethod,
+    finalPayTaxCents: (taxMethod === "REFUND_AND_WITHHOLD_FINAL" ? finalPayTaxCents : withholdingTaxCents).toString(),
+    refundedPriorTaxCents: (taxMethod === "REFUND_AND_WITHHOLD_FINAL" ? fp.cyPriorWithholdingTaxCents : 0n).toString(),
+    leaveCashOutDeMinimisCents: leaveCashOutDeMinimisCents.toString(),
   };
 
   return {
@@ -1101,7 +1169,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // Unit 1.8: a full period pays the contract, less unpaid days (see
   // computeBasePay). Before 1.8 this was dailyRate × daysWorked for MONTHLY
   // too, so ₱30,000/month grossed ₱27,586.20 to ₱31,724.13 by the calendar.
-  const basePayCents = computeBasePay(input, rates);
+  const basePayCents = blendedBasePay(input, computeBasePay(input, rates));
 
   // -- Step 2: late / undertime ---------------------------------------------
   // Deduction = hourlyRate × (minutes / 60), rounded HALF-UP at the end.
@@ -1150,8 +1218,13 @@ export function computeSheet(input: ComputeInput): ComputeResult {
     timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayHours                ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY) +
     timesUnits(hourlyRateCents, (periodInput.restDaySpecialHolidayOtHours              ?? 0) * m.SPECIAL_HOLIDAY_REST_DAY_OT);
 
+  // PAY-206: worked regular-holiday hours of a monthly-paid employee add 100%
+  // on top of the base that already pays the day (200% in all).
+  const regularHolidayWorkedRate = regularHolidayInBase(input)
+    ? Math.max(0, m.REGULAR_HOLIDAY - m.NO_WORK_REGULAR_HOLIDAY)
+    : m.REGULAR_HOLIDAY;
   const regularHolidayPayCents =
-    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * m.REGULAR_HOLIDAY) +
+    timesUnits(hourlyRateCents, periodInput.regularHolidayHours                              * regularHolidayWorkedRate) +
     timesUnits(hourlyRateCents, (periodInput.regularHolidayOtHours                     ?? 0) * m.REGULAR_HOLIDAY_OT) +
     timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayHours                ?? 0) * m.REGULAR_HOLIDAY_REST_DAY) +
     timesUnits(hourlyRateCents, (periodInput.restDayRegularHolidayOtHours              ?? 0) * m.REGULAR_HOLIDAY_REST_DAY_OT) +
