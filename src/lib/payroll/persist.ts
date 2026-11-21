@@ -16,6 +16,7 @@
  */
 import { issueRunControlNumbers } from "./control-numbers";
 import { recordThirteenthAccrual } from "./thirteenth-accrual";
+import { buildPayslipFromRecords, encodeSealSnapshot } from "@/lib/payslip/pdf-data";
 import type {
   Loan,
   PayComponent,
@@ -1909,12 +1910,19 @@ export async function finalizeRun(
     // PAY-69: control numbers, gapless, in this transaction.
     const control = await issueRunControlNumbers(tx, tenantId, bookId, book.periodEnd);
 
-    // 5. Transition the book + audit log.
+    // PAY-67: each payslip as it stands at the seal; reprints come from it.
+    const finalizedAt = new Date();
+    for (const s of await tx.payrollSheet.findMany({ where: { payrollBookId: bookId } })) {
+      const data = await buildPayslipFromRecords(tx, { tenantId, bookId, employeeId: s.employeeId }, { ...book, finalizedAt }, s);
+      await tx.payrollSheet.update({ where: { id: s.id }, data: { sealSnapshot: encodeSealSnapshot(data) as Prisma.InputJsonValue } });
+    }
+
+    // 5. Transition the book + audit log. From here the database seals the run (PAY-67).
     const finalized = await tx.payrollBook.update({
       where: { id: bookId },
       data: {
         status: "FINALIZED",
-        finalizedAt: new Date(),
+        finalizedAt,
         finalizedByUserId: userId,
       },
       include: { sheets: true },

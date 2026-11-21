@@ -2814,6 +2814,8 @@ model PayrollSheet {
   /// PAY-152: this payslip's 13th-month base (REGULAR runs) and its accrual, one twelfth of it. Recorded at finalize, never paid.
   thirteenthAccrualBasisCents BigInt?
   thirteenthAccrualCents      BigInt?
+  /// PAY-67: the payslip as it stood when the run was sealed; reprints come from this.
+  sealSnapshot                Json?
   /// PAY-69: payslip control number, issued gapless at finalize (PS-YYYY-NNNNNN). Never changes once set.
   controlNumber               String?
 
