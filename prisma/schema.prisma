@@ -759,6 +759,7 @@ model Tenant {
   causelessNotes          CauselessNote[]
   documentRequests        DocumentRequest[]
   employeeSignatures      EmployeeSignature[]
+  bir2316Signatory        Bir2316Signatory?
 
   @@index([deletedAt])
 }
@@ -845,6 +846,7 @@ model User {
   centralAuditEvents     CentralAuditEvent[]     @relation("CentralAuditActor")
   clearanceTemplateItems ClearanceTemplateItem[] @relation("ClearanceTemplateSignatory")
   clearanceItems         ClearanceItem[]         @relation("ClearanceItemSignatory")
+  bir2316Signatory       Bir2316Signatory[]
 
   @@unique([tenantId, email])
   @@unique([tenantId, authenticizeUserId])
@@ -4612,4 +4614,22 @@ model EmployeeSignature {
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+/// Mark's ruling (22 Nov 2026): the HR manager the employer assigns to sign
+/// BIR 2316 (Items 53 and 55), with that person's e-signature (PNG or JPEG,
+/// at most 1 MB). One per company.
+model Bir2316Signatory {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  userId          String
+  position        String
+  mimeType        String?
+  data            Bytes?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

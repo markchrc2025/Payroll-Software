@@ -10,7 +10,14 @@
  *   D2  ESS: a PNG signature is saved; a file that is not a PNG or JPEG is
  *       refused; the employee's own 2316 carries one image more than HR's
  *       copy without a signature: the signature.
- *   D3  the embedded blank is the file Mark supplied (SHA-256).
+ *   D3  the blank on disk is the file Mark supplied (SHA-256).
+ *   D4  (ruling 22 Nov 2026) the employer's 2316 signatory: only an active
+ *       user of the company; with their e-signature, the PDF carries one
+ *       image more, and their name and position (fails on main).
+ *   D5  (ruling 22 Nov 2026, items 1 and 2) a resignee's 2316 is annualized:
+ *       with a final pay that returned the earlier tax and withheld on its
+ *       own (monthly table), Item 24 is the year's tax due on the whole
+ *       year's taxable pay and Item 25A what was actually withheld.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
@@ -33,6 +40,9 @@ vi.mock("@/lib/ess-auth", () => ({ getEssContext: vi.fn(async () => ess) }));
 import { GET as hr } from "@/app/api/payroll/reports/bir/2316/route";
 import { GET as mine } from "@/app/api/ess/bir-2316/route";
 import { PUT as putSig } from "@/app/api/ess/signature/route";
+import { PUT as putSignatory } from "@/app/api/settings/bir-signatory/route";
+import { annualTaxDueCents } from "@/lib/payroll/annual-tax";
+import { TRAIN_2023 } from "@/lib/statutory/baseline-2026";
 import { readFileSync } from "node:fs";
 import { BIR_2316_BLANK_PATH, BIR_2316_BLANK_SHA256 } from "@/lib/payroll/reports/bir-2316-blank";
 
@@ -78,6 +88,8 @@ describeDb("PAY-199 BIR 2316 PDF (real Postgres)", () => {
     auth.tenantId = T; ess.tenantId = T; ess.employeeId = id("ana");
     await q(`INSERT INTO "Tenant" (id, name, "companyCode", "updatedAt") VALUES ($1, 'Tala Foods', $2, now())`, [T, `P199${sfx}`.toUpperCase()]);
     await q(`INSERT INTO "Employee" (id, "tenantId", "employeeNumber", "firstName", "lastName", "hireDate", "updatedAt") VALUES ($1, $2, 'A-1', 'Ana', 'Cruz', '2024-01-08', now())`, [id("ana"), T]);
+    await q(`INSERT INTO "User" (id, "tenantId", email, "passwordHash", "firstName", "lastName", "updatedAt") VALUES ($1, $2, $3, 'x', 'Liza', 'Santos', now())`, [id("hr"), T, `hr${sfx}@t.test`]);
+    await q(`INSERT INTO "StatutoryRule" (id, "tenantId", category, "effectiveFrom", "legalBasis", version, payload, "updatedAt") VALUES ($1, $2, 'BIR_WITHHOLDING_TABLE', '2023-01-01', 'test', 'p199-bir', $3::jsonb, now())`, [id("bir"), T, JSON.stringify(TRAIN_2023)]);
     await q(`INSERT INTO "PayrollBook" (id, "tenantId", "periodStart", "periodEnd", cycle, "runType", status, "updatedAt") VALUES ($1, $2, '2026-01-01', '2026-01-15', 'SEMI_MONTHLY', 'REGULAR', 'FINALIZED', now())`, [id("b"), T]);
     await q(`INSERT INTO "PayrollSheet" (id, "tenantId", "payrollBookId", "employeeId", "taxClassificationSnapshot", "payFrequencySnapshot",
          "salaryTypeSnapshot", "basicSalaryCentsSnapshot", "workingDaysDenominatorSnapshot", "statutoryDeductedSnapshot",
@@ -96,7 +108,7 @@ describeDb("PAY-199 BIR 2316 PDF (real Postgres)", () => {
     await q(`DELETE FROM "PayrollBook" WHERE "tenantId" = $1`, [T]);
     await q(`ALTER TABLE "PayrollSheet" ENABLE TRIGGER USER`);
     await q(`ALTER TABLE "PayrollBook" ENABLE TRIGGER USER`);
-    for (const t of ["EmployeeSignature", "AuditLog", "Employee"]) await q(`DELETE FROM "${t}" WHERE "tenantId" = $1`, [T]).catch(() => undefined);
+    for (const t of ["EmployeeSignature", "Bir2316Signatory", "AuditLog", "StatutoryRule", "Employee", "User"]) await q(`DELETE FROM "${t}" WHERE "tenantId" = $1`, [T]).catch(() => undefined);
     await q(`DELETE FROM "Tenant" WHERE id = $1`, [T]);
     await admin.end();
   });
@@ -130,5 +142,35 @@ describeDb("PAY-199 BIR 2316 PDF (real Postgres)", () => {
   it("D3 the blank is the file Mark supplied", () => {
     expect(createHash("sha256").update(readFileSync(BIR_2316_BLANK_PATH)).digest("hex")).toBe(BIR_2316_BLANK_SHA256);
     expect(BIR_2316_BLANK_SHA256).toBe("8e927e65b096d7a786ba7d36c55c28ee3de3546278880d9de8c11a91d1b48d60");
+  });
+
+  it("D4 the employer's signatory on Items 53 and 55", async () => {
+    const form = (userId: string, withFile: boolean) => {
+      const fd = new FormData(); fd.set("userId", userId); fd.set("position", "HR Manager");
+      if (withFile) fd.set("file", new File([png()], "hr.png", { type: "image/png" }));
+      return putSignatory(new NextRequest("http://x", { method: "PUT", body: fd }));
+    };
+    expect((await form("someone-else", true)).status).toBe(422);
+    const before = images(streams(Buffer.from(await (await hr(new NextRequest(`http://x/api/payroll/reports/bir/2316?year=2026&employeeId=${id("ana")}&format=pdf`))).arrayBuffer())));
+    expect((await form(id("hr"), true)).status).toBe(200);
+    const text = streams(Buffer.from(await (await hr(new NextRequest(`http://x/api/payroll/reports/bir/2316?year=2026&employeeId=${id("ana")}&format=pdf`))).arrayBuffer()));
+    expect(images(text)).toBe(before + 1);
+    expect(text).toContain(hex("Liza Santos, HR Manager"));
+  });
+
+  it("D5 a resignee's 2316 is annualized", async () => {
+    await q(`INSERT INTO "PayrollBook" (id, "tenantId", "periodStart", "periodEnd", cycle, "runType", status, "updatedAt") VALUES ($1, $2, '2026-01-16', '2026-01-31', 'SEMI_MONTHLY', 'FINAL_PAY', 'FINALIZED', now())`, [id("fb"), T]);
+    // Final pay: 40,000.00 taxable, its own tax 2,875.05 (monthly table) less the 1,500.00 returned.
+    await q(`INSERT INTO "PayrollSheet" (id, "tenantId", "payrollBookId", "employeeId", "taxClassificationSnapshot", "payFrequencySnapshot",
+         "salaryTypeSnapshot", "basicSalaryCentsSnapshot", "workingDaysDenominatorSnapshot", "statutoryDeductedSnapshot",
+         "basePayCents", "grossCompensationCents", "nontaxableCompensationCents", "grossTaxableIncomeCents", "withholdingTaxCents",
+         "sssEeCents", "philhealthEeCents", "pagibigEeCents", "netPayCents", "payComponentsApplied", "loanPaymentsApplied", "periodInputSnapshot", "statutoryBreakdown", "updatedAt")
+       VALUES ($1, $2, $3, $4, 'REGULAR', 'SEMI_MONTHLY', 'MONTHLY', 6520000, 261, false, 4000000, 4000000, 0, 4000000, 137505, 0, 0, 0, 3862495, '[]', '[]', '{}', '{}', now())`,
+      [id("fs"), T, id("fb"), id("ana")]);
+    const cert = (await (await hr(new NextRequest(`http://x/api/payroll/reports/bir/2316?year=2026&employeeId=${id("ana")}`))).json()).data;
+    const item = (no: string) => cert.form.sections.flatMap((x: { lines: { no: string; value: string | null }[] }) => x.lines).find((l: { no: string }) => l.no === no)?.value;
+    expect(item("23")).toBe("7260000");
+    expect(item("24")).toBe(annualTaxDueCents(TRAIN_2023, 7_260_000n).toString());
+    expect(item("25A")).toBe("287505");
   });
 });
