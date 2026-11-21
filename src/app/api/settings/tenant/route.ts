@@ -69,6 +69,8 @@ const patchSchema = z.object({
   // Whether FINAL_PAY runs may go negative (terminal charges on separation).
   // REGULAR/YEAR_END runs are always floored regardless of this flag.
   allowNegativeFinalPay: z.boolean().optional(),
+  // Mark's ruling (21 Nov 2026): how final pay settles the year's tax.
+  finalPayTaxMethod: z.enum(["REFUND_AND_WITHHOLD_FINAL", "ANNUALIZE"]).optional(),
   // PAY-172: hold the pay of an employee whose cutoff DTR is not fully approved.
   strictDtrPolicy: z.boolean().optional(),
   // PAY-198: lates and undertime reduce the 13th month base.
@@ -133,6 +135,7 @@ export async function GET(req: NextRequest) {
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
+        finalPayTaxMethod: true,
         strictDtrPolicy: true,
         sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
         philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,
@@ -211,6 +214,7 @@ export async function PATCH(req: NextRequest) {
         maxDeductionPctOfGross: true,
         breakDeductAfterMinutes: true,
         allowNegativeFinalPay: true,
+        finalPayTaxMethod: true,
         strictDtrPolicy: true,
         sssIncludeEarnings: true, sssIncludePremiums: true, philhealthIncludeEarnings: true,
         philhealthIncludePremiums: true, pagibigIncludeEarnings: true, pagibigIncludePremiums: true,

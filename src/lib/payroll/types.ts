@@ -67,6 +67,13 @@ export interface ComputeTenantSnapshot {
    */
   allowNegativeFinalPay: boolean;
   /**
+   * Mark's ruling (21 Nov 2026): how FINAL_PAY settles the year's tax.
+   * REFUND_AND_WITHHOLD_FINAL returns the tax withheld earlier in the year and
+   * taxes the final pay by itself (MONTHLY table); ANNUALIZE (also when
+   * omitted) annualizes the year at separation (PAY-156).
+   */
+  finalPayTaxMethod?: "REFUND_AND_WITHHOLD_FINAL" | "ANNUALIZE";
+  /**
    * PAY-62 (unit 1.7, S3): Tenant.maxDeductionPctOfGross. In a REGULAR,
    * OFF_CYCLE or YEAR_END run, government contributions plus loan
    * installments may not exceed this % of the period's gross; installments
@@ -341,6 +348,11 @@ export interface FinalPayInputs {
   /** Prorated 13th month = sum(basePayCents from CY REGULAR runs) / 12. */
   proratedThirteenthMonthCents: bigint;
   /**
+   * Decision 8 (Mark, 21 Nov 2026): the part of leaveCashOutCents that is de
+   * minimis: up to 10 days of vacation leave converted in the year. Omitted = 0.
+   */
+  leaveCashOutDeMinimisCents?: bigint;
+  /**
    * Monetised unused leave days (isConvertibleToCash types only).
    * Treated as taxable compensation (included in gross).
    */
@@ -565,4 +577,9 @@ export interface FinalPayBreakdown {
   cyPriorTaxableIncomeCents: string;
   cyPriorWithholdingTaxCents: string;
   annualizedWhtCents: string;
+  /** Ruling 21 Nov 2026: the method used, the tax on this final pay alone and the earlier tax returned (REFUND_AND_WITHHOLD_FINAL). */
+  taxMethod?: "REFUND_AND_WITHHOLD_FINAL" | "ANNUALIZE";
+  finalPayTaxCents?: string;
+  refundedPriorTaxCents?: string;
+  leaveCashOutDeMinimisCents?: string;
 }

@@ -23,6 +23,7 @@ type TenantSettings = {
   maxDeductionPctOfGross: number;
   breakDeductAfterMinutes: number;
   allowNegativeFinalPay: boolean;
+  finalPayTaxMethod: "REFUND_AND_WITHHOLD_FINAL" | "ANNUALIZE";
   strictDtrPolicy: boolean;
   sssIncludeEarnings: boolean;
   sssIncludePremiums: boolean;
@@ -71,6 +72,7 @@ export default function PayRulesPage() {
     maxDeductionPctOfGross: 50,
     breakDeductAfterMinutes: 300,
     allowNegativeFinalPay: true,
+    finalPayTaxMethod: "REFUND_AND_WITHHOLD_FINAL",
     strictDtrPolicy: false,
     sssIncludeEarnings: false, sssIncludePremiums: false, philhealthIncludeEarnings: false,
     philhealthIncludePremiums: false, pagibigIncludeEarnings: false, pagibigIncludePremiums: false,
@@ -96,6 +98,7 @@ export default function PayRulesPage() {
         maxDeductionPctOfGross: d.maxDeductionPctOfGross ?? 50,
         breakDeductAfterMinutes: d.breakDeductAfterMinutes ?? 300,
         allowNegativeFinalPay: d.allowNegativeFinalPay ?? true,
+        finalPayTaxMethod: d.finalPayTaxMethod ?? "REFUND_AND_WITHHOLD_FINAL",
         strictDtrPolicy: d.strictDtrPolicy ?? false,
         sssIncludeEarnings: d.sssIncludeEarnings ?? false, sssIncludePremiums: d.sssIncludePremiums ?? false,
         philhealthIncludeEarnings: d.philhealthIncludeEarnings ?? false, philhealthIncludePremiums: d.philhealthIncludePremiums ?? false,
@@ -328,6 +331,18 @@ export default function PayRulesPage() {
                 checked={form.allowNegativeFinalPay}
                 onCheckedChange={(v) => update("allowNegativeFinalPay", v)}
               />
+            </div>
+            <div className="rounded-lg border border-[#E8E8E8] bg-white px-4 py-3 space-y-1.5">
+              <p className="text-[13px] font-medium text-[var(--ink)]">Withholding tax on final pay</p>
+              <select
+                className="h-9 w-full rounded-md border px-2 text-[13px]"
+                value={form.finalPayTaxMethod}
+                onChange={(e) => update("finalPayTaxMethod", e.target.value as TenantSettings["finalPayTaxMethod"])}
+              >
+                <option value="REFUND_AND_WITHHOLD_FINAL">Return the tax withheld earlier this year; tax the final pay by itself</option>
+                <option value="ANNUALIZE">Annualize the year at separation (RR 2-98) and settle the difference</option>
+              </select>
+              <p className="text-[12px] text-[#6B6B6B]">The first returns every peso withheld earlier in the year and withholds on the final pay alone (monthly table). The second taxes the whole year and refunds or withholds only the difference; when the year is under the first tax bracket, it withholds nothing.</p>
             </div>
           </RuleSection>
 

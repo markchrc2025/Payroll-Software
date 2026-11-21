@@ -942,8 +942,14 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
 
   const mandatoryEeContribs = sssEeCents + philhealthEeCents + pagibigEeCents;
 
+  // Decision 8 (Mark, 21 Nov 2026): up to 10 days of vacation leave converted
+  // to cash in the year are de minimis; the persist layer works out that part.
+  const leaveCashOutDeMinimisCents = (() => {
+    const v = fp.leaveCashOutDeMinimisCents ?? 0n;
+    return v > leaveCashOutCents ? leaveCashOutCents : v < 0n ? 0n : v;
+  })();
   const nontaxableCompensationCents =
-    buckets.nontaxableCompensationCents + mandatoryEeContribs;
+    buckets.nontaxableCompensationCents + mandatoryEeContribs + leaveCashOutDeMinimisCents;
 
   // -- Step 7: gross taxable income -----------------------------------------
   // PAY-153: gross holds the whole 13th month, so only its exempt part comes
@@ -978,6 +984,26 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
       bracketFixedTaxCents: bir.bracket.fixedTax.toString(),
       bracketPlusRate: bir.bracket.plusRate,
     };
+  }
+  // Mark's ruling (21 Nov 2026 22:25, reference: his final-pay payslip): with
+  // REFUND_AND_WITHHOLD_FINAL the tax withheld earlier in the year is returned
+  // in full and the final pay is taxed by itself on the MONTHLY table (the
+  // payslip's 2,130.78 on 31,487.91). Net withholding = that tax less the
+  // refund (negative = a net refund, as PAY-156). MWE: no tax, refund only.
+  const taxMethod = tenant.finalPayTaxMethod ?? "ANNUALIZE";
+  let finalPayTaxCents = 0n;
+  if (taxMethod === "REFUND_AND_WITHHOLD_FINAL") {
+    birBracket = null;
+    if (!isMwe && grossTaxableIncomeCents > 0n) {
+      const own = lookupBIR(rules.bir, "MONTHLY", grossTaxableIncomeCents);
+      finalPayTaxCents = own.tax;
+      birBracket = {
+        bracketFloorCents: own.bracket.floor.toString(),
+        bracketFixedTaxCents: own.bracket.fixedTax.toString(),
+        bracketPlusRate: own.bracket.plusRate,
+      };
+    }
+    withholdingTaxCents = finalPayTaxCents - fp.cyPriorWithholdingTaxCents;
   }
 
   // -- Step 10: non-taxable additions ---------------------------------------
@@ -1033,6 +1059,10 @@ function computeFinalPay(input: ComputeInput): ComputeResult {
     cyPriorTaxableIncomeCents: fp.cyPriorTaxableIncomeCents.toString(),
     cyPriorWithholdingTaxCents: fp.cyPriorWithholdingTaxCents.toString(),
     annualizedWhtCents: annualizedWht.toString(),
+    taxMethod,
+    finalPayTaxCents: (taxMethod === "REFUND_AND_WITHHOLD_FINAL" ? finalPayTaxCents : withholdingTaxCents).toString(),
+    refundedPriorTaxCents: (taxMethod === "REFUND_AND_WITHHOLD_FINAL" ? fp.cyPriorWithholdingTaxCents : 0n).toString(),
+    leaveCashOutDeMinimisCents: leaveCashOutDeMinimisCents.toString(),
   };
 
   return {
