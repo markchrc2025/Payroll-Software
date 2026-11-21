@@ -14,11 +14,13 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 
-export type DocType = "PAYROLL_RUN" | "PAYSLIP";
+export type DocType = "PAYROLL_RUN" | "PAYSLIP" | "PAYROLL_CORRECTION";
 
 const PREFIX: Record<DocType, { code: string; width: number }> = {
   PAYROLL_RUN: { code: "PR", width: 4 },
   PAYSLIP: { code: "PS", width: 6 },
+  /** PAY-68: payroll corrections, PC-YYYY-NNNN, issued at approval. */
+  PAYROLL_CORRECTION: { code: "PC", width: 4 },
 };
 
 export function formatControlNumber(docType: DocType, year: number, n: number): string {

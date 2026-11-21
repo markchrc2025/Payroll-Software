@@ -8,13 +8,13 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 174 |
+| USER_SESSION | 178 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PUBLIC_BY_DESIGN | 9 |
 | NONE | 0 |
-| Total | 249 |
+| Total | 253 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -262,6 +262,10 @@ None.
 | PATCH | /api/pay-components/[id] | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/pay-components/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/pay-components | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/corrections/[id]/approve | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/corrections/[id]/cancel | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/corrections/[id]/land | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/corrections | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/payroll/runs/[id]/adjustments/[adjId] | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/runs/[id]/adjustments | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/runs/[id]/annualize | USER_SESSION | requirePermission | yes |
