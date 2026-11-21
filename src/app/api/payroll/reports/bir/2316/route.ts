@@ -19,7 +19,7 @@ import { err, notFound, ok, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import { loadBir2316Report } from "@/lib/payroll/reports/bir-2316-load";
 import { fill2316 } from "@/lib/payroll/reports/bir-2316-pdf";
-import { signatureOf } from "@/lib/payroll/reports/signature";
+import { signatoryOf, signatureOf } from "@/lib/payroll/reports/signature";
 import { forbidUnless } from "@/lib/authz/route-permission";
 import { crossFoot2316 } from "@/lib/payroll/reports/cross-foot-data";
 
@@ -62,8 +62,11 @@ export async function GET(req: NextRequest) {
       );
       if (!cert) return notFound("No payroll data found for this employee in the requested year");
       if (format === "pdf") {
-        const sig = await withTenant(auth.tenantId, (tx) => signatureOf(tx, auth.tenantId, employeeId));
-        const pdf = await fill2316(cert.form, { signature: sig });
+        const { sig, employerSignatory } = await withTenant(auth.tenantId, async (tx) => ({
+          sig: await signatureOf(tx, auth.tenantId, employeeId),
+          employerSignatory: await signatoryOf(tx, auth.tenantId),
+        }));
+        const pdf = await fill2316(cert.form, { signature: sig, employerSignatory });
         return new Response(new Uint8Array(pdf), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="BIR_2316_${year}_${cert.employeeNumber}.pdf"`, "cache-control": "private, no-store" } });
       }
       return ok({ ...cert, crossFoot: await crossFoot2316(auth.tenantId, year, [cert], employeeId) });
