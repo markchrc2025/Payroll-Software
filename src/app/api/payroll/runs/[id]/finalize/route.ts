@@ -48,6 +48,7 @@ export async function POST(
           tenantId: auth.tenantId,
           bookId: id,
           sheetId: sheet.id,
+          enqueuedByUserId: auth.userId ?? null,
         }).catch((e) =>
           console.error("[api/finalize] Failed to enqueue payslip.publish:", e),
         );

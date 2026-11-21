@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fire-and-forget enqueue — computation happens asynchronously
-    void enqueuePayrollRun({ tenantId: auth.tenantId, bookId: book.id }).catch(
+    void enqueuePayrollRun({ tenantId: auth.tenantId, bookId: book.id, enqueuedByUserId: auth.userId ?? null }).catch(
       (e) => console.error("[api/payroll/runs] Failed to enqueue payroll.run:", e),
     );
 
