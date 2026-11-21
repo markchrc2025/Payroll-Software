@@ -5,6 +5,7 @@
  * RESOLVED or CLOSED.
  */
 import type { NextRequest } from "next/server";
+import { IncidentListRefusal, resolveDecision } from "@/lib/incidents/lists";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
@@ -23,7 +24,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const parsed = resolveIncidentSchema.safeParse(body);
   if (!parsed.success) return err("Invalid input", 422, parsed.error.flatten());
-  const { resolution, status } = parsed.data;
+  const { resolution, status, decisionId } = parsed.data;
 
   const existing = await withTenant(ctx.tenantId, (tx) =>
     tx.incidentReport.findFirst({ where: { id, tenantId: ctx.tenantId, deletedAt: null } }),
@@ -31,10 +32,14 @@ export async function POST(
   if (!existing) return notFound("Incident");
   if (existing.status === "CLOSED") return err("Incident is already closed.", 409);
 
-  const updated = await withTenant(ctx.tenantId, (tx) =>
+  let updated;
+  try {
+  updated = await withTenant(ctx.tenantId, async (tx) =>
     tx.incidentReport.update({
       where: { id },
       data: {
+        // Wave A3 (PAY-210): the decision and its outcome, copied now.
+        ...(await resolveDecision(tx, ctx.tenantId, decisionId)),
         resolution,
         status,
         resolvedAt: new Date(),
@@ -42,6 +47,10 @@ export async function POST(
       },
     }),
   );
+  } catch (e) {
+    if (e instanceof IncidentListRefusal) return err(e.message, 422);
+    throw e;
+  }
 
   void writeAuditLog({
     tenantId: ctx.tenantId,
@@ -49,7 +58,7 @@ export async function POST(
     action: "UPDATE",
     entity: "IncidentReport",
     entityId: id,
-    changes: { action: "resolve", newStatus: status },
+    changes: { action: "resolve", newStatus: status, decisionId: updated.decisionId, suspensionDays: updated.decisionSuspensionDays, dismissal: updated.decisionIsDismissal },
     ipAddress: getClientIp(req),
   });
 

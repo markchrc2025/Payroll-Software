@@ -1778,6 +1778,9 @@ model IncidentReport {
   employeeId String
   type       IncidentType
   status     IncidentStatus @default(OPEN)
+  /// Wave A3 (PAY-210): the company's Incident Types and Incident Categories items.
+  typeId     String?
+  categoryId String?
 
   subject      String
   description  String
@@ -1791,6 +1794,10 @@ model IncidentReport {
   resolution       String?
   resolvedAt       DateTime?
   resolvedByUserId String?
+  /// Wave A3: the decision (Incident Decisions item) and its outcome, copied at resolution.
+  decisionId             String?
+  decisionSuspensionDays Int?
+  decisionIsDismissal    Boolean @default(false)
 
   createdByUserId String?
   createdAt       DateTime  @default(now())
@@ -1799,6 +1806,9 @@ model IncidentReport {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  typeItem     LookupItem? @relation("IncidentTypeItem", fields: [typeId], references: [id], onDelete: SetNull)
+  categoryItem LookupItem? @relation("IncidentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
+  decisionItem LookupItem? @relation("IncidentDecisionItem", fields: [decisionId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -4204,6 +4214,9 @@ model LookupItem {
   employeesWithBank Employee[] @relation("EmployeeBank")
   expenseClaimsByCategory ExpenseClaim[] @relation("ExpenseClaimCategory")
   expenseClaimsByType     ExpenseClaim[] @relation("ExpenseClaimType")
+  incidentsByType         IncidentReport[] @relation("IncidentTypeItem")
+  incidentsByCategory     IncidentReport[] @relation("IncidentCategoryItem")
+  incidentsByDecision     IncidentReport[] @relation("IncidentDecisionItem")
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])
