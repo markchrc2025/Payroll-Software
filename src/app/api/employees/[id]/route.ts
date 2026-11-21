@@ -19,6 +19,8 @@ import {
 import { updateEmployeeSchema } from "@/lib/validations/employee";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { employeeRefWhere } from "@/lib/employee-ref";
+import { redactSensitive, sensitiveAccess, SensitiveRefusal, shapeSensitiveWrite, withoutSensitive } from "@/lib/employees/sensitive";
+import { BankRefusal, resolveBank } from "@/lib/employees/bank";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees/[id]
@@ -70,7 +72,9 @@ export async function GET(
     })),
   };
 
-  return ok(serialised);
+  // Wave A1 (PAY-208): ethnicity and religion only with SENSITIVE_DATA:READ.
+  const access = await sensitiveAccess(auth);
+  return ok({ ...redactSensitive(serialised, access), sensitiveAccess: access });
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +107,7 @@ export async function PUT(
     }
   }
 
+  const access = await sensitiveAccess(auth);
   const {
     departmentId,
     branchId,
@@ -113,14 +118,20 @@ export async function PUT(
     standardWorkHours,
     standardWorkDays,
     statutoryIds,
+    bankId,
     ...rest
-  } = parsed.data;
+  } = withoutSensitive(parsed.data);
 
   // Ensure employee belongs to this tenant + run all writes in one tx
-  const result = await withTenant(auth.tenantId, async (tx) => {
+  let result;
+  try {
+  result = await withTenant(auth.tenantId, async (tx) => {
     const existing = await tx.employee.findFirst({
       where: { id, tenantId: auth.tenantId, deletedAt: null },
-      select: { id: true, userId: true, departmentId: true, branchId: true, positionId: true },
+      select: {
+        id: true, userId: true, departmentId: true, branchId: true, positionId: true,
+        ethnicity: true, religion: true, spouseEthnicity: true, spouseReligion: true, sensitiveDataConsentAt: true,
+      },
     });
     if (!existing) return { notFound: true as const };
 
@@ -172,10 +183,17 @@ export async function PUT(
       if (refusal) return { refused: true as const, message: refusal };
     }
 
+    // Wave A1 (PAY-208): consent and permission for ethnicity and religion;
+    // the bank from the company's Bank list.
+    const sensitive = await shapeSensitiveWrite(tx, auth, parsed.data, existing, access);
+    const bank = bankId !== undefined ? await resolveBank(tx, auth.tenantId, bankId) : {};
+
     const emp = await tx.employee.update({
       where: { id },
       data: {
         ...rest,
+        ...sensitive,
+        ...bank,
         ...(departmentId !== undefined && { departmentId }),
         ...(branchId !== undefined && { branchId }),
         ...(positionId !== undefined && { positionId }),
@@ -224,6 +242,11 @@ export async function PUT(
 
     return { employee: emp };
   });
+  } catch (e) {
+    if (e instanceof SensitiveRefusal) return err(e.message, e.status);
+    if (e instanceof BankRefusal) return err(e.message, 422);
+    throw e;
+  }
 
   if ("notFound" in result) return notFound("Employee");
   if ("selfEdit" in result) return err("You cannot modify your own employee record. Ask another administrator to make this change.", 403);
@@ -244,12 +267,12 @@ export async function PUT(
   // shape as GET: centavos as strings, hashes replaced by booleans.
   const { essPin, kioskPinHash, ...saved } = result.employee;
   return ok(
-    {
+    redactSensitive({
       ...saved,
       hasEssPin: essPin !== null,
       hasKioskPin: kioskPinHash !== null,
       nontaxableBasicAmountCents: centavosToJson(saved.nontaxableBasicAmountCents),
-    },
+    }, access),
     "Employee updated",
   );
 }

@@ -42,6 +42,8 @@ enum PermissionModule {
   MOVEMENTS
   DOCUMENTS
   AUDIT
+  /// Wave A1 (PAY-208): ethnicity and religion (sensitive personal information).
+  SENSITIVE_DATA
 }
 
 enum PermissionAction {
@@ -1248,6 +1250,9 @@ model Employee {
   qrBadgeCode                    String?
 
   // Bank (encrypted at app layer)
+  /// Wave A1 (PAY-208): the company's Bank list item; its name is copied to bankName.
+  bankId            String?
+  bankItem          LookupItem? @relation("EmployeeBank", fields: [bankId], references: [id], onDelete: SetNull)
   bankName          String?
   bankAccountNumber String?
   bankAccountName   String?
@@ -1257,6 +1262,9 @@ model Employee {
   passportNumber     String?
   ethnicity          String?
   religion           String?
+  /// Wave A1 (PAY-208): when HR noted the employee's consent to record ethnicity and religion.
+  sensitiveDataConsentAt       DateTime?
+  sensitiveDataConsentByUserId String?
   allowProfileUpdate Boolean @default(false)
   needsTimeClock     Boolean @default(true)
   /// Skip geofence enforcement for this employee's punches (e.g. field staff,
@@ -4182,6 +4190,7 @@ model LookupItem {
   deletedAt  DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeesWithBank Employee[] @relation("EmployeeBank")
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])

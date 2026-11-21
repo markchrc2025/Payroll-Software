@@ -54,6 +54,10 @@ interface Employee {
   taxClassification?: string;
   payFrequency?: string;
   bankName?: string;
+  ethnicity?: string | null;
+  religion?: string | null;
+  sensitiveHidden?: boolean;
+  sensitiveDataConsentAt?: string | null;
   bankAccountNumber?: string;
   bankAccountName?: string;
   jobTitle?: string;
@@ -197,6 +201,20 @@ function PersonalTab({ emp }: { emp: Employee }) {
           {irow("Account Name", fmt(emp.bankAccountName))}
         </div>
       </section>
+
+      {/* Wave A1 (PAY-208): shown only to roles with the sensitive-data permission. */}
+      {!emp.sensitiveHidden && (emp.ethnicity || emp.religion) && (
+        <section>
+          <h3 className="text-[12.5px] font-medium text-[#8F8F8F] mb-3">
+            Sensitive Personal Information
+          </h3>
+          <div className="grid grid-cols-2 gap-x-5">
+            {irow("Ethnicity", fmt(emp.ethnicity))}
+            {irow("Religion", fmt(emp.religion))}
+            {irow("Consent noted", fmtDate(emp.sensitiveDataConsentAt))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

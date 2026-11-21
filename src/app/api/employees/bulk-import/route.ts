@@ -15,6 +15,7 @@
  */
 
 import type { NextRequest } from "next/server";
+import { bankByCodeOrName } from "@/lib/employees/bank";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { toCentavos } from "@/lib/money";
@@ -137,6 +138,9 @@ export async function POST(req: NextRequest) {
     for (const row of validRows) {
       const d = row.data;
       const hireDate = new Date(d.hire_date);
+      // Wave A1 (PAY-208): a bank_name matching a Bank list item's code or
+      // name links it; anything else is kept as typed.
+      const bank = d.bank_name ? await bankByCodeOrName(tx, auth.tenantId, d.bank_name) : null;
 
       const emp = await tx.employee.create({
         data: {
@@ -158,7 +162,8 @@ export async function POST(req: NextRequest) {
           hireDate,
           payFrequency: d.pay_frequency,
           salaryType: d.salary_type,
-          bankName: d.bank_name ?? null,
+          bankId: bank?.id ?? null,
+          bankName: bank?.name ?? d.bank_name ?? null,
           bankAccountNumber: d.bank_account_number ?? null,
           bankAccountName: d.bank_account_name ?? null,
         },
