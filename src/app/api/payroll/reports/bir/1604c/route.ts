@@ -8,7 +8,11 @@
  *
  * PAY-71: mandated structure, no added columns, footnotes only.
  *
- * Response: { data: Bir1604cReport }
+ * PAY-200: the response also carries the alphalist .DAT file for BIR's
+ * Alphalist Data Entry and Validation module 7.4, with BIR's validation
+ * rules applied (alphalistDatText, alphalistDatFileName, alphalistDatIssues).
+ *
+ * Response: { data: Bir1604cReport & crossFoot & alphalistDat* }
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -17,6 +21,7 @@ import { err, ok, unauthorized } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import { forbidUnless } from "@/lib/authz/route-permission";
 import { buildBir1604cReport } from "@/lib/payroll/reports/bir-1604c";
+import { buildAlphalistDat } from "@/lib/payroll/reports/bir-1604c-dat";
 import {
   loadAnnualTaxDue, loadBirYearEmployees, loadWithholdingAgent,
 } from "@/lib/payroll/reports/bir-data";
@@ -52,7 +57,14 @@ export async function GET(req: NextRequest) {
         ...crossFootAlphalist(built.form, certs),
         ...bir2316Checks(certificateFigures(certs), await yearPayslipFigures(tx, auth.tenantId, year)),
       ];
-      return { ...built, crossFoot };
+      const dat = buildAlphalistDat({ year, tenantId: auth.tenantId, tenantName: agent.name, agent, taxDue, employees }, built);
+      return {
+        ...built,
+        crossFoot,
+        alphalistDatText: dat.content,
+        alphalistDatFileName: dat.fileName,
+        alphalistDatIssues: dat.issues,
+      };
     });
     return ok(report);
   } catch (e) {
