@@ -155,7 +155,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
       { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
       { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
-      { href: "#soon-field-checkin", label: "Field Check-In", icon: "locations", comingSoon: true },
+      { href: "/attendance/field-checkins", label: "Field Check-In", icon: "locations" },
       { href: "/reports/hr/time-clock", label: "Time Clock Report", icon: "govreports" },
     ],
   },

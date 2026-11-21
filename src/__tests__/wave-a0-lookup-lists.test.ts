@@ -47,7 +47,8 @@ describe("Wave A lists", () => {
     // Training and Legal Documents (17); Wave C (PAY-213) opened Expense
     // Review and Leave Review (15), then Document Management and Review (13);
     // Wave D (PAY-214) opened the four reports (9); Wave E1 (PAY-215) the
-    // Earning Policy (8); Wave E3 the Planner and Schedule (6).
-    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(6);
+    // Earning Policy (8); Wave E3 the Planner and Schedule (6); Wave F1
+    // (PAY-216) Field Check-In (5).
+    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(5);
   });
 });

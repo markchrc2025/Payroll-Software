@@ -1118,6 +1118,9 @@ model JobType {
   name        String
   description String?
   deletedAt   DateTime?
+  /// Wave F1 (PAY-216): employees of this job type work in the field.
+  fieldWork Boolean @default(false)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1278,6 +1281,9 @@ model Employee {
   /// or employees whose time clock is off). When true, punches are never
   /// flagged outsideGeofence.
   geofenceExempt     Boolean @default(false)
+  /// Wave F1 (PAY-216): works in the field; punches are checked against every
+  /// fence that applies (also set per job type).
+  fieldWork          Boolean @default(false)
   /// Employee receives full pay for every scheduled workday without needing
   /// time-clock punches or DTR records (e.g. executives, C-level). Leaves and
   /// public holidays still apply. Only HR/Payroll Admin may enable this.
@@ -3234,6 +3240,8 @@ model AttendanceLog {
   outsideGeofence Boolean  @default(false)
   /// Haversine distance in metres from the nearest active geofence centre.
   distanceMeters  Int?
+  /// Wave F1 (PAY-216): the fence a field worker's punch fell inside.
+  siteName        String?
 
   ipAddress String?
   userAgent String?
