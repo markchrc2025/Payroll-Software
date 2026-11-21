@@ -402,7 +402,8 @@ async function loadActiveEmployees(
       employmentTerms: {
         where: { effectiveDate: { lte: periodEnd }, basicSalaryCents: { not: null } },
         orderBy: { effectiveDate: "desc" },
-        take: 1,
+        // Ruling 1 (21 Nov 2026): the one before too, for a change inside the period.
+        take: 2,
       },
     },
   });
@@ -569,6 +570,7 @@ async function buildComputeInputForEmployee(
   dtrPolicy?: { onGap: (days: number) => void },
 ): Promise<ComputeInput | null> {
   const term = employee.employmentTerms[0];
+  const prevTerm = employee.employmentTerms[1];
   if (!term || term.basicSalaryCents == null || term.salaryType == null) {
     return null; // No effective salary → skip
   }
@@ -625,6 +627,10 @@ async function buildComputeInputForEmployee(
     salary: {
       basicSalaryCents: salary.basicSalaryCents,
       salaryType: salary.salaryType,
+      // Ruling 1 (Mark, 21 Nov 2026): the salary changed inside the period.
+      ...(term.effectiveDate > periodStart && prevTerm?.basicSalaryCents != null && prevTerm.salaryType != null
+        ? { before: { basicSalaryCents: prevTerm.basicSalaryCents, salaryType: prevTerm.salaryType, until: term.effectiveDate } }
+        : {}),
     },
     tenant: tenantSettings,
     period: { start: periodStart, end: periodEnd, cycle },

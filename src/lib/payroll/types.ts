@@ -54,6 +54,12 @@ export interface ComputeEmployeeSnapshot {
 export interface ComputeSalarySnapshot {
   basicSalaryCents: bigint;
   salaryType: SalaryType;
+  /**
+   * Ruling 1 (Mark, 21 Nov 2026): the salary changed inside the period. This
+   * is the salary in force before `until` (the new salary's effective date);
+   * a REGULAR run pays basic pay for the calendar days before it at this rate.
+   */
+  before?: { basicSalaryCents: bigint; salaryType: SalaryType; until: Date };
 }
 
 export interface ComputeTenantSnapshot {

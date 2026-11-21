@@ -332,6 +332,28 @@ function computeBasePay(input: ComputeInput, rates: SalaryRates): bigint {
 }
 
 /**
+ * Ruling 1 (Mark, 21 Nov 2026 22:25): a salary that changes inside a REGULAR
+ * run's period is paid at the old rate for the calendar days before the
+ * effective date and the new rate after (rulings 2 and 3: calendar days, basic
+ * pay only; overtime and premiums use the new rate). Each side is the base the
+ * engine would pay for the whole period at that salary; the blend is
+ * old x days before / days + new x days after / days, rounded half-up. A
+ * change of salary type inside a period is not blended (paid on the new one).
+ */
+function blendedBasePay(input: ComputeInput, newBase: bigint): bigint {
+  const before = input.salary.before;
+  if (!before || (input.runType ?? "REGULAR") !== "REGULAR" || before.salaryType !== input.salary.salaryType) return newBase;
+  const DAY = 86_400_000;
+  const whole = BigInt(Math.round((input.period.end.getTime() - input.period.start.getTime()) / DAY) + 1);
+  const daysBefore = BigInt(Math.round((before.until.getTime() - input.period.start.getTime()) / DAY));
+  if (daysBefore <= 0n || daysBefore >= whole) return newBase;
+  const oldInput: ComputeInput = { ...input, salary: { basicSalaryCents: before.basicSalaryCents, salaryType: before.salaryType } };
+  const oldBase = computeBasePay(oldInput, deriveRates(oldInput));
+  const num = oldBase * daysBefore + newBase * (whole - daysBefore);
+  return (num * 2n + whole) / (2n * whole);
+}
+
+/**
  * PAY-206 (Mark, 21 Nov 2026 22:25): a monthly-paid employee's contracted base
  * already pays the regular holiday (100%). Working it pays 200% in all, so the
  * hours worked on it add the multiplier less that 100%; hours past 8 (the
@@ -1147,7 +1169,7 @@ export function computeSheet(input: ComputeInput): ComputeResult {
   // Unit 1.8: a full period pays the contract, less unpaid days (see
   // computeBasePay). Before 1.8 this was dailyRate × daysWorked for MONTHLY
   // too, so ₱30,000/month grossed ₱27,586.20 to ₱31,724.13 by the calendar.
-  const basePayCents = computeBasePay(input, rates);
+  const basePayCents = blendedBasePay(input, computeBasePay(input, rates));
 
   // -- Step 2: late / undertime ---------------------------------------------
   // Deduction = hourlyRate × (minutes / 60), rounded HALF-UP at the end.

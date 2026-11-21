@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 219 |
+| USER_SESSION | 218 |
 | ESS_SESSION | 30 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 304 |
+| Total | 303 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -337,7 +337,6 @@ None.
 | POST | /api/roles | USER_SESSION | requirePermission | yes |
 | POST | /api/salary-adjustments/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/salary-adjustments/[id]/reject | USER_SESSION | getAuthContext | yes |
-| POST | /api/salary-adjustments/[id]/split | USER_SESSION | getAuthContext | yes |
 | POST | /api/salary-adjustments | USER_SESSION | getAuthContext | yes |
 | POST | /api/settings/ownership | USER_SESSION | requirePermission | yes |
 | PUT | /api/settings/pay-schedules | USER_SESSION | getAuthContext | yes |
