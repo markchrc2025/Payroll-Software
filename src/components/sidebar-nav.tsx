@@ -162,8 +162,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Document Workflow",
     items: [
-      { href: "#soon-doc-management", label: "Management", icon: "claims", comingSoon: true },
-      { href: "#soon-doc-review", label: "Review", icon: "requests", comingSoon: true },
+      { href: "/document-workflow/management", label: "Management", icon: "claims" },
+      { href: "/document-workflow/review", label: "Review", icon: "requests" },
     ],
   },
   {

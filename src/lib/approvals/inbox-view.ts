@@ -3,7 +3,7 @@
  * (src/lib/approvals/inbox.ts) and the review screens, and the routes each
  * module's approve and reject go through.
  */
-export const INBOX_MODULES = ["LEAVE", "EXPENSE"] as const;
+export const INBOX_MODULES = ["LEAVE", "EXPENSE", "DOCUMENT"] as const;
 export type InboxModule = (typeof INBOX_MODULES)[number];
 export const isInboxModule = (m: string): m is InboxModule => (INBOX_MODULES as readonly string[]).includes(m);
 
@@ -30,6 +30,7 @@ export interface InboxItem {
 export const ACTION_ROUTES: Record<InboxModule, { approve: (id: string) => string; reject: (id: string) => string; returnTo?: (id: string) => string }> = {
   LEAVE: { approve: (id) => `/api/leave-transactions/${id}/approve`, reject: (id) => `/api/leave-transactions/${id}/reject` },
   EXPENSE: { approve: (id) => `/api/expense-claims/${id}/approve`, reject: (id) => `/api/expense-claims/${id}/reject`, returnTo: (id) => `/api/expense-claims/${id}/return` },
+  DOCUMENT: { approve: (id) => `/api/document-requests/${id}/approve`, reject: (id) => `/api/document-requests/${id}/reject` },
 };
 
 /** Items a bulk approval may include: no exceptions. */

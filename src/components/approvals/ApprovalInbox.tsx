@@ -171,6 +171,12 @@ export function ApprovalInbox({ module, title, blurb }: { module: InboxModule; t
                   <p><span className="text-muted-foreground">Balance:</span> {String(open.details.balanceAvailable)} now, {String(open.details.balanceAfter)} after the pending requests</p>
                 )}
               </div>
+              {module === "DOCUMENT" && open.details.preview != null && (
+                <div className="rounded-md border p-4 space-y-2 bg-white">
+                  <p className="text-center font-semibold uppercase tracking-wide">{(open.details.preview as { title: string }).title}</p>
+                  {(open.details.preview as { body: string }).body.split(/\n\s*\n/).map((para, k) => <p key={k} className="whitespace-pre-line text-[12.5px]">{para}</p>)}
+                </div>
+              )}
               {module === "EXPENSE" && open.details.hasReceipt === true && (
                 <Button variant="outline" size="sm" onClick={() => viewReceipt(open.id)}>Open the receipt</Button>
               )}

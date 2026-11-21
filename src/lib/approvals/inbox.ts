@@ -6,7 +6,7 @@
  * Who sees an item (the same rules the approve routes enforce):
  * - the employee assigned to the request's due approval step; or
  * - the company owner or a role holding the module's approve permission
- *   (LEAVE: LEAVES:APPROVE; EXPENSE: PAYROLL:APPROVE);
+ *   (LEAVE: LEAVES:APPROVE; EXPENSE: PAYROLL:APPROVE; DOCUMENT: DOCUMENTS:APPROVE);
  * - never the employee the request is about.
  *
  * The inbox only lists. Approving and rejecting go through each module's own
@@ -15,7 +15,8 @@
 import type { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/lib/auth";
 import type { TenantTx } from "@/lib/with-tenant";
-import { callerEmployeeId, holdsApprovePermission } from "./second-party";
+import { callerEmployeeId, holdsApprovePermission, holdsPermission } from "./second-party";
+import { renderRequest } from "@/lib/documents/templates";
 import type { InboxItem, InboxModule } from "./inbox-view";
 
 export type { InboxItem, InboxModule } from "./inbox-view";
@@ -70,6 +71,35 @@ export async function listInbox(tx: TenantTx, auth: AuthContext, module: InboxMo
         details: { type: c.typeItem?.name ?? null, taxTreatment: treatment, hasReceipt: !!c.receiptKey },
       };
     });
+  }
+
+  if (module === "DOCUMENT") {
+    const reqs = await tx.documentRequest.findMany({
+      where: { tenantId, status: "PENDING", ...(me ? { employeeId: { not: me } } : {}) },
+      include: { employee: emp, template: { select: { name: true, showsSalary: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    const { due, hasChain } = await dueStepsByEntity(tx, tenantId, "DOCUMENT", reqs.map((r) => r.id));
+    const seesPay = await holdsPermission(tx, auth, ["PAYROLL", "READ"]);
+    const out: InboxItem[] = [];
+    for (const r of reqs) {
+      const step = due.get(r.id);
+      const mineStep = !!step && !!me && step.approverEmployeeId === me;
+      if (!mineStep && !hr) continue;
+      const exceptions: string[] = [];
+      let preview: { title: string; body: string } | null = null;
+      // A letter that shows pay is previewed only to someone who may see pay.
+      if (r.template.showsSalary && !seesPay) exceptions.push("Shows pay: only a role that may see pay can approve it");
+      else preview = await renderRequest(tx, tenantId, r.id);
+      out.push({
+        module, id: r.id, stepId: mineStep ? step!.id : null,
+        via: mineStep ? "STEP" : hasChain.has(r.id) ? "HR_OVERRIDE" : "HR",
+        employee: who(r.employee), title: r.template.name, date: ymd(r.createdAt)!, endDate: null, amount: "",
+        reason: r.purpose ?? "", filedAt: r.createdAt.toISOString(), exceptions,
+        details: { showsSalary: r.template.showsSalary, preview },
+      });
+    }
+    return out;
   }
 
   // LEAVE

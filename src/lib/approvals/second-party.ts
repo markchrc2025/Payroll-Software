@@ -23,7 +23,7 @@ import { withTenant, type TenantTx } from "@/lib/with-tenant";
 import { checkPermission } from "@/lib/require-permission";
 import { forbidden, unauthorized } from "@/lib/api-response";
 
-export type RequestModule = "OT" | "UNDERTIME" | "DTR" | "LEAVE" | "EXPENSE";
+export type RequestModule = "OT" | "UNDERTIME" | "DTR" | "LEAVE" | "EXPENSE" | "DOCUMENT";
 
 /** The permission that approves each module's requests when no chain resolves. */
 export const APPROVE_PERMISSION: Record<RequestModule, readonly [PermissionModule, PermissionAction]> = {
@@ -33,6 +33,8 @@ export const APPROVE_PERMISSION: Record<RequestModule, readonly [PermissionModul
   LEAVE: ["LEAVES", "APPROVE"],
   // There is no EXPENSES permission module; reimbursements are paid through payroll.
   EXPENSE: ["PAYROLL", "APPROVE"],
+  // Wave C3 (PAY-213): document requests (Certificates of Employment and the like).
+  DOCUMENT: ["DOCUMENTS", "APPROVE"],
 };
 
 /** The permission that lets someone see another employee's records of a module. */
@@ -42,6 +44,7 @@ export const READ_PERMISSION: Record<RequestModule, readonly [PermissionModule, 
   DTR: ["TIMESHEETS", "READ"],
   LEAVE: ["LEAVES", "READ"],
   EXPENSE: ["PAYROLL", "READ"],
+  DOCUMENT: ["DOCUMENTS", "READ"],
 };
 
 /** The caller's own Employee id in this tenant, if they have one. */
