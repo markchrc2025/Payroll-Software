@@ -16,6 +16,7 @@
  */
 import { issueRunControlNumbers } from "./control-numbers";
 import { recordThirteenthAccrual } from "./thirteenth-accrual";
+import { unclearedEmployees } from "@/lib/offboarding/clearance";
 import { buildPayslipFromRecords, encodeSealSnapshot } from "@/lib/payslip/pdf-data";
 import type {
   Loan,
@@ -1854,6 +1855,16 @@ export async function finalizeRun(
     // (check 2) cannot be finalized. The register's totals are added by the
     // database, apart from the payslips loaded above.
     await assertRunTiesOut(tx, tenantId, book.id, book.sheets);
+
+    // PAY-197, ruling 3: a final pay run waits for clearance (block, not warn).
+    if (book.runType === "FINAL_PAY") {
+      const held = await unclearedEmployees(tx, tenantId, book.sheets.map((s) => s.employeeId));
+      if (held.length) {
+        throw new PayrollRunConflictError(
+          `Clearance is not complete, so this final pay run cannot be finalized: ${held.map((h) => `${h.name}: ${h.pending.join(", ")}`).join("; ")}.`,
+        );
+      }
+    }
 
     // 1. Aggregate loan payments from all sheets.
     const loanPayments = new Map<string, bigint>(); // loanId → totalAmount

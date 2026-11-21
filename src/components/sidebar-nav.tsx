@@ -115,6 +115,14 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    // PAY-197 (Mark, 20 Nov 2026): the Offboarding module, a main menu with submenus.
+    label: "Offboarding",
+    items: [
+      { href: "/offboarding", label: "Cases", icon: "movements" },
+      { href: "/offboarding/checklist", label: "Clearance Checklist", icon: "policies" },
+    ],
+  },
+  {
     label: "Expense Claim",
     items: [
       { href: "/expense-claims", label: "Expense Claims", icon: "claims" },

@@ -8,13 +8,13 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 180 |
+| USER_SESSION | 187 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PUBLIC_BY_DESIGN | 9 |
 | NONE | 0 |
-| Total | 255 |
+| Total | 262 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -253,6 +253,13 @@ None.
 | POST | /api/movements/[id]/approve | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | POST | /api/movements/[id]/reject | USER_SESSION | getAuthContext | yes |
+| PATCH | /api/offboarding/cases/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/offboarding/cases | USER_SESSION | getAuthContext | yes |
+| PATCH | /api/offboarding/clearance-template/[id] | USER_SESSION | getAuthContext | yes |
+| DELETE | /api/offboarding/clearance-template/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/offboarding/clearance-template | USER_SESSION | getAuthContext | yes |
+| POST | /api/offboarding/items/[id]/clear | USER_SESSION | getAuthContext | yes |
+| PATCH | /api/offboarding/items/[id] | USER_SESSION | getAuthContext | yes |
 | PATCH | /api/org-chart/reassign | USER_SESSION | getAuthContext | yes |
 | PUT | /api/org-roles/[roleKey] | USER_SESSION | requirePermission | yes |
 | DELETE | /api/org-roles/[roleKey] | USER_SESSION | requirePermission | yes |
