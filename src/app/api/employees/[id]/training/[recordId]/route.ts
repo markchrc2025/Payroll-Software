@@ -12,12 +12,13 @@ import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound, serverError } from "@/lib/api-response";
 import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { r2, R2_BUCKET, isR2Configured } from "@/lib/r2";
+import { applyCourse, PickRefusal } from "@/lib/lookups/record-picks";
 import { trainingSchema } from "@/lib/validations/employee-background";
 
 const SELECT = {
   id: true, title: true, provider: true, trainingDate: true, hours: true,
   certificateKey: true, certificateFileName: true, certificateMimeType: true,
-  certificateFileSize: true, expiresAt: true, notes: true,
+  certificateFileSize: true, expiresAt: true, notes: true, courseId: true, trainerId: true,
   createdAt: true, updatedAt: true,
 } as const;
 
@@ -57,7 +58,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       });
       if (!existing) return { notFound: true as const };
       const row = await tx.employeeTraining.update({
-        where: { id: recordId }, data: parsed.data, select: SELECT,
+        // Wave A4 (PAY-211): the course and trainer from the company's lists.
+        where: { id: recordId }, data: await applyCourse(tx, ctx.tenantId, parsed.data), select: SELECT,
       });
       return { row, oldKey: existing.certificateKey };
     });
@@ -73,6 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
     return ok(result.row, "Training updated");
   } catch (e) {
+    if (e instanceof PickRefusal) return err(e.message, 422);
     return serverError(e);
   }
 }
