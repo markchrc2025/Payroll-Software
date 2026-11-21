@@ -11,6 +11,7 @@
 
 import prismaAdmin from "@/lib/prisma-admin";
 import { retirePasskeys } from "@/lib/ess-credential-links";
+import { recordJobWrite, systemPrincipal } from "@/lib/jobs/principal";
 
 export async function handleEssDeactivationSweep(): Promise<void> {
   const now = new Date();
@@ -21,11 +22,12 @@ export async function handleEssDeactivationSweep(): Promise<void> {
       essAccessStatus: { in: ["INVITED", "ACTIVE"] },
       deletedAt: null,
     },
-    select: { id: true },
+    select: { id: true, tenantId: true },
   });
 
   if (due.length === 0) return;
 
+  const principal = systemPrincipal("ess.deactivation");
   let passkeys = 0;
   for (const emp of due) {
     passkeys += await prismaAdmin.$transaction(async (tx) => {
@@ -39,6 +41,7 @@ export async function handleEssDeactivationSweep(): Promise<void> {
       });
       return retirePasskeys(tx, emp.id);
     });
+    await recordJobWrite(principal, { tenantId: emp.tenantId, entity: "Employee", entityId: emp.id, summary: { after: { essAccessStatus: "DISABLED" }, reason: "scheduled ESS deactivation" } });
   }
 
   console.log(`[jobs/ess.deactivation] Disabled ${due.length} employee(s) past their scheduled deactivation; deleted ${passkeys} passkey(s).`);

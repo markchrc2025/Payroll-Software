@@ -7,12 +7,15 @@
  *       report, counted apart from the script; today none is NONE.
  *   T3  every pg-boss job handler is in the report.
  *   T4  docs/WRITE_PATH_AUDIT.md is the script's current output.
+ *   T5  PAY-205, the gate: no write handler checks a session without refusing
+ *       a missing one, and every job that writes records the SYSTEM principal
+ *       (fails on main: jobs record none).
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { auditJobs, auditRoutes, classify, renderReport } from "../../scripts/audit/write-paths.mjs";
+import { auditJobs, auditRoutes, classify, refuses, renderReport } from "../../scripts/audit/write-paths.mjs";
 
 type Row = { route: string; method: string; principal: string; evidence: string };
 const files = (dir: string): string[] =>
@@ -55,5 +58,16 @@ describe("PAY-72 write-path principal audit", () => {
   it("T4 the committed report is current", () => {
     expect(readFileSync("docs/WRITE_PATH_AUDIT.md", "utf8")).toBe(renderReport(auditRoutes(), auditJobs()));
     expect(execFileSync("node", ["scripts/audit/write-paths.mjs", "--check"], { encoding: "utf8" })).toContain("report is current");
+  });
+
+  it("T5 PAY-205 the gate", () => {
+    expect(refuses("const auth = await getAuthContext(req);\n if (!auth) return unauthorized();")).toBe(true);
+    expect(refuses("const guard = await requirePermission(req, 'X', 'Y');\n if (guard instanceof Response) return guard;")).toBe(true);
+    expect(refuses("const auth = await getAuthContext(req);\n await prisma.x.update({ where: { id: auth?.userId } });")).toBe(false);
+    const rows = auditRoutes() as (Row & { refuses: boolean | null })[];
+    expect(rows.filter((r) => r.refuses === false).map((r) => `${r.method} ${r.route}`)).toEqual([]);
+    const jobs = auditJobs() as { handler: string; writes: boolean; principal: string }[];
+    expect(jobs.filter((j) => j.writes && j.principal !== "SYSTEM (recorded)").map((j) => j.handler)).toEqual([]);
+    expect(jobs.filter((j) => j.writes)).toHaveLength(5);
   });
 });
