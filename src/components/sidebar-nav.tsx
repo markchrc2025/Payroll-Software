@@ -127,7 +127,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
       { href: "/expense-claims/review", label: "Review", icon: "requests" },
-      { href: "#soon-expense-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
+      { href: "/reports/hr/expense-transactions", label: "Transaction Report", icon: "govreports" },
       { href: "/settings/lists/EXPENSE_CATEGORY", label: "Category", icon: "components" },
       { href: "/settings/lists/EXPENSE_TYPE", label: "Type", icon: "components" },
     ],
@@ -140,9 +140,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "#soon-leave-planner", label: "Planner", icon: "leave", comingSoon: true },
       { href: "#soon-leave-schedule", label: "Schedule", icon: "time", comingSoon: true },
       { href: "/leave/review", label: "Review", icon: "requests" },
-      { href: "#soon-leave-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
-      { href: "#soon-leave-entitlement-report", label: "Entitlement Report", icon: "govreports", comingSoon: true },
-      { href: "#soon-leave-earning-policy", label: "Earning Policy", icon: "policies", comingSoon: true },
+      { href: "/reports/hr/leave-transactions", label: "Transaction Report", icon: "govreports" },
+      { href: "/reports/hr/leave-entitlement", label: "Entitlement Report", icon: "govreports" },
+      { href: "/leave/earning-policy", label: "Earning Policy", icon: "policies" },
     ],
   },
   {
@@ -156,7 +156,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
       { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
       { href: "#soon-field-checkin", label: "Field Check-In", icon: "locations", comingSoon: true },
-      { href: "#soon-time-clock-report", label: "Time Clock Report", icon: "govreports", comingSoon: true },
+      { href: "/reports/hr/time-clock", label: "Time Clock Report", icon: "govreports" },
     ],
   },
   {
