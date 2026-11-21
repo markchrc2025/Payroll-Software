@@ -750,6 +750,9 @@ model Tenant {
   documentTemplates      DocumentTemplate[]
   leaveEarningPolicies   LeaveEarningPolicy[]
   leaveSchedules         LeaveSchedule[]
+  discussionThreads      DiscussionThread[]
+  discussionComments     DiscussionComment[]
+  sharedDocuments        SharedDocument[]
   documentRequests       DocumentRequest[]
 
   @@index([deletedAt])
@@ -4379,4 +4382,108 @@ model LeaveSchedule {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, kind])
+}
+
+// =============================================================================
+// TEAM: DISCUSSION, DOCUMENT AND FORM SHARING (Wave F2, F3, PAY-216)
+// =============================================================================
+
+/// A discussion for an audience (departments, branches; empty: everyone).
+/// HR can hide a post; the hide is audited (src/lib/team/discussion.ts).
+model DiscussionThread {
+  id               String    @id @default(cuid())
+  tenantId         String
+  title            String
+  body             String    @db.Text
+  audience         Json      @default("{}")
+  authorEmployeeId String?
+  authorUserId     String?
+  authorName       String
+  mentions         Json      @default("[]")
+  hiddenAt         DateTime?
+  hiddenByUserId   String?
+  hiddenReason     String?
+  lastActivityAt   DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  comments DiscussionComment[]
+
+  @@index([tenantId, lastActivityAt])
+}
+
+model DiscussionComment {
+  id               String    @id @default(cuid())
+  tenantId         String
+  threadId         String
+  body             String    @db.Text
+  authorEmployeeId String?
+  authorUserId     String?
+  authorName       String
+  mentions         Json      @default("[]")
+  hiddenAt         DateTime?
+  hiddenByUserId   String?
+  hiddenReason     String?
+  createdAt        DateTime  @default(now())
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  thread DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+/// A file HR shares with an audience (handbook, policies, forms), versioned;
+/// each version may need an "I have read and understood" acknowledgement.
+model SharedDocument {
+  id             String    @id @default(cuid())
+  tenantId       String
+  title          String
+  description    String?
+  audience       Json      @default("{}")
+  requiresAck    Boolean   @default(false)
+  currentVersion Int       @default(1)
+  createdByUserId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  tenant   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions SharedDocumentVersion[]
+  acks     SharedDocumentAck[]
+
+  @@index([tenantId])
+}
+
+model SharedDocumentVersion {
+  id          String   @id @default(cuid())
+  tenantId    String
+  documentId  String
+  version     Int
+  fileName    String
+  mimeType    String
+  fileSize    Int
+  /// Object storage key; null when the file is kept in the database (no storage configured).
+  storageKey  String?
+  data        Bytes?
+  note        String?
+  uploadedByUserId String?
+  createdAt   DateTime @default(now())
+
+  document SharedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+}
+
+model SharedDocumentAck {
+  id             String   @id @default(cuid())
+  tenantId       String
+  documentId     String
+  version        Int
+  employeeId     String
+  acknowledgedAt DateTime @default(now())
+
+  document SharedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version, employeeId])
 }

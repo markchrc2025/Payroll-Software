@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 207 |
-| ESS_SESSION | 27 |
+| USER_SESSION | 213 |
+| ESS_SESSION | 30 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 289 |
+| Total | 298 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -209,6 +209,9 @@ None.
 | POST | /api/ess/pin | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/profile/update-requests | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/reset-password | PUBLIC_BY_DESIGN | the single-use reset token is the principal | n/a |
+| POST | /api/ess/team/documents/[id]/ack | ESS_SESSION | getEssContext | yes |
+| POST | /api/ess/team/threads/[id]/comments | ESS_SESSION | getEssContext | yes |
+| POST | /api/ess/team/threads | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/team-requests/[stepId] | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/undertime/[id]/cancel | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/undertime | ESS_SESSION | getEssContext | yes |
@@ -339,6 +342,12 @@ None.
 | DELETE | /api/shifts/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/shifts | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/storage/object | USER_SESSION | requirePermission | yes |
+| DELETE | /api/team/documents/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/team/documents/[id]/versions | USER_SESSION | getAuthContext | yes |
+| POST | /api/team/documents | USER_SESSION | getAuthContext | yes |
+| POST | /api/team/hide | USER_SESSION | getAuthContext | yes |
+| POST | /api/team/threads/[id]/comments | USER_SESSION | getAuthContext | yes |
+| POST | /api/team/threads | USER_SESSION | getAuthContext | yes |
 | POST | /api/undertime-requests/[id]/approve | USER_SESSION | requireApprover | yes |
 | POST | /api/undertime-requests/[id]/reject | USER_SESSION | requireApprover | yes |
 | PATCH | /api/work-locations/[id] | USER_SESSION | requirePermission | yes |

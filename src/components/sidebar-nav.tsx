@@ -180,8 +180,8 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Team",
     items: [
       { href: "/announcements", label: "Announcements", icon: "announcements" },
-      { href: "#soon-team-discussion", label: "Discussion", icon: "requests", comingSoon: true },
-      { href: "#soon-team-doc-sharing", label: "Document & Form Sharing", icon: "claims", comingSoon: true },
+      { href: "/team/discussion", label: "Discussion", icon: "requests" },
+      { href: "/team/documents", label: "Document & Form Sharing", icon: "claims" },
     ],
   },
   {
