@@ -50,6 +50,7 @@ interface ExpenseClaim {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// Labels for claims filed before Wave A2; new claims pick from the company's lists.
 const CATEGORIES = [
   { value: "TRANSPORTATION", label: "Transportation" },
   { value: "MEALS", label: "Meals" },
@@ -100,8 +101,12 @@ function todayIso() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+type ListItem = { id: string; code: string; name: string; attributes?: Record<string, unknown> };
+
 const EMPTY_FORM = {
-  category: "OTHER",
+  /** Wave A2 (PAY-209): the Expense Categories item; typeId the Expense Types item. */
+  category: "",
+  typeId: "",
   description: "",
   amount: "",
   claimDate: todayIso(),
@@ -116,6 +121,18 @@ export default function EssExpenseClaimsPage() {
   const [saving, setSaving] = useState(false);
   // PAY-190: the receipt (OR) photo or PDF, uploaded before the claim is filed.
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [categories, setCategories] = useState<ListItem[]>([]);
+  const [types, setTypes] = useState<ListItem[]>([]);
+  useEffect(() => {
+    const token = localStorage.getItem("ess_token");
+    const load = (list: string) =>
+      fetch(`/api/ess/lookups/${list}`, { headers: { Authorization: `Bearer ${token ?? ""}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => (j?.data ?? []) as ListItem[])
+        .catch(() => [] as ListItem[]);
+    void Promise.all([load("EXPENSE_CATEGORY"), load("EXPENSE_TYPE")]).then(([c, t]) => { setCategories(c); setTypes(t); });
+  }, []);
+  const needsReceipt = categories.find((c) => c.id === form.category)?.attributes?.receiptRequired === true;
 
   function authHeaders() {
     const token = localStorage.getItem("ess_token");
@@ -150,7 +167,7 @@ export default function EssExpenseClaimsPage() {
 
   async function fileClaim() {
     const amountPesos = parseFloat(form.amount);
-    if (!form.description.trim() || isNaN(amountPesos) || amountPesos <= 0) {
+    if (!form.category || !form.description.trim() || isNaN(amountPesos) || amountPesos <= 0) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -179,7 +196,8 @@ export default function EssExpenseClaimsPage() {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        category: form.category,
+        categoryId: form.category,
+        ...(form.typeId ? { typeId: form.typeId } : {}),
         description: form.description.trim(),
         amountCents,
         claimDate: form.claimDate,
@@ -291,7 +309,8 @@ export default function EssExpenseClaimsPage() {
                   </TableCell>
                   <TableCell>
                     <span className="text-xs">
-                      {CATEGORIES.find((x) => x.value === c.category)?.label ??
+                      {categories.find((x) => x.code === c.category)?.name ??
+                        CATEGORIES.find((x) => x.value === c.category)?.label ??
                         c.category}
                     </span>
                   </TableCell>
@@ -354,17 +373,33 @@ export default function EssExpenseClaimsPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Choose a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {needsReceipt && <p className="text-xs text-muted-foreground">This category needs a receipt.</p>}
             </div>
+            {types.length > 1 && (
+              <div className="space-y-1">
+                <Label>Kind of claim</Label>
+                <Select value={form.typeId} onValueChange={(v) => setForm((f) => ({ ...f, typeId: v ?? f.typeId }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Reimbursement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {types.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="claim-date">
                 Expense Date <span className="text-destructive">*</span>

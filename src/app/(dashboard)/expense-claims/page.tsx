@@ -43,9 +43,26 @@ type ExpenseClaim = {
   claimDate: string;
   status: string;
   taxTreatment: string | null;
+  taxTreatmentReason?: string | null;
+  // Wave A2 (PAY-209): the company's list items, and limits flagged (decision 6).
+  categoryId?: string | null;
+  typeId?: string | null;
+  limitFlags?: LimitFlag[];
   receiptKey?: string | null;
   employee?: { id: string; firstName: string; lastName: string } | null;
 };
+
+type LimitFlag =
+  | { kind: "PER_CLAIM"; limitCents: string; amountCents: string }
+  | { kind: "PER_MONTH"; limitCents: string; monthTotalCents: string; month: string };
+
+type ListItem = { id: string; code: string; name: string; attributes: Record<string, unknown> };
+
+function flagText(f: LimitFlag) {
+  return f.kind === "PER_CLAIM"
+    ? `Over the per-claim limit of ${formatPeso(f.limitCents)}`
+    : `Month total ${formatPeso(f.monthTotalCents)} is over the monthly limit of ${formatPeso(f.limitCents)} (${f.month})`;
+}
 
 type Employee = {
   id: string;
@@ -65,6 +82,7 @@ type PayrollRun = {
 // Constants
 // ---------------------------------------------------------------------------
 
+// Labels for claims filed before Wave A2 (no list link).
 const EXPENSE_CATEGORIES = [
   { value: "TRANSPORTATION", label: "Transportation" },
   { value: "MEALS", label: "Meals" },
@@ -128,6 +146,9 @@ export default function ExpenseClaimsPage() {
   const [attachTarget, setAttachTarget] = useState<ExpenseClaim | null>(null);
 
   const [approveTax, setApproveTax] = useState("NONTAXABLE_REIMBURSEMENT");
+  const [approveReason, setApproveReason] = useState("");
+  const [categories, setCategories] = useState<ListItem[]>([]);
+  const [types, setTypes] = useState<ListItem[]>([]);
   const [rejectReason, setRejectReason] = useState("");
   const [attachPayrollId, setAttachPayrollId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -160,6 +181,13 @@ export default function ExpenseClaimsPage() {
   }, [filterStatus]);
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
+  useEffect(() => {
+    const load = (list: string) => fetch(`/api/lookups/${list}?includeInactive=1`).then((r) => r.json()).then((j) => (j?.data?.items ?? []) as ListItem[]).catch(() => []);
+    void Promise.all([load("EXPENSE_CATEGORY"), load("EXPENSE_TYPE")]).then(([c, t]) => { setCategories(c); setTypes(t); });
+  }, []);
+  const typeTreatment = (c: ExpenseClaim | null) => (c?.typeId ? (types.find((t) => t.id === c.typeId)?.attributes.taxTreatment as string | undefined) : undefined);
+  const categoryLabel = (c: ExpenseClaim) =>
+    categories.find((x) => x.id === c.categoryId)?.name ?? EXPENSE_CATEGORIES.find((x) => x.value === c.category)?.label ?? c.category;
   useEffect(() => { loadClaims(); }, [loadClaims]);
 
   // ---------------------------------------------------------------------------
@@ -183,7 +211,7 @@ export default function ExpenseClaimsPage() {
     const res = await fetch(`/api/expense-claims/${approveTarget.id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taxTreatment: approveTax }),
+      body: JSON.stringify({ taxTreatment: approveTax, ...(approveReason.trim() ? { reason: approveReason.trim() } : {}) }),
     });
     const json = await res.json();
     setSaving(false);
@@ -323,7 +351,10 @@ export default function ExpenseClaimsPage() {
                     {new Date(claim.claimDate).toLocaleDateString("en-PH")}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {EXPENSE_CATEGORIES.find((c) => c.value === claim.category)?.label ?? claim.category}
+                    {categoryLabel(claim)}
+                    {!!claim.limitFlags?.length && (
+                      <Badge variant="outline" className="ml-1.5 border-amber-400 text-amber-700" title={claim.limitFlags.map(flagText).join("\n")}>Over limit</Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm max-w-xs truncate" title={claim.description}>
                     {claim.description.length > 60 ? claim.description.slice(0, 60) + "…" : claim.description}
@@ -353,7 +384,7 @@ export default function ExpenseClaimsPage() {
                       )}
                       {claim.status === "SUBMITTED" && (
                         <>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setApproveTax("NONTAXABLE_REIMBURSEMENT"); setApproveTarget(claim); }}>
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setApproveTax(typeTreatment(claim) ?? "NONTAXABLE_REIMBURSEMENT"); setApproveReason(""); setApproveTarget(claim); }}>
                             Approve
                           </Button>
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={() => { setRejectReason(""); setRejectTarget(claim); }}>
@@ -390,6 +421,16 @@ export default function ExpenseClaimsPage() {
                 <p><span className="text-muted-foreground">Employee:</span> {claimEmpLabel(approveTarget)} <span className="font-mono text-xs text-muted-foreground">{empMap.get(approveTarget.employeeId)?.employeeNumber ?? ""}</span></p>
                 <p><span className="text-muted-foreground">Amount:</span> {formatPeso(approveTarget.amountCents)}</p>
                 <p><span className="text-muted-foreground">Description:</span> {approveTarget.description}</p>
+                <p><span className="text-muted-foreground">Category:</span> {categoryLabel(approveTarget)}</p>
+                {approveTarget.typeId && (
+                  <p><span className="text-muted-foreground">Type:</span> {types.find((t) => t.id === approveTarget.typeId)?.name ?? "—"}</p>
+                )}
+              </div>
+            )}
+            {!!approveTarget?.limitFlags?.length && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 space-y-1">
+                {approveTarget.limitFlags.map((f, i) => <p key={i}>{flagText(f)}.</p>)}
+                <p className="text-xs">Flagged for you; it can still be approved.</p>
               </div>
             )}
             <div className="space-y-1.5">
@@ -403,6 +444,12 @@ export default function ExpenseClaimsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {typeTreatment(approveTarget) && approveTax !== typeTreatment(approveTarget) && (
+              <div className="space-y-1.5">
+                <Label>Reason for a treatment other than the type&apos;s <span className="text-destructive">*</span></Label>
+                <Textarea value={approveReason} onChange={(e) => setApproveReason(e.target.value)} rows={2} />
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <Button className="flex-1" onClick={handleApprove} disabled={saving}>
                 {saving ? "Approving…" : "Approve"}

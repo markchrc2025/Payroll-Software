@@ -31,15 +31,20 @@ export const ALLOWED_MIME_TYPES = [
 export const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 /** Used after the server-side upload — confirm and persist metadata. */
+// Wave A4 (PAY-211): categoryId is the company's Document Categories item;
+// `category` alone still works for the built-in ones. isConfidential left out
+// takes the category's default (src/lib/lookups/record-picks.ts).
 export const finalizeDocumentSchema = z.object({
-  category: z.enum(DOCUMENT_CATEGORIES),
+  category: z.enum(DOCUMENT_CATEGORIES).optional(),
+  categoryId: z.string().min(1).optional(),
   title: z.string().min(1).max(200),
   description: z.string().max(1000).optional().nullable(),
-  isConfidential: z.coerce.boolean().default(false),
+  isConfidential: z.coerce.boolean().optional(),
+  expiresAt: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.date().nullable().optional()),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   fileSize: z.number().int().positive().max(MAX_FILE_SIZE),
   storageKey: z.string().min(1).max(500),
-});
+}).refine((v) => v.category || v.categoryId, { message: "Choose the document category", path: ["categoryId"] });
 
 export type FinalizeDocumentInput = z.infer<typeof finalizeDocumentSchema>;

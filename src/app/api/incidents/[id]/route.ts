@@ -3,6 +3,7 @@
  * PATCH /api/incidents/[id] — Update incident details (HR/admin use).
  */
 import type { NextRequest } from "next/server";
+import { IncidentListRefusal, resolveIncidentLists } from "@/lib/incidents/lists";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, err, notFound } from "@/lib/api-response";
@@ -58,17 +59,25 @@ export async function PATCH(
   );
   if (!existing) return notFound("Incident");
 
-  const { attachmentUrls, ...rest } = parsed.data;
+  const { attachmentUrls, type, typeId, categoryId, ...rest } = parsed.data;
 
-  const updated = await withTenant(ctx.tenantId, (tx) =>
+  let updated;
+  try {
+  updated = await withTenant(ctx.tenantId, async (tx) =>
     tx.incidentReport.update({
       where: { id },
       data: {
         ...rest,
+        // Wave A3 (PAY-210): from the company's lists.
+        ...(await resolveIncidentLists(tx, ctx.tenantId, { type, typeId, categoryId })),
         ...(attachmentUrls !== undefined && { attachmentUrls }),
       },
     }),
   );
+  } catch (e) {
+    if (e instanceof IncidentListRefusal) return err(e.message, 422);
+    throw e;
+  }
 
   return ok(updated);
 }

@@ -47,11 +47,26 @@ type Incident = {
   employeeResponse: string | null;
   resolution: string | null;
   resolvedAt: string | null;
+  // Wave A3 (PAY-210): the company's list items; the decision's outcome copied at resolution.
+  typeId?: string | null;
+  categoryId?: string | null;
+  decisionId?: string | null;
+  decisionSuspensionDays?: number | null;
+  decisionIsDismissal?: boolean;
   createdAt: string;
   employee: { id: string; employeeNumber: string; firstName: string; lastName: string };
 };
 
 type Employee = { id: string; employeeNumber: string; firstName: string; lastName: string };
+type ListItem = { id: string; code: string; name: string; attributes: Record<string, unknown> };
+
+function decisionNote(d: ListItem | undefined) {
+  if (!d) return null;
+  const days = typeof d.attributes.suspensionDays === "number" ? d.attributes.suspensionDays : 0;
+  if (d.attributes.isDismissal === true) return "Dismissal: the employee's offboarding starts from this decision (Wave G).";
+  if (days > 0) return `Suspension of ${days} day${days === 1 ? "" : "s"}: these become unpaid days in payroll (Wave G).`;
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -124,6 +139,8 @@ export default function IncidentsPage() {
   const [form, setForm] = useState({
     employeeId: "",
     type: "INCIDENT_REPORT",
+    typeId: "",
+    categoryId: "",
     subject: "",
     description: "",
     incidentDate: "",
@@ -137,6 +154,15 @@ export default function IncidentsPage() {
     employeeResponse: "",
   });
   const [resolution, setResolution] = useState("");
+  const [decisionId, setDecisionId] = useState("");
+  const [typeItems, setTypeItems] = useState<ListItem[]>([]);
+  const [categoryItems, setCategoryItems] = useState<ListItem[]>([]);
+  const [decisionItems, setDecisionItems] = useState<ListItem[]>([]);
+  useEffect(() => {
+    const load = (list: string) => fetch(`/api/lookups/${list}?includeInactive=1`).then((r) => r.json()).then((j) => (j?.data?.items ?? []) as ListItem[]).catch(() => []);
+    void Promise.all([load("INCIDENT_TYPE"), load("INCIDENT_CATEGORY"), load("INCIDENT_DECISION")]).then(([t, c, d]) => { setTypeItems(t); setCategoryItems(c); setDecisionItems(d); });
+  }, []);
+  const incidentTypeLabel = (i: Incident) => typeItems.find((t) => t.id === i.typeId)?.name ?? typeLabel(i.type);
   const [saving, setSaving] = useState(false);
 
   // ---------------------------------------------------------------------------
@@ -187,7 +213,8 @@ export default function IncidentsPage() {
     setSaving(true);
     const body: Record<string, unknown> = {
       employeeId: form.employeeId,
-      type: form.type,
+      ...(form.typeId ? { typeId: form.typeId } : { type: form.type }),
+      ...(form.categoryId ? { categoryId: form.categoryId } : {}),
       subject: form.subject.trim(),
       description: form.description.trim(),
       incidentDate: form.incidentDate,
@@ -237,7 +264,7 @@ export default function IncidentsPage() {
     const res = await fetch(`/api/incidents/${resolveTarget.id}/resolve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resolution: resolution.trim() }),
+      body: JSON.stringify({ resolution: resolution.trim(), ...(decisionId ? { decisionId } : {}) }),
     });
     const json = await res.json();
     setSaving(false);
@@ -296,7 +323,7 @@ export default function IncidentsPage() {
           <Button variant="outline" size="sm" onClick={loadIncidents} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => { setForm({ employeeId: "", type: "INCIDENT_REPORT", subject: "", description: "", incidentDate: "", responseDeadline: "" }); setCreateOpen(true); }}>
+          <Button size="sm" onClick={() => { setForm({ employeeId: "", type: "INCIDENT_REPORT", typeId: "", categoryId: "", subject: "", description: "", incidentDate: "", responseDeadline: "" }); setCreateOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" /> New Incident
           </Button>
         </div>
@@ -340,7 +367,7 @@ export default function IncidentsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={typeBadgeVariant(inc.type)} className="text-xs">
-                      {typeLabel(inc.type)}
+                      {incidentTypeLabel(inc)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate" title={inc.subject}>
@@ -379,7 +406,7 @@ export default function IncidentsPage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-xs text-green-600 hover:text-green-700"
-                          onClick={() => { setResolveTarget(inc); setResolution(""); }}
+                          onClick={() => { setResolveTarget(inc); setResolution(""); setDecisionId(""); }}
                         >
                           Resolve
                         </Button>
@@ -418,11 +445,22 @@ export default function IncidentsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? form.type })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.typeId} onValueChange={(v) => setForm({ ...form, typeId: v ?? form.typeId })}>
+                <SelectTrigger><SelectValue placeholder="Incident report" /></SelectTrigger>
                 <SelectContent>
-                  {INCIDENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  {typeItems.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v ?? form.categoryId })}>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <SelectContent>
+                  {categoryItems.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -465,7 +503,7 @@ export default function IncidentsPage() {
             {editTarget && (
               <div className="rounded-md bg-muted/50 p-3 text-sm">
                 <p className="font-medium">{editTarget.employee.lastName}, {editTarget.employee.firstName}</p>
-                <p className="text-muted-foreground">{typeLabel(editTarget.type)} · {editTarget.incidentDate.slice(0, 10)}</p>
+                <p className="text-muted-foreground">{incidentTypeLabel(editTarget)} · {editTarget.incidentDate.slice(0, 10)}</p>
               </div>
             )}
             <div className="space-y-1.5">
@@ -521,6 +559,20 @@ export default function IncidentsPage() {
             <div className="space-y-1.5">
               <Label>Resolution <span className="text-destructive">*</span></Label>
               <Textarea rows={5} placeholder="Describe the resolution…" value={resolution} onChange={(e) => setResolution(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Decision</Label>
+              <Select value={decisionId} onValueChange={(v) => setDecisionId(v ?? "")}>
+                <SelectTrigger><SelectValue placeholder="No sanction recorded" /></SelectTrigger>
+                <SelectContent>
+                  {decisionItems.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {decisionNote(decisionItems.find((d) => d.id === decisionId)) && (
+                <p className="text-xs text-muted-foreground">{decisionNote(decisionItems.find((d) => d.id === decisionId))}</p>
+              )}
             </div>
             <div className="flex gap-3 pt-2">
               <Button className="flex-1" onClick={handleResolve} disabled={saving}>

@@ -4,6 +4,7 @@
  */
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
+import { IncidentListRefusal, resolveIncidentLists } from "@/lib/incidents/lists";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/require-permission";
 import { ok, paginated, err } from "@/lib/api-response";
@@ -63,10 +64,15 @@ export async function POST(req: NextRequest) {
   );
   if (!employee) return err("Employee not found", 404);
 
-  const incident = await withTenant(ctx.tenantId, (tx) =>
+  const { type, typeId, categoryId, ...fields } = rest;
+  let incident;
+  try {
+  incident = await withTenant(ctx.tenantId, async (tx) =>
     tx.incidentReport.create({
       data: {
-        ...rest,
+        ...fields,
+        // Wave A3 (PAY-210): from the company's lists.
+        ...(await resolveIncidentLists(tx, ctx.tenantId, { type, typeId, categoryId })) as { type: NonNullable<typeof type> },
         employeeId,
         tenantId: ctx.tenantId,
         attachmentUrls: attachmentUrls ?? [],
@@ -79,6 +85,10 @@ export async function POST(req: NextRequest) {
       },
     }),
   );
+  } catch (e) {
+    if (e instanceof IncidentListRefusal) return err(e.message, 422);
+    throw e;
+  }
 
   return ok(incident, "Incident created", 201);
 }

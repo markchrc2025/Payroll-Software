@@ -14,6 +14,7 @@ import type { NextRequest } from "next/server";
 import { withTenant } from "@/lib/with-tenant";
 import { getAuthContext } from "@/lib/auth";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { PickRefusal, resolveDocumentCategory } from "@/lib/lookups/record-picks";
 import { finalizeDocumentSchema } from "@/lib/validations/document";
 import { forbidUnless } from "@/lib/authz/route-permission";
 
@@ -50,6 +51,8 @@ export async function GET(
       select: {
         id: true,
         category: true,
+        categoryId: true,
+        expiresAt: true,
         title: true,
         description: true,
         fileName: true,
@@ -103,14 +106,15 @@ export async function POST(
       });
       if (!employee) return { notFound: true as const };
 
+      // Wave A4 (PAY-211): the category from the company's list.
+      const picked = await resolveDocumentCategory(tx, auth.tenantId, parsed.data);
       const doc = await tx.employeeDocument.create({
         data: {
           employeeId: id,
           tenantId: auth.tenantId,
-          category: parsed.data.category,
+          ...picked,
           title: parsed.data.title,
           description: parsed.data.description ?? null,
-          isConfidential: parsed.data.isConfidential,
           fileName: parsed.data.fileName,
           mimeType: parsed.data.mimeType,
           fileSize: parsed.data.fileSize,
@@ -120,6 +124,8 @@ export async function POST(
         select: {
           id: true,
           category: true,
+          categoryId: true,
+          expiresAt: true,
           title: true,
           fileName: true,
           mimeType: true,
@@ -133,6 +139,7 @@ export async function POST(
     if ("notFound" in result) return notFound("Employee");
     return ok(result.doc, "Document uploaded", 201);
   } catch (e) {
+    if (e instanceof PickRefusal) return err(e.message, 422);
     return serverError(e);
   }
 }

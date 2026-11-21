@@ -1464,8 +1464,12 @@ model EmployeeDocument {
   tenantId   String
 
   category    DocumentCategory
+  /// Wave A4 (PAY-211): the company's Document Categories item.
+  categoryId  String?
   title       String
   description String?
+  /// Wave A4: required when the category has an expiry date (IDs, permits, clearances).
+  expiresAt   DateTime?
 
   storageKey String
   fileName   String
@@ -1481,6 +1485,7 @@ model EmployeeDocument {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  categoryItem LookupItem? @relation("DocumentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -1571,6 +1576,9 @@ model EmployeeTraining {
 
   title               String
   provider            String?
+  /// Wave A4 (PAY-211): the company's Courses and Trainers items.
+  courseId            String?
+  trainerId           String?
   trainingDate        DateTime?
   /// Training duration in whole hours.
   hours               Int?
@@ -1590,6 +1598,8 @@ model EmployeeTraining {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  courseItem  LookupItem? @relation("TrainingCourseItem", fields: [courseId], references: [id], onDelete: SetNull)
+  trainerItem LookupItem? @relation("TrainingTrainerItem", fields: [trainerId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -1778,6 +1788,9 @@ model IncidentReport {
   employeeId String
   type       IncidentType
   status     IncidentStatus @default(OPEN)
+  /// Wave A3 (PAY-210): the company's Incident Types and Incident Categories items.
+  typeId     String?
+  categoryId String?
 
   subject      String
   description  String
@@ -1791,6 +1804,10 @@ model IncidentReport {
   resolution       String?
   resolvedAt       DateTime?
   resolvedByUserId String?
+  /// Wave A3: the decision (Incident Decisions item) and its outcome, copied at resolution.
+  decisionId             String?
+  decisionSuspensionDays Int?
+  decisionIsDismissal    Boolean @default(false)
 
   createdByUserId String?
   createdAt       DateTime  @default(now())
@@ -1799,6 +1816,9 @@ model IncidentReport {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  typeItem     LookupItem? @relation("IncidentTypeItem", fields: [typeId], references: [id], onDelete: SetNull)
+  categoryItem LookupItem? @relation("IncidentCategoryItem", fields: [categoryId], references: [id], onDelete: SetNull)
+  decisionItem LookupItem? @relation("IncidentDecisionItem", fields: [decisionId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
@@ -3228,8 +3248,14 @@ model ExpenseClaim {
   tenantId   String
   employeeId String
 
-  /// Free-text category (TRANSPORTATION, MEALS, ACCOMMODATION, MEDICAL, etc.).
+  /// The category's code (reports read this). Wave A2: from the company's list.
   category    String
+  /// Wave A2 (PAY-209): the company's Expense Categories and Expense Types items.
+  categoryId  String?
+  typeId      String?
+  /// Wave A2 (decision 6): limits the claim goes over, recorded at submission
+  /// and again at approval. Flagged for the approver, never blocking.
+  limitFlags  Json     @default("[]")
   description String   @db.Text
   /// Claim amount in centavos.
   amountCents BigInt
@@ -3241,6 +3267,8 @@ model ExpenseClaim {
   status       ExpenseClaimStatus   @default(DRAFT)
   /// Set by Finance/HR during APPROVAL. Drives engine treatment.
   taxTreatment ExpenseTaxTreatment?
+  /// Wave A2: why the approver chose a treatment other than the type's.
+  taxTreatmentReason String? @db.Text
 
   approvedById    String?
   approvedAt      DateTime?
@@ -3259,11 +3287,14 @@ model ExpenseClaim {
   approvedBy  User?        @relation("ExpenseClaimApprover", fields: [approvedById], references: [id])
   payrollBook PayrollBook? @relation("BookExpenseClaims", fields: [payrollBookId], references: [id])
   paidInBook  PayrollBook? @relation("BookPaidExpenseClaims", fields: [paidInBookId], references: [id])
+  categoryItem LookupItem? @relation("ExpenseClaimCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  typeItem     LookupItem? @relation("ExpenseClaimType", fields: [typeId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, employeeId])
   @@index([tenantId, status])
   @@index([payrollBookId])
+  @@index([tenantId, employeeId, categoryId, claimDate])
 }
 
 // =============================================================================
@@ -4191,6 +4222,14 @@ model LookupItem {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employeesWithBank Employee[] @relation("EmployeeBank")
+  expenseClaimsByCategory ExpenseClaim[] @relation("ExpenseClaimCategory")
+  expenseClaimsByType     ExpenseClaim[] @relation("ExpenseClaimType")
+  incidentsByType         IncidentReport[] @relation("IncidentTypeItem")
+  incidentsByCategory     IncidentReport[] @relation("IncidentCategoryItem")
+  incidentsByDecision     IncidentReport[] @relation("IncidentDecisionItem")
+  documentsByCategory     EmployeeDocument[] @relation("DocumentCategoryItem")
+  trainingsByCourse       EmployeeTraining[] @relation("TrainingCourseItem")
+  trainingsByTrainer      EmployeeTraining[] @relation("TrainingTrainerItem")
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])

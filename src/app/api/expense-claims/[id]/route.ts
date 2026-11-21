@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/with-tenant";
 import { ok, err, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { updateExpenseClaimSchema } from "@/lib/validations/expense-claim";
 import { toCentavos } from "@/lib/money";
+import { ClaimListRefusal, resolveClaimLists } from "@/lib/expenses/claim-lists";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function GET(
@@ -67,10 +68,18 @@ export async function PATCH(
       if (claim.status !== "DRAFT")
         return err("Only DRAFT claims can be edited", 409);
 
+      const picks = d.category || d.categoryId || d.typeId;
+      const lists = picks
+        ? await resolveClaimLists(tx, auth.tenantId, {
+            categoryId: d.categoryId ?? (d.category ? undefined : claim.categoryId),
+            category: d.category ?? (d.categoryId ? undefined : claim.category),
+            typeId: d.typeId ?? claim.typeId,
+          })
+        : {};
       const updated = await tx.expenseClaim.update({
         where: { id },
         data: {
-          ...(d.category ? { category: d.category } : {}),
+          ...lists,
           ...(d.description !== undefined ? { description: d.description } : {}),
           ...(d.amount ? { amountCents: toCentavos(d.amount) } : {}),
           ...(d.receiptKey !== undefined ? { receiptKey: d.receiptKey } : {}),
@@ -81,6 +90,7 @@ export async function PATCH(
       return ok(serializeExpenseClaim(updated));
     });
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     return serverError(e);
   }
 }

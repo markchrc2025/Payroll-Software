@@ -4,6 +4,7 @@ import { getAuthContext } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { ok, err, unauthorized, notFound, serverError, forbidden } from "@/lib/api-response";
 import { approveExpenseClaimSchema } from "@/lib/validations/expense-claim";
+import { ClaimListRefusal, limitFlags, treatmentOnApproval } from "@/lib/expenses/claim-lists";
 import { serializeExpenseClaim } from "@/lib/payroll/serialize";
 
 export async function POST(
@@ -25,7 +26,7 @@ export async function POST(
   if (!parsed.success)
     return err("Validation error", 400, parsed.error.flatten());
 
-  const { taxTreatment } = parsed.data;
+  const { taxTreatment: chosen, reason } = parsed.data;
 
   try {
     return await withTenant(auth.tenantId, async (tx) => {
@@ -42,11 +43,15 @@ export async function POST(
       if (claim.status !== "SUBMITTED")
         return err("Only SUBMITTED claims can be approved", 409);
 
+      // Wave A2 (PAY-209): the type's tax treatment unless the approver gives a
+      // reason for another; limits re-checked and flagged, never blocking.
+      const treatment = await treatmentOnApproval(tx, auth.tenantId, claim.typeId, chosen, reason);
       const updated = await tx.expenseClaim.update({
         where: { id },
         data: {
           status: "APPROVED",
-          taxTreatment,
+          ...treatment,
+          limitFlags: await limitFlags(tx, claim),
           approvedById: auth.userId,
           approvedAt: new Date(),
         },
@@ -55,6 +60,7 @@ export async function POST(
       return ok(serializeExpenseClaim(updated));
     });
   } catch (e) {
+    if (e instanceof ClaimListRefusal) return err(e.message, e.status);
     return serverError(e);
   }
 }

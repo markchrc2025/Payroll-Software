@@ -3,21 +3,18 @@
  */
 import { z } from "zod";
 
-const EXPENSE_CATEGORIES = [
-  "TRANSPORTATION",
-  "MEALS",
-  "ACCOMMODATION",
-  "COMMUNICATION",
-  "OFFICE_SUPPLIES",
-  "MEDICAL",
-  "TRAINING",
-  "ENTERTAINMENT",
-  "OTHER",
-] as const;
+// Wave A2 (PAY-209): the category and type come from the company's lists
+// (src/lib/expenses/claim-lists.ts). `category` may be an item's code or
+// name; `categoryId` and `typeId` are the items themselves.
+const listPick = {
+  category: z.string().trim().min(1).max(100).optional(),
+  categoryId: z.string().min(1).optional(),
+  typeId: z.string().min(1).optional(),
+};
 
 export const createExpenseClaimSchema = z.object({
   employeeId: z.string(),
-  category: z.enum(EXPENSE_CATEGORIES),
+  ...listPick,
   description: z.string().min(1).max(1000),
   /// Amount in peso string: "1500.00"
   amount: z
@@ -28,7 +25,7 @@ export const createExpenseClaimSchema = z.object({
 });
 
 export const updateExpenseClaimSchema = z.object({
-  category: z.enum(EXPENSE_CATEGORIES).optional(),
+  ...listPick,
   description: z.string().min(1).max(1000).optional(),
   amount: z
     .string()
@@ -38,12 +35,14 @@ export const updateExpenseClaimSchema = z.object({
   receiptKey: z.string().nullable().optional(),
 });
 
+// Wave A2: the treatment defaults from the claim's type; another one needs a reason.
 export const approveExpenseClaimSchema = z.object({
   taxTreatment: z.enum([
     "NONTAXABLE_REIMBURSEMENT",
     "DE_MINIMIS",
     "TAXABLE",
-  ]),
+  ]).optional(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export const rejectExpenseClaimSchema = z.object({
