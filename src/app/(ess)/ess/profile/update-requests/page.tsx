@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { BackgroundEntrySheet, type BackgroundKindEss } from "@/components/ess/BackgroundEntrySheet";
+import { BACKGROUND_FIELDS, describeBackground, isBackgroundField } from "@/lib/background/entry-view";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,8 @@ export default function EssProfileUpdateRequestsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  // Wave B (PAY-212, decision 7): add education, experience or training.
+  const [addKind, setAddKind] = useState<BackgroundKindEss | null>(null);
 
   function authHeaders() {
     const token = localStorage.getItem("ess_token");
@@ -134,7 +138,6 @@ export default function EssProfileUpdateRequestsPage() {
         if (d) setRequests(d?.data ?? []);
       })
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   useEffect(() => {
@@ -183,16 +186,22 @@ export default function EssProfileUpdateRequestsPage() {
             Request changes to your personal information
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setForm(EMPTY_FORM);
-            setSheetOpen(true);
-          }}
-        >
-          + Request Change
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setAddKind("education")}>+ Education</Button>
+          <Button size="sm" variant="outline" onClick={() => setAddKind("experience")}>+ Experience</Button>
+          <Button size="sm" variant="outline" onClick={() => setAddKind("training")}>+ Training</Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setForm(EMPTY_FORM);
+              setSheetOpen(true);
+            }}
+          >
+            + Request Change
+          </Button>
+        </div>
       </div>
+      <BackgroundEntrySheet kind={addKind} open={addKind !== null} onOpenChange={(o) => { if (!o) setAddKind(null); }} onFiled={fetchRequests} />
 
       {/* Requests table */}
       {loading ? (
@@ -227,14 +236,14 @@ export default function EssProfileUpdateRequestsPage() {
               {requests.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">
-                    {FIELD_LABELS[r.field] ?? r.field}
+                    {isBackgroundField(r.field) ? BACKGROUND_FIELDS[r.field] : (FIELD_LABELS[r.field] ?? r.field)}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {r.oldValue || "—"}
                   </TableCell>
                   <TableCell className="text-sm max-w-[140px]">
-                    <p className="truncate" title={r.newValue}>
-                      {r.newValue}
+                    <p className="truncate" title={isBackgroundField(r.field) ? describeBackground(r.field, r.newValue) : r.newValue}>
+                      {isBackgroundField(r.field) ? describeBackground(r.field, r.newValue) : r.newValue}
                     </p>
                   </TableCell>
                   <TableCell>

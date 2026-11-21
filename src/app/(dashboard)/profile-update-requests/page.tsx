@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BACKGROUND_FIELDS, describeBackground, isBackgroundField } from "@/lib/background/entry-view";
 import {
   Sheet,
   SheetContent,
@@ -80,11 +81,14 @@ const FIELD_LABELS: Record<string, string> = {
 const MASKED_FIELDS = new Set(["bankAccountNumber", "bankAccountName"]);
 
 function fieldLabel(field: string) {
+  if (isBackgroundField(field)) return BACKGROUND_FIELDS[field];
   return FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, " $1").trim();
 }
 
 function maskValue(field: string, value: string | null) {
   if (!value) return "—";
+  // Wave B (PAY-212): an employee's own education, experience or training.
+  if (isBackgroundField(field)) return describeBackground(field, value);
   if (MASKED_FIELDS.has(field) && value.length > 4) {
     return "•".repeat(value.length - 4) + value.slice(-4);
   }
