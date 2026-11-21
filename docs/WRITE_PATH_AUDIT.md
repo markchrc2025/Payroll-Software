@@ -8,13 +8,13 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 178 |
+| USER_SESSION | 180 |
 | ESS_SESSION | 25 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PUBLIC_BY_DESIGN | 9 |
 | NONE | 0 |
-| Total | 253 |
+| Total | 255 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -266,6 +266,8 @@ None.
 | POST | /api/payroll/corrections/[id]/cancel | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/corrections/[id]/land | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/corrections | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/retro-pay/[batchId]/approve | USER_SESSION | getAuthContext | yes |
+| POST | /api/payroll/retro-pay | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/payroll/runs/[id]/adjustments/[adjId] | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/runs/[id]/adjustments | USER_SESSION | getAuthContext | yes |
 | POST | /api/payroll/runs/[id]/annualize | USER_SESSION | requirePermission | yes |

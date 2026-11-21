@@ -3993,6 +3993,10 @@ model PayrollCorrection {
   originalSheetId String
   /// The correction this one corrects, if any.
   correctsId      String?
+  /// PAY-166: CORRECTION, or RETRO_PAY for a retroactive salary increase.
+  kind            String                  @default("CORRECTION")
+  /// PAY-166: the retroactive increase this belongs to (one per payslip of the period).
+  batchId         String?
   /// Issued at approval, gapless (DocumentSeries PAYROLL_CORRECTION).
   controlNumber   String?
   status          PayrollCorrectionStatus @default(DRAFT)
@@ -4022,4 +4026,5 @@ model PayrollCorrection {
   @@index([tenantId])
   @@index([originalSheetId])
   @@index([targetBookId])
+  @@index([tenantId, batchId])
 }
