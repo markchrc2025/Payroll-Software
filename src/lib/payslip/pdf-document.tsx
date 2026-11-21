@@ -16,7 +16,7 @@ import { peso, type PayslipPdfData, type PdfLine } from "@/lib/payslip/pdf-data"
 
 const FONT_DIR = path.join(process.cwd(), "src/lib/payslip/fonts");
 let fontsRegistered = false;
-function registerFonts() {
+export function registerFonts() {
   if (fontsRegistered) return;
   Font.register({
     family: "Inter",

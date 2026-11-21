@@ -4083,6 +4083,8 @@ model OffboardingCase {
   personalInfo        Json?
   personalInfoAt      DateTime?
   coeRequestedAt      DateTime?
+  /// PAY-197 part 3: when HR issued the certificate of employment (the portal then offers it).
+  coeIssuedAt         DateTime?
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
