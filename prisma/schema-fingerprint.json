@@ -977,6 +977,8 @@
   "column \"PayrollSheet\".\"taxClassificationSnapshot\" TaxClassification not null",
   "column \"PayrollSheet\".\"taxableAllowancesCents\" int8 not null default 0",
   "column \"PayrollSheet\".\"tenantId\" text not null",
+  "column \"PayrollSheet\".\"thirteenthAccrualBasisCents\" int8 null",
+  "column \"PayrollSheet\".\"thirteenthAccrualCents\" int8 null",
   "column \"PayrollSheet\".\"thirteenthMonthBreakdown\" jsonb null",
   "column \"PayrollSheet\".\"updatedAt\" timestamp not null",
   "column \"PayrollSheet\".\"withholdingTaxCents\" int8 not null default 0",

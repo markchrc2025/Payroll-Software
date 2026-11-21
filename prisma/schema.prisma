@@ -2811,8 +2811,11 @@ model PayrollSheet {
   /// each cutoff's figures, which are included in this sheet's amounts.
   heldRelease Json?
 
+  /// PAY-152: this payslip's 13th-month base (REGULAR runs) and its accrual, one twelfth of it. Recorded at finalize, never paid.
+  thirteenthAccrualBasisCents BigInt?
+  thirteenthAccrualCents      BigInt?
   /// PAY-69: payslip control number, issued gapless at finalize (PS-YYYY-NNNNNN). Never changes once set.
-  controlNumber String?
+  controlNumber               String?
 
   @@unique([tenantId, controlNumber])
   @@unique([payrollBookId, employeeId])
