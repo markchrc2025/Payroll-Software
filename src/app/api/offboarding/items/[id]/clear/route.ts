@@ -1,6 +1,7 @@
 /**
  * PAY-197: POST /api/offboarding/items/[id]/clear { remarks? }. Only the
  * item's signatory, never the leaving employee.
+ * @permission-exempt: a signatory signs off only items assigned to them; clearItem refuses anyone else and the leaving employee.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";

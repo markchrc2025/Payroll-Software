@@ -1,4 +1,7 @@
-/** PAY-197: GET the clearance items waiting for the signed-in user's sign-off. */
+/**
+ * PAY-197: GET the clearance items waiting for the signed-in user's sign-off.
+ * @permission-exempt: lists only the items assigned to the signed-in user.
+ */
 import type { NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { ok, unauthorized } from "@/lib/api-response";
