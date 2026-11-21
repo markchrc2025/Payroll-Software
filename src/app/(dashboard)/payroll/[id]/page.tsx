@@ -85,6 +85,8 @@ import {
 type PayrollSheet = {
   /** PAY-59: the statutory table versions that priced this payslip. */
   statutoryRuleVersions?: Record<string, { version: string; effectiveFrom: string }> | null;
+  /** PAY-69: the payslip's control number. */
+  controlNumber?: string | null;
   id: string;
   employeeId: string;
   employeeNumber?: string | null;
@@ -138,6 +140,8 @@ type PayrollRun = {
   cycle: string;
   runType: string;
   status: "DRAFT" | "PROCESSING" | "FINALIZED" | "CANCELLED";
+  /** PAY-69: issued at finalize. */
+  controlNumber?: string | null;
   notes: string | null;
   createdAt: string;
   sheets: PayrollSheet[];
@@ -603,6 +607,9 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
             <div className="flex items-center gap-2">
               <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{formatPeriod(run.periodStart, run.periodEnd)}</h1>
               <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
+              {run.controlNumber && (
+                <span data-testid="run-control-number" className="text-[12.5px] font-mono text-muted-foreground">{run.controlNumber}</span>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               {CYCLE_LABELS[run.cycle] ?? run.cycle} · {TYPE_LABELS[run.runType] ?? run.runType}

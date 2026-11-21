@@ -14,6 +14,7 @@
  *                               `AuditLog` entry. Re-finalize on a FINALIZED
  *                               book is a no-op (returns existing row).
  */
+import { issueRunControlNumbers } from "./control-numbers";
 import type {
   Loan,
   PayComponent,
@@ -1901,6 +1902,9 @@ export async function finalizeRun(
       });
     }
 
+    // PAY-69: control numbers, gapless, in this transaction.
+    const control = await issueRunControlNumbers(tx, tenantId, bookId, book.periodEnd);
+
     // 5. Transition the book + audit log.
     const finalized = await tx.payrollBook.update({
       where: { id: bookId },
@@ -1921,7 +1925,7 @@ export async function finalizeRun(
         entityId: bookId,
         changes: {
           before: { status: "DRAFT" },
-          after: { status: "FINALIZED" },
+          after: { status: "FINALIZED", controlNumber: control.run },
           loanPaymentsApplied: Array.from(loanPayments.entries()).map(
             ([loanId, amount]) => ({
               loanId,
