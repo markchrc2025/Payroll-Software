@@ -63,8 +63,8 @@ type ListItem = { id: string; code: string; name: string; attributes: Record<str
 function decisionNote(d: ListItem | undefined) {
   if (!d) return null;
   const days = typeof d.attributes.suspensionDays === "number" ? d.attributes.suspensionDays : 0;
-  if (d.attributes.isDismissal === true) return "Dismissal: the employee's offboarding starts from this decision (Wave G).";
-  if (days > 0) return `Suspension of ${days} day${days === 1 ? "" : "s"}: these become unpaid days in payroll (Wave G).`;
+  if (d.attributes.isDismissal === true) return "Dismissal: an offboarding case opens with the last working day you enter.";
+  if (days > 0) return `Suspension of ${days} workday${days === 1 ? "" : "s"} from the first day you enter: they become unpaid days in payroll.`;
   return null;
 }
 
@@ -155,6 +155,7 @@ export default function IncidentsPage() {
   });
   const [resolution, setResolution] = useState("");
   const [decisionId, setDecisionId] = useState("");
+  const [outcomeDate, setOutcomeDate] = useState("");
   const [typeItems, setTypeItems] = useState<ListItem[]>([]);
   const [categoryItems, setCategoryItems] = useState<ListItem[]>([]);
   const [decisionItems, setDecisionItems] = useState<ListItem[]>([]);
@@ -257,14 +258,24 @@ export default function IncidentsPage() {
     loadIncidents();
   }
 
+  const chosen = decisionItems.find((d) => d.id === decisionId);
+  const needsDate = !!chosen && (chosen.attributes.isDismissal === true || (typeof chosen.attributes.suspensionDays === "number" && chosen.attributes.suspensionDays > 0));
+
   async function handleResolve() {
     if (!resolveTarget) return;
+    if (needsDate && !outcomeDate) { toast.error(chosen?.attributes.isDismissal === true ? "Enter the last working day" : "Enter the first day of the suspension"); return; }
     if (!resolution.trim()) { toast.error("Resolution text is required"); return; }
     setSaving(true);
     const res = await fetch(`/api/incidents/${resolveTarget.id}/resolve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resolution: resolution.trim(), ...(decisionId ? { decisionId } : {}) }),
+      body: JSON.stringify({
+        resolution: resolution.trim(),
+        ...(decisionId ? { decisionId } : {}),
+        // Wave G3: the suspension's first day, or the dismissal's last working day.
+        ...(outcomeDate && chosen?.attributes.isDismissal === true ? { lastWorkingDay: outcomeDate } : {}),
+        ...(outcomeDate && chosen?.attributes.isDismissal !== true ? { suspensionStartDate: outcomeDate } : {}),
+      }),
     });
     const json = await res.json();
     setSaving(false);
@@ -272,6 +283,7 @@ export default function IncidentsPage() {
     toast.success("Incident resolved");
     setResolveTarget(null);
     setResolution("");
+    setOutcomeDate("");
     loadIncidents();
   }
 
@@ -574,6 +586,12 @@ export default function IncidentsPage() {
                 <p className="text-xs text-muted-foreground">{decisionNote(decisionItems.find((d) => d.id === decisionId))}</p>
               )}
             </div>
+            {needsDate && (
+              <div className="space-y-1.5">
+                <Label>{chosen?.attributes.isDismissal === true ? "Last working day" : "First day of the suspension"} <span className="text-destructive">*</span></Label>
+                <Input type="date" value={outcomeDate} onChange={(e) => setOutcomeDate(e.target.value)} />
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <Button className="flex-1" onClick={handleResolve} disabled={saving}>
                 {saving ? "Resolving…" : "Mark Resolved"}

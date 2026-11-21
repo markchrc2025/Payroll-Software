@@ -1828,6 +1828,11 @@ model IncidentReport {
   decisionId             String?
   decisionSuspensionDays Int?
   decisionIsDismissal    Boolean   @default(false)
+  /// Wave G3 (PAY-217): the first day of the suspension, and the workdays written as unpaid DTR days.
+  suspensionStartDate    DateTime?
+  suspensionDates        Json?
+  /// Wave G3: the offboarding case a dismissal opened.
+  offboardingCaseId      String?
 
   createdByUserId String?
   createdAt       DateTime  @default(now())
@@ -3079,6 +3084,9 @@ model DTRRecord {
   /// Locked records cannot be edited — set by payroll finalize.
   isLocked       Boolean   @default(false)
 
+  /// Wave G3 (PAY-217): an unpaid day written by an incident's suspension.
+  incidentReportId String?
+
   notes String? @db.Text
 
   // -- Official layer (sourced from AttendanceLog, immutable after write) ----
@@ -3116,6 +3124,7 @@ model DTRRecord {
   auditLogs        DTRAuditLog[]
 
   @@unique([tenantId, employeeId, date])
+  @@index([incidentReportId])
   @@index([tenantId])
   @@index([tenantId, employeeId, date])
   @@index([tenantId, approvalStatus])
