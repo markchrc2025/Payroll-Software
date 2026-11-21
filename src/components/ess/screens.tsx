@@ -186,6 +186,7 @@ export function HomeScreen() {
           { icon: "clock", label: "File overtime", onClick: () => nav.go("request", "ot") },
           { icon: "clock", label: "File undertime", onClick: () => router.push("/ess/undertime") },
           { icon: "wallet", label: "Claim an expense", onClick: () => router.push("/ess/expense-claims") },
+          { icon: "doc", label: "Request a document", onClick: () => router.push("/ess/documents") },
           { icon: "cal", label: "My DTR", onClick: () => router.push("/ess/dtr") },
           { icon: "doc", label: "View payslips", onClick: () => nav.tab("pay") },
         ]}

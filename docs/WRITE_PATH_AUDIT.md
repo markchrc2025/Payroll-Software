@@ -8,14 +8,14 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 | Principal | Write handlers |
 |---|---|
-| USER_SESSION | 193 |
-| ESS_SESSION | 26 |
+| USER_SESSION | 198 |
+| ESS_SESSION | 27 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 274 |
+| Total | 280 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -127,6 +127,11 @@ None.
 | PATCH | /api/departments/[id] | USER_SESSION | requirePermission | yes |
 | DELETE | /api/departments/[id] | USER_SESSION | requirePermission | yes |
 | POST | /api/departments | USER_SESSION | getAuthContext | yes |
+| POST | /api/document-requests/[id]/approve | USER_SESSION | getAuthContext | yes |
+| POST | /api/document-requests/[id]/reject | USER_SESSION | getAuthContext | yes |
+| PATCH | /api/document-templates/[id] | USER_SESSION | getAuthContext | yes |
+| DELETE | /api/document-templates/[id] | USER_SESSION | getAuthContext | yes |
+| POST | /api/document-templates | USER_SESSION | getAuthContext | yes |
 | POST | /api/dtr/[id]/approve | USER_SESSION | requirePermission | yes |
 | PATCH | /api/dtr/[id]/manual | USER_SESSION | requirePermission | yes |
 | POST | /api/dtr/[id]/reject | USER_SESSION | requirePermission | yes |
@@ -188,6 +193,7 @@ None.
 | POST | /api/ess/clock | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/clock/upload | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/consent | ESS_SESSION | getEssContext | yes |
+| POST | /api/ess/document-requests | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/dtr | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/expense-claims/[id]/submit | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/expense-claims | ESS_SESSION | getEssContext | yes |

@@ -747,6 +747,8 @@ model Tenant {
   offboardingCases       OffboardingCase[]
   clearanceItems         ClearanceItem[]
   lookupItems            LookupItem[]
+  documentTemplates      DocumentTemplate[]
+  documentRequests       DocumentRequest[]
 
   @@index([deletedAt])
 }
@@ -1411,6 +1413,7 @@ model Employee {
   payrollCorrections    PayrollCorrection[]
   offboardingCases      OffboardingCase[]
 
+  documentRequests DocumentRequest[]
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, qrBadgeCode])
   @@index([tenantId])
@@ -4233,4 +4236,60 @@ model LookupItem {
 
   @@unique([tenantId, list, code])
   @@index([tenantId, list])
+}
+
+// =============================================================================
+// DOCUMENT WORKFLOW (Wave C3, PAY-213)
+// =============================================================================
+
+/// A letter HR issues on request (Certificate of Employment, COE with
+/// compensation, clearance). Title and body hold {{merge}} fields
+/// (src/lib/documents/templates.ts).
+model DocumentTemplate {
+  id             String    @id @default(cuid())
+  tenantId       String
+  name           String
+  title          String
+  body           String    @db.Text
+  signatoryName  String?
+  signatoryTitle String?
+  /// Uses a salary field: only a role that may see pay approves it.
+  showsSalary    Boolean   @default(false)
+  /// Employees may request it in ESS.
+  availableInEss Boolean   @default(true)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requests DocumentRequest[]
+
+  @@index([tenantId])
+}
+
+/// An employee's request for a document. The letter's text is filled and
+/// kept at approval, so it never changes afterwards.
+model DocumentRequest {
+  id               String         @id @default(cuid())
+  tenantId         String
+  employeeId       String
+  templateId       String
+  purpose          String?
+  status           ApprovalStatus @default(PENDING)
+  currentStepIndex Int            @default(0)
+  decidedByUserId  String?
+  decidedAt        DateTime?
+  rejectionReason  String?        @db.Text
+  renderedTitle    String?
+  renderedBody     String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee         @relation(fields: [employeeId], references: [id])
+  template DocumentTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([employeeId])
 }

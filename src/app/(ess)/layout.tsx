@@ -9,7 +9,7 @@ import { LayoutDashboard, FileText, CalendarDays, UserCircle, LogOut, ClipboardL
 // Time, Profile), so the menu no longer changes between screens. `match` lists
 // the standalone pages that belong to each place.
 const NAV_ITEMS = [
-  { href: "/ess", label: "Home", icon: LayoutDashboard, match: ["/ess/expense-claims"] },
+  { href: "/ess", label: "Home", icon: LayoutDashboard, match: ["/ess/expense-claims", "/ess/documents"] },
   { href: "/ess?tab=pay", label: "Pay", icon: FileText, match: ["/ess/payslips"] },
   { href: "/ess?tab=leave", label: "Leave", icon: CalendarDays, match: ["/ess/leaves"] },
   { href: "/ess?tab=time", label: "Time", icon: ClipboardList, match: ["/ess/dtr", "/ess/clock", "/ess/undertime", "/ess/ot-applications"] },
