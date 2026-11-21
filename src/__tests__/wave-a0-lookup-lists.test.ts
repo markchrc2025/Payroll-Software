@@ -50,6 +50,6 @@ describe("Wave A lists", () => {
     // Earning Policy (8); Wave E3 the Planner and Schedule (6); Wave F1
     // (PAY-216) Field Check-In (5); Wave F2 and F3 Discussion and Sharing (3);
     // Wave G2 (PAY-217) the Annual Salary Statement (2).
-    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(2);
+    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(1);
   });
 });
