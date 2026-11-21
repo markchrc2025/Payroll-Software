@@ -23,6 +23,9 @@ export default auth((req) => {
     path.startsWith("/api/ess/") ||
     path.startsWith("/ess") ||
     path.startsWith("/remotekiosk") ||
+    // PAY-197: the offboarding portal has its own sign-in (a link to the personal email).
+    path.startsWith("/api/offboard-portal/") ||
+    path.startsWith("/offboard-portal") ||
     path.startsWith("/_next/") ||
     path === "/favicon.ico";
 
