@@ -62,6 +62,8 @@ describeDb("Wave A3 incident lists (real Postgres)", () => {
     if (!admin) return;
     // The resolve route writes its audit row without waiting; let it land first.
     await new Promise((r) => setTimeout(r, 500));
+    await q(`DELETE FROM "DTRRecord" WHERE "tenantId" = $1`, [T]);
+    await q(`DELETE FROM "OffboardingCase" WHERE "tenantId" = $1`, [T]);
     await q(`DELETE FROM "IncidentReport" WHERE "tenantId" = $1`, [T]);
     await q(`DELETE FROM "AuditLog" WHERE "tenantId" = $1`, [T]).catch(() => undefined);
     await q(`DELETE FROM "Employee" WHERE "tenantId" = $1`, [T]);
@@ -89,14 +91,14 @@ describeDb("Wave A3 incident lists (real Postgres)", () => {
 
   it("D3 the decision's outcome is copied at resolution", async () => {
     const inc = (await (await post({ typeId: ids.nte })).json()).data;
-    const res = await resolve(new NextRequest(`http://localhost/x/${inc.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution: "Three days", decisionId: ids.suspension }) }), { params: Promise.resolve({ id: inc.id }) });
+    const res = await resolve(new NextRequest(`http://localhost/x/${inc.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution: "Three days", decisionId: ids.suspension, suspensionStartDate: "2026-11-23" }) }), { params: Promise.resolve({ id: inc.id }) });
     expect(res.status).toBe(200);
     expect((await res.json()).data).toMatchObject({ decisionId: ids.suspension, decisionSuspensionDays: 3, decisionIsDismissal: false, status: "RESOLVED" });
     await q(`UPDATE "LookupItem" SET attributes = '{"suspensionDays": 10}' WHERE id = $1`, [ids.suspension]);
     expect((await q(`SELECT "decisionSuspensionDays" d FROM "IncidentReport" WHERE id = $1`, [inc.id])).rows[0].d).toBe(3);
 
     const inc2 = (await (await post({ typeId: ids.nte })).json()).data;
-    const res2 = await resolve(new NextRequest(`http://localhost/x/${inc2.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution: "Dismissed", decisionId: ids.dismissal }) }), { params: Promise.resolve({ id: inc2.id }) });
+    const res2 = await resolve(new NextRequest(`http://localhost/x/${inc2.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution: "Dismissed", decisionId: ids.dismissal, lastWorkingDay: "2026-11-30" }) }), { params: Promise.resolve({ id: inc2.id }) });
     expect((await res2.json()).data).toMatchObject({ decisionSuspensionDays: null, decisionIsDismissal: true });
   });
 });

@@ -63,7 +63,7 @@ interface ResolvedSchedule {
 }
 
 /** Resolve the employee's scheduled day length + working days for a date. */
-async function resolveSchedule(
+export async function resolveSchedule(
   tx: TenantTx,
   tenantId: string,
   employeeId: string,
