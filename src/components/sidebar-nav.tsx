@@ -126,7 +126,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Expense Claim",
     items: [
       { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
-      { href: "#soon-expense-review", label: "Review", icon: "requests", comingSoon: true },
+      { href: "/expense-claims/review", label: "Review", icon: "requests" },
       { href: "#soon-expense-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
       { href: "/settings/lists/EXPENSE_CATEGORY", label: "Category", icon: "components" },
       { href: "/settings/lists/EXPENSE_TYPE", label: "Type", icon: "components" },
@@ -139,7 +139,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/leave-policies", label: "Leave Policies", icon: "policies" },
       { href: "#soon-leave-planner", label: "Planner", icon: "leave", comingSoon: true },
       { href: "#soon-leave-schedule", label: "Schedule", icon: "time", comingSoon: true },
-      { href: "#soon-leave-review", label: "Review", icon: "requests", comingSoon: true },
+      { href: "/leave/review", label: "Review", icon: "requests" },
       { href: "#soon-leave-transaction-report", label: "Transaction Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-entitlement-report", label: "Entitlement Report", icon: "govreports", comingSoon: true },
       { href: "#soon-leave-earning-policy", label: "Earning Policy", icon: "policies", comingSoon: true },

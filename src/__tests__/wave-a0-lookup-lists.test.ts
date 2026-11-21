@@ -44,7 +44,8 @@ describe("Wave A lists", () => {
       expect(nav).not.toContain(`#soon-${slug}"`);
     }
     // 21 after Wave A0; Wave B (PAY-212) opened Education, Experience,
-    // Training and Legal Documents, leaving 17.
-    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(17);
+    // Training and Legal Documents (17); Wave C (PAY-213) opened Expense
+    // Review and Leave Review, leaving 15.
+    expect((nav.match(/comingSoon: true/g) ?? []).length).toBe(15);
   });
 });
