@@ -8,8 +8,10 @@
  * The employee's e-signature, when they have uploaded one in ESS, is drawn
  * over Item 54 (Conforme) with today's date; when the certificate qualifies
  * for substituted filing (no previous employer, tax withheld equals tax due),
- * also over Item 56. Items 53 and 55 (the employer's signature over printed
- * name) are left blank for the employer to sign.
+ * also over Item 56. Items 53 and 55 carry the HR manager the employer
+ * assigned as 2316 signatory (ruling 22 Nov 2026): name and position, and
+ * that person's e-signature when uploaded, with the date at Item 53; Item 55
+ * only under substituted filing. No signatory assigned: they stay blank.
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { loadBlank2316 } from "./bir-2316-blank";
@@ -55,8 +57,10 @@ const ZIP: Record<string, [number, number, number]> = { "6A": [261.4, 309.4, 176
 export interface FillOptions {
   /** The employee's e-signature (PNG or JPEG). */
   signature?: { bytes: Uint8Array; mimeType: string } | null;
-  /** The date written beside the employee's signature (defaults to today). */
+  /** The date written beside the signatures (defaults to today). */
   signedOn?: Date;
+  /** The employer's 2316 signatory (Items 53 and 55). */
+  employerSignatory?: { name: string; position: string; signature: { bytes: Uint8Array; mimeType: string } | null } | null;
 }
 
 const valueOf = (form: BirFormView, no: string) => {
@@ -146,9 +150,9 @@ export async function fill2316(form: BirFormView, opts: FillOptions = {}): Promi
   const mmddyyyy = digits(`${String(signedOn.getUTCMonth() + 1).padStart(2, "0")}${String(signedOn.getUTCDate()).padStart(2, "0")}${signedOn.getUTCFullYear()}`);
   const substituted = (v("22") === null || v("22") === "0") && v("24") !== null && v("24") === v("26");
   // The signature sits on the signature line (its bottom at `lineTop`), over the printed name.
-  const signAt = async (centerX: number, lineTop: number) => {
-    if (!sig) return;
-    const img = sig.mimeType === "image/png" ? await doc.embedPng(sig.bytes) : await doc.embedJpg(sig.bytes);
+  const signAt = async (centerX: number, lineTop: number, which = sig) => {
+    if (!which) return;
+    const img = which.mimeType === "image/png" ? await doc.embedPng(which.bytes) : await doc.embedJpg(which.bytes);
     const maxW = 110, maxH = lineTop > 850 ? 11 : 16;
     const s = Math.min(maxW / img.width, maxH / img.height);
     page.drawImage(img, { x: centerX - (img.width * s) / 2, y: PAGE_H - lineTop, width: img.width * s, height: img.height * s });
@@ -157,6 +161,16 @@ export async function fill2316(form: BirFormView, opts: FillOptions = {}): Promi
     await signAt(179.8, 799);
     cellsIn(page, font, [{ x0: 416.1, x1: 466.6, n: 4 }, { x0: 466.6, x1: 517.0, n: 4 }], 787.1, mmddyyyy);
     if (substituted) await signAt(451.1, 894.5);
+  }
+  // The employer's signatory: Item 53, and Item 55 under substituted filing.
+  const es = opts.employerSignatory ?? null;
+  if (es) {
+    await signAt(201.2, 768.5, es.signature);
+    if (es.signature) cellsIn(page, font, [{ x0: 415.7, x1: 466.1, n: 4 }, { x0: 466.1, x1: 516.6, n: 4 }], 756.7, mmddyyyy);
+    if (substituted) await signAt(179.8, 880.5, es.signature);
+    const label = `${es.name}, ${es.position}`;
+    page.drawText(label, { x: 201.2 - font.widthOfTextAtSize(label, 7) / 2, y: PAGE_H - 768.5, size: 7, font });
+    if (substituted) page.drawText(label, { x: 179.8 - font.widthOfTextAtSize(label, 7) / 2, y: PAGE_H - 880.5, size: 7, font });
   }
   // The printed name last, so an image with a white background never hides it.
   if (name) {

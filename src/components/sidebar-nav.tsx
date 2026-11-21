@@ -196,6 +196,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/payroll/statutory-contributions", label: "Statutory Contribution", icon: "premium" },
       { href: "/payroll/statutory-tables", label: "Statutory Table", icon: "payrules" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
+      { href: "/settings/bir-signatory", label: "BIR 2316 Signatory", icon: "roles" },
       { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "/payroll/salary-adjustment", label: "Salary Adjustment", icon: "components" },
       { href: "/payroll/annual-salary-statement", label: "Annual Salary Statement", icon: "govreports" },
