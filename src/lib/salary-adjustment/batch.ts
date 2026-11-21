@@ -14,16 +14,16 @@
  * regular payslips on or after the effective date is a PAY-166 retroactive
  * batch (re-priced for the days from the effective date only), approved on the
  * Corrections page into a later draft run; a sealed run is never reopened.
- * The draft run that straddles the effective date pays the new rate for the
- * whole period, so split() takes back the days before it at the old rate.
+ * A run whose period straddles the effective date is paid by the engine at
+ * the old rate for the days before it and the new rate after (ruling 1, Mark,
+ * 21 Nov 2026; the G1 "Split" deduction it replaced is gone).
  */
 import type { Prisma, SalaryAdjustmentRule, SalaryType } from "@prisma/client";
 import { applyMovementEffects } from "@/lib/movements/apply";
 import { getActiveRule } from "@/lib/statutory/resolver";
-import { createRetroPay, previewRetroPay, retroDifference, retroPaySchema } from "@/lib/payroll/retro-pay";
+import { createRetroPay, previewRetroPay, retroPaySchema } from "@/lib/payroll/retro-pay";
 
 type Tx = Prisma.TransactionClient;
-const DAY = 86_400_000;
 
 export class SalaryAdjustmentError extends Error {
   constructor(message: string, public status = 422) { super(message); }
@@ -213,48 +213,6 @@ export async function rejectBatch(tx: Tx, tenantId: string, userId: string | nul
   return tx.salaryAdjustmentBatch.update({ where: { id }, data: { status: "REJECTED", approvedByUserId: userId, approvedAt: new Date(), rejectionReason: reason } });
 }
 
-/**
- * The draft regular run whose period straddles the effective date was paid
- * the new basic for the whole period: take back the calendar days before the
- * effective date at the old rate, as a taxable deduction. Run it after the
- * run has been computed with the new salary; the caller recomputes.
- */
-export async function splitRun(tx: Tx, tenantId: string, id: string, bookId: string) {
-  const b = await tx.salaryAdjustmentBatch.findFirst({ where: { id, tenantId }, include: { lines: { include: { employee: true } } } });
-  if (!b) throw new SalaryAdjustmentError("Salary adjustment not found", 404);
-  if (b.status !== "APPROVED") throw new SalaryAdjustmentError("Approve the adjustment first.", 409);
-  const book = await tx.payrollBook.findFirst({ where: { id: bookId, tenantId } });
-  if (!book) throw new SalaryAdjustmentError("Payroll run not found", 404);
-  if (book.status !== "DRAFT" || book.runType !== "REGULAR") throw new SalaryAdjustmentError("Pick a draft regular run.", 409);
-  const eff = b.effectiveDate.getTime(), ps = book.periodStart.getTime(), pe = book.periodEnd.getTime();
-  if (!(eff > ps && eff <= pe)) throw new SalaryAdjustmentError("The effective date is not inside this run's period.", 422);
-  const whole = BigInt(Math.round((pe - ps) / DAY) + 1);
-  const before = BigInt(Math.round((eff - ps) / DAY));
-  const effLabel = b.effectiveDate.toISOString().slice(0, 10);
-  const done: { employeeId: string; amountCents: string }[] = [];
-  for (const l of b.lines) {
-    if (l.splitAdjustmentId || l.toCents === l.fromCents) continue;
-    const sheet = await tx.payrollSheet.findFirst({ where: { payrollBookId: bookId, employeeId: l.employeeId } });
-    if (!sheet) continue;
-    if (sheet.basicSalaryCentsSnapshot !== l.toCents) {
-      throw new SalaryAdjustmentError(`Recompute the run first so ${nameOf(l.employee)} is paid the new salary.`, 409);
-    }
-    const overpaid = -retroDifference(sheet.basePayCents, l.toCents, l.fromCents); // new-rate pay less old-rate pay
-    const neg = overpaid < 0n; const a = neg ? -overpaid : overpaid;
-    const part = (a * before * 2n + whole) / (2n * whole);
-    if (part === 0n) continue;
-    const adj = await tx.payrollAdjustment.create({
-      data: {
-        tenantId, employeeId: l.employeeId, payrollBookId: bookId, kind: neg ? "ADDITION" : "DEDUCTION", amountCents: part, isTaxable: true,
-        reason: `Salary adjustment "${b.name}": ${before} day(s) before ${effLabel} at the old rate`,
-      },
-    });
-    await tx.salaryAdjustmentLine.update({ where: { id: l.id }, data: { splitAdjustmentId: adj.id } });
-    done.push({ employeeId: l.employeeId, amountCents: (neg ? part : -part).toString() });
-  }
-  return { bookId, adjustments: done };
-}
-
 export function serializeBatch(b: Prisma.SalaryAdjustmentBatchGetPayload<{ include: { lines: { include: { employee: { select: { firstName: true; lastName: true; employeeNumber: true } } } } } }>) {
   return {
     id: b.id, name: b.name, rule: b.rule, percentBasisPoints: b.percentBasisPoints, fixedCents: b.fixedCents?.toString() ?? null,
@@ -263,7 +221,7 @@ export function serializeBatch(b: Prisma.SalaryAdjustmentBatchGetPayload<{ inclu
     lines: b.lines.map((l) => ({
       id: l.id, employeeId: l.employeeId, name: nameOf(l.employee), employeeNumber: l.employee.employeeNumber, salaryType: l.salaryType,
       fromCents: l.fromCents.toString(), toCents: l.toCents.toString(), diffCents: (l.toCents - l.fromCents).toString(),
-      movementId: l.movementId, split: !!l.splitAdjustmentId,
+      movementId: l.movementId,
     })),
   };
 }
