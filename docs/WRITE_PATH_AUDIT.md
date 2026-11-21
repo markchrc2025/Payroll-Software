@@ -9,13 +9,13 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 | Principal | Write handlers |
 |---|---|
 | USER_SESSION | 192 |
-| ESS_SESSION | 25 |
+| ESS_SESSION | 26 |
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
 | PUBLIC_BY_DESIGN | 11 |
 | NONE | 0 |
-| Total | 272 |
+| Total | 273 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -184,6 +184,7 @@ None.
 | POST | /api/ess/ai/chat | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/auth/logout | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/auth | PUBLIC_BY_DESIGN | ESS sign-in: the credentials are the principal | n/a |
+| POST | /api/ess/background/[kind] | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/clock | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/clock/upload | ESS_SESSION | getEssContext | yes |
 | POST | /api/ess/consent | ESS_SESSION | getEssContext | yes |
