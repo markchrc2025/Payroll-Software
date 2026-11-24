@@ -15,7 +15,7 @@ export default function SettingsHubPage() {
       </div>
       {SETTINGS_GROUPS.map((g) => (
         <section key={g.title} className="space-y-2">
-          <h2 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#6B6B6B]">{g.title}</h2>
+          <h2 className="text-[14px] font-semibold text-[var(--ink)]">{g.title}</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {g.links.map((l) => (
               <Link
