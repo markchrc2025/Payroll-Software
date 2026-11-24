@@ -120,6 +120,9 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/offboarding", label: "Cases", icon: "movements" },
       { href: "/offboarding/checklist", label: "Clearance Checklist", icon: "policies" },
+      { href: "/offboarding/exit-questionnaires", label: "Exit Questionnaires", icon: "requests" },
+      { href: "/offboarding/personal-information", label: "Personal Information Forms", icon: "employees" },
+      { href: "/offboarding/final-pay", label: "Final Pay & Documents", icon: "payruns" },
     ],
   },
   {
