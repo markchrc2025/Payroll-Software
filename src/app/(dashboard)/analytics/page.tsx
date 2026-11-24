@@ -11,6 +11,9 @@
  *   • dtr/summary       — late / OT / absence totals for the month
  *   • employees/upcoming-events — birthdays / anniversaries (next 30 days)
  *
+ * PAY-219 (25 Nov 2026) adds the drill-down section (src/components/analytics/
+ * DrillDown.tsx, GET /api/analytics/drill).
+ *
  * Charts are hand-rolled (CSS/SVG) to match the rest of the app — no charting
  * dependency is installed.
  */
@@ -19,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Cake, Award, BadgeCheck, TrendingUp, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DrillDown } from "@/components/analytics/DrillDown";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -197,6 +201,9 @@ export default function AnalyticsPage() {
         <Stat label="Late" value={minutesToHm(dtr?.lateMinutes ?? 0)} caption="total this month" />
         <Stat label="Absences" value={String(dtr?.absentCount ?? 0)} caption="days this month" />
       </div>
+
+      {/* PAY-219: drill-down by department, employee, payslip or day */}
+      <DrillDown />
 
       {/* Net pay trend */}
       <Card>
