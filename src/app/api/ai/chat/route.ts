@@ -13,6 +13,7 @@ import { checkAiGating, callAI } from "@/lib/ai/gateway";
 import { hrChatSystemPrompt } from "@/lib/ai/prompts";
 import { ok, err, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import prismaAdmin from "@/lib/prisma-admin";
+import { AI_FEATURES_ENABLED, aiUnavailable } from "@/lib/ai/availability";
 
 const chatSchema = z.object({
   messages: z
@@ -29,6 +30,8 @@ const chatSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Mark, 24 Nov 2026: AI is removed until a later build (src/lib/ai/availability.ts).
+  if (!AI_FEATURES_ENABLED) return aiUnavailable();
   const ctx = await getAuthContext(req);
   if (!ctx) return unauthorized();
   // @permission-exempt: HR assistant chat; reads no employee records; gated by the AI feature flag and daily cap (unit 0.25)
