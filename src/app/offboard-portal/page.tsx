@@ -66,6 +66,7 @@ export default function OffboardPortalPage() {
       <section className={box}>
         <h2 className="font-semibold">Final documents</h2>
         {me.finalPayslipBookId ? <a className="underline" href="/api/offboard-portal/payslip" data-testid="final-payslip">Download your final payslip</a> : <p>Your final payslip will be here once your final pay is released.</p>}
+        {me.finalPayslipBookId ? <a className="underline" href="/api/offboard-portal/bir-2316" data-testid="bir-2316">Download your BIR Form 2316</a> : <p>Your BIR Form 2316 will be here once your final pay is released.</p>}
         <div>{me.coeIssuedAt ? <a className="underline" href="/api/offboard-portal/coe" data-testid="coe-download">Download your certificate of employment</a> : me.coeRequestedAt ? <p>Certificate of employment requested on {me.coeRequestedAt.slice(0, 10)}.</p> : <button type="button" className="underline" onClick={() => send("/api/offboard-portal/coe-request", "POST")}>Request a certificate of employment</button>}</div>
       </section>
 

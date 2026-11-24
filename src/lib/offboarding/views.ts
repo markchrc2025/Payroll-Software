@@ -1,6 +1,7 @@
 /** PAY-197: shared by the offboarding routes. */
 import { z } from "zod";
 import { daysSinceSeparation, FINAL_PAY_DAYS } from "./clearance";
+import { maskCase } from "./hr-forms";
 
 export const templateItemSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -11,6 +12,6 @@ export const templateItemSchema = z.object({
 });
 export function caseView(c: { lastWorkingDay: Date; items: { status: string }[] } & Record<string, unknown>) {
   const days = daysSinceSeparation(c.lastWorkingDay);
-  return { ...c, daysSinceSeparation: days, finalPayDueInDays: FINAL_PAY_DAYS - days, pendingItems: c.items.filter((i) => i.status === "PENDING").length };
+  return { ...maskCase(c), daysSinceSeparation: days, finalPayDueInDays: FINAL_PAY_DAYS - days, pendingItems: c.items.filter((i) => i.status === "PENDING").length };
 }
 
