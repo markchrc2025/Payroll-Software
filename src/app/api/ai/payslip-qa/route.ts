@@ -18,6 +18,7 @@ import { payslipQaSystemPrompt } from "@/lib/ai/prompts";
 import { ok, err, notFound, forbidden, serverError } from "@/lib/api-response";
 import { withTenant } from "@/lib/with-tenant";
 import prismaAdmin from "@/lib/prisma-admin";
+import { AI_FEATURES_ENABLED, aiUnavailable } from "@/lib/ai/availability";
 
 const schema = z.object({
   payslipId: z.string().min(1),
@@ -28,6 +29,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Mark, 24 Nov 2026: AI is removed until a later build (src/lib/ai/availability.ts).
+  if (!AI_FEATURES_ENABLED) return aiUnavailable();
   const guard = await requirePermission(req, "PAYROLL", "READ");
   if (guard instanceof Response) return guard;
   const { ctx } = guard;
