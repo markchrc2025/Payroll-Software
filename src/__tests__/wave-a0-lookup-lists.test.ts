@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DocumentCategory, ExpenseTaxTreatment, IncidentType } from "@prisma/client";
 import { attributesSchema, LIST_KEYS, LISTS } from "@/lib/lookups/registry";
+import { LIST_TAB_ORDER } from "@/lib/settings-hub";
 
 describe("Wave A lists", () => {
   it("T1 the lists", () => {
@@ -37,9 +38,11 @@ describe("Wave A lists", () => {
     expect(attributesSchema(LISTS.BANK!).safeParse({ kind: "CRYPTO" }).success).toBe(false);
   });
 
-  it("T4 the sidebar opens the lists", () => {
+  it("T4 every list opens (from the Settings hub's Lists page since the menu split)", () => {
     const nav = readFileSync("src/components/sidebar-nav.tsx", "utf8");
-    for (const k of LIST_KEYS) expect(nav).toContain(`href: "/settings/lists/${k}"`);
+    // Menu split (Mark, 25 Nov 2026): the lists left the sidebar for one
+    // Lists page with a tab per list (src/app/(dashboard)/setup/lists).
+    for (const k of LIST_KEYS) expect(LIST_TAB_ORDER).toContain(k);
     for (const slug of ["bank", "course", "trainer", "ethnicity", "religion", "document-category", "expense-category", "expense-type", "incident-category", "incident-type", "incident-decision"]) {
       expect(nav).not.toContain(`#soon-${slug}"`);
     }
