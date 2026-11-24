@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SETTINGS_HUB_HREF, SETTINGS_PATHS } from "@/lib/settings-hub";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
 
 // ---- SentireMark: 4-node constellation with accent center dot ----
@@ -60,6 +61,7 @@ const ICON_PATHS: Record<string, string> = {
   policies:      "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8",
   roles:         "M7 11V7a5 5 0 0 1 10 0v4M5 11h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM12 15v2",
   kiosks:        "M2 4h20v12H2zM8 20h8M12 16v4M7 8h2M7 11h6",
+  settings:      "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
   ai:            "M12 3a3 3 0 0 1 3 3 3 3 0 0 1 0 6 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1 0-6 3 3 0 0 1 3-3zM12 8v.01M9 16v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3",
 };
 
@@ -80,6 +82,8 @@ type NavItem = {
   isNew?: boolean;
   /** Not yet built — rendered as a disabled "Soon" row, never navigates. */
   comingSoon?: boolean;
+  /** Other paths that make this entry active (the Settings hub's pages). */
+  also?: string[];
 };
 type NavSection = {
   label: string;
@@ -90,9 +94,11 @@ type NavSection = {
 // Group order follows hr.my's menu sequence (Home → Employee → Expense Claim →
 // Leave → Attendance → Document Workflow → Incident → Team → Payroll →
 // Employer); groups hr.my doesn't expose (Recruitment, Insights & Tools) are
-// kept and placed at the end. `comingSoon` items are functions hr.my exposes
-// that we haven't built yet — shown as disabled "Soon" rows so the full
-// structure is visible.
+// kept and placed at the end. Menu split (Mark, 25 Nov 2026): "Employer" became
+// "Organization" (the company and its structure), Assets moved to Employee, and
+// the set-up pages left the menus for the Settings hub (/setup, the last entry).
+// `comingSoon` items are functions hr.my exposes that we haven't built yet,
+// shown as disabled "Soon" rows so the full structure is visible.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Overview",
@@ -110,7 +116,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/background/experience", label: "Experience", icon: "recruitment" },
       { href: "/background/training", label: "Training", icon: "recruitment" },
       { href: "/background/legal-documents", label: "Legal Documents", icon: "claims" },
-      { href: "/settings/roles", label: "Custom Role", icon: "roles" },
+      { href: "/assets", label: "Assets", icon: "assets" },
       { href: "/ess-portal", label: "Employee Self-Service", icon: "kiosks" },
     ],
   },
@@ -131,8 +137,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/expense-claims", label: "Expense Claims", icon: "claims" },
       { href: "/expense-claims/review", label: "Review", icon: "requests" },
       { href: "/reports/hr/expense-transactions", label: "Transaction Report", icon: "govreports" },
-      { href: "/settings/lists/EXPENSE_CATEGORY", label: "Category", icon: "components" },
-      { href: "/settings/lists/EXPENSE_TYPE", label: "Type", icon: "components" },
     ],
   },
   {
@@ -155,9 +159,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/shift-schedules", label: "Shift Schedules", icon: "time" },
       { href: "/ot-applications", label: "OT Applications", icon: "time" },
       { href: "/undertime-requests", label: "Undertime Requests", icon: "time" },
-      { href: "/settings/premium-rates", label: "Premium Rates", icon: "premium" },
-      { href: "/settings/holidays", label: "Holiday Calendar", icon: "holiday" },
-      { href: "/settings/kiosk", label: "Kiosks", icon: "kiosks" },
       { href: "/attendance/field-checkins", label: "Field Check-In", icon: "locations" },
       { href: "/reports/hr/time-clock", label: "Time Clock Report", icon: "govreports" },
     ],
@@ -174,9 +175,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/incidents", label: "Incidents", icon: "incidents" },
       { href: "/incidents/causeless", label: "Causeless", icon: "incidents" },
-      { href: "/settings/lists/INCIDENT_CATEGORY", label: "Category", icon: "components" },
-      { href: "/settings/lists/INCIDENT_TYPE", label: "Type", icon: "components" },
-      { href: "/settings/lists/INCIDENT_DECISION", label: "Decision", icon: "policies" },
     ],
   },
   {
@@ -199,35 +197,21 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/payroll/statutory-contributions", label: "Statutory Contribution", icon: "premium" },
       { href: "/payroll/statutory-tables", label: "Statutory Table", icon: "payrules" },
       { href: "/reports", label: "Gov't Reports", icon: "govreports" },
-      { href: "/settings/bir-signatory", label: "BIR 2316 Signatory", icon: "roles" },
-      { href: "/settings/pay-rules", label: "Pay Rules", icon: "payrules" },
       { href: "/payroll/salary-adjustment", label: "Salary Adjustment", icon: "components" },
       { href: "/payroll/annual-salary-statement", label: "Annual Salary Statement", icon: "govreports" },
     ],
   },
   {
-    label: "Employer",
+    label: "Organization",
     items: [
       { href: "/settings", label: "Company Info", icon: "policies" },
-      { href: "/positions", label: "Positions", icon: "positions" },
-      { href: "/departments", label: "Departments", icon: "departments" },
-      { href: "/org-chart", label: "Org Chart", icon: "branches" },
       { href: "/branches", label: "Branches", icon: "branches" },
       { href: "/work-locations", label: "Locations", icon: "locations" },
-      { href: "/assets", label: "Assets", icon: "assets" },
-      { href: "/settings/employee-id", label: "Employee ID", icon: "roles" },
-      { href: "/settings/ownership", label: "Ownership", icon: "roles" },
-      { href: "/settings/storage", label: "File Storage", icon: "claims" },
-      { href: "/levels", label: "Level", icon: "positions" },
-      { href: "/approval-roles", label: "Approval Roles", icon: "roles" },
-      { href: "/approval-workflows", label: "Approval Workflows", icon: "movements" },
+      { href: "/departments", label: "Departments", icon: "departments" },
+      { href: "/positions", label: "Positions", icon: "positions" },
+      { href: "/levels", label: "Levels", icon: "positions" },
       { href: "/job-types-statuses", label: "Job Type & Status", icon: "components" },
-      { href: "/settings/lists/BANK", label: "Bank", icon: "bankfiles" },
-      { href: "/settings/lists/COURSE", label: "Course", icon: "recruitment" },
-      { href: "/settings/lists/TRAINER", label: "Trainer", icon: "employees" },
-      { href: "/settings/lists/ETHNICITY", label: "Ethnicity", icon: "requests" },
-      { href: "/settings/lists/RELIGION", label: "Religion", icon: "requests" },
-      { href: "/settings/lists/DOCUMENT_CATEGORY", label: "Document Category", icon: "claims" },
+      { href: "/org-chart", label: "Org Chart", icon: "branches" },
     ],
   },
   {
@@ -239,6 +223,12 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/analytics", label: "Analytics", icon: "analytics", isNew: true },
     ],
+  },
+  // The Settings hub (/setup) holds the set-up pages as cards; this entry is
+  // active on any of them (menu split, Mark 25 Nov 2026).
+  {
+    label: "Settings",
+    items: [{ href: SETTINGS_HUB_HREF, label: "Settings", icon: "settings", also: SETTINGS_PATHS }],
   },
 ];
 
@@ -304,6 +294,8 @@ export function SidebarNav({
   function isActive(href: string): boolean {
     if (href === "/settings") return pathname === "/settings";
     const matches = (h: string) => pathname === h || pathname.startsWith(h + "/");
+    const item = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.href === href);
+    if (item?.also?.some(matches)) return true;
     if (!matches(href)) return false;
     // A more specific link wins over its parent: on /payroll/ytd-openings only
     // "Year-to-date Openings" is active, not "Payroll Runs" (/payroll).
