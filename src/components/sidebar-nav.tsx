@@ -235,7 +235,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Insights & Tools",
     items: [
       { href: "/analytics", label: "Analytics", icon: "analytics", isNew: true },
-      { href: "/ai", label: "AI Assistant", icon: "ai", isNew: true },
     ],
   },
 ];
