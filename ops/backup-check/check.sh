@@ -43,7 +43,14 @@ oldest_at=$(echo "$objects" | jq -r '.[0].LastModified // empty')
 total_bytes=$(echo "$objects" | jq '[.[].Size] | add // 0')
 key=""; size=0; backup_at=""; age_h=null
 if [ -z "$newest" ]; then
-  [ ${#errors[@]} -eq 0 ] && fail "no backup found under $prefix"
+  if [ ${#errors[@]} -eq 0 ]; then
+    # Name what is there, so a wrong SRC_PREFIX is a one-line fix.
+    near=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --output json 2>/dev/null \
+      | jq -r '[.Contents // [] | .[].Key | select(test("payroll"; "i"))] | sort | .[-5:] | join(", ")')
+    tops=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --delimiter / --output json 2>/dev/null \
+      | jq -r '[.CommonPrefixes // [] | .[].Prefix] | join(", ")')
+    fail "no backup found under $prefix (keys with payroll: ${near:-none}; top-level folders: ${tops:-none})"
+  fi
 else
   key=$(echo "$newest" | jq -r .Key)
   size=$(echo "$newest" | jq -r .Size)
