@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# PAY-73 (Mark, 25 Nov 2026): prove the newest Payroll database backup can be
+# restored, copy the uploaded files to this server, and write a report the
+# Payroll app reads. Never touches the live database.
+#
+#   SRC_S3_*     read-only key on the backup bucket (dokploy-backups)
+#   SRC_PREFIX   where Dokploy writes the Payroll dumps (postgres/sentire_payroll/)
+#   FILES_S3_*   read-only key on the uploaded-files bucket (sentire-payroll)
+#   FILES_DIR    where the copy of the files is kept (a volume on this server)
+#   REPORT_S3_*  read-write key on the report bucket (payroll-backup-reports)
+#   MIN_TABLES   fewest tables a good restore has (default 80)
+#   MAX_AGE_HOURS newest dump older than this is stale (default 26)
+set -uo pipefail
+
+log() { echo "[backup-check] $*"; }
+started=$(date -u +%FT%TZ)
+t0=$(date +%s)
+work=$(mktemp -d /tmp/check.XXXXXX)
+trap 'pg_ctl -D "$work/pg" -m immediate stop >/dev/null 2>&1; rm -rf "$work"' EXIT
+
+s3() { # s3 <PREFIX_> <aws args...>
+  local p=$1; shift
+  local ep="${p}ENDPOINT" ak="${p}ACCESS_KEY_ID" sk="${p}SECRET_ACCESS_KEY" rg="${p}REGION"
+  AWS_ACCESS_KEY_ID="${!ak:-}" AWS_SECRET_ACCESS_KEY="${!sk:-}" AWS_DEFAULT_REGION="${!rg:-us-east-1}" \
+    aws --endpoint-url "${!ep:-}" "$@"
+}
+export AWS_CONFIG_FILE="$work/aws.conf"
+printf '[default]\ns3 =\n    addressing_style = path\n' > "$AWS_CONFIG_FILE"
+
+errors=()
+warnings=()
+fail() { errors+=("$1"); log "FAIL: $1"; }
+warn() { warnings+=("$1"); log "WARN: $1"; }
+
+# ---- 1. the newest dump ----
+prefix="${SRC_PREFIX:-postgres/sentire_payroll/}"
+listing=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --prefix "$prefix" --output json 2>"$work/list.err") \
+  || { fail "cannot list the backup bucket: $(tail -c 300 "$work/list.err")"; listing='{}'; }
+objects=$(echo "$listing" | jq '[.Contents // [] | .[] | select(.Size > 0)] | sort_by(.LastModified)')
+copies=$(echo "$objects" | jq 'length')
+newest=$(echo "$objects" | jq -c '.[-1] // empty')
+oldest_at=$(echo "$objects" | jq -r '.[0].LastModified // empty')
+total_bytes=$(echo "$objects" | jq '[.[].Size] | add // 0')
+key=""; size=0; backup_at=""; age_h=null
+if [ -z "$newest" ]; then
+  [ ${#errors[@]} -eq 0 ] && fail "no backup found under $prefix"
+else
+  key=$(echo "$newest" | jq -r .Key)
+  size=$(echo "$newest" | jq -r .Size)
+  backup_at=$(echo "$newest" | jq -r .LastModified)
+  age_h=$(( ( $(date -u +%s) - $(date -u -d "$backup_at" +%s) ) / 360 ))
+  age_h=$(awk "BEGIN{printf \"%.1f\", $age_h/10}")
+  if awk "BEGIN{exit !($age_h > ${MAX_AGE_HOURS:-26})}"; then warn "the newest backup is ${age_h}h old"; fi
+  log "newest backup $key ($size bytes, $backup_at), $copies copies kept"
+fi
+
+# ---- 2. restore it into a throwaway server ----
+restore_ok=false; tables=0; forced=0; migrations=0; last_migration=""; counts='{}'
+if [ -n "$key" ]; then
+  if s3 SRC_S3_ s3 cp "s3://${SRC_S3_BUCKET}/$key" "$work/dump.raw" --only-show-errors 2>"$work/get.err"; then
+    if gzip -t "$work/dump.raw" 2>/dev/null; then gunzip -c "$work/dump.raw" > "$work/dump"; else mv "$work/dump.raw" "$work/dump"; fi
+    initdb -D "$work/pg" -U postgres --auth=trust >/dev/null \
+      && pg_ctl -D "$work/pg" -o "-k $work -c listen_addresses=''" -w start >/dev/null \
+      || fail "the throwaway PostgreSQL did not start"
+    export PGHOST="$work" PGUSER=postgres
+    if [ ${#errors[@]} -eq 0 ]; then
+      if [ "$(head -c 5 "$work/dump")" = "PGDMP" ]; then
+        # Recreate every role the dump names first (owner, payroll_app, ...),
+        # so ownership, grants and the row-security policies restore as they are.
+        pg_restore --schema-only -f "$work/schema.sql" "$work/dump" 2>/dev/null
+        roles=$( { grep -oE 'OWNER TO "?[A-Za-z_][A-Za-z0-9_]*' "$work/schema.sql" | sed -E 's/OWNER TO "?//';
+                   grep -E '^(GRANT|CREATE POLICY|ALTER DEFAULT PRIVILEGES)' "$work/schema.sql" | grep -oE ' TO [^;]+' | sed 's/ TO //' | tr ',' '\n' | sed -E 's/^ *"?//; s/"? *$//; s/ WITH GRANT OPTION//'; } \
+                 | grep -vE '^(PUBLIC|postgres|public)$' | sort -u)
+        for r in $roles; do psql -q -d postgres -c "DO \$\$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$r') THEN CREATE ROLE \"$r\" NOLOGIN; END IF; END\$\$;" >/dev/null; done
+        createdb restored
+        pg_restore --exit-on-error -d restored "$work/dump" 2>"$work/restore.err" \
+          && restore_ok=true || fail "pg_restore failed: $(tail -c 400 "$work/restore.err")"
+      else
+        createdb restored
+        psql -q -v ON_ERROR_STOP=1 -d restored -f "$work/dump" >/dev/null 2>"$work/restore.err" \
+          && restore_ok=true || fail "the SQL restore failed: $(tail -c 400 "$work/restore.err")"
+      fi
+    fi
+  else
+    fail "cannot download $key: $(tail -c 300 "$work/get.err")"
+  fi
+fi
+
+if [ "$restore_ok" = true ]; then
+  q() { psql -d restored -tAc "$1" 2>/dev/null; }
+  tables=$(q "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")
+  forced=$(q "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relforcerowsecurity")
+  migrations=$(q "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")
+  last_migration=$(q "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name DESC LIMIT 1")
+  counts=$(q "SELECT json_build_object('tenants', (SELECT count(*) FROM \"Tenant\"), 'users', (SELECT count(*) FROM \"User\"), 'employees', (SELECT count(*) FROM \"Employee\"), 'payrollBooks', (SELECT count(*) FROM \"PayrollBook\"), 'payrollSheets', (SELECT count(*) FROM \"PayrollSheet\"))")
+  [ -z "$counts" ] && counts='{}'
+  [ "${tables:-0}" -lt "${MIN_TABLES:-80}" ] && fail "only ${tables:-0} tables restored (expected at least ${MIN_TABLES:-80})"
+  [ "${migrations:-0}" -lt 1 ] && fail "no applied migrations in the restored copy"
+  [ "$(echo "$counts" | jq '.tenants // 0')" -lt 1 ] && fail "no companies in the restored copy"
+  [ "${forced:-0}" -lt 1 ] && fail "row security is not forced on any restored table"
+  log "restored: $tables tables ($forced with forced row security), $migrations migrations, last $last_migration, rows $counts"
+fi
+
+# ---- 3. copy the uploaded files to this server ----
+files_ok=false; files_objects=0; files_bytes=0; files_persistent=false
+dir="${FILES_DIR:-/backups/files}"
+mountpoint -q "$(dirname "$dir")" 2>/dev/null && files_persistent=true
+if [ -n "${FILES_S3_BUCKET:-}" ]; then
+  mkdir -p "$dir" 2>/dev/null
+  # No --delete: a file deleted in the app stays in the copy.
+  if s3 FILES_S3_ s3 sync "s3://${FILES_S3_BUCKET}" "$dir" --only-show-errors 2>"$work/sync.err"; then
+    files_ok=true
+    files_objects=$(find "$dir" -type f | wc -l)
+    files_bytes=$(du -sb "$dir" | cut -f1)
+    log "files copied: $files_objects objects, $files_bytes bytes"
+  else
+    fail "copying the uploaded files failed: $(tail -c 300 "$work/sync.err")"
+  fi
+  [ "$files_persistent" = true ] || warn "the files copy is not on a volume, so it is lost when this app is redeployed"
+else
+  warn "no key for the uploaded-files bucket, so the files are not copied"
+fi
+
+# ---- 4. the report ----
+ok=$([ ${#errors[@]} -eq 0 ] && echo true || echo false)
+report=$(jq -n \
+  --arg checkedAt "$(date -u +%FT%TZ)" --arg startedAt "$started" --argjson seconds $(( $(date +%s) - t0 )) \
+  --argjson ok "$ok" --arg key "$key" --argjson size "${size:-0}" --arg backupAt "$backup_at" --argjson ageHours "${age_h:-null}" \
+  --argjson copies "${copies:-0}" --arg oldestAt "$oldest_at" --argjson totalBytes "${total_bytes:-0}" \
+  --argjson restoreOk "$restore_ok" --argjson tables "${tables:-0}" --argjson forced "${forced:-0}" \
+  --argjson migrations "${migrations:-0}" --arg lastMigration "$last_migration" --argjson counts "$counts" \
+  --argjson filesOk "$files_ok" --argjson filesObjects "${files_objects:-0}" --argjson filesBytes "${files_bytes:-0}" --argjson filesPersistent "$files_persistent" \
+  --argjson errors "$(printf '%s\n' "${errors[@]}" | jq -R . | jq -s 'map(select(length > 0))')" \
+  --argjson warnings "$(printf '%s\n' "${warnings[@]}" | jq -R . | jq -s 'map(select(length > 0))')" \
+  '{version: 1, checkedAt: $checkedAt, startedAt: $startedAt, seconds: $seconds, ok: $ok,
+    backup: {key: $key, sizeBytes: $size, at: (if $backupAt == "" then null else $backupAt end), ageHours: $ageHours,
+             copies: $copies, oldestAt: (if $oldestAt == "" then null else $oldestAt end), totalBytes: $totalBytes},
+    restore: {ok: $restoreOk, tables: $tables, forcedRowSecurityTables: $forced, migrations: $migrations,
+              lastMigration: $lastMigration, rows: $counts},
+    files: {ok: $filesOk, objects: $filesObjects, bytes: $filesBytes, persistent: $filesPersistent},
+    errors: $errors, warnings: $warnings}')
+echo "$report" > "$work/report.json"
+day=$(date -u +%F)
+s3 REPORT_S3_ s3 cp "$work/report.json" "s3://${REPORT_S3_BUCKET:-}/history/$day.json" --only-show-errors --content-type application/json \
+  && s3 REPORT_S3_ s3 cp "$work/report.json" "s3://${REPORT_S3_BUCKET:-}/latest.json" --only-show-errors --content-type application/json \
+  || log "FAIL: could not write the report"
+log "done: ok=$ok in $(( $(date +%s) - t0 ))s"
+[ "$ok" = true ]

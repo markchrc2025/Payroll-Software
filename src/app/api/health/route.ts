@@ -44,13 +44,17 @@ export async function GET() {
     };
   }
 
-  if (backup.status === "stale" || backup.status === "never") {
+  if (backup.status === "stale" || backup.status === "never" || backup.status === "failed") {
     warnings.push({
       name: "DATABASE_BACKUP",
+      // Public endpoint: no check details here (they name row counts and
+      // errors); the backup watch job emails those to ALERT_EMAIL_TO (PAY-73).
       detail:
         backup.status === "never"
           ? "No successful off-platform database backup has been recorded yet."
-          : `Latest off-platform backup is ${backup.ageHours}h old (threshold ${backup.maxAgeHours}h).`,
+          : backup.status === "failed"
+            ? "The last backup restore check failed."
+            : `Latest off-platform backup is ${backup.ageHours}h old (threshold ${backup.maxAgeHours}h).`,
     });
   }
 
@@ -68,7 +72,7 @@ export async function GET() {
     status: problems.length === 0 ? "ok" : "degraded",
     ...(problems.length ? { problems } : {}),
     ...(warnings.length ? { warnings } : {}),
-    backup,
+    backup: { status: backup.status, lastBackupAt: backup.lastBackupAt, ageHours: backup.ageHours, maxAgeHours: backup.maxAgeHours, ok: backup.ok },
     alerts,
   });
 }

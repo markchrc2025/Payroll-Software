@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Test stand-in for the awscli calls check.sh makes; buckets are folders under $FAKE_S3.
+while [ "$1" = "--endpoint-url" ]; do shift 2; done
+root=$FAKE_S3
+case "$1 $2" in
+  "s3api list-objects-v2")
+    shift 2; while [ $# -gt 0 ]; do case $1 in --bucket) b=$2; shift 2;; --prefix) p=$2; shift 2;; *) shift;; esac; done
+    [ -d "$root/$b" ] || { echo "NoSuchBucket" >&2; exit 254; }
+    cd "$root/$b"; find . -type f -path "./$p*" | sed 's|^\./||' | while read -r k; do
+      jq -n --arg k "$k" --argjson s "$(stat -c %s "$k")" --arg m "$(date -u -d @"$(stat -c %Y "$k")" +%FT%T.000Z)" '{Key:$k,Size:$s,LastModified:$m}'; done | jq -s '{Contents: .}';;
+  "s3 cp")
+    src=$3; dst=$4
+    if [[ $src == s3://* ]]; then cp "$root/${src#s3://}" "$dst"; else mkdir -p "$(dirname "$root/${dst#s3://}")"; cp "$src" "$root/${dst#s3://}"; fi;;
+  "s3 sync")
+    src=$3; dst=$4; cp -r "$root/${src#s3://}/." "$dst/";;
+  *) echo "unexpected: $*" >&2; exit 2;;
+esac

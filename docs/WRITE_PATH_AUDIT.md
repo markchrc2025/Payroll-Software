@@ -19,7 +19,7 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 
 Handlers that check a session but do not refuse when there is none: 0.
 
-Job handlers: 7, of which 5 write and 5 record the system principal.
+Job handlers: 8, of which 5 write and 5 record the system principal.
 
 ## Write handlers with no principal recognised
 
@@ -43,6 +43,7 @@ None.
 
 | Handler | Writes | Tenant from the job | Principal |
 |---|---|---|---|
+| src/lib/jobs/handlers/backup-watch.ts | no | no | SYSTEM (not recorded) |
 | src/lib/jobs/handlers/billing-overdue.ts | yes | no | SYSTEM (recorded) |
 | src/lib/jobs/handlers/dtr-submitted.ts | no | yes | SYSTEM (not recorded) |
 | src/lib/jobs/handlers/ess-deactivation.ts | yes | no | SYSTEM (recorded) |
