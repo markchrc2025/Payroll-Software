@@ -111,7 +111,7 @@ if [ -n "${FILES_S3_BUCKET:-}" ]; then
   if s3 FILES_S3_ s3 sync "s3://${FILES_S3_BUCKET}" "$dir" --only-show-errors 2>"$work/sync.err"; then
     files_ok=true
     files_objects=$(find "$dir" -type f | wc -l)
-    files_bytes=$(du -sb "$dir" | cut -f1)
+    files_bytes=$(find "$dir" -type f -printf '%s\n' | awk '{s += $1} END {print s + 0}')
     log "files copied: $files_objects objects, $files_bytes bytes"
   else
     fail "copying the uploaded files failed: $(tail -c 300 "$work/sync.err")"
