@@ -4,7 +4,7 @@
 # Payroll app reads. Never touches the live database.
 #
 #   SRC_S3_*     read-only key on the backup bucket (dokploy-backups)
-#   SRC_PREFIX   where Dokploy writes the Payroll dumps (postgres/sentire_payroll/)
+#   SRC_PREFIX   where Dokploy writes the Payroll dumps (shared-postgres-dwdmih/postgres/sentire_payroll/)
 #   FILES_S3_*   read-only key on the uploaded-files bucket (sentire-payroll)
 #   FILES_DIR    where the copy of the files is kept (a volume on this server)
 #   REPORT_S3_*  read-write key on the report bucket (payroll-backup-reports)
@@ -33,7 +33,7 @@ fail() { errors+=("$1"); log "FAIL: $1"; }
 warn() { warnings+=("$1"); log "WARN: $1"; }
 
 # ---- 1. the newest dump ----
-prefix="${SRC_PREFIX:-postgres/sentire_payroll/}"
+prefix="${SRC_PREFIX:-shared-postgres-dwdmih/postgres/sentire_payroll/}"
 listing=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --prefix "$prefix" --output json 2>"$work/list.err") \
   || { fail "cannot list the backup bucket: $(tail -c 300 "$work/list.err")"; listing='{}'; }
 objects=$(echo "$listing" | jq '[.Contents // [] | .[] | select(.Size > 0)] | sort_by(.LastModified)')
