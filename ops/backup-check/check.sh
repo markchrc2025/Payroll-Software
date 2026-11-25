@@ -4,7 +4,7 @@
 # Payroll app reads. Never touches the live database.
 #
 #   SRC_S3_*     read-only key on the backup bucket (dokploy-backups)
-#   SRC_PREFIX   where Dokploy writes the Payroll dumps (postgres/sentire_payroll/)
+#   SRC_PREFIX   where Dokploy writes the Payroll dumps (shared-postgres-dwdmih/postgres/sentire_payroll/)
 #   FILES_S3_*   read-only key on the uploaded-files bucket (sentire-payroll)
 #   FILES_DIR    where the copy of the files is kept (a volume on this server)
 #   REPORT_S3_*  read-write key on the report bucket (payroll-backup-reports)
@@ -33,7 +33,7 @@ fail() { errors+=("$1"); log "FAIL: $1"; }
 warn() { warnings+=("$1"); log "WARN: $1"; }
 
 # ---- 1. the newest dump ----
-prefix="${SRC_PREFIX:-postgres/sentire_payroll/}"
+prefix="${SRC_PREFIX:-shared-postgres-dwdmih/postgres/sentire_payroll/}"
 listing=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --prefix "$prefix" --output json 2>"$work/list.err") \
   || { fail "cannot list the backup bucket: $(tail -c 300 "$work/list.err")"; listing='{}'; }
 objects=$(echo "$listing" | jq '[.Contents // [] | .[] | select(.Size > 0)] | sort_by(.LastModified)')
@@ -43,7 +43,14 @@ oldest_at=$(echo "$objects" | jq -r '.[0].LastModified // empty')
 total_bytes=$(echo "$objects" | jq '[.[].Size] | add // 0')
 key=""; size=0; backup_at=""; age_h=null
 if [ -z "$newest" ]; then
-  [ ${#errors[@]} -eq 0 ] && fail "no backup found under $prefix"
+  if [ ${#errors[@]} -eq 0 ]; then
+    # Name what is there, so a wrong SRC_PREFIX is a one-line fix.
+    near=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --output json 2>/dev/null \
+      | jq -r '[.Contents // [] | .[].Key | select(test("payroll"; "i"))] | sort | .[-5:] | join(", ")')
+    tops=$(s3 SRC_S3_ s3api list-objects-v2 --bucket "${SRC_S3_BUCKET:-}" --delimiter / --output json 2>/dev/null \
+      | jq -r '[.CommonPrefixes // [] | .[].Prefix] | join(", ")')
+    fail "no backup found under $prefix (keys with payroll: ${near:-none}; top-level folders: ${tops:-none})"
+  fi
 else
   key=$(echo "$newest" | jq -r .Key)
   size=$(echo "$newest" | jq -r .Size)
@@ -111,7 +118,7 @@ if [ -n "${FILES_S3_BUCKET:-}" ]; then
   if s3 FILES_S3_ s3 sync "s3://${FILES_S3_BUCKET}" "$dir" --only-show-errors 2>"$work/sync.err"; then
     files_ok=true
     files_objects=$(find "$dir" -type f | wc -l)
-    files_bytes=$(du -sb "$dir" | cut -f1)
+    files_bytes=$(find "$dir" -type f -printf '%s\n' | awk '{s += $1} END {print s + 0}')
     log "files copied: $files_objects objects, $files_bytes bytes"
   else
     fail "copying the uploaded files failed: $(tail -c 300 "$work/sync.err")"

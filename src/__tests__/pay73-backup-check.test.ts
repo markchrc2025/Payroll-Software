@@ -11,6 +11,8 @@
  *   T4  the watch job is scheduled at 06:00 Manila; the check service restores
  *       with --exit-on-error into a throwaway PostgreSQL 18 and never deletes
  *       from the files copy.
+ *   T5  the Dockerfile carries check.sh and run.sh verbatim (Dokploy builds it
+ *       with an empty context) and is up to date with them.
  */
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -99,11 +101,25 @@ describe("PAY-73 backup check", () => {
     expect(workers).toContain('boss.schedule(JOB_NAMES.BACKUP_WATCH, "0 22 * * *"');
     const docker = readFileSync("ops/backup-check/Dockerfile", "utf8");
     expect(docker).toMatch(/^FROM postgres:18-/m);
+    expect(docker).toMatch(/^# syntax=docker\/dockerfile:1$/m);
     const check = readFileSync("ops/backup-check/check.sh", "utf8");
     expect(check).toContain("pg_restore --exit-on-error -d restored");
     expect(check).toContain('s3 sync "s3://${FILES_S3_BUCKET}" "$dir"');
     expect(check).not.toMatch(/sync[^\n]*--delete/);
     expect(check).not.toMatch(/\baws\b[^\n]*\brm\b/);
     expect(readFileSync("ops/backup-check/run.sh", "utf8")).toContain('CHECK_AT_UTC:-20:30');
+  });
+
+  it("T5 the Dockerfile carries the scripts verbatim and is up to date", async () => {
+    const { dockerfile } = await import("../../ops/backup-check/build-dockerfile.mjs");
+    const file = readFileSync("ops/backup-check/Dockerfile", "utf8");
+    expect(file).toBe(dockerfile());
+    expect(file).not.toMatch(/^COPY (?!--chmod=755 <<')/m);
+    const body = (tag: string) => {
+      const m = new RegExp(`<<'${tag}' [^\\n]+\\n([\\s\\S]*?)^${tag}$`, "m").exec(file);
+      return m?.[1];
+    };
+    expect(body("PAY73_CHECK_SH_END")).toBe(readFileSync("ops/backup-check/check.sh", "utf8"));
+    expect(body("PAY73_RUN_SH_END")).toBe(readFileSync("ops/backup-check/run.sh", "utf8"));
   });
 });
