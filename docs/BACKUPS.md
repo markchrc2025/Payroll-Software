@@ -1,233 +1,93 @@
-# Database Backups — Sentire Payroll
+# Database and file backups: Sentire Payroll
 
-> ## ⚠️ STATUS: NOT OPERATIONAL — HARD Phase-2 launch gate
->
-> **There is no working database backup today.** Neither layer below is active:
-> - The **off-platform copy** (this doc's workflows) is **disabled**. It needs a
->   `BYPASSRLS`/superuser DB role for `pg_dump`, and Sliplane's managed Postgres
->   does not expose one without the `postgres` superuser (see "Backup DB role"
->   below). Rather than block on it, we deferred it.
-> - **Sliplane native PITR is not active** either — it likely requires a
->   dedicated/upgraded DB tier.
->
-> **Why this is acceptable right now:** we are **pre-beta with zero customer
-> data**. A total DB loss today costs only seed/test data.
->
-> **This is a HARD gate for Phase 2.** A working, *restore-tested* backup MUST be
-> in place **before the first beta tenant** (any real customer data). Acceptable
-> ways to clear the gate:
-> 1. **Sliplane native PITR** on an upgraded DB tier, and/or
-> 2. **Revive the off-platform copy** — have Sliplane/superuser create a dedicated
->    `backup_ro` (`LOGIN BYPASSRLS` + `pg_read_all_data`) role and point
->    `BACKUP_DATABASE_URL` at it (see "Backup DB role"), and/or
-> 3. **Copy Sliplane's native backup artifact to R2** on a schedule (provider-loss
->    protection without needing `pg_dump` bypass).
->
-> The `db-backup` and `db-restore-drill` workflows are **built and validated but
-> their schedules are disabled** — they remain as ready-to-enable scaffolding.
-> Everything below documents how they work once a qualifying role exists.
+> **Status (PAY-73, 25 Nov 2026):** daily database backups to RustFS on the mail
+> server, restore-tested every day by the Backup Check service, with a copy of
+> the uploaded files kept on the app server. Mark chose RustFS on 25 Nov 2026
+> ("why can't we have the backup in our Rust in another server?"). A second copy
+> outside Contabo is planned before paying customers (see "What is not covered").
 
-Two independent layers protect the production database:
+## The pieces
 
-1. **Sliplane native backups / PITR** — protects against disk failure *within*
-   Sliplane. Fine-grained recovery, but useless if the Sliplane **account or
-   provider** is lost.
-2. **Independent off-platform backup (this doc)** — a scheduled, encrypted
-   `pg_dump` pushed to **Cloudflare R2** (a different provider), so a
-   Sliplane-level failure never loses both the DB and its backup.
-
-> **A backup you have never restored is not a backup.** The monthly restore
-> drill (below) proves layer 2 actually works.
-
----
-
-## How it works
-
-| Piece | File | Runs where |
+| Piece | Where | What it does |
 |---|---|---|
-| Scheduled encrypted backup | `.github/workflows/db-backup.yml` | GitHub Actions |
-| GFS retention prune (lock-aware) | `scripts/prune-backups.ts` | inside the backup job |
-| Monthly + manual restore drill | `.github/workflows/db-restore-drill.yml` | GitHub Actions (throwaway `postgres:18`) |
-| Restore verifier | `scripts/verify-backup.ts` | inside the drill job |
-| Freshness heartbeat | `BackupRun` table → `/api/health` | written by the job, read by the app |
-| Manual restore runbook | `scripts/restore-from-backup.md` | you, when recovering |
+| Dokploy database backup | Dokploy, Shared Services Postgres, database `sentire_payroll` | Daily at 18:30 UTC (02:30 Manila): `pg_dump` (custom format, gzipped) into bucket `dokploy-backups`, prefix `postgres/sentire_payroll/`, on RustFS (the mail server). Keeps the latest N copies (set in Dokploy). |
+| Backup Check service | Dokploy app "Payroll Backup Check" on the app server, built from `ops/backup-check/Dockerfile` | Daily at 20:30 UTC (04:30 Manila) and on every deploy: restores the newest dump into a throwaway PostgreSQL 18 inside its own container, checks it, copies the uploaded files, writes a report. Never touches the live database. |
+| Report | bucket `payroll-backup-reports`: `latest.json` and `history/YYYY-MM-DD.json` | The check's result. The Payroll app has a read-only key to this bucket only. |
+| Files copy | a Docker volume (not a bind mount) on the app server, mounted at `/backups` in the Backup Check app | `aws s3 sync` of bucket `sentire-payroll` (the uploaded files, which live on the mail server). No `--delete`: a file deleted in the app stays in the copy. |
+| Health signal | `src/lib/backup-status.ts`, `/api/health` | Reads `latest.json`. Public health shows only the status and ages. |
+| Alert email | `backup.watch` job (`src/lib/jobs/handlers/backup-watch.ts`), daily at 22:00 UTC (06:00 Manila) | Emails `ALERT_EMAIL_TO` with the details when the status is not `ok`. |
 
-It runs on **GitHub Actions, not the app**: the app image is a Railpack native
-build with no `pg_dump`, and a backup must keep working even if the app or the
-whole Sliplane account is down. Three independent parties hold the pieces:
-**GitHub** runs it, **Sliplane** holds the live DB, **Cloudflare R2** holds the
-copy.
+The two servers cover each other: the live database is on the app server and
+its backups on the mail server; the live files are on the mail server and their
+copy on the app server.
 
-**RLS / role safety:** `pg_dump` only *reads*, via the owner (`BYPASSRLS`) role,
-so it captures every row without weakening anything. No RLS policy or DB role is
-altered. Restores only ever touch a throwaway scratch database.
+## What the check proves
 
-**PostgreSQL version:** the Sliplane server is **PostgreSQL 18.4**. Both
-workflows install the **v18** client from PGDG and invoke `pg_dump` / `pg_restore`
-/ `psql` by absolute path (`$PG_BIN=/usr/lib/postgresql/18/bin`) so the runner's
-older default `pg_dump` (16.x) on `PATH` can't shadow it — `pg_dump` refuses to
-dump a server newer than itself. The restore drill's scratch service is
-`postgres:18` to match. A guard step in `db-backup.yml` fails early with a clear
-message if `pg_dump`'s major version is ever older than the live server's, so a
-tooling regression can't silently produce a broken backup. **If Sliplane later
-upgrades the server major, bump `postgresql-client-<N>`, `$PG_BIN`, and the
-`postgres:<N>` scratch image together.**
+`ops/backup-check/check.sh`, in order:
 
----
+1. Lists the dumps under the prefix; the newest one is checked. Records how many
+   copies are kept and the oldest one's date.
+2. Downloads it, starts a throwaway PostgreSQL 18, **recreates every role the
+   dump names** (owner, payroll_app, ...) as NOLOGIN roles, then runs
+   `pg_restore --exit-on-error`, so ownership, grants and the row-security
+   policies restore as they are.
+3. Checks the restored copy: at least `MIN_TABLES` tables (default 80), at least
+   one applied migration, at least one company, and forced row security on the
+   tenant tables. Records table, migration and row counts.
+4. Copies the uploaded files and records the count, the size, and whether the
+   copy is on a volume (it warns if not, because it would be lost on redeploy).
+5. Writes the report. `ok` is false if any step failed.
 
-## Required GitHub repo secrets (workflows only — never on the app)
+Statuses in the app (`freshnessFromReport`): `failed` (the last check failed),
+`stale` (newest backup older than `BACKUP_MAX_AGE_HOURS`, default 26, or the
+check has not run for 50 hours), `never` (no report yet), `ok`.
 
-Set under **Settings → Secrets and variables → Actions**:
+Run the check locally, end to end, against your test database:
+`TEST_DATABASE_URL=... sudo -E bash ops/backup-check/test.sh`.
 
-| Secret | Value |
-|---|---|
-| `BACKUP_DATABASE_URL` | Sliplane connection string for a **superuser or `BYPASSRLS` role** (see "Backup DB role" below), reachable from GitHub runners. **The `owner` role does NOT work** — every table uses `FORCE ROW LEVEL SECURITY` and `owner` lacks `BYPASSRLS`, so `pg_dump` refuses. |
-| `BACKUP_S3_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
-| `BACKUP_S3_REGION` | `auto` |
-| `BACKUP_S3_BUCKET` | `sentire-payroll-backups` |
-| `BACKUP_S3_ACCESS_KEY_ID` | R2 API token access key (Object **Read & Write**, scoped to this bucket only) |
-| `BACKUP_S3_SECRET_ACCESS_KEY` | R2 API token secret |
-| `BACKUP_GPG_PASSPHRASE` | Symmetric AES-256 passphrase — **see the custody warning below** |
+## Keys (all made with the Dokploy connector; values are never shown in chat)
 
-Optional tuning (workflow env, defaults shown): `BACKUP_KEEP_INTRADAY_HOURS=48`,
-`BACKUP_RETENTION_DAILY=14`, `BACKUP_RETENTION_WEEKLY=8`.
+| App | Prefix | Bucket | Access |
+|---|---|---|---|
+| Payroll Backup Check | `SRC_S3_` | `dokploy-backups` | read-only |
+| Payroll Backup Check | `FILES_S3_` | `sentire-payroll` | read-only |
+| Payroll Backup Check | `REPORT_S3_` | `payroll-backup-reports` | read-write |
+| Payroll | `BACKUP_REPORT_S3_` | `payroll-backup-reports` | read-only |
 
-### Backup DB role (why `owner` fails, and what to use)
+The Backup Check app's other settings: `SRC_PREFIX=postgres/sentire_payroll/`,
+`FILES_DIR=/backups/files`, `CHECK_AT_UTC=20:30`.
 
-Every tenant table uses `FORCE ROW LEVEL SECURITY`. `pg_dump` runs `row_security =
-off` to guarantee a complete dump, and Postgres only allows that for a
-**superuser** or a role with the **`BYPASSRLS` attribute**. The app's "admin
-bypass" is an RLS *policy* (`admin_bypass USING(true)`), **not** the role
-attribute — so it does not satisfy `pg_dump`. The `owner` role the app runs as has
-neither attribute, which is why the first backup failed on `Announcement`.
+## Restoring for real
 
-Per the live `pg_roles` inventory, the only qualifying login role is the
-`postgres` **superuser** (`rolsuper = t, rolbypassrls = t`). Two ways to fix,
-both requiring `postgres` (superuser) at least once:
+1. Pick the dump: the newest is in `latest.json` (`backup.key`); older ones are
+   under `postgres/sentire_payroll/` in `dokploy-backups` (RustFS console at
+   storage.sentire.solutions).
+2. Restore into a **new** database first, never over the live one:
+   `gunzip -c <dump>.sql.gz > payroll.dump`, create the roles the dump names
+   (as check.sh does), `createdb sentire_payroll_restore`,
+   `pg_restore --exit-on-error -d sentire_payroll_restore payroll.dump`.
+3. Check it as check.sh does, then point the app's `DATABASE_URL` and
+   `DIRECT_DATABASE_URL` at it in Dokploy and deploy. The app's start-up checks
+   (migrations, schema drift, the runtime role) must pass.
+4. Files: copy `/backups/files` from the Backup Check volume back into the
+   `sentire-payroll` bucket with `aws s3 sync`.
 
-- **Recommended — dedicated least-privilege backup role.** As `postgres`, run:
-  ```sql
-  CREATE ROLE backup_ro WITH LOGIN PASSWORD '<strong-random>' BYPASSRLS;
-  GRANT pg_read_all_data TO backup_ro;   -- PG14+ : SELECT on all current & future tables
-  ```
-  Then point `BACKUP_DATABASE_URL` at `backup_ro`. This is read-only and RLS-
-  bypassing — a much smaller blast radius than superuser if the secret ever leaks.
-- **Fastest — use `postgres` directly** in `BACKUP_DATABASE_URL`. Works with no
-  DDL, but the backup job then holds superuser credentials.
+## What is not covered (yet)
 
-> Do **not** work around this with `pg_dump --enable-row-security` as `owner`: that
-> depends on `admin_bypass` staying complete on every present and future table and
-> would **silently drop rows** the day a table lacks it. A `BYPASSRLS`/superuser
-> role is the only robust choice for a payroll backup.
+- **Both servers are at Contabo.** A Contabo account or data-centre loss takes
+  the app, the files and the backups together. Plan: a second copy outside
+  Contabo (Cloudflare R2, the Oracle Always Free account, or the spare laptop)
+  before paying customers.
+- **The dumps are not encrypted.** They sit on our own server behind a private
+  bucket. Encrypt them when the copy outside Contabo is added.
+- **Retention is a Dokploy setting** (keep latest N). Mark approved 30 days on
+  25 Nov 2026; it is changed in Dokploy (it was 14).
 
-Keep the host/port/database/`sslmode` identical to the current value; change only
-the **user and password** to the chosen role.
+## Retired
 
-### App env (optional)
-
-The app holds **no** backup credentials. Freshness comes from the `BackupRun`
-heartbeat row. The only optional app var is `BACKUP_MAX_AGE_HOURS` (default
-`26`) — how old the newest backup may be before `/api/health` warns.
-
----
-
-## ⚠️ Encryption passphrase custody — READ THIS
-
-The dump is encrypted with `BACKUP_GPG_PASSPHRASE` before it leaves the runner.
-**If you lose that passphrase, every backup is permanently unrecoverable — the
-encrypted dumps are useless without it.**
-
-- Store it in **at least two independent places** (e.g. your password manager
-  **and** a sealed offline copy), separate from the GitHub secret.
-- It is intentionally **not** the app's `ENCRYPTION_KEY`: restore happens outside
-  the app, and the two must not be coupled.
-
----
-
-## Cadence & RPO
-
-The default schedule is **every 6 hours** (`cron: "0 */6 * * *"`) — the
-**fail-safe** setting, giving ~6h RPO on the independent copy even if Sliplane
-has no PITR.
-
-Set the cadence to match Sliplane's native protection:
-
-| Sliplane native PITR | Recommended cadence | RPO on the independent copy |
-|---|---|---|
-| **ON** (Sliplane covers fine-grained recovery) | daily is enough — the R2 dump is only the *provider-loss* floor | up to ~24h |
-| **OFF / none** (R2 is your *only* recovery) | keep **every 6h** (or tighter) | ~6h |
-
-To switch to daily, change the one cron line in `db-backup.yml` to
-`"0 3 * * *"`.
-
-> **Confirm Sliplane's PITR status** (Sliplane → Databases → the Postgres
-> service → backups/PITR) and set the cadence accordingly. Until confirmed, the
-> workflow ships the safe 6h default.
-
----
-
-## Retention (GFS) & Object Lock
-
-`scripts/prune-backups.ts` keeps, after each run:
-
-- every dump from the last **48h** (intraday),
-- the newest dump **per day for 14 days**,
-- the newest dump **per week for 8 weeks**,
-
-and deletes the rest (each dump plus its `.manifest.json`).
-
-**Object Lock:** the bucket was created with Object Lock (EU jurisdiction,
-~35-day default retention). The prune is **lock-aware** — any object still
-within its retention window cannot be deleted, so the prune logs it as
-`locked, kept` and moves on (never an error). This gives ransomware/tamper
-resistance: **backups are immutable until their lock expires**, which also means
-the *effective minimum retention is ~35 days* regardless of the GFS policy
-above. The prune works identically if Object Lock is ever disabled.
-
----
-
-## Freshness signal
-
-After each successful run the workflow writes a `BackupRun` heartbeat row
-(timestamps + object key + size + Employee/PayrollSheet/Invoice counts — **no
-tenant PII**). `/api/health` reads the newest successful row and includes:
-
-```json
-"backup": { "status": "ok|stale|never|unknown", "lastBackupAt": "...", "ageHours": 3.2, "maxAgeHours": 26 }
-```
-
-`stale` or `never` also appears in the health `warnings` array. This read is
-cached (60s), timeout-bounded, and fully guarded, so it can **never** flip
-`/api/health` off its always-200 liveness — a DB blip just yields
-`status: "unknown"`.
-
-> First-run ordering: the `BackupRun` table ships as migration
-> `20260802000000_backup_run`. Apply it to prod via the **`db-migrate`** GitHub
-> workflow (the last manual-migration step; **task 0.2** removes it). Until it's
-> applied, backups still run fine — the heartbeat insert is skipped with a
-> warning and `/api/health` reports `backup.status = "unknown"`.
-
----
-
-## Running the restore drill
-
-- **Automatic:** the 1st of each month (`db-restore-drill.yml`).
-- **Manual:** GitHub → Actions → **DB Restore Drill** → *Run workflow*.
-
-It pulls the newest dump, decrypts, restores into a throwaway `postgres:18`, and
-runs `scripts/verify-backup.ts`, which asserts the restored Employee /
-PayrollSheet / Invoice counts equal the dump-time manifest. Green = your backup
-is real and restorable. For a real (production) restore, follow
-`scripts/restore-from-backup.md`.
-
----
-
-## Manual backup drill (first-time verification)
-
-1. Set the seven `BACKUP_*` secrets.
-2. Apply the `BackupRun` migration via the `db-migrate` workflow.
-3. GitHub → Actions → **DB Backup** → *Run workflow*. Confirm a
-   `db/<timestamp>.dump.gpg` object appears in R2 and `/api/health` shows a fresh
-   `backup` block.
-4. GitHub → Actions → **DB Restore Drill** → *Run workflow*. Confirm it ends with
-   `RESTORE VERIFICATION PASSED`.
+The GitHub Actions workflows `db-backup.yml` and `db-restore-drill.yml`
+(encrypted `pg_dump` to Cloudflare R2, built for Sliplane) stay disabled. They,
+`scripts/prune-backups.ts`, `scripts/verify-backup.ts` and
+`scripts/restore-from-backup.md` are kept as the starting point for the copy
+outside Contabo. The `BackupRun` table they wrote is still read when the
+Payroll app has no report key.
