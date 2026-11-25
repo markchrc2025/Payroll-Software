@@ -14,6 +14,7 @@ import { handlePayslipPublish, PayslipPublishJobData } from "./handlers/payslip-
 import { handleLeaveAccrual } from "./handlers/leave-accrual";
 import { handleEssDeactivationSweep } from "./handlers/ess-deactivation";
 import { handleBillingOverdueSweep } from "./handlers/billing-overdue";
+import { handleBackupWatch } from "./handlers/backup-watch";
 import prismaAdmin from "@/lib/prisma-admin";
 import { isLiveState, requeueStuckRuns } from "./stuck-runs";
 
@@ -26,6 +27,7 @@ export const JOB_NAMES = {
   ESS_DEACTIVATION: "ess.deactivation",
   BILLING_OVERDUE: "billing.overdue",
   PAYROLL_STUCK_SWEEP: "payroll.stuck-sweep",
+  BACKUP_WATCH: "backup.watch",
 } as const;
 
 const RETRY_LIMIT = 3;
@@ -146,6 +148,11 @@ export async function registerWorkers(): Promise<void> {
   await boss.schedule(JOB_NAMES.PAYROLL_STUCK_SWEEP, "*/10 * * * *", {}, { tz: "UTC" });
   await boss.work(JOB_NAMES.PAYROLL_STUCK_SWEEP, { localConcurrency: 1 }, () => sweepStuckRuns());
   void sweepStuckRuns().catch((e) => console.error("[jobs/payroll.stuck-sweep] start-up sweep failed:", e));
+
+  // PAY-73: the backup watch, daily at 06:00 Manila (22:00 UTC), after the
+  // 02:30 Dokploy backup and the 04:30 restore check. Emails when they are not good.
+  await boss.schedule(JOB_NAMES.BACKUP_WATCH, "0 22 * * *", {}, { tz: "UTC" });
+  await boss.work(JOB_NAMES.BACKUP_WATCH, { localConcurrency: 1 }, async () => { await handleBackupWatch(); });
 
   console.log("[pg-boss] Workers registered:", Object.values(JOB_NAMES).join(", "));
 }
