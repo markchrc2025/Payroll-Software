@@ -47,6 +47,8 @@ export const PUBLIC_BY_DESIGN = {
   "ess/webauthn/authenticate/route.ts": "ESS passkey sign-in, step 1: issues a challenge",
   "ess/webauthn/authenticate/finish/route.ts": "ESS passkey sign-in, step 2: the signed challenge is the principal",
   "offboard-portal/session/route.ts": "offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie",
+  "signup/route.ts": "PAY-74 self-serve sign-up: stores a pending sign-up and emails a link; limited per IP and per email",
+  "signup/verify/route.ts": "PAY-74: the single-use emailed link is the principal; it creates the company and its owner",
 };
 
 const RULES = [

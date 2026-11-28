@@ -116,3 +116,20 @@ export async function sendAdminResetPasswordNotice(
   const { subject, html } = t.renderAdminResetPasswordNotice(v);
   await dispatch({ to, subject, html, replyTo: support.central });
 }
+
+// PAY-74: self-serve sign-up
+export async function sendSignupVerify(
+  to: string,
+  v: Parameters<typeof t.renderSignupVerify>[0],
+): Promise<void> {
+  const { subject, html } = t.renderSignupVerify(v);
+  await dispatch({ to, subject, html, replyTo: support.payroll });
+}
+
+export async function sendSignupReady(
+  to: string,
+  v: Parameters<typeof t.renderSignupReady>[0],
+): Promise<void> {
+  const { subject, html } = t.renderSignupReady(v);
+  await dispatch({ to, subject, html, replyTo: support.payroll });
+}

@@ -13,9 +13,9 @@ PAY-205: a test fails when a write handler has no principal, checks one without 
 | CENTRAL_ADMIN | 39 |
 | KIOSK_DEVICE | 2 |
 | PORTAL_SESSION | 3 |
-| PUBLIC_BY_DESIGN | 11 |
+| PUBLIC_BY_DESIGN | 13 |
 | NONE | 0 |
-| Total | 307 |
+| Total | 309 |
 
 Handlers that check a session but do not refuse when there is none: 0.
 
@@ -38,6 +38,8 @@ None.
 - POST /api/ess/webauthn/authenticate: ESS passkey sign-in, step 1: issues a challenge
 - POST /api/offboard-portal/session: offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie
 - DELETE /api/offboard-portal/session: offboarding portal sign-in: the single-use link is the principal; sign-out ends the session in the cookie
+- POST /api/signup: PAY-74 self-serve sign-up: stores a pending sign-up and emails a link; limited per IP and per email
+- POST /api/signup/verify: PAY-74: the single-use emailed link is the principal; it creates the company and its owner
 
 ## Job handlers (pg-boss)
 
@@ -351,6 +353,8 @@ None.
 | PATCH | /api/shifts/[id] | USER_SESSION | getAuthContext | yes |
 | DELETE | /api/shifts/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/shifts | USER_SESSION | getAuthContext | yes |
+| POST | /api/signup | PUBLIC_BY_DESIGN | PAY-74 self-serve sign-up: stores a pending sign-up and emails a link; limited per IP and per email | n/a |
+| POST | /api/signup/verify | PUBLIC_BY_DESIGN | PAY-74: the single-use emailed link is the principal; it creates the company and its owner | n/a |
 | DELETE | /api/storage/object | USER_SESSION | requirePermission | yes |
 | DELETE | /api/team/documents/[id] | USER_SESSION | getAuthContext | yes |
 | POST | /api/team/documents/[id]/versions | USER_SESSION | getAuthContext | yes |
