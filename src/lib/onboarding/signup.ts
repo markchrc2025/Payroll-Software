@@ -61,7 +61,7 @@ export async function requestSignup(input: SignupInput, ip: string | null, now =
   if (pending >= MAX_PENDING_PER_EMAIL_PER_HOUR) return { sent: false };
 
   const token = randomBytes(32).toString("base64url");
-  await prismaAdmin.tenantSignup.create({
+  const pendingRow = await prismaAdmin.tenantSignup.create({
     data: {
       email,
       companyName: input.companyName.trim(),
@@ -75,11 +75,21 @@ export async function requestSignup(input: SignupInput, ip: string | null, now =
       ipAddress: ip,
     },
   });
-  await sendSignupVerify(email, {
-    firstName: input.firstName.trim(),
-    companyName: input.companyName.trim(),
-    verifyUrl: `${appUrl()}/signup/verify?token=${token}`,
-  });
+  try {
+    await sendSignupVerify(email, {
+      firstName: input.firstName.trim(),
+      companyName: input.companyName.trim(),
+      verifyUrl: `${appUrl()}/signup/verify?token=${token}`,
+    });
+  } catch (e) {
+    // The link never reached anyone: drop the sign-up so it does not count
+    // against the limits, and say so plainly (not "Internal server error").
+    // Found on production on 28 Nov 2026: Resend refused the sentire.solutions
+    // sender (domain not verified).
+    console.error("[signup] the confirmation email could not be sent:", e);
+    await prismaAdmin.tenantSignup.delete({ where: { id: pendingRow.id } }).catch(() => {});
+    throw new SignupRefusal("We couldn't send the confirmation email just now. Please try again in a few minutes.", 503);
+  }
   return { sent: true, token };
 }
 
