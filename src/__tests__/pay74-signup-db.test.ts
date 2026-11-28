@@ -14,6 +14,9 @@
  *   S7  the routes: validation, consent, the same answer either way; public paths.
  *   S8  the setup checklist ticks itself off from the company's data.
  *   S9  the runtime role payroll_app holds the grants but sees no sign-up rows.
+ *   S10 when the confirmation email cannot be sent, the sign-up is dropped and
+ *       the route says so (503), not "Internal server error" (found on
+ *       production, 28 Nov 2026).
  */
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -27,9 +30,12 @@ const describeDb = DB ? describe : describe.skip;
 const sfx = randomBytes(4).toString("hex");
 const mail = (k: string) => `pay74-${k}-${sfx}@example.test`;
 
-const sent = vi.hoisted(() => ({ verify: [] as { to: string; v: { verifyUrl: string } }[], ready: [] as { to: string; v: { companyCode: string } }[] }));
+const sent = vi.hoisted(() => ({ failNext: false, verify: [] as { to: string; v: { verifyUrl: string } }[], ready: [] as { to: string; v: { companyCode: string } }[] }));
 vi.mock("@/lib/emails", () => ({
-  sendSignupVerify: vi.fn(async (to: string, v: { verifyUrl: string }) => { sent.verify.push({ to, v }); }),
+  sendSignupVerify: vi.fn(async (to: string, v: { verifyUrl: string }) => {
+    if (sent.failNext) { sent.failNext = false; throw new Error("Resend rejected: the sentire.solutions domain is not verified"); }
+    sent.verify.push({ to, v });
+  }),
   sendSignupReady: vi.fn(async (to: string, v: { companyCode: string }) => { sent.ready.push({ to, v }); }),
 }));
 vi.mock("server-only", () => ({}));
@@ -199,5 +205,14 @@ describeDb("PAY-74 self-serve sign-up (real Postgres)", () => {
     } finally {
       await q("ROLLBACK");
     }
+  });
+
+  it("S10 an email that cannot be sent drops the sign-up and says so", async () => {
+    sent.failNext = true;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await signupPost(new NextRequest("http://x/api/signup", { method: "POST", body: JSON.stringify({ ...input("fail"), acceptTerms: true }), headers: { "x-forwarded-for": "192.0.2.88" } }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toBe("We couldn't send the confirmation email just now. Please try again in a few minutes.");
+    expect((await q(`SELECT count(*)::int AS n FROM "TenantSignup" WHERE email = $1`, [mail("fail")])).rows[0].n).toBe(0);
   });
 });
