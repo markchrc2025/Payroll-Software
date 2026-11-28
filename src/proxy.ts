@@ -13,6 +13,15 @@ export default auth((req) => {
 
   const isPublic =
     path === "/login" ||
+    // The password reset pages were missing here, so a signed-out user who
+    // clicked "Forgot password?" was sent back to /login (found with PAY-74).
+    path === "/forgot-password" ||
+    path === "/reset-password" ||
+    // PAY-74: self-serve sign-up.
+    path === "/signup" ||
+    path === "/signup/verify" ||
+    path === "/api/signup" ||
+    path === "/api/signup/verify" ||
     path === "/api/health" ||
     path === "/centralportal" ||
     path === "/centralportal/login" ||
