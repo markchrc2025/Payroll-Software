@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const {
-      adminFirstName, adminLastName, adminEmail, adminPassword, adminPhone,
+      adminFirstName, adminLastName, adminEmail, adminPassword,
       tinNumber, address, city, province, zipCode, contactEmail, contactPhone,
       trialEndsAt, payrollCycle, companyCode, packageId,
       ...tenantData
