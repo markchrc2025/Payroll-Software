@@ -496,3 +496,68 @@ export function renderAdminResetPasswordNotice(v: {
   });
   return { subject: "Your password was changed", html };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAY-74. Self-serve sign-up: confirm the email address — PAYROLL
+// ─────────────────────────────────────────────────────────────────────────────
+export function renderSignupVerify(v: { firstName: string; companyName: string; verifyUrl: string }): Rendered {
+  const name = escapeHtml(v.firstName);
+  const company = escapeHtml(v.companyName);
+  const url = escapeAttr(v.verifyUrl);
+  const html = renderShell({
+    title: "Confirm your email",
+    preheader: `Confirm your email to create ${v.companyName} on Sentire Payroll. The link expires in 24 hours.`,
+    surface: "PAYROLL",
+    body: [
+      intro({
+        eyebrow: "One more step",
+        h1: "Confirm your email",
+        bodyHtml: `Hi ${name}, confirm this address to create ${b(company)} on Sentire&nbsp;Payroll. Your company is set up the moment you click, with the holiday calendar, standard shifts and leave types ready. This link expires in ${b("24&nbsp;hours")}.`,
+        ctaLabel: "Confirm and create my company",
+        ctaUrl: url,
+      }),
+      fallback(url),
+    ].join("\n"),
+    footerLines: [
+      "Didn't sign up? Ignore this email and nothing is created.",
+      supportLine("Questions? Email", "PAYROLL"),
+    ],
+    legal: "© 2026 Sentire · Sent because this address was used to sign up for Sentire Payroll.",
+  });
+  return { subject: "Confirm your email to create your company", html };
+}
+
+// PAY-74. Self-serve sign-up: the company is ready — PAYROLL
+export function renderSignupReady(v: { firstName: string; companyName: string; companyCode: string; loginUrl: string }): Rendered {
+  const name = escapeHtml(v.firstName);
+  const company = escapeHtml(v.companyName);
+  const code = escapeHtml(v.companyCode);
+  const url = escapeAttr(v.loginUrl);
+  const html = renderShell({
+    title: "Your company is ready",
+    preheader: `${v.companyName} is ready on Sentire Payroll. Your company code is ${v.companyCode}.`,
+    surface: "PAYROLL",
+    body: [
+      intro({
+        eyebrow: "Welcome aboard",
+        h1: `${company} is ready`,
+        bodyHtml: `Hi ${name}, your company is set up and you are its ${b("Administrator")}. Your company code is ${b(code)}: your employees use it to sign in to Self-Service.`,
+        ctaLabel: "Sign in",
+        ctaUrl: url,
+      }),
+      stepsPanel({
+        kicker: "Get set up",
+        meta: "the checklist on your dashboard",
+        title: "From here to your first payslip",
+        steps: [
+          { title: "Complete your company profile", desc: "TIN, registered address and the SSS, PhilHealth and Pag-IBIG employer numbers." },
+          { title: "Add your employees", desc: "Their pay, schedule and statutory numbers." },
+          { title: "Run and publish your first payroll", desc: "Review the computation, then publish the payslips to Self-Service." },
+        ],
+      }),
+    ].join("\n"),
+    footerLines: [supportLine("Questions about getting started? Email", "PAYROLL")],
+    legal: `© 2026 Sentire · You’re receiving this because ${company} was created on Sentire Payroll.`,
+  });
+  return { subject: `${v.companyName} is ready on Sentire Payroll`, html };
+}

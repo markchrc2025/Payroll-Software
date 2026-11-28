@@ -53,7 +53,8 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
   const urlErr = authErrorMessage(searchParams.get("error"));
 
   const [companyCode, setCompanyCode] = useState("");
-  const [email, setEmail] = useState("");
+  // PAY-74: the sign-up confirmation page links here with ?email= filled in.
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(mode === "tenant");
@@ -412,6 +413,12 @@ export default function SentireLoginScreen({ mode }: { mode: Mode }) {
                 )}
               </button>
             </form>
+
+            {mode === "tenant" && (
+              <p className="sn-legal" data-testid="signup-link">
+                New to Sentire Payroll? <Link className="sn-link" href="/signup">Create a company account</Link>
+              </p>
+            )}
 
             <p className="sn-legal">
               <ShieldIcon />

@@ -14,6 +14,7 @@ import { writeAuditLog, getClientIp } from "@/lib/audit";
 import { writeCentralAudit, logSubscriptionEvent } from "@/lib/central/audit";
 import { tenantMrrPesos, computeHealthScore } from "@/lib/central/metrics";
 import { countryToTimezone } from "@/lib/time/country-timezone";
+import { seedTenantDefaults } from "@/lib/onboarding/provision";
 import { z } from "zod";
 
 const createTenantSchema = z.object({
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const {
-      adminFirstName, adminLastName, adminEmail, adminPassword, adminPhone,
+      adminFirstName, adminLastName, adminEmail, adminPassword,
       tinNumber, address, city, province, zipCode, contactEmail, contactPhone,
       trialEndsAt, payrollCycle, companyCode, packageId,
       ...tenantData
@@ -206,6 +207,10 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+
+    // PAY-74: the same starting rows a self-serve sign-up gets (head office,
+    // standard shifts, statutory leave types, national holidays).
+    await prismaAdmin.$transaction((tx) => seedTenantDefaults(tx, tenant.id, adminUser?.id ?? null));
 
     // Assign the chosen package (creates the subscription + syncs the tier tag).
     if (packageId) {

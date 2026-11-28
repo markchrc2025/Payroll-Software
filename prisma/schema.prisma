@@ -4633,3 +4633,28 @@ model Bir2316Signatory {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+/// PAY-74: a self-serve sign-up waiting for its email to be verified. Nothing
+/// else exists until the link is opened; then the company is created
+/// (src/lib/onboarding/signup.ts) and provisionedTenantId points to it. A
+/// platform table: no tenantId, read and written only by the owner client;
+/// row security with only admin_bypass hides every row from payroll_app.
+model TenantSignup {
+  id                  String       @id @default(cuid())
+  email               String
+  companyName         String
+  firstName           String
+  lastName            String
+  phone               String?
+  passwordHash        String
+  payrollCycle        PayFrequency @default(SEMI_MONTHLY)
+  tokenHash           String       @unique
+  expiresAt           DateTime
+  ipAddress           String?
+  verifiedAt          DateTime?
+  provisionedTenantId String?
+  createdAt           DateTime     @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+}

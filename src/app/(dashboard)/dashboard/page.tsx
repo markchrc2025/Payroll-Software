@@ -11,33 +11,25 @@ import {
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import prismaAdmin from "@/lib/prisma-admin";
+import { getSetupChecklist } from "@/lib/onboarding/checklist";
+import { SetupChecklist } from "@/components/dashboard/SetupChecklist";
 
-// ─── Philippine public holidays 2026 ────────────────────────────────────────
-const PH_HOLIDAYS_2026 = [
-  { date: "2026-01-01", name: "New Year's Day", type: "Regular" },
-  { date: "2026-03-31", name: "Eid'l Fitr", type: "Regular" },
-  { date: "2026-04-02", name: "Maundy Thursday", type: "Regular" },
-  { date: "2026-04-03", name: "Good Friday", type: "Regular" },
-  { date: "2026-04-04", name: "Black Saturday", type: "Special" },
-  { date: "2026-04-09", name: "Araw ng Kagitingan", type: "Regular" },
-  { date: "2026-05-01", name: "Labor Day", type: "Regular" },
-  { date: "2026-06-07", name: "Eid'l Adha", type: "Regular" },
-  { date: "2026-06-12", name: "Independence Day", type: "Regular" },
-  { date: "2026-08-24", name: "Ninoy Aquino Day", type: "Special" },
-  { date: "2026-08-31", name: "National Heroes Day", type: "Regular" },
-  { date: "2026-11-01", name: "All Saints' Day", type: "Special" },
-  { date: "2026-11-02", name: "All Souls' Day", type: "Special" },
-  { date: "2026-11-30", name: "Bonifacio Day", type: "Regular" },
-  { date: "2026-12-08", name: "Immaculate Conception", type: "Special" },
-  { date: "2026-12-24", name: "Christmas Eve", type: "Special" },
-  { date: "2026-12-25", name: "Christmas Day", type: "Regular" },
-  { date: "2026-12-30", name: "Rizal Day", type: "Regular" },
-  { date: "2026-12-31", name: "New Year's Eve", type: "Special" },
-];
-
-function getUpcomingHolidays(from: Date, count = 3) {
-  const fromMs = from.getTime();
-  return PH_HOLIDAYS_2026.filter((h) => new Date(h.date).getTime() >= fromMs).slice(0, count);
+// ─── Upcoming holidays: the company's own holiday calendar ──────────────────
+// PAY-74: was a hard-coded 2026 list with wrong dates (Eid'l Fitr and Eid'l
+// Adha guessed, Ninoy Aquino Day on 24 Aug instead of 21 Aug); now the
+// company's Holiday rows, which a new company gets seeded with.
+async function getUpcomingHolidays(tenantId: string, from: Date, count = 3) {
+  const rows = await prismaAdmin.holiday.findMany({
+    where: { tenantId, deletedAt: null, date: { gte: from } },
+    orderBy: { date: "asc" },
+    take: count,
+    select: { date: true, name: true, category: true },
+  });
+  return rows.map((h) => ({
+    date: h.date.toISOString().slice(0, 10),
+    name: h.name,
+    type: h.category === "LEGAL" ? "Regular" : "Special",
+  }));
 }
 
 function isBirthdayInRange(birthDate: Date, from: Date, days: number): boolean {
@@ -192,7 +184,10 @@ export default async function DashboardPage() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const upcomingHolidays = getUpcomingHolidays(today, 3);
+  const [upcomingHolidays, setupSteps] = await Promise.all([
+    getUpcomingHolidays(session.user.tenantId, new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())), 3),
+    getSetupChecklist(session.user.tenantId),
+  ]);
 
   const stats = [
     {
@@ -249,6 +244,9 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* PAY-74: setup checklist until the first payslips are published */}
+      <SetupChecklist steps={setupSteps} />
 
       {/* ── Metric cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
